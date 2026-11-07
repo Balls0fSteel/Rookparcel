@@ -4,6 +4,12 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-07_135959_1794056399: Release 1.2.21 published
+
+- `main` fast-forwarded to the release commit; CI, FreeBSD and Fuzz green (CI's new `docker` job too); `v1.2.21` tagged. The Release run passed every job: Windows, macOS, Linux and Flatpak on both architectures, both Docker images and `docker-manifest`. The Windows zip matches `SHA256SUMS` and its nox says `1.2.21`.
+- Published as GitHub's Latest on the owner's instruction ("merge, bump version, release"), without the by-hand tries of RELEASING step 5. The site's news entry is on `main`; `update.txt` says `stable=1.2.21`. The wiki has the Docker page and the Files tab's tree.
+- **GHCR:** `ghcr.io/balls0fsteel/rookparcel-nox:1.2.21` and `:latest` (amd64 and arm64) pull without a login: the package came out public, so RELEASING's "make it public" step was not needed this time.
+
 ## 2026-11-07_133525_1794054925: Release 1.2.21 prepared
 
 - The owner asked to merge, bump and release. 1.2.20 was never released, so 1.2.21 (already the workspace version) is the release: `docs/releases/1.2.21.md` covers 1.2.20 and 1.2.21 (Add Torrent filter and type-ahead, the Files tab tree, the GTK stripe fix) and the first Docker image; the Flatpak metainfo has its `<release>`. `rename-rookparcel` is merged into `main` for the tag; the site's news entry waits on a branch until the draft is published.

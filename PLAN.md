@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-07_084750_1794037670
+Last updated: 2026-11-07_135959_1794056399
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D60](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -33,7 +33,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Next steps
 
-**1.2.21 (2026-11-07_084025_1794037225):** the Files tab shows the folder tree by default in all four UIs, with a toggle to 2.2.1's list (D62), and fixes a GTK abort with any torrent listed (since 1.2.0's row shading); hand checks in BACKLOG "Files tab folder tree". A nox Docker image goes to GHCR on tags; the first push is untested. Next on macOS: drop the legacy notification centre (BACKLOG "macOS" (A)).
+**1.2.21, published 2026-11-07:** the Files tab shows the folder tree by default in all four UIs, with a toggle to 2.2.1's list (D62), and fixes a GTK abort with any torrent listed (since 1.2.0's row shading); hand checks in BACKLOG "Files tab folder tree". A nox Docker image goes to GHCR on tags; the first push is untested. Next on macOS: drop the legacy notification centre (BACKLOG "macOS" (A)).
 
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 
