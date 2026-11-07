@@ -44,6 +44,22 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.21" data-date="2026-11-07" aria-labelledby="v1.2.21-h">
+      <h2 id="v1.2.21-h"><a href="#v1.2.21"><time datetime="2026-11-07">Sat 7 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.21</span></a></h2>
+      <p class="news-lede">The Files tab shows a torrent's files in their folders, as the Add Torrent dialog does, in every app; one click gives back the single list of paths. The Add Torrent dialog gets a file filter, and <code>rookparcel-nox</code> comes as a Docker image.</p>
+      <ul class="changes">
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>The Files tab's folder tree: folders add up their files' size and progress, and a priority set on a folder applies to all its files.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>A Tree view button beside the filter box switches to µTorrent's single list of paths; the choice is remembered.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Add Torrent: a Filter files box to check or uncheck matching files in one go, and type-ahead to jump to a file by its first letters.</span></li>
+        <li><span class="tag tag-plat">Windows</span><span class="vh">:</span> <span>Typing in the torrent list and the detail tabs jumps to the matching row.</span></li>
+        <li><span class="tag tag-area">Web UI</span><span class="vh">:</span> <span>The Add dialog and the Files tab work from the keyboard: arrows, Space and letters.</span></li>
+        <li><span class="tag tag-area">Daemon</span><span class="vh">:</span> <span>A Docker image, <code>ghcr.io/balls0fsteel/rookparcel-nox</code>, for amd64 and arm64, with a Compose file for Sonarr, Radarr and Prowlarr.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>The GTK app could close as soon as a torrent was listed on some systems (seen with GTK 4.22).</span></li>
+      </ul>
+      <p class="news-note">Version 1.2.20 was a development step; this entry covers it.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.21">Download 1.2.21 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.21.md">Full release notes</a></p>
+    </article>
+
     <article class="news-entry" id="v1.2.19" data-date="2026-11-06" aria-labelledby="v1.2.19-h">
       <h2 id="v1.2.19-h"><a href="#v1.2.19"><time datetime="2026-11-06">Fri 6 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.19</span></a></h2>
       <p class="news-lede">A native Mac app: one <code>Rookparcel.app</code> for Apple silicon and Intel Macs, on macOS 11 Big Sur or newer, which takes over the GTK app's settings and torrents. On every platform, a stopped magnet reconnects at once when started.</p>
