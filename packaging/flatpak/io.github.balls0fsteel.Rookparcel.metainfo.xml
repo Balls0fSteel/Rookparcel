@@ -70,6 +70,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="1.2.21" date="2026-11-07" type="stable">
+      <description>
+        <p>The Files tab shows the torrent's files in their folders, as the Add Torrent dialog does; a Tree view button gives back the single list of paths. The Add Torrent dialog gets a file filter and type-ahead. The app no longer closes on some systems as soon as a torrent is listed.</p>
+      </description>
+    </release>
     <release version="1.2.19" date="2026-11-06" type="stable">
       <description>
         <p>A magnet stopped from its Add dialog now reconnects to its peer at once when it is started, instead of a minute later. The rest of this release is the new native macOS app; the Linux GUI is otherwise unchanged.</p>

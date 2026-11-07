@@ -4,6 +4,10 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-07_133525_1794054925: Release 1.2.21 prepared
+
+- The owner asked to merge, bump and release. 1.2.20 was never released, so 1.2.21 (already the workspace version) is the release: `docs/releases/1.2.21.md` covers 1.2.20 and 1.2.21 (Add Torrent filter and type-ahead, the Files tab tree, the GTK stripe fix) and the first Docker image; the Flatpak metainfo has its `<release>`. `rename-rookparcel` is merged into `main` for the tag; the site's news entry waits on a branch until the draft is published.
+
 ## 2026-11-07_084750_1794037670: A Docker image of rookparcel-nox, published to GHCR on release tags
 
 - **Owner request:** a Docker image; the owner chose a Dockerfile, a Compose example and docs, plus images for amd64 and arm64 pushed to GitHub's registry on each tag.
