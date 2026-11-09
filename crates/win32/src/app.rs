@@ -32,6 +32,7 @@ use rookparcel_frontend::import;
 use rookparcel_frontend::lang::{self, S};
 use rookparcel_frontend::model::{Filter, TorrentList};
 use rookparcel_frontend::options::{self, GuiOptions, Options};
+use rookparcel_frontend::palette::LIGHT;
 use rookparcel_frontend::pref_pages::Features;
 use rookparcel_frontend::prefs::Prefs;
 use rookparcel_frontend::properties::{self, Properties, TorrentProps};
@@ -69,7 +70,7 @@ use windows_sys::core::{PCWSTR, w};
 
 use crate::closing;
 use crate::controls;
-use crate::details::{Detail, Page, PaintCtx};
+use crate::details::{self, Detail, Page, PaintCtx};
 use crate::dialogs;
 use crate::icons::{self, Icon};
 use crate::integration::{self, Integration, Keys};
@@ -6767,10 +6768,11 @@ unsafe fn list_custom_draw(cd: &mut NMLVCUSTOMDRAW) -> LRESULT {
                 if bar.right <= bar.left {
                     return CDRF_DODEFAULT as LRESULT;
                 }
-                let frame = CreateSolidBrush(0x00a0a0a0);
-                let back = CreateSolidBrush(0x00ffffff);
+                let frame = CreateSolidBrush(details::rgb(LIGHT.bar_frame));
+                let back = CreateSolidBrush(details::rgb(LIGHT.bar_bg));
                 // µTorrent: blue while downloading, green once complete.
-                let fill = CreateSolidBrush(if finished { 0x0043b54b } else { 0x00d8783c });
+                let fill =
+                    CreateSolidBrush(details::rgb(if finished { LIGHT.bar_green } else { LIGHT.bar_blue }));
                 FillRect(hdc, &bar, back);
                 let w = ((bar.right - bar.left - 2) as i64 * ppm as i64 / 1_000_000) as i32;
                 let done = RECT {
@@ -6788,7 +6790,7 @@ unsafe fn list_custom_draw(cd: &mut NMLVCUSTOMDRAW) -> LRESULT {
                 let mut r = bar;
                 let old = SelectObject(hdc, font);
                 SetBkMode(hdc, TRANSPARENT as i32);
-                SetTextColor(hdc, 0);
+                SetTextColor(hdc, details::rgb(LIGHT.bar_fg));
                 DrawTextW(
                     hdc,
                     text.as_ptr(),

@@ -8,9 +8,11 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 use rookparcel_frontend::lang;
+use rookparcel_frontend::palette::DrawPalette;
 use rookparcel_frontend::scheduler::{CELLS, DAY_NAMES, DAYS, HOURS, Mode, drag_line, hover_text};
 
 use crate::canvas::{self, Canvas, faded, fill, frame, rgb};
+use crate::icons;
 
 struct Grid {
     table: [Mode; CELLS],
@@ -177,10 +179,12 @@ fn paint(w: &gtk::Widget, s: &gtk::Snapshot, width: f32, height: f32, g: &Grid) 
     let l = Layout::new(w, width, height);
     let fg = w.color();
     let line = faded(w, 0.5);
-    // the cells keep µTorrent's colours in either theme; greyed, they fade
+    // the cells keep µTorrent's colours in either theme but for Turn off, which is the page's
+    // surface (white only on a light one); greyed, they fade
     let alpha = if w.is_sensitive() { 1.0 } else { 0.45 };
+    let pal = DrawPalette::for_dark(icons::dark());
     let color = |m: Mode| {
-        let c = rgb(m.rgb());
+        let c = rgb(pal.sched_cell(m));
         gtk::gdk::RGBA::new(c.red(), c.green(), c.blue(), alpha)
     };
     let text = |t: &str, x: f32, y: f32, centre_w: Option<f32>| {

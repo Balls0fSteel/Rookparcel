@@ -9,6 +9,7 @@ use std::mem::zeroed;
 use std::ptr::null;
 
 use rookparcel_frontend::lang;
+use rookparcel_frontend::palette::LIGHT;
 use rookparcel_frontend::scheduler::{CELLS, DAY_NAMES, DAYS, HOURS, Mode, drag_line, hover_text};
 use windows_sys::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
@@ -71,12 +72,13 @@ fn bgr(c: u32) -> COLORREF {
     ((c & 0xff) << 16) | (c & 0xff00) | (c >> 16)
 }
 
-/// A cell's colour: the mode's while the scheduler is enabled; greyed, as µTorrent 2.2.1 draws
-/// the disabled table (its cells all white, its legend in greys: 0x38 Full speed, 0xa2 Limited,
-/// 0xd4 Seeding only).
+/// A cell's colour: the mode's on the light palette (µTorrent's for Full speed, Limited and
+/// Seeding only, the page's surface for Turn off) while the scheduler is enabled; greyed, as
+/// µTorrent 2.2.1 draws the disabled table (its cells all white, its legend in greys: 0x38 Full
+/// speed, 0xa2 Limited, 0xd4 Seeding only).
 fn color(m: Mode, enabled: bool) -> COLORREF {
     if enabled {
-        return bgr(m.rgb());
+        return bgr(LIGHT.sched_cell(m));
     }
     let g = match m {
         Mode::Full => 0x38,

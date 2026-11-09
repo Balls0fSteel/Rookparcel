@@ -20,9 +20,11 @@ use rookparcel_frontend::detail::{
 use rookparcel_frontend::fmt;
 use rookparcel_frontend::icons::{tab_icon, tracker_icon};
 use rookparcel_frontend::lang::{self, gtk_mnemonic};
+use rookparcel_frontend::palette::DrawPalette;
 use rookparcel_frontend::tr;
 
 use crate::canvas::{self, Canvas, faded, fill, frame, rgb};
+use crate::icons;
 use crate::table::{ContextMenu, Table};
 
 /// Runs the callback on the detail data and the selected torrent's status (with whether the
@@ -42,12 +44,6 @@ fn with<R>(peek: Peek, f: impl FnOnce(&Detail, Option<(&TorrentStatus, bool)>) -
     });
     out
 }
-
-const BAR_BLUE: u32 = 0x3c78d8;
-const BAR_GREEN: u32 = 0x4bb543;
-const BLOCK_REQUESTED: u32 = 0xe8a000;
-const DOWN_COLOR: u32 = 0x2aa52a;
-const UP_COLOR: u32 = 0xd23c3c;
 
 /// The piece map's squares: padding, side, gap.
 const MAP_PAD: i32 = 4;
@@ -594,18 +590,31 @@ fn general_bar(
     d: &Detail,
     st: &TorrentStatus,
 ) {
+    let pal = DrawPalette::for_dark(icons::dark());
     if which == 0 {
         match &d.have {
-            Some(h) => canvas::piece_bar(w, s, rect, h.len(), BAR_BLUE, |p| if h.get(p) { 1.0 } else { 0.0 }),
+            Some(h) => {
+                canvas::piece_bar(
+                    w,
+                    s,
+                    rect,
+                    h.len(),
+                    pal,
+                    pal.bar_blue,
+                    |p| if h.get(p) { 1.0 } else { 0.0 },
+                )
+            }
             None => {
                 // before the first piece reply: the progress alone
                 let done = st.progress_ppm as usize;
-                canvas::piece_bar(w, s, rect, 1000, BAR_BLUE, |p| if p * 1000 < done { 1.0 } else { 0.0 })
+                canvas::piece_bar(w, s, rect, 1000, pal, pal.bar_blue, |p| {
+                    if p * 1000 < done { 1.0 } else { 0.0 }
+                })
             }
         }
     } else {
         let (av, have) = (&d.availability, d.have.as_ref());
-        canvas::piece_bar(w, s, rect, av.len(), BAR_GREEN, |p| {
+        canvas::piece_bar(w, s, rect, av.len(), pal, pal.bar_green, |p| {
             if have.is_some_and(|h| h.get(p)) { 1.0 } else { (av[p] as f32 / 3.0).min(1.0) }
         });
     }
@@ -647,8 +656,9 @@ fn piece_map(w: &gtk::Widget, s: &gtk::Snapshot, width: f32, (value, page): (f64
     let cols = map_columns(width as i32);
     let border = faded(w, 0.45);
     let (cell, step) = (MAP_CELL as f32, (MAP_CELL + MAP_GAP) as f32);
-    let shades = [rgb(0xffffff), rgb(0xd8e8d0), rgb(0xa8d29a), rgb(0x6fb85c)];
-    let (blue, orange) = (rgb(BAR_BLUE), rgb(BLOCK_REQUESTED));
+    let pal = DrawPalette::for_dark(icons::dark());
+    let shades = pal.availability.map(rgb);
+    let (blue, orange) = (rgb(pal.bar_blue), rgb(pal.block_requested));
     let rows = visible_rows(value, page, MAP_PAD as f64, step as f64, cols, have.len());
     for i in rows.start * cols..(rows.end * cols).min(have.len()) {
         let x = MAP_PAD as f32 + (i % cols) as f32 * step;
@@ -680,13 +690,14 @@ fn block_bar(
     if n == 0 || inner <= 0.0 || height <= 2.0 {
         return;
     }
-    fill(s, x, y, width, height, &rgb(0xffffff));
+    let pal = DrawPalette::for_dark(icons::dark());
+    fill(s, x, y, width, height, &rgb(pal.bar_bg));
     for (kind, start, len) in detail::block_runs(p) {
         let color = match kind {
             BlockKind::Free => continue,
-            BlockKind::Requested => BLOCK_REQUESTED,
-            BlockKind::Writing => BAR_GREEN,
-            BlockKind::Finished => BAR_BLUE,
+            BlockKind::Requested => pal.block_requested,
+            BlockKind::Writing => pal.bar_green,
+            BlockKind::Finished => pal.bar_blue,
         };
         let x0 = x + 1.0 + (start as f32 * inner / n as f32).floor();
         // at least a pixel, so one requested block among a thousand still shows
@@ -706,13 +717,14 @@ fn speed_graph(w: &gtk::Widget, s: &gtk::Snapshot, width: f32, height: f32, d: &
     }
     let fg = w.color();
     let scale = detail::speed_scale(&d.speed);
+    let pal = DrawPalette::for_dark(icons::dark());
 
     // legend
     let (down, up) = d.speed.back().copied().unwrap_or((0, 0));
     let mut x = left;
     for (text, color) in [
-        (tr!(SpeedDownload, rate = fmt::speed_always(down)), DOWN_COLOR),
-        (tr!(SpeedUpload, rate = fmt::speed_always(up)), UP_COLOR),
+        (tr!(SpeedDownload, rate = fmt::speed_always(down)), pal.graph_down),
+        (tr!(SpeedUpload, rate = fmt::speed_always(up)), pal.graph_up),
     ] {
         fill(s, x, pad + 3.0, 10.0, 10.0, &rgb(color));
         let tw = canvas::text(w, s, &text, (x + 14.0, pad, line), false, &fg);
@@ -741,7 +753,7 @@ fn speed_graph(w: &gtk::Widget, s: &gtk::Snapshot, width: f32, height: f32, d: &
     let cr = s.append_cairo(&gtk::graphene::Rect::new(left, top, pw, ph));
     cr.set_line_width(2.0);
     let step = ((pw - 2.0) / (SPEED_SAMPLES - 1) as f32).max(1.0) as f64;
-    for (series, color) in [(0, DOWN_COLOR), (1, UP_COLOR)] {
+    for (series, color) in [(0, pal.graph_down), (1, pal.graph_up)] {
         let c = rgb(color);
         cr.set_source_rgb(c.red().into(), c.green().into(), c.blue().into());
         for (i, &(a, b)) in d.speed.iter().enumerate() {

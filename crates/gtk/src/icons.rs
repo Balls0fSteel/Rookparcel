@@ -11,8 +11,9 @@
 //! - the state icons of the torrent list, the Trackers tab and the status bar
 //!   ([`state_texture`]), the toolbar images ([`toolbar_image`]) and the symbols of the category
 //!   list, the detail tabs and the Preferences pages ([`ui_image`]): the artwork's light
-//!   palette, or its dark one while the GTK theme is dark ([`setup`] follows the theme). The
-//!   menus stay text only: GTK 4's popover menus show an icon only in a row of buttons.
+//!   palette, or its dark one while the desktop or the GTK theme is dark ([`setup`] follows
+//!   both; [`dark`] tells the drawn widgets which palette to use). The menus stay text only:
+//!   GTK 4's popover menus show an icon only in a row of buttons.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -23,14 +24,21 @@ use gtk::{gdk, gio, glib};
 use rookparcel_frontend::icons::{self, APP_SIZES, Icon, StateIcon, UiIcon};
 
 use crate::app::APP_ID;
+use crate::portal;
 
 /// The state icons' size in the list and the status bar, in logical pixels.
 pub const STATE_PX: i32 = 16;
 
 thread_local! {
     static TEXTURES: RefCell<HashMap<StateIcon, gdk::Texture>> = RefCell::default();
-    /// Whether the GTK theme is dark: the icons use the artwork's dark palette.
+    /// Whether the theme is dark: the icons use the artwork's dark palette, the drawn widgets
+    /// the frontend's dark one.
     static DARK: Cell<bool> = const { Cell::new(false) };
+    /// The desktop's preference from the Settings portal (`Some(dark)`), read at [`setup`] and
+    /// kept current by its `SettingChanged` signal; `None` without a portal or a preference.
+    static PORTAL_SCHEME: Cell<Option<bool>> = const { Cell::new(None) };
+    /// The subscription to the portal's `SettingChanged`, for as long as the process runs.
+    static PORTAL_WATCH: RefCell<Option<gio::SignalSubscription>> = const { RefCell::new(None) };
     /// The toolbar's and the navigation's images, to repaint when the theme turns dark or light.
     static THEMED: RefCell<Vec<(Art, glib::WeakRef<gtk::Image>)>> = RefCell::default();
     /// The folder [`setup`] wrote the application icon into.
@@ -138,15 +146,27 @@ pub fn with_icon(icon: UiIcon, label: &gtk::Label) -> gtk::Box {
     row
 }
 
-/// Whether `settings` describe a dark theme: one asked for (`gtk-application-prefer-dark-theme`)
-/// or one named so (`Adwaita-dark`, `Breeze-Dark`, ...).
+/// Whether the theme is dark: the desktop's preference through the Settings portal
+/// ([`PORTAL_SCHEME`]) when it states one, else what `settings` describe: a dark theme asked
+/// for (`gtk-application-prefer-dark-theme`) or one named so (`Adwaita-dark`, `Breeze-Dark`,
+/// ...).
 fn is_dark(settings: &gtk::Settings) -> bool {
-    settings.is_gtk_application_prefer_dark_theme()
-        || settings.gtk_theme_name().is_some_and(|n| n.to_lowercase().contains("dark"))
+    PORTAL_SCHEME.get().unwrap_or_else(|| {
+        settings.is_gtk_application_prefer_dark_theme()
+            || settings.gtk_theme_name().is_some_and(|n| n.to_lowercase().contains("dark"))
+    })
+}
+
+/// Whether the icons and the drawn widgets are on their dark palette (as of the last theme
+/// change [`setup`] saw).
+pub fn dark() -> bool {
+    DARK.get()
 }
 
 /// Switches the icons to the palette for `settings`' theme. State icons follow at their next
 /// redraw (the list and the status bar redraw every refresh); the themed images are set here.
+/// The drawn widgets ask [`dark`] when they paint, and every one of them repaints at least
+/// each refresh or on its next show.
 fn follow_theme(settings: &gtk::Settings) {
     let dark = is_dark(settings);
     if DARK.replace(dark) == dark {
@@ -204,13 +224,20 @@ pub fn install_theme_icons(base: &Path, index: bool) -> Result<(), String> {
 }
 
 /// Makes the application icon findable by name on `display` and the default icon of every
-/// window, and makes the other icons follow the display's theme (light or dark). Once, at
-/// startup.
+/// window, and makes the other icons follow the desktop's light-or-dark preference (the
+/// Settings portal) and the display's theme. Once, at startup.
 pub fn setup(display: &gdk::Display) {
     let settings = gtk::Settings::for_display(display);
+    PORTAL_SCHEME.set(portal::color_scheme());
     follow_theme(&settings);
     settings.connect_gtk_theme_name_notify(follow_theme);
     settings.connect_gtk_application_prefer_dark_theme_notify(follow_theme);
+    let s = settings.clone();
+    let watch = portal::watch_color_scheme(move |scheme| {
+        PORTAL_SCHEME.set(scheme);
+        follow_theme(&s);
+    });
+    PORTAL_WATCH.with(|w| *w.borrow_mut() = watch);
     let dir = glib::user_cache_dir().join("rookparcel").join("icons");
     if let Err(e) = install_theme_icons(&dir, true) {
         eprintln!("icons: {e}");

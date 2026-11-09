@@ -15,6 +15,7 @@
 //! * [`settings`]: the engine settings by libtorrent name (the Advanced preferences table).
 //! * [`secret`]: the proxy password sealed with DPAPI in the preferences file (Windows).
 //! * [`options`]: what the Preferences dialog edits, loaded from and stored to the preferences.
+//! * [`palette`]: the colours of the parts the GUIs draw themselves, for light and dark pages.
 //! * [`scheduler`]: the weekly scheduler (table, modes, what to change when the hour turns).
 //! * [`torrent_folders`]: the `.torrent` folders (stored copies, finished jobs, auto-load).
 //! * [`rss`]: RSS / Atom feeds and the RSS Downloader (filters, episodes, history, `rss.dat`).
@@ -59,6 +60,7 @@ pub mod legacy;
 pub mod model;
 pub mod network;
 pub mod options;
+pub mod palette;
 pub mod pref_pages;
 pub mod prefs;
 pub mod profile;

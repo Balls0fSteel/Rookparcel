@@ -159,8 +159,12 @@ impl Layout {
     }
 }
 
-/// A mode's colour (µTorrent's, in either appearance), faded while greyed.
+/// A mode's colour (µTorrent's, in either appearance, but for Turn off: the text background,
+/// white in the light appearance and dark in the dark one), faded while greyed.
 fn color(m: Mode, alpha: f64) -> Retained<NSColor> {
+    if m == Mode::Off {
+        return NSColor::textBackgroundColor().colorWithAlphaComponent(alpha);
+    }
     let c = m.rgb();
     let part = |shift: u32| f64::from((c >> shift) & 0xff) / 255.0;
     NSColor::colorWithSRGBRed_green_blue_alpha(part(16), part(8), part(0), alpha)

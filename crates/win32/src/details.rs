@@ -6,6 +6,7 @@
 use rookparcel_core::{PartialPiece, TorrentStatus};
 use rookparcel_frontend::detail::{self, BlockKind, PieceShade, SPEED_SAMPLES};
 pub use rookparcel_frontend::detail::{Detail, Tab as Page};
+use rookparcel_frontend::palette::LIGHT;
 use rookparcel_frontend::{columns::RowExtra, fmt, tr};
 use windows_sys::Win32::Foundation::POINT;
 use windows_sys::Win32::Foundation::{COLORREF, RECT};
@@ -18,15 +19,10 @@ use windows_sys::Win32::Graphics::Gdi::{
 
 use crate::util::{rtl, scale, wide};
 
-fn rgb(c: u32) -> COLORREF {
+/// `0xRRGGBB` (the palette's) as GDI wants it (BGR).
+pub(crate) fn rgb(c: u32) -> COLORREF {
     ((c & 0xff) << 16) | (c & 0xff00) | ((c >> 16) & 0xff)
 }
-
-const BAR_BLUE: u32 = 0x3c78d8;
-const BAR_GREEN: u32 = 0x4bb543;
-const BLOCK_REQUESTED: u32 = 0xe8a000;
-const DOWN_COLOR: u32 = 0x2aa52a;
-const UP_COLOR: u32 = 0xd23c3c;
 
 unsafe fn fill(hdc: HDC, rc: &RECT, color: u32) {
     unsafe {
@@ -49,7 +45,7 @@ unsafe fn piece_bar(hdc: HDC, rc: &RECT, pieces: usize, color: u32, value: impl 
         FrameRect(hdc, rc, GetSysColorBrush(COLOR_BTNSHADOW));
         let inner = RECT { left: rc.left + 1, top: rc.top + 1, right: rc.right - 1, bottom: rc.bottom - 1 };
         let w = (inner.right - inner.left).max(0) as usize;
-        fill(hdc, &inner, 0xffffff);
+        fill(hdc, &inner, LIGHT.bar_bg);
         if pieces == 0 || w == 0 {
             return;
         }
@@ -70,11 +66,7 @@ unsafe fn piece_bar(hdc: HDC, rc: &RECT, pieces: usize, color: u32, value: impl 
                 end += 1;
             }
             if v > 0.0 {
-                let mix = |c: u32, shift: u32| {
-                    let ch = ((c >> shift) & 0xff) as f32;
-                    ((255.0 - (255.0 - ch) * v.min(1.0)) as u32) << shift
-                };
-                let c = mix(color, 16) | mix(color, 8) | mix(color, 0);
+                let c = LIGHT.blend(color, v);
                 let r = RECT {
                     left: inner.left + x as i32,
                     top: inner.top,
@@ -149,16 +141,24 @@ unsafe fn general(c: &PaintCtx<'_>) {
             let detail = c.detail;
             if i == 0 {
                 match &detail.have {
-                    Some(h) => piece_bar(c.hdc, &bar, pieces, BAR_BLUE, |p| if h.get(p) { 1.0 } else { 0.0 }),
+                    Some(h) => {
+                        piece_bar(c.hdc, &bar, pieces, LIGHT.bar_blue, |p| if h.get(p) { 1.0 } else { 0.0 })
+                    }
                     None => {
                         let done = st.progress_ppm as usize;
-                        piece_bar(c.hdc, &bar, 1000, BAR_BLUE, |p| if p * 1000 < done { 1.0 } else { 0.0 })
+                        piece_bar(
+                            c.hdc,
+                            &bar,
+                            1000,
+                            LIGHT.bar_blue,
+                            |p| if p * 1000 < done { 1.0 } else { 0.0 },
+                        )
                     }
                 }
             } else {
                 let av = &detail.availability;
                 let have = detail.have.as_ref();
-                piece_bar(c.hdc, &bar, av.len(), BAR_GREEN, |p| {
+                piece_bar(c.hdc, &bar, av.len(), LIGHT.bar_green, |p| {
                     if have.is_some_and(|h| h.get(p)) { 1.0 } else { (av[p] as f32 / 3.0).min(1.0) }
                 });
             }
@@ -269,13 +269,13 @@ pub unsafe fn block_bar(hdc: HDC, rc: &RECT, p: &PartialPiece) {
         return;
     }
     unsafe {
-        fill(hdc, rc, 0xffffff);
+        fill(hdc, rc, LIGHT.bar_bg);
         for (kind, start, len) in detail::block_runs(p) {
             let color = match kind {
                 BlockKind::Free => continue,
-                BlockKind::Requested => BLOCK_REQUESTED,
-                BlockKind::Writing => BAR_GREEN,
-                BlockKind::Finished => BAR_BLUE,
+                BlockKind::Requested => LIGHT.block_requested,
+                BlockKind::Writing => LIGHT.bar_green,
+                BlockKind::Finished => LIGHT.bar_blue,
             };
             let x0 = rc.left + 1 + (start as i64 * w / n) as i32;
             // at least a pixel, so one requested block among a thousand still shows
@@ -321,12 +321,12 @@ unsafe fn pieces(c: &PaintCtx<'_>) {
             let y = c.rc.top + header + ((i / cols) as i32) * (cell + gap);
             let rc = RECT { left: x, top: y, right: x + cell, bottom: y + cell };
             let color = match d.piece_shade(i) {
-                PieceShade::Have => BAR_BLUE,
-                PieceShade::Downloading => BLOCK_REQUESTED,
-                PieceShade::Available(0) => 0xffffff,
-                PieceShade::Available(1) => 0xd8e8d0,
-                PieceShade::Available(2 | 3) => 0xa8d29a,
-                PieceShade::Available(_) => 0x6fb85c,
+                PieceShade::Have => LIGHT.bar_blue,
+                PieceShade::Downloading => LIGHT.block_requested,
+                PieceShade::Available(0) => LIGHT.availability[0],
+                PieceShade::Available(1) => LIGHT.availability[1],
+                PieceShade::Available(2 | 3) => LIGHT.availability[2],
+                PieceShade::Available(_) => LIGHT.availability[3],
             };
             fill(c.hdc, &rc, color);
             FrameRect(c.hdc, &rc, GetSysColorBrush(COLOR_BTNSHADOW));
@@ -355,7 +355,7 @@ unsafe fn speed(c: &PaintCtx<'_>) {
     let top = detail::speed_scale(&d.speed);
     unsafe {
         FrameRect(c.hdc, &plot, GetSysColorBrush(COLOR_BTNSHADOW));
-        let grid = CreatePen(PS_SOLID, 1, rgb(0xe0e0e0));
+        let grid = CreatePen(PS_SOLID, 1, rgb(LIGHT.grid_line));
         let old = SelectObject(c.hdc, grid);
         for i in 1..4 {
             let y = plot.top + (plot.bottom - plot.top) * i / 4;
@@ -383,8 +383,8 @@ unsafe fn speed(c: &PaintCtx<'_>) {
         let (down, up) = d.speed.back().copied().unwrap_or((0, 0));
         let mut x = plot.left;
         for (label, color) in [
-            (tr!(SpeedDownload, rate = fmt::speed_always(down)), DOWN_COLOR),
-            (tr!(SpeedUpload, rate = fmt::speed_always(up)), UP_COLOR),
+            (tr!(SpeedDownload, rate = fmt::speed_always(down)), LIGHT.graph_down),
+            (tr!(SpeedUpload, rate = fmt::speed_always(up)), LIGHT.graph_up),
         ] {
             let swatch = RECT {
                 left: x,
@@ -405,7 +405,7 @@ unsafe fn speed(c: &PaintCtx<'_>) {
 
         let w = (plot.right - plot.left - 2) as usize;
         let h = (plot.bottom - plot.top - 2) as f64;
-        for (series, color) in [(0usize, DOWN_COLOR), (1, UP_COLOR)] {
+        for (series, color) in [(0usize, LIGHT.graph_down), (1, LIGHT.graph_up)] {
             let n = d.speed.len();
             if n < 2 {
                 continue;

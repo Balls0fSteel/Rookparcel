@@ -7,6 +7,7 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
+use rookparcel_frontend::palette::DrawPalette;
 
 /// Draws the canvas: the widget (for its colours and Pango context), the snapshot, the size.
 pub type Paint = Box<dyn Fn(&gtk::Widget, &gtk::Snapshot, f32, f32)>;
@@ -132,16 +133,17 @@ pub fn text(
 }
 
 /// A horizontal bar with one step per piece: `value(i)` in 0..=1 is the fill strength of piece
-/// `i` (the Win32 client's `piece_bar`).
+/// `i` (the Win32 client's `piece_bar`), `color` over `pal`'s bar background.
 pub fn piece_bar(
     widget: &gtk::Widget,
     s: &gtk::Snapshot,
     (x, y, w, h): (f32, f32, f32, f32),
     pieces: usize,
+    pal: &DrawPalette,
     color: u32,
     value: impl Fn(usize) -> f32,
 ) {
-    fill(s, x, y, w, h, &rgb(0xffffff));
+    fill(s, x, y, w, h, &rgb(pal.bar_bg));
     frame(s, x, y, w, h, &faded(widget, 0.45));
     let inner = (w - 2.0).max(0.0) as usize;
     if pieces == 0 || inner == 0 {
@@ -161,11 +163,7 @@ pub fn piece_bar(
             end += 1;
         }
         if v > 0.0 {
-            let mix = |shift: u32| {
-                let ch = ((color >> shift) & 0xff) as f32;
-                ((255.0 - (255.0 - ch) * v.min(1.0)) as u32) << shift
-            };
-            let c = rgb(mix(16) | mix(8) | mix(0));
+            let c = rgb(pal.blend(color, v));
             fill(s, x + 1.0 + col as f32, y + 1.0, (end - col) as f32, h - 2.0, &c);
         }
         col = end;
