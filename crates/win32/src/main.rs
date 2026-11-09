@@ -52,6 +52,7 @@ mod setup_guide;
 mod shortcut;
 #[cfg(windows)]
 mod shutdown;
+#[cfg(windows)]
 mod theme;
 #[cfg(windows)]
 mod tray;
