@@ -384,10 +384,10 @@ toolbar_icons! {
 }
 
 /// A toolbar image, `size` pixels square: BGRA bytes, premultiplied, top-down; `gray` for the
-/// disabled look. The light-palette image at [`toolbar_size`]`(size)`, centred when that is
-/// smaller than `size`.
-pub fn toolbar_bgra(icon: Icon, size: usize, gray: bool) -> Vec<u8> {
-    bgra(icon.png(size as u32, false), size, gray)
+/// disabled look, `dark` for the dark palette. The image at [`toolbar_size`]`(size)`, centred
+/// when that is smaller than `size`.
+pub fn toolbar_bgra(icon: Icon, size: usize, gray: bool, dark: bool) -> Vec<u8> {
+    bgra(icon.png(size as u32, dark), size, gray)
 }
 
 /// `png` as a `size` pixels square image: BGRA bytes, premultiplied, top-down, centred when
@@ -506,11 +506,11 @@ mod tests {
                 }
             }
             // a slot bigger than the export: the image centred, premultiplied
-            let bgra = toolbar_bgra(icon, 22, false);
+            let bgra = toolbar_bgra(icon, 22, false, false);
             assert_eq!(bgra.len(), 22 * 22 * 4);
             assert!(bgra.chunks(4).all(|p| p[0] <= p[3] && p[1] <= p[3] && p[2] <= p[3]), "{icon:?}");
             assert!(bgra.chunks(4).any(|p| p[3] > 0), "{icon:?} drew nothing");
-            let gray = toolbar_bgra(icon, 24, true);
+            let gray = toolbar_bgra(icon, 24, true, false);
             assert!(gray.chunks(4).all(|p| p[3] <= 128 && p[0] == p[1] && p[1] == p[2]), "{icon:?}");
         }
     }

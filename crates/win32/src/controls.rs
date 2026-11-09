@@ -5,10 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use rookparcel_frontend::typeahead;
 use windows_sys::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT};
-use windows_sys::Win32::Graphics::Gdi::{
-    COLOR_BTNFACE, COLOR_BTNTEXT, COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT, COLOR_WINDOW, CreateSolidBrush,
-    DeleteObject, DrawFocusRect, FillRect, GetSysColor,
-};
+use windows_sys::Win32::Graphics::Gdi::{CreateSolidBrush, DeleteObject, DrawFocusRect, FillRect};
 use windows_sys::Win32::UI::Controls::{
     CDDS_ITEMPOSTPAINT, CDDS_ITEMPREPAINT, CDDS_PREPAINT, CDDS_SUBITEM, CDIS_FOCUS, CDIS_SELECTED,
     CDRF_DODEFAULT, CDRF_NOTIFYITEMDRAW, CDRF_NOTIFYPOSTPAINT, CDRF_NOTIFYSUBITEMDRAW, HDF_SORTDOWN,
@@ -225,14 +222,17 @@ pub fn set_alternate_rows(on: bool) {
 }
 
 /// The background of an unselected row: the window colour, or for every other row (when
-/// shading is on) the window colour darkened a little, so it follows the system's colours.
+/// shading is on) the window colour darkened a little, so it follows the system's colours; on
+/// a dark window (D64) lightened a little instead.
 fn row_background(row: usize) -> COLORREF {
-    let window = unsafe { GetSysColor(COLOR_WINDOW) };
+    let window = crate::theme::sys().window;
     if row % 2 == 0 || !ALTERNATE_ROWS.load(Ordering::Relaxed) {
         return window;
     }
-    let shade = |c: u32| (c * 15 / 16) & 0xff;
-    shade(window & 0xff) | (shade((window >> 8) & 0xff) << 8) | (shade((window >> 16) & 0xff) << 16)
+    let channel = |c: u32| {
+        if crate::theme::is_dark() { (c + (0xff - c) / 16) & 0xff } else { (c * 15 / 16) & 0xff }
+    };
+    channel(window & 0xff) | (channel((window >> 8) & 0xff) << 8) | (channel((window >> 16) & 0xff) << 16)
 }
 
 /// Whether a custom-draw notification is a paint of the item. The list view also sends the
@@ -307,15 +307,11 @@ pub unsafe fn selection_post_paint(cd: &NMLVCUSTOMDRAW) {
     }
 }
 
-/// (background, text) of a selected row.
+/// (background, text) of a selected row: the highlight while the list has the focus, else the
+/// button face and text (their dark stand-ins under D64).
 unsafe fn selection_colours(lv: HWND) -> (COLORREF, COLORREF) {
-    unsafe {
-        if GetFocus() == lv {
-            (GetSysColor(COLOR_HIGHLIGHT), GetSysColor(COLOR_HIGHLIGHTTEXT))
-        } else {
-            (GetSysColor(COLOR_BTNFACE), GetSysColor(COLOR_BTNTEXT))
-        }
-    }
+    let s = crate::theme::sys();
+    if unsafe { GetFocus() } == lv { (s.highlight, s.highlight_text) } else { (s.pressed, s.button_text) }
 }
 
 /// The whole custom-draw handler of a list with no cells of its own: the selection bar and

@@ -1212,6 +1212,7 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
         let lv = controls::create_report(hwnd, IDC_LIST, true);
         // the state icon goes in the Name column wherever it is
         send(lv, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_SUBITEMIMAGES as usize, LVS_EX_SUBITEMIMAGES as isize);
+        crate::theme::list(lv);
         let tabs = child(hwnd, WC_TABCONTROLW, "", WS_CHILD | WS_CLIPSIBLINGS | WS_TABSTOP, 0, IDC_TABS);
         let mut pages = [null_mut(); 7];
         for page in Page::ALL {
@@ -1265,6 +1266,7 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
             IDC_FILES_TREE,
         );
         crate::help::control_tip(hwnd, files_tree_box, tr!(FilesTreeTip));
+        crate::theme::check_box(files_tree_box);
         let mut detail = Detail::default();
         detail.set_files_tree(prefs.get_bool(detail::FILES_TREE_KEY, true));
         let file_icons = crate::add::ShellIcons::load();
@@ -1278,6 +1280,7 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
         );
         let status =
             child(hwnd, STATUSCLASSNAMEW, "", WS_CHILD | SBARS_SIZEGRIP | SBARS_TOOLTIPS, 0, IDC_STATUS);
+        crate::theme::status_bar(status);
 
         let handle = session.handle();
         let target = hwnd as isize;
@@ -1409,6 +1412,7 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
         APP.with(|a| *a.borrow_mut() = Some(app));
 
         apply_dpi(hwnd, dpi);
+        with_app(|a| theme_controls(a));
         build_tree();
         for page in Page::ALL {
             if page.is_list() {
@@ -3304,15 +3308,33 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 0
             }
             // the Files filter's count and Tree View sit on the tab's body: white with visual
-            // styles, the dialog colour without
+            // styles, the dialog colour without (dark: the window colour, D64)
             WM_CTLCOLORSTATIC
                 if with_app(|a| a.files_count == lparam as HWND || a.files_tree == lparam as HWND)
                     == Some(true) =>
             {
+                if crate::theme::is_dark() {
+                    let s = crate::theme::sys();
+                    SetBkColor(wparam as HDC, s.window);
+                    SetTextColor(wparam as HDC, s.window_text);
+                    return crate::theme::brush(crate::theme::Brush::Window) as LRESULT;
+                }
                 let color = if IsAppThemed() != 0 { COLOR_WINDOW } else { COLOR_BTNFACE };
                 SetBkColor(wparam as HDC, GetSysColor(color));
                 SetTextColor(wparam as HDC, GetSysColor(COLOR_WINDOWTEXT));
                 GetSysColorBrush(color) as LRESULT
+            }
+            // the search box and the Files filter in dark (D64)
+            WM_CTLCOLOREDIT | WM_CTLCOLORSTATIC | WM_CTLCOLORBTN if crate::theme::is_dark() => {
+                crate::theme::ctl_color(msg, wparam, lparam).unwrap_or(0)
+            }
+            // the splitter gaps and the client area behind the controls (D64; light keeps the
+            // class brush)
+            WM_ERASEBKGND if crate::theme::is_dark() => {
+                let mut rc: RECT = zeroed();
+                GetClientRect(hwnd, &mut rc);
+                FillRect(wparam as HDC, &rc, crate::theme::brush(crate::theme::Brush::Face));
+                1
             }
             WM_COMMAND if crate::util::loword(wparam) as usize == IDC_FILES_CLEAR => {
                 // empties the box (its EN_CHANGE lists every file again) and leaves the
@@ -3372,6 +3394,18 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             crate::theme::WM_APP_THEME => {
                 apply_theme(hwnd);
                 0
+            }
+            // the menu bar in dark (D64): Windows asks the window to paint it
+            crate::theme::WM_UAHDRAWMENU | crate::theme::WM_UAHDRAWMENUITEM if crate::theme::is_dark() => {
+                match crate::theme::menu_bar_message(hwnd, msg, lparam) {
+                    Some(r) => r,
+                    None => DefWindowProcW(hwnd, msg, wparam, lparam),
+                }
+            }
+            WM_NCPAINT | WM_NCACTIVATE if crate::theme::is_dark() => {
+                let r = DefWindowProcW(hwnd, msg, wparam, lparam);
+                crate::theme::menu_bar_line(hwnd);
+                r
             }
             // Windows' "Choose your mode" or High Contrast may have changed (D64)
             WM_SETTINGCHANGE | WM_THEMECHANGED | WM_SYSCOLORCHANGE => {
@@ -3596,6 +3630,7 @@ unsafe fn close_session(hwnd: HWND, end_session: bool) {
             ImageList_Destroy(app.images.0);
             ImageList_Destroy(app.images.1);
             ImageList_Destroy(app.states.0);
+            ImageList_Destroy(app.nav_images);
             for icon in [app.icon_big, app.icon_small].into_iter().chain(app.net_icons) {
                 DestroyIcon(icon);
             }
@@ -4738,13 +4773,38 @@ unsafe fn show_setup_guide(hwnd: HWND) {
     }
 }
 
-/// The window follows a flipped theme (D64): the caption and the popups now; the controls,
-/// menus, icons and drawn parts come with their own slices.
+/// The window follows a flipped theme (D64): the caption, the popups, the controls and, through
+/// [`apply_dpi`], every icon set and menu bitmap (they come in a light and a dark palette); the
+/// drawn parts and the dialogs come with their own slices.
 unsafe fn apply_theme(hwnd: HWND) {
     unsafe {
         crate::theme::theme_window(hwnd);
+        with_app(|a| theme_controls(a));
+        if let Some(dpi) = with_app(|a| a.dpi) {
+            apply_dpi(hwnd, dpi);
+        }
         RedrawWindow(hwnd, null(), null_mut(), RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
         DrawMenuBar(hwnd);
+    }
+}
+
+/// The main window's controls follow the mode (D64): the torrent list and its header, the
+/// category tree, the Files tab's filter, button and check box, the status bar.
+fn theme_controls(a: &App) {
+    use crate::theme::{Kind, theme_control, tooltip};
+    unsafe {
+        crate::theme::list(a.lv);
+        crate::theme::tree(a.tree);
+        theme_control(a.search, Kind::Cfd);
+        theme_control(a.files_filter, Kind::Cfd);
+        theme_control(a.files_clear, Kind::Explorer);
+        crate::theme::check_box(a.files_tree);
+        crate::theme::status_bar(a.status);
+        let search_menu = GetDlgItem(a.hwnd, IDC_SEARCH_MENU as i32);
+        tooltip(a.toolbar, TB_GETTOOLTIPS);
+        tooltip(search_menu, TB_GETTOOLTIPS);
+        tooltip(a.lv, LVM_GETTOOLTIPS);
+        tooltip(a.tree, TVM_GETTOOLTIPS);
     }
 }
 
@@ -6716,6 +6776,13 @@ unsafe fn on_notify(hwnd: HWND, nm: *const NMHDR) -> LRESULT {
                 0
             }
             // the button under the pointer described in the status bar, as a menu item is (D55)
+            // dark (D64): the hot and pressed buttons' fills and the search drop-down's chevron
+            (IDC_TOOLBAR, NM_CUSTOMDRAW) => {
+                crate::theme::toolbar_custom_draw(&mut *(nm as *mut NMTBCUSTOMDRAW), false)
+            }
+            (IDC_SEARCH_MENU, NM_CUSTOMDRAW) => {
+                crate::theme::toolbar_custom_draw(&mut *(nm as *mut NMTBCUSTOMDRAW), true)
+            }
             (IDC_TOOLBAR, TBN_HOTITEMCHANGE) => {
                 let hot = &*(nm as *const NMTBHOTITEM);
                 let button = (hot.dwFlags & HICF_LEAVING == 0)

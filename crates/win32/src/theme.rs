@@ -22,11 +22,16 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use rookparcel_frontend::lang::S;
 use rookparcel_frontend::palette::DrawPalette;
-use windows_sys::Win32::Foundation::HWND;
+use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
 use windows_sys::Win32::Graphics::Gdi::{
-    COLOR_BTNFACE, COLOR_BTNSHADOW, COLOR_BTNTEXT, COLOR_GRAYTEXT, COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT,
-    COLOR_WINDOW, COLOR_WINDOWTEXT, CreateSolidBrush, GetSysColor, GetSysColorBrush, HBRUSH,
+    BeginPaint, COLOR_BTNFACE, COLOR_BTNSHADOW, COLOR_BTNTEXT, COLOR_GRAYTEXT, COLOR_HIGHLIGHT,
+    COLOR_HIGHLIGHTTEXT, COLOR_WINDOW, COLOR_WINDOWTEXT, CreateFontIndirectW, CreateSolidBrush, DFC_BUTTON,
+    DFCS_BUTTONCHECK, DFCS_BUTTONRADIO, DFCS_CHECKED, DFCS_INACTIVE, DT_CALCRECT, DT_CENTER, DT_END_ELLIPSIS,
+    DT_HIDEPREFIX, DT_LEFT, DT_NOCLIP, DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE, DT_VCENTER, DT_WORDBREAK,
+    DeleteObject, DrawFocusRect, DrawFrameControl, DrawTextW, EndPaint, FillRect, FrameRect, GetSysColor,
+    GetSysColorBrush, GetWindowDC, HBRUSH, HDC, HFONT, HGDIOBJ, InvalidateRect, OPAQUE, PAINTSTRUCT,
+    ReleaseDC, SelectObject, SetBkColor, SetBkMode, SetTextColor, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::{
     GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
@@ -34,9 +39,28 @@ use windows_sys::Win32::System::LibraryLoader::{
 use windows_sys::Win32::System::Registry::HKEY_CURRENT_USER;
 use windows_sys::Win32::System::SystemInformation::{GetVersionExW, OSVERSIONINFOW};
 use windows_sys::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
-use windows_sys::Win32::UI::Controls::SetWindowTheme;
+use windows_sys::Win32::UI::Controls::{
+    BP_CHECKBOX, BP_RADIOBUTTON, BST_CHECKED, BST_INDETERMINATE, CDDS_ITEMPREPAINT, CDDS_PREPAINT,
+    CDIS_CHECKED, CDIS_DISABLED, CDIS_HOT, CDIS_SELECTED, CDRF_DODEFAULT, CDRF_NOTIFYITEMDRAW,
+    CDRF_SKIPDEFAULT, CloseThemeData, DRAWITEMSTRUCT, DrawThemeBackground, GetThemePartSize, HDF_CENTER,
+    HDF_JUSTIFYMASK, HDF_RIGHT, HDF_SORTDOWN, HDF_SORTUP, HDI_FORMAT, HDI_TEXT, HDITEMW, HDM_GETITEMW,
+    LVM_GETHEADER, LVM_SETBKCOLOR, LVM_SETTEXTBKCOLOR, LVM_SETTEXTCOLOR, NM_CUSTOMDRAW, NMCUSTOMDRAW, NMHDR,
+    NMTBCUSTOMDRAW, ODS_DISABLED, ODS_GRAYED, ODS_HOTLIGHT, ODS_INACTIVE, ODS_NOACCEL, ODS_SELECTED,
+    OpenThemeData, SB_GETICON, SB_GETPARTS, SB_GETRECT, SB_GETTEXTLENGTHW, SB_GETTEXTW, SB_ISSIMPLE,
+    SB_SIMPLEID, SBARS_SIZEGRIP, SetWindowTheme, TBCDRF_NOBACKGROUND, TBCDRF_NOEDGES, TBCDRF_USECDCOLORS,
+    TS_DRAW, TVM_SETBKCOLOR, TVM_SETLINECOLOR, TVM_SETTEXTCOLOR,
+};
+use windows_sys::Win32::UI::HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi, SystemParametersInfoForDpi};
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetFocus, IsWindowEnabled};
+use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    SPI_GETHIGHCONTRAST, SendMessageW, SystemParametersInfoW, WM_APP, WM_THEMECHANGED,
+    BM_GETSTATE, BS_AUTORADIOBUTTON, BS_MULTILINE, BS_RADIOBUTTON, BST_PUSHED, DI_NORMAL, DrawIconEx,
+    GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMenuBarInfo, GetMenuItemInfoW, GetParent, GetWindowLongW,
+    GetWindowRect, GetWindowTextLengthW, GetWindowTextW, HICON, HMENU, MENUBARINFO, MENUITEMINFOW,
+    MIIM_STRING, NONCLIENTMETRICSW, OBJID_MENU, SM_CXSMICON, SPI_GETHIGHCONTRAST, SPI_GETNONCLIENTMETRICS,
+    SendMessageW, SystemParametersInfoW, UISF_HIDEACCEL, UISF_HIDEFOCUS, WM_APP, WM_CTLCOLORBTN,
+    WM_CTLCOLORDLG, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_GETFONT,
+    WM_NCDESTROY, WM_NOTIFY, WM_PAINT, WM_QUERYUISTATE, WM_THEMECHANGED, WS_EX_LAYOUTRTL,
 };
 use windows_sys::core::w;
 
@@ -432,11 +456,13 @@ pub enum Brush {
     Hot,
     Pressed,
     Border,
+    /// The text colour, for glyphs drawn as rectangles.
+    Text,
 }
 
 thread_local! {
     /// The dark brushes, made once and kept for the thread's life (the colours never change).
-    static DARK_BRUSHES: std::cell::Cell<[HBRUSH; 6]> = const { std::cell::Cell::new([null_mut(); 6]) };
+    static DARK_BRUSHES: std::cell::Cell<[HBRUSH; 7]> = const { std::cell::Cell::new([null_mut(); 7]) };
 }
 
 /// Light: the system's own brush (never deleted); dark: a solid brush kept for good.
@@ -447,6 +473,7 @@ pub fn brush(which: Brush) -> HBRUSH {
             Brush::Face | Brush::Pressed => COLOR_BTNFACE,
             Brush::Hot => COLOR_HIGHLIGHT,
             Brush::Border => COLOR_BTNSHADOW,
+            Brush::Text => COLOR_WINDOWTEXT,
         };
         // SAFETY: a colour index; the brush belongs to the system.
         return unsafe { GetSysColorBrush(index) };
@@ -462,6 +489,7 @@ pub fn brush(which: Brush) -> HBRUSH {
                 Brush::Hot => DARK_SYS.hot,
                 Brush::Pressed => DARK_SYS.pressed,
                 Brush::Border => DARK_SYS.border,
+                Brush::Text => DARK_SYS.window_text,
             };
             // SAFETY: a GDI brush that is kept for the thread's life, so no double free.
             all[i] = unsafe { CreateSolidBrush(color) };
@@ -542,6 +570,662 @@ pub unsafe fn theme_control(hwnd: HWND, kind: Kind) {
             SetWindowTheme(hwnd, null(), null());
         }
         SendMessageW(hwnd, WM_THEMECHANGED, 0, 0);
+    }
+}
+
+// ---- subclasses and painted parts -----------------------------------------------------------
+
+const SUBCLASS_ID: usize = 0x5244; // "RD"
+
+type SubclassFn = unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM, usize, usize) -> LRESULT;
+
+/// Installs `proc` on `hwnd` once (a second call replaces it). The procs do nothing while light,
+/// so installing them changes no pixel.
+unsafe fn subclass(hwnd: HWND, proc: SubclassFn) {
+    if hwnd.is_null() {
+        return;
+    }
+    // SAFETY: the caller's window; the id is ours.
+    unsafe {
+        SetWindowSubclass(hwnd, Some(proc), SUBCLASS_ID, 0);
+    }
+}
+
+/// A list view (its header too): the dark classes, the dark background and text colours, and
+/// the header painted by [`list_proc`] in dark.
+///
+/// # Safety
+/// `lv` is a list view of this thread.
+pub unsafe fn list(lv: HWND) {
+    // SAFETY: the caller's list view and its header.
+    unsafe {
+        subclass(lv, list_proc);
+        let dark = is_dark();
+        if !dark && !SWITCHED.load(Ordering::Relaxed) {
+            return;
+        }
+        theme_control(lv, Kind::Explorer);
+        let header = SendMessageW(lv, LVM_GETHEADER, 0, 0) as HWND;
+        theme_control(header, Kind::ItemsView);
+        let s = sys();
+        SendMessageW(lv, LVM_SETBKCOLOR, 0, s.window as LPARAM);
+        SendMessageW(lv, LVM_SETTEXTBKCOLOR, 0, s.window as LPARAM);
+        SendMessageW(lv, LVM_SETTEXTCOLOR, 0, s.window_text as LPARAM);
+        InvalidateRect(lv, null(), 1);
+    }
+}
+
+/// A tree view: the dark class and colours.
+///
+/// # Safety
+/// `tree` is a tree view of this thread.
+pub unsafe fn tree(tree: HWND) {
+    let dark = is_dark();
+    if !dark && !SWITCHED.load(Ordering::Relaxed) {
+        return;
+    }
+    // SAFETY: the caller's tree view.
+    unsafe {
+        theme_control(tree, Kind::Explorer);
+        let s = sys();
+        SendMessageW(tree, TVM_SETBKCOLOR, 0, s.window as LPARAM);
+        SendMessageW(tree, TVM_SETTEXTCOLOR, 0, s.window_text as LPARAM);
+        SendMessageW(tree, TVM_SETLINECOLOR, 0, s.gray_text as LPARAM);
+        InvalidateRect(tree, null(), 1);
+    }
+}
+
+/// A status bar: painted by [`status_proc`] in dark.
+///
+/// # Safety
+/// `status` is a status bar of this thread.
+pub unsafe fn status_bar(status: HWND) {
+    // SAFETY: the caller's status bar.
+    unsafe {
+        subclass(status, status_proc);
+        if is_dark() || SWITCHED.load(Ordering::Relaxed) {
+            InvalidateRect(status, null(), 1);
+        }
+    }
+}
+
+/// A check box or radio button: the dark glyph from the `DarkMode_Explorer` theme and its text
+/// painted by [`check_proc`] in the window's text colour (the themed button ignores
+/// `WM_CTLCOLORSTATIC` for its caption).
+///
+/// # Safety
+/// `button` is a check box or radio button of this thread.
+pub unsafe fn check_box(button: HWND) {
+    // SAFETY: the caller's button.
+    unsafe {
+        subclass(button, check_proc);
+        theme_control(button, Kind::Explorer);
+    }
+}
+
+/// The `WM_CTLCOLOR*` family in dark: the text and background colours, and the brush. `None`
+/// while light (the caller falls through to the default), and for other messages.
+///
+/// # Safety
+/// `wparam` is the message's device context and `lparam` its control.
+pub unsafe fn ctl_color(msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    if !is_dark() {
+        return None;
+    }
+    let s = sys();
+    let (bg, which) = match msg {
+        WM_CTLCOLORDLG | WM_CTLCOLORSTATIC | WM_CTLCOLORBTN => (s.button_face, Brush::Face),
+        WM_CTLCOLOREDIT | WM_CTLCOLORLISTBOX => (s.window, Brush::Window),
+        _ => return None,
+    };
+    // SAFETY: the message's device context; the control may be null for WM_CTLCOLORDLG.
+    unsafe {
+        let hdc = wparam as HDC;
+        let ctl = lparam as HWND;
+        let disabled = !ctl.is_null() && IsWindowEnabled(ctl) == 0;
+        SetTextColor(hdc, if disabled { s.gray_text } else { s.window_text });
+        SetBkColor(hdc, bg);
+        SetBkMode(hdc, OPAQUE as i32);
+    }
+    Some(brush(which) as LRESULT)
+}
+
+/// A 1 px line as a filled rectangle.
+unsafe fn line(hdc: HDC, left: i32, top: i32, right: i32, bottom: i32, which: Brush) {
+    let rc = RECT { left, top, right, bottom };
+    // SAFETY: a plain fill on the caller's device context.
+    unsafe {
+        FillRect(hdc, &rc, brush(which));
+    }
+}
+
+/// The text of a window, for painting.
+unsafe fn text_of(hwnd: HWND) -> Vec<u16> {
+    // SAFETY: the buffer is as long as the text plus the terminator.
+    unsafe {
+        let n = GetWindowTextLengthW(hwnd).max(0) as usize;
+        let mut buf = vec![0u16; n + 1];
+        let got = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32).max(0) as usize;
+        buf.truncate(got);
+        buf
+    }
+}
+
+fn scaled(px: i32, dpi: u32) -> i32 {
+    (px * dpi as i32 + 48) / 96
+}
+
+/// The list view's subclass: in dark, its header's items are painted here (`DarkMode_ItemsView`
+/// gives the dark surface but black text).
+unsafe extern "system" fn list_proc(
+    hwnd: HWND,
+    msg: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    _: usize,
+    _: usize,
+) -> LRESULT {
+    // SAFETY: the subclassed list view's messages; `lp` is an NMHDR for WM_NOTIFY.
+    unsafe {
+        if msg == WM_NOTIFY && is_dark() {
+            let nm = &*(lp as *const NMHDR);
+            if nm.code == NM_CUSTOMDRAW && nm.hwndFrom == SendMessageW(hwnd, LVM_GETHEADER, 0, 0) as HWND {
+                return header_custom_draw(&*(lp as *const NMCUSTOMDRAW));
+            }
+        }
+        if msg == WM_NCDESTROY {
+            RemoveWindowSubclass(hwnd, Some(list_proc), SUBCLASS_ID);
+        }
+        DefSubclassProc(hwnd, msg, wp, lp)
+    }
+}
+
+/// A header item in dark: the surface (hot or pressed when so), a divider on its right, the
+/// text with the column's alignment and the sort arrow.
+unsafe fn header_custom_draw(cd: &NMCUSTOMDRAW) -> LRESULT {
+    if cd.dwDrawStage == CDDS_PREPAINT {
+        return CDRF_NOTIFYITEMDRAW as LRESULT;
+    }
+    if cd.dwDrawStage != CDDS_ITEMPREPAINT {
+        return CDRF_DODEFAULT as LRESULT;
+    }
+    // SAFETY: the header's paint device context and item; the text buffer is ours.
+    unsafe {
+        let header = cd.hdr.hwndFrom;
+        let hdc = cd.hdc;
+        let rc = cd.rc;
+        let fill = if cd.uItemState & CDIS_SELECTED != 0 {
+            Brush::Pressed
+        } else if cd.uItemState & CDIS_HOT != 0 {
+            Brush::Hot
+        } else {
+            Brush::Header
+        };
+        FillRect(hdc, &rc, brush(fill));
+        line(hdc, rc.right - 1, rc.top, rc.right, rc.bottom, Brush::Border);
+        line(hdc, rc.left, rc.bottom - 1, rc.right, rc.bottom, Brush::Border);
+        let mut text = [0u16; 256];
+        let mut item: HDITEMW = std::mem::zeroed();
+        item.mask = HDI_TEXT | HDI_FORMAT;
+        item.pszText = text.as_mut_ptr();
+        item.cchTextMax = text.len() as i32;
+        SendMessageW(header, HDM_GETITEMW, cd.dwItemSpec, &mut item as *mut _ as LPARAM);
+        let font = SendMessageW(header, WM_GETFONT, 0, 0) as HGDIOBJ;
+        let old = SelectObject(hdc, font);
+        SetBkMode(hdc, TRANSPARENT as i32);
+        SetTextColor(hdc, sys().window_text);
+        let dpi = GetDpiForWindow(header);
+        let pad = scaled(6, dpi);
+        let mut text_rc = RECT { left: rc.left + pad, top: rc.top, right: rc.right - pad, bottom: rc.bottom };
+        let align = match item.fmt & HDF_JUSTIFYMASK {
+            HDF_RIGHT => DT_RIGHT,
+            HDF_CENTER => DT_CENTER,
+            _ => DT_LEFT,
+        };
+        let len = text.iter().position(|&c| c == 0).unwrap_or(text.len()) as i32;
+        DrawTextW(
+            hdc,
+            text.as_mut_ptr(),
+            len,
+            &mut text_rc,
+            align | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX,
+        );
+        if item.fmt & (HDF_SORTUP | HDF_SORTDOWN) != 0 {
+            // a small triangle at the top centre, as the theme draws it
+            let rows = scaled(4, dpi).max(3);
+            let cx = (rc.left + rc.right) / 2;
+            for i in 0..rows {
+                let y = if item.fmt & HDF_SORTUP != 0 { rc.top + 1 + i } else { rc.top + rows - i };
+                line(hdc, cx - i, y, cx + i + 1, y + 1, Brush::Border);
+            }
+        }
+        SelectObject(hdc, old);
+    }
+    CDRF_SKIPDEFAULT as LRESULT
+}
+
+/// The status bar's subclass: in dark, painted here (the themed one is light).
+unsafe extern "system" fn status_proc(
+    hwnd: HWND,
+    msg: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    _: usize,
+    _: usize,
+) -> LRESULT {
+    // SAFETY: the subclassed status bar's messages.
+    unsafe {
+        match msg {
+            WM_ERASEBKGND if is_dark() => 1,
+            WM_PAINT if is_dark() => {
+                paint_status(hwnd);
+                0
+            }
+            WM_NCDESTROY => {
+                RemoveWindowSubclass(hwnd, Some(status_proc), SUBCLASS_ID);
+                DefSubclassProc(hwnd, msg, wp, lp)
+            }
+            _ => DefSubclassProc(hwnd, msg, wp, lp),
+        }
+    }
+}
+
+unsafe fn paint_status(hwnd: HWND) {
+    // SAFETY: a paint cycle on the status bar; the buffers are sized from the control's answers.
+    unsafe {
+        let mut ps: PAINTSTRUCT = std::mem::zeroed();
+        let hdc = BeginPaint(hwnd, &mut ps);
+        let mut client: RECT = std::mem::zeroed();
+        GetClientRect(hwnd, &mut client);
+        FillRect(hdc, &client, brush(Brush::Face));
+        let s = sys();
+        let dpi = GetDpiForWindow(hwnd);
+        let font = SendMessageW(hwnd, WM_GETFONT, 0, 0) as HGDIOBJ;
+        let old = SelectObject(hdc, font);
+        SetBkMode(hdc, TRANSPARENT as i32);
+        SetTextColor(hdc, s.window_text);
+        let pad = scaled(4, dpi);
+        let icon_px = GetSystemMetricsForDpi(SM_CXSMICON, dpi);
+        let draw_part = |part: usize, rc: RECT| {
+            let mut x = rc.left + pad;
+            let icon = SendMessageW(hwnd, SB_GETICON, part, 0) as HICON;
+            if !icon.is_null() {
+                let y = rc.top + (rc.bottom - rc.top - icon_px) / 2;
+                DrawIconEx(hdc, x, y, icon, icon_px, icon_px, 0, null_mut(), DI_NORMAL);
+                x += icon_px + pad;
+            }
+            let len = (SendMessageW(hwnd, SB_GETTEXTLENGTHW, part, 0) & 0xffff) as usize;
+            let mut buf = vec![0u16; len + 1];
+            SendMessageW(hwnd, SB_GETTEXTW, part, buf.as_mut_ptr() as LPARAM);
+            let mut text_rc = RECT { left: x, top: rc.top, right: rc.right - pad, bottom: rc.bottom };
+            DrawTextW(
+                hdc,
+                buf.as_mut_ptr(),
+                len as i32,
+                &mut text_rc,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX,
+            );
+        };
+        if SendMessageW(hwnd, SB_ISSIMPLE, 0, 0) != 0 {
+            draw_part(SB_SIMPLEID as usize, client);
+        } else {
+            let n = SendMessageW(hwnd, SB_GETPARTS, 0, 0).max(0) as usize;
+            for part in 0..n {
+                let mut rc: RECT = std::mem::zeroed();
+                SendMessageW(hwnd, SB_GETRECT, part, &mut rc as *mut _ as LPARAM);
+                draw_part(part, rc);
+                if part + 1 < n {
+                    line(hdc, rc.right, rc.top + 1, rc.right + 1, rc.bottom - 1, Brush::Border);
+                }
+            }
+        }
+        if GetWindowLongW(hwnd, GWL_STYLE) as u32 & SBARS_SIZEGRIP != 0 {
+            // the size grip: three rows of dots in the corner
+            let dot = scaled(2, dpi).max(1);
+            let step = dot * 2;
+            let grip = brush(Brush::Border);
+            for row in 0..3 {
+                for col in 0..=row {
+                    let x = client.right - step * (col + 1) - dot;
+                    let y = client.bottom - step * (3 - row) - dot;
+                    let rc = RECT { left: x, top: y, right: x + dot, bottom: y + dot };
+                    FillRect(hdc, &rc, grip);
+                }
+            }
+        }
+        SelectObject(hdc, old);
+        EndPaint(hwnd, &ps);
+    }
+}
+
+const BST_HOT_STATE: usize = 0x0200;
+
+/// The check box and radio button subclass: in dark, painted here (the themed glyph from
+/// `DarkMode_Explorer`, the caption in the window's text colour).
+unsafe extern "system" fn check_proc(
+    hwnd: HWND,
+    msg: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    _: usize,
+    _: usize,
+) -> LRESULT {
+    // SAFETY: the subclassed button's messages.
+    unsafe {
+        match msg {
+            WM_ERASEBKGND if is_dark() => 1,
+            WM_PAINT if is_dark() => {
+                paint_check(hwnd);
+                0
+            }
+            WM_NCDESTROY => {
+                RemoveWindowSubclass(hwnd, Some(check_proc), SUBCLASS_ID);
+                DefSubclassProc(hwnd, msg, wp, lp)
+            }
+            _ => DefSubclassProc(hwnd, msg, wp, lp),
+        }
+    }
+}
+
+unsafe fn paint_check(hwnd: HWND) {
+    // SAFETY: a paint cycle on the button; the theme handle is closed before returning.
+    unsafe {
+        let mut ps: PAINTSTRUCT = std::mem::zeroed();
+        let hdc = BeginPaint(hwnd, &mut ps);
+        let mut rc: RECT = std::mem::zeroed();
+        GetClientRect(hwnd, &mut rc);
+        // the background is the parent's: what it answers for a static
+        let parent = GetParent(hwnd);
+        let bg = SendMessageW(parent, WM_CTLCOLORSTATIC, hdc as WPARAM, hwnd as LPARAM) as HBRUSH;
+        FillRect(hdc, &rc, if bg.is_null() { brush(Brush::Face) } else { bg });
+        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+        let radio = matches!((style & 0xf) as i32, BS_RADIOBUTTON | BS_AUTORADIOBUTTON);
+        let part = if radio { BP_RADIOBUTTON } else { BP_CHECKBOX };
+        let state = SendMessageW(hwnd, BM_GETSTATE, 0, 0) as usize;
+        let enabled = IsWindowEnabled(hwnd) != 0;
+        // CBS_UNCHECKEDNORMAL 1 .. CBS_MIXEDDISABLED 12: four states per check value
+        let base = if state & BST_INDETERMINATE as usize != 0 {
+            8
+        } else if state & BST_CHECKED as usize != 0 {
+            4
+        } else {
+            0
+        };
+        let variant = if !enabled {
+            4
+        } else if state & BST_PUSHED as usize != 0 {
+            3
+        } else if state & BST_HOT_STATE != 0 {
+            2
+        } else {
+            1
+        };
+        let theme = OpenThemeData(hwnd, w!("Button"));
+        let mut glyph = SIZE { cx: 13, cy: 13 };
+        if theme != 0 {
+            GetThemePartSize(theme, hdc, part, (base + variant) as i32, null(), TS_DRAW, &mut glyph);
+        }
+        let rtl = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32 & WS_EX_LAYOUTRTL != 0;
+        let gy = rc.top + (rc.bottom - rc.top - glyph.cy) / 2;
+        let gx = if rtl { rc.right - glyph.cx } else { rc.left };
+        let glyph_rc = RECT { left: gx, top: gy, right: gx + glyph.cx, bottom: gy + glyph.cy };
+        if theme != 0 {
+            DrawThemeBackground(theme, hdc, part, (base + variant) as i32, &glyph_rc, null());
+            CloseThemeData(theme);
+        } else {
+            let flags = if radio { DFCS_BUTTONRADIO } else { DFCS_BUTTONCHECK }
+                | if state & BST_CHECKED as usize != 0 { DFCS_CHECKED } else { 0 }
+                | if enabled { 0 } else { DFCS_INACTIVE };
+            let mut frame = glyph_rc;
+            DrawFrameControl(hdc, &mut frame, DFC_BUTTON, flags);
+        }
+        let dpi = GetDpiForWindow(hwnd);
+        let gap = scaled(3, dpi);
+        let mut text_rc = rc;
+        if rtl {
+            text_rc.right = gx - gap;
+        } else {
+            text_rc.left = glyph_rc.right + gap;
+        }
+        let font = SendMessageW(hwnd, WM_GETFONT, 0, 0) as HGDIOBJ;
+        let old = SelectObject(hdc, font);
+        SetBkMode(hdc, TRANSPARENT as i32);
+        let s = sys();
+        SetTextColor(hdc, if enabled { s.window_text } else { s.gray_text });
+        let mut text = text_of(hwnd);
+        let multiline = style as i32 & BS_MULTILINE != 0;
+        let flags = DT_LEFT
+            | if multiline { DT_WORDBREAK } else { DT_SINGLELINE | DT_VCENTER }
+            | if SendMessageW(hwnd, WM_QUERYUISTATE, 0, 0) as u32 & UISF_HIDEACCEL != 0 {
+                DT_HIDEPREFIX
+            } else {
+                0
+            };
+        DrawTextW(hdc, text.as_mut_ptr(), text.len() as i32, &mut text_rc, flags);
+        if GetFocus() == hwnd && SendMessageW(hwnd, WM_QUERYUISTATE, 0, 0) as u32 & UISF_HIDEFOCUS == 0 {
+            let mut focus = text_rc;
+            DrawTextW(hdc, text.as_mut_ptr(), text.len() as i32, &mut focus, flags | DT_CALCRECT);
+            focus.left -= 1;
+            focus.right += 1;
+            focus.top = text_rc.top + (text_rc.bottom - text_rc.top - (focus.bottom - focus.top)) / 2 - 1;
+            focus.bottom = focus.top + (text_rc.bottom - text_rc.top).min(focus.bottom - focus.top + 2);
+            DrawFocusRect(hdc, &focus);
+        }
+        SelectObject(hdc, old);
+        EndPaint(hwnd, &ps);
+    }
+}
+
+// ---- toolbar, tooltips and the menu bar -----------------------------------------------------
+
+/// A control's tooltip window (`TB_GETTOOLTIPS`, `LVM_GETTOOLTIPS`, ...) follows the mode.
+///
+/// # Safety
+/// `owner` is a control of this thread and `get` its message that answers the tooltip.
+pub unsafe fn tooltip(owner: HWND, get: u32) {
+    if owner.is_null() {
+        return;
+    }
+    // SAFETY: the control's own tooltip window, or null.
+    unsafe {
+        let tip = SendMessageW(owner, get, 0, 0) as HWND;
+        theme_control(tip, Kind::Explorer);
+    }
+}
+
+/// A toolbar's `NM_CUSTOMDRAW` in dark: the hot, pressed and checked buttons get their own
+/// fills (the themed ones are light), the images stay; `dropdown` is the search box's
+/// chevron-only button, drawn whole. Light: the default drawing.
+///
+/// # Safety
+/// `cd` is the notification's `NMTBCUSTOMDRAW`.
+pub unsafe fn toolbar_custom_draw(cd: &mut NMTBCUSTOMDRAW, dropdown: bool) -> LRESULT {
+    if !is_dark() {
+        return CDRF_DODEFAULT as LRESULT;
+    }
+    match cd.nmcd.dwDrawStage {
+        CDDS_PREPAINT => CDRF_NOTIFYITEMDRAW as LRESULT,
+        CDDS_ITEMPREPAINT => {
+            let hdc = cd.nmcd.hdc;
+            let rc = cd.nmcd.rc;
+            let st = cd.nmcd.uItemState;
+            let fill = if st & (CDIS_SELECTED | CDIS_CHECKED) != 0 {
+                Some(Brush::Pressed)
+            } else if st & CDIS_HOT != 0 {
+                Some(Brush::Hot)
+            } else {
+                None
+            };
+            // SAFETY: the toolbar's paint device context and the item's rectangle.
+            unsafe {
+                if let Some(b) = fill {
+                    FillRect(hdc, &rc, brush(b));
+                    FrameRect(hdc, &rc, brush(Brush::Border));
+                }
+                if dropdown {
+                    // a chevron in the text colour, as wide as the themed arrow
+                    let dpi = GetDpiForWindow(cd.nmcd.hdr.hwndFrom);
+                    let rows = scaled(3, dpi).max(2);
+                    let cx = (rc.left + rc.right) / 2;
+                    let top = (rc.top + rc.bottom) / 2 - rows / 2;
+                    let which = if st & CDIS_DISABLED != 0 { Brush::Border } else { Brush::Text };
+                    for i in 0..rows {
+                        line(hdc, cx - (rows - i), top + i, cx + (rows - i), top + i + 1, which);
+                    }
+                    return CDRF_SKIPDEFAULT as LRESULT;
+                }
+            }
+            cd.clrText = sys().window_text;
+            (TBCDRF_NOBACKGROUND | TBCDRF_NOEDGES | TBCDRF_USECDCOLORS) as LRESULT
+        }
+        _ => CDRF_DODEFAULT as LRESULT,
+    }
+}
+
+/// The undocumented messages Windows sends a window whose menu bar it would paint itself:
+/// answering them paints the bar (Explorer, Notepad++ and Chromium do the same).
+pub const WM_UAHDRAWMENU: u32 = 0x0091;
+pub const WM_UAHDRAWMENUITEM: u32 = 0x0092;
+
+#[repr(C)]
+struct UahMenu {
+    hmenu: HMENU,
+    hdc: HDC,
+    flags: u32,
+}
+
+#[repr(C)]
+struct UahMenuItem {
+    position: i32,
+    /// `UAHMENUITEMMETRICS`: two or four size pairs.
+    metrics: [u32; 8],
+    /// `UAHMENUPOPUPMETRICS`: four widths and a flag word.
+    popup: [u32; 5],
+}
+
+#[repr(C)]
+struct UahDrawMenuItem {
+    dis: DRAWITEMSTRUCT,
+    um: UahMenu,
+    umi: UahMenuItem,
+}
+
+/// The menu bar's rectangle in window coordinates (for `GetWindowDC` and the UAH device
+/// context), or `None` without a bar.
+unsafe fn menu_bar_rect(hwnd: HWND) -> Option<RECT> {
+    // SAFETY: a zeroed MENUBARINFO with its size set, and the window's rectangle.
+    unsafe {
+        let mut mbi: MENUBARINFO = std::mem::zeroed();
+        mbi.cbSize = size_of::<MENUBARINFO>() as u32;
+        if GetMenuBarInfo(hwnd, OBJID_MENU, 0, &mut mbi) == 0 {
+            return None;
+        }
+        let mut win: RECT = std::mem::zeroed();
+        GetWindowRect(hwnd, &mut win);
+        Some(RECT {
+            left: mbi.rcBar.left - win.left,
+            top: mbi.rcBar.top - win.top,
+            right: mbi.rcBar.right - win.left,
+            bottom: mbi.rcBar.bottom - win.top,
+        })
+    }
+}
+
+/// The menu bar in dark: `WM_UAHDRAWMENU` fills the bar, `WM_UAHDRAWMENUITEM` draws an item.
+/// `None` while light, or for other messages.
+///
+/// # Safety
+/// `lparam` is the message's structure.
+pub unsafe fn menu_bar_message(hwnd: HWND, msg: u32, lparam: LPARAM) -> Option<LRESULT> {
+    if !is_dark() {
+        return None;
+    }
+    // SAFETY: the structures Windows passes with these messages (DARKMODE.md §2).
+    unsafe {
+        match msg {
+            WM_UAHDRAWMENU => {
+                let um = &*(lparam as *const UahMenu);
+                if let Some(rc) = menu_bar_rect(hwnd) {
+                    FillRect(um.hdc, &rc, brush(Brush::Face));
+                }
+                Some(1)
+            }
+            WM_UAHDRAWMENUITEM => {
+                let d = &*(lparam as *const UahDrawMenuItem);
+                let hdc = d.dis.hDC;
+                let rc = d.dis.rcItem;
+                let st = d.dis.itemState;
+                let mut text = [0u16; 256];
+                let mut mii: MENUITEMINFOW = std::mem::zeroed();
+                mii.cbSize = size_of::<MENUITEMINFOW>() as u32;
+                mii.fMask = MIIM_STRING;
+                mii.dwTypeData = text.as_mut_ptr();
+                mii.cch = text.len() as u32 - 1;
+                GetMenuItemInfoW(d.um.hmenu, d.umi.position as u32, 1, &mut mii);
+                let fill = if st & (ODS_HOTLIGHT | ODS_SELECTED) != 0 && st & ODS_INACTIVE == 0 {
+                    Brush::Hot
+                } else {
+                    Brush::Face
+                };
+                FillRect(hdc, &rc, brush(fill));
+                let s = sys();
+                let gray = st & (ODS_GRAYED | ODS_DISABLED | ODS_INACTIVE) != 0;
+                SetTextColor(hdc, if gray { s.gray_text } else { s.window_text });
+                SetBkMode(hdc, TRANSPARENT as i32);
+                let font = menu_font(hwnd);
+                let old = SelectObject(hdc, font as HGDIOBJ);
+                let mut text_rc = rc;
+                let flags = DT_CENTER
+                    | DT_SINGLELINE
+                    | DT_VCENTER
+                    | DT_NOCLIP
+                    | if st & ODS_NOACCEL != 0 { DT_HIDEPREFIX } else { 0 };
+                DrawTextW(hdc, text.as_mut_ptr(), -1, &mut text_rc, flags);
+                SelectObject(hdc, old);
+                DeleteObject(font as HGDIOBJ);
+                Some(1)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// The menu font of the window's DPI; the caller deletes it.
+unsafe fn menu_font(hwnd: HWND) -> HFONT {
+    // SAFETY: a zeroed NONCLIENTMETRICSW with its size set.
+    unsafe {
+        let mut ncm: NONCLIENTMETRICSW = std::mem::zeroed();
+        ncm.cbSize = size_of::<NONCLIENTMETRICSW>() as u32;
+        SystemParametersInfoForDpi(
+            SPI_GETNONCLIENTMETRICS,
+            ncm.cbSize,
+            &mut ncm as *mut _ as *mut c_void,
+            0,
+            GetDpiForWindow(hwnd),
+        );
+        CreateFontIndirectW(&ncm.lfMenuFont)
+    }
+}
+
+/// After `WM_NCPAINT` and `WM_NCACTIVATE` in dark: the one-pixel line Windows leaves under the
+/// menu bar in its own colour is painted over.
+///
+/// # Safety
+/// `hwnd` is a window of this thread with a menu bar.
+pub unsafe fn menu_bar_line(hwnd: HWND) {
+    if !is_dark() {
+        return;
+    }
+    // SAFETY: the window's own device context, released before returning.
+    unsafe {
+        let Some(bar) = menu_bar_rect(hwnd) else { return };
+        let hdc = GetWindowDC(hwnd);
+        if hdc.is_null() {
+            return;
+        }
+        let rc = RECT { left: bar.left, top: bar.bottom, right: bar.right, bottom: bar.bottom + 1 };
+        FillRect(hdc, &rc, brush(Brush::Face));
+        ReleaseDC(hwnd, hdc);
     }
 }
 

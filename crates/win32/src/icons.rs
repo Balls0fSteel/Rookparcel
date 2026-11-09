@@ -57,7 +57,7 @@ pub fn toolbar_images(size: usize) -> (HIMAGELIST, HIMAGELIST) {
         let disabled = ImageList_Create(size as i32, size as i32, flags, Icon::ALL.len() as i32, 0);
         for icon in Icon::ALL {
             for (list, gray) in [(normal, false), (disabled, true)] {
-                let bmp = dib(size, &icons::toolbar_bgra(icon, size, gray));
+                let bmp = dib(size, &icons::toolbar_bgra(icon, size, gray, crate::theme::is_dark()));
                 ImageList_Add(list, bmp, null_mut());
                 DeleteObject(bmp);
             }
@@ -86,7 +86,7 @@ pub fn app_icon_resource() -> *const u16 {
 /// A state icon at [`icons::state_size`]`(size)` pixels, from its PNG. Free with `DestroyIcon`.
 pub fn state_icon(icon: StateIcon, size: usize) -> HICON {
     let size = icons::state_size(size as u32);
-    png_icon(icon.png(size), size)
+    png_icon(icon.themed_png(size, crate::theme::is_dark()), size)
 }
 
 /// An icon from a PNG of `size` pixels. Free with `DestroyIcon`.
@@ -124,16 +124,18 @@ pub fn state_images(size: usize) -> (HIMAGELIST, usize) {
 }
 
 thread_local! {
-    /// Menu bitmaps by symbol, pixel size and disabled look. A menu only borrows its items'
-    /// bitmaps, so these stay for the life of the GUI thread: a few dozen per DPI in use.
-    static MENU_BITMAPS: RefCell<HashMap<(UiIcon, u32, bool), HBITMAP>> = RefCell::default();
+    /// Menu bitmaps by symbol, pixel size, disabled look and palette (D64). A menu only borrows
+    /// its items' bitmaps, so these stay for the life of the GUI thread: a few dozen per DPI in
+    /// use.
+    static MENU_BITMAPS: RefCell<HashMap<(UiIcon, u32, bool, bool), HBITMAP>> = RefCell::default();
 }
 
 fn menu_bitmap(icon: UiIcon, px: u32, gray: bool) -> HBITMAP {
+    let dark = crate::theme::is_dark();
     MENU_BITMAPS.with(|m| {
-        *m.borrow_mut()
-            .entry((icon, px, gray))
-            .or_insert_with(|| unsafe { dib(px as usize, &icons::bgra(icon.png(px), px as usize, gray)) })
+        *m.borrow_mut().entry((icon, px, gray, dark)).or_insert_with(|| unsafe {
+            dib(px as usize, &icons::bgra(icon.themed_png(px, dark), px as usize, gray))
+        })
     })
 }
 
@@ -189,8 +191,9 @@ pub fn ui_images(size: usize) -> HIMAGELIST {
     unsafe {
         let flags = ILC_COLOR32 | crate::util::rtl(ILC_MIRROR);
         let list = ImageList_Create(px as i32, px as i32, flags, UiIcon::ALL.len() as i32, 0);
+        let dark = crate::theme::is_dark();
         for icon in UiIcon::ALL {
-            let h = png_icon(icon.png(px), px);
+            let h = png_icon(icon.themed_png(px, dark), px);
             ImageList_ReplaceIcon(list, -1, h);
             DestroyIcon(h);
         }
