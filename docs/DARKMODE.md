@@ -1,6 +1,6 @@
 # Win32 dark mode: design
 
-Status: **built** (D64; slices 1-7 in 1.2.24-1.2.27, 2026-11-09), after the design below was
+Status: **built** (D64; slices 1-7 in 1.2.24-1.2.28, 2026-11-09), after the design below was
 written on the same day. `crates/win32/src/theme.rs` is the implementation; §7's slices read as
 the commit history. Left open: see BACKLOG "Themes" (a 17763 VM, 150/200 % screenshots, the
 updater's marquee bar and the message boxes, which stay the system's).

@@ -275,7 +275,7 @@ server and a per-browser choice; `frontend::palette` for the drawn parts; GTK's 
 Blocks cells follow a dark theme and `is_dark` also reads the XDG portal's colour scheme; the
 scheduler's Off cell is the surface colour in every UI. Still open:
 
-- **Win32 dark mode (D64, 1.2.24-1.2.27):** built as [DARKMODE.md](DARKMODE.md) designed it.
+- **Win32 dark mode (D64, 1.2.24-1.2.28):** built as [DARKMODE.md](DARKMODE.md) designed it.
   Still to check by hand: a Windows 10 1809 (17763) VM, where ordinal 135 is
   `AllowDarkModeForApp` and the DWM attribute is 19; 150 % and 200 % DPI screenshots in dark
   (the hidden desktop has the session's DPI); a live flip of Windows' *Choose your mode* with
