@@ -70,6 +70,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="1.2.29" date="2026-11-09" type="stable">
+      <description>
+        <p>Dark mode on Windows (following the system, or chosen), nine themes and your own CSS themes for the Web UI, and dark-theme fixes for the GTK app's drawn parts, icons and scheduler.</p>
+      </description>
+    </release>
     <release version="1.2.21" date="2026-11-07" type="stable">
       <description>
         <p>The Files tab shows the torrent's files in their folders, as the Add Torrent dialog does; a Tree view button gives back the single list of paths. The Add Torrent dialog gets a file filter and type-ahead. The app no longer closes on some systems as soon as a torrent is listed.</p>

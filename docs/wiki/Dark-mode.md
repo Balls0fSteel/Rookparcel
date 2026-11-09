@@ -15,7 +15,7 @@ Dark needs **Windows 10 version 1809** or later. An older Windows, or one withou
 
 ## Linux (GTK)
 
-The GTK program follows the desktop's theme: GNOME's and KDE's *Dark* appearance, a dark GTK theme, or `gtk-application-prefer-dark-theme`. Its own drawn parts (the progress bars, the piece map, the speed graph, the scheduler) switch with it.
+The GTK program follows its GTK theme: a dark theme such as Adwaita-dark or Breeze-Dark, `gtk-application-prefer-dark-theme`, or `GTK_THEME=Adwaita:dark`. A desktop's dark preference on its own (GNOME's or KDE's *Dark* style) does not darken plain GTK 4 windows, so Rookparcel stays light with it until the GTK theme is dark too. Its own drawn parts (the progress bars, the piece map, the speed graph, the scheduler) and icons switch with the theme.
 
 ## macOS
 

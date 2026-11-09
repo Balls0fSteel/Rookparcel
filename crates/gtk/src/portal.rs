@@ -1,8 +1,8 @@
 //! XDG desktop portals, over GDBus as the tray does (no library beyond GIO). What a Flatpak
 //! needs from them: autostart through the Background portal (`integration`, Preferences >
-//! General's "Start Rookparcel on system startup"); and what every desktop offers through them:
-//! the user's light-or-dark preference from the Settings portal ([`color_scheme`], which the
-//! icons and the drawn widgets follow).
+//! General's "Start Rookparcel on system startup"). The Settings portal's `color-scheme` was
+//! read here in 1.2.23-1.2.28; it went, since plain GTK 4 widgets do not follow it and the
+//! icons must match the widgets (`icons::is_dark`).
 //!
 //! A portal request answers twice: the method call returns the path of an
 //! `org.freedesktop.portal.Request` object at once, and the outcome arrives later on its
@@ -22,12 +22,6 @@ use gtk::{gio, glib};
 
 const BUS: &str = "org.freedesktop.portal.Desktop";
 const PATH: &str = "/org/freedesktop/portal/desktop";
-const SETTINGS: &str = "org.freedesktop.portal.Settings";
-/// The Settings portal's namespace and key of the light-or-dark preference.
-const APPEARANCE: &str = "org.freedesktop.appearance";
-const COLOR_SCHEME: &str = "color-scheme";
-/// How long a Settings read may take: a missing portal must not hold up the start.
-const SETTINGS_TIMEOUT_MS: i32 = 300;
 
 thread_local! {
     /// Makes each request's `handle_token` unique within this connection.
@@ -169,105 +163,9 @@ pub fn request_autostart(
     );
 }
 
-/// What a `color-scheme` value says: `Some(true)` prefers dark, `Some(false)` light, `None` no
-/// preference (0) or something unexpected. The value arrives boxed: `ReadOne` replies `(v)` and
-/// `SettingChanged` carries a `v`, an older portal's `Read` replies `(v)` around another `v`.
-fn prefers_dark(value: &glib::Variant) -> Option<bool> {
-    let mut v = value.clone();
-    loop {
-        if v.is_container() && v.type_().is_tuple() {
-            if v.n_children() != 1 {
-                return None;
-            }
-            v = v.child_value(0);
-        } else if v.type_().is_variant() {
-            v = v.as_variant()?;
-        } else {
-            break;
-        }
-    }
-    match v.get::<u32>()? {
-        1 => Some(true),
-        2 => Some(false),
-        _ => None,
-    }
-}
-
-/// The desktop's light-or-dark preference from the Settings portal: `Some(true)` for dark,
-/// `Some(false)` for light, `None` when there is no preference or no portal (within
-/// [`SETTINGS_TIMEOUT_MS`]). `ReadOne` first (portal version 2), then the older `Read`.
-pub fn color_scheme() -> Option<bool> {
-    let bus = gio::bus_get_sync(gio::BusType::Session, None::<&gio::Cancellable>).ok()?;
-    let args = (APPEARANCE, COLOR_SCHEME).to_variant();
-    let reply = glib::VariantTy::new("(v)").expect("a valid type");
-    ["ReadOne", "Read"].iter().find_map(|method| {
-        let v = bus
-            .call_sync(
-                Some(BUS),
-                PATH,
-                SETTINGS,
-                method,
-                Some(&args),
-                Some(reply),
-                gio::DBusCallFlags::NONE,
-                SETTINGS_TIMEOUT_MS,
-                None::<&gio::Cancellable>,
-            )
-            .ok()?;
-        prefers_dark(&v)
-    })
-}
-
-/// Calls `changed` with the new preference whenever the Settings portal announces a change of
-/// the `color-scheme` key (`SettingChanged(namespace, key, value)`). The subscription lives as
-/// long as the returned value; `None` without a session bus.
-pub fn watch_color_scheme(changed: impl Fn(Option<bool>) + 'static) -> Option<gio::SignalSubscription> {
-    let bus = gio::bus_get_sync(gio::BusType::Session, None::<&gio::Cancellable>).ok()?;
-    Some(bus.subscribe_to_signal(
-        Some(BUS),
-        Some(SETTINGS),
-        Some("SettingChanged"),
-        Some(PATH),
-        Some(APPEARANCE),
-        gio::DBusSignalFlags::NONE,
-        move |signal| {
-            let Some((namespace, key, value)) = signal.parameters.get::<(String, String, glib::Variant)>()
-            else {
-                return;
-            };
-            if namespace == APPEARANCE && key == COLOR_SCHEME {
-                changed(prefers_dark(&value));
-            }
-        },
-    ))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_colour_scheme_is_read_out_of_its_boxes() {
-        // ReadOne's reply: (v) around the u32
-        let read_one =
-            |n: u32| glib::Variant::tuple_from_iter([glib::Variant::from_variant(&n.to_variant())]);
-        assert_eq!(read_one(1).type_().as_str(), "(v)");
-        assert_eq!(prefers_dark(&read_one(1)), Some(true));
-        assert_eq!(prefers_dark(&read_one(2)), Some(false));
-        assert_eq!(prefers_dark(&read_one(0)), None);
-        assert_eq!(prefers_dark(&read_one(7)), None);
-        // an older portal's Read: (v) around a v around the u32
-        let read = glib::Variant::tuple_from_iter([glib::Variant::from_variant(
-            &glib::Variant::from_variant(&1u32.to_variant()),
-        )]);
-        assert_eq!(prefers_dark(&read), Some(true));
-        // SettingChanged's value: a bare v, or the u32 itself
-        assert_eq!(prefers_dark(&glib::Variant::from_variant(&2u32.to_variant())), Some(false));
-        assert_eq!(prefers_dark(&1u32.to_variant()), Some(true));
-        // not a colour scheme at all
-        assert_eq!(prefers_dark(&"dark".to_variant()), None);
-        assert_eq!(prefers_dark(&(1u32, 2u32).to_variant()), None);
-    }
 
     #[test]
     fn the_request_path_comes_from_the_unique_name() {

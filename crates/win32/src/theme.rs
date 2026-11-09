@@ -56,10 +56,10 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetFocus, IsWindowEnabled}
 use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     BM_GETSTATE, BS_3STATE, BS_AUTO3STATE, BS_AUTOCHECKBOX, BS_AUTORADIOBUTTON, BS_CHECKBOX, BS_GROUPBOX,
-    BS_MULTILINE, BS_RADIOBUTTON, BS_TYPEMASK, BST_PUSHED, DI_NORMAL, DrawIconEx, EnumChildWindows,
-    EnumThreadWindows, GWL_STYLE, GetClassNameW, GetClientRect, GetMenuBarInfo, GetMenuItemInfoW, GetParent,
-    GetWindowLongW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, HICON, HMENU, MENUBARINFO,
-    MENUITEMINFOW, MIIM_STRING, NONCLIENTMETRICSW, OBJID_MENU, PostMessageW, SM_CXSMICON,
+    BS_MULTILINE, BS_RADIOBUTTON, BS_TYPEMASK, BST_PUSHED, DI_NORMAL, DrawIconEx, ES_MULTILINE,
+    EnumChildWindows, EnumThreadWindows, GWL_STYLE, GetClassNameW, GetClientRect, GetMenuBarInfo,
+    GetMenuItemInfoW, GetParent, GetWindowLongW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, HICON,
+    HMENU, MENUBARINFO, MENUITEMINFOW, MIIM_STRING, NONCLIENTMETRICSW, OBJID_MENU, PostMessageW, SM_CXSMICON,
     SPI_GETHIGHCONTRAST, SPI_GETNONCLIENTMETRICS, SendMessageW, SystemParametersInfoW, UISF_HIDEACCEL,
     UISF_HIDEFOCUS, WM_APP, WM_CTLCOLORBTN, WM_CTLCOLORDLG, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX,
     WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_GETFONT, WM_INITDIALOG, WM_NCDESTROY, WM_NOTIFY, WM_PAINT,
@@ -227,23 +227,27 @@ fn inputs() -> Inputs {
 // ---- Windows' own state ---------------------------------------------------------------------
 
 /// Windows' "Choose your mode" for apps: `ROOKPARCEL_FORCE_WINDOWS_DARK=0|1` for tests, else
-/// uxtheme's answer, else the registry value the setting writes.
+/// the registry value the setting writes, else uxtheme's answer. The registry comes first
+/// because `ShouldAppsUseDarkMode` answers from the app mode once `SetPreferredAppMode(ForceDark)`
+/// is in force: after a switch to dark it says dark whatever Windows is set to, so a flip
+/// back to light would never be seen (found on the Windows 11 VM, 2026-11-09).
 fn windows_dark(u: Option<&Uxtheme>) -> Option<bool> {
     match std::env::var("ROOKPARCEL_FORCE_WINDOWS_DARK").ok().as_deref() {
         Some("1") => return Some(true),
         Some("0") => return Some(false),
         _ => {}
     }
-    if let Some(u) = u {
-        // SAFETY: a no-argument call into uxtheme.
-        return Some(unsafe { (u.should_apps_use_dark_mode)() });
-    }
-    crate::integration::get_dword_in(
+    let stored = crate::integration::get_dword_in(
         HKEY_CURRENT_USER,
         r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
         Some("AppsUseLightTheme"),
     )
-    .map(|light| light == 0)
+    .map(|light| light == 0);
+    if stored.is_some() {
+        return stored;
+    }
+    // SAFETY: a no-argument call into uxtheme.
+    u.map(|u| unsafe { (u.should_apps_use_dark_mode)() })
 }
 
 /// Windows High Contrast is on (`ROOKPARCEL_FORCE_HIGH_CONTRAST=1` for tests).
@@ -1297,7 +1301,6 @@ unsafe fn paint_tabs(hwnd: HWND) {
         if images != 0 {
             ImageList_GetIconSize(images, &mut icx, &mut icy);
         }
-        let pad = scaled(6, dpi);
         let gap = scaled(4, dpi);
         FrameRect(hdc, &body, brush(Brush::Border));
         for i in 0..n {
@@ -1323,21 +1326,30 @@ unsafe fn paint_tabs(hwnd: HWND) {
             item.pszText = text.as_mut_ptr();
             item.cchTextMax = text.len() as i32;
             SendMessageW(hwnd, TCM_GETITEMW, i, &mut item as *mut _ as LPARAM);
-            let mut x = rc.left + pad;
+            // the icon and the text centred in the item, as the control lays them out: the
+            // item is as wide as the control's own padding makes it, which does not scale
+            // the way a fixed margin would (at 150 % a margin of 6 clipped "General" to
+            // "Genera", found on the Windows 11 VM, 2026-11-09)
+            let len = text.iter().position(|&c| c == 0).unwrap_or(text.len()) as i32;
+            let mut measure: RECT = std::mem::zeroed();
+            DrawTextW(hdc, text.as_mut_ptr(), len, &mut measure, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX);
+            let has_image = images != 0 && item.iImage >= 0;
+            let content = if has_image { icx + gap } else { 0 } + measure.right - measure.left;
+            let edge = scaled(2, dpi);
+            let mut x = rc.left + ((rc.right - rc.left - content) / 2).max(edge);
             let mid = (rc.top + rc.bottom) / 2 + if selected { 1 } else { 0 };
-            if images != 0 && item.iImage >= 0 {
+            if has_image {
                 ImageList_Draw(images, item.iImage, hdc, x, mid - icy / 2, ILD_TRANSPARENT);
                 x += icx + gap;
             }
             SetTextColor(hdc, s.window_text);
-            let len = text.iter().position(|&c| c == 0).unwrap_or(text.len()) as i32;
-            let mut text_rc = RECT { left: x, top: rc.top, right: rc.right - pad, bottom: rc.bottom };
+            let mut text_rc = RECT { left: x, top: rc.top, right: rc.right - edge, bottom: rc.bottom };
             DrawTextW(
                 hdc,
                 text.as_mut_ptr(),
                 len,
                 &mut text_rc,
-                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX,
             );
         }
         SelectObject(hdc, old);
@@ -1438,6 +1450,10 @@ pub unsafe fn theme_by_class(hwnd: HWND) {
                     subclass(hwnd, etched_proc);
                 }
             }
+            // a multi-line edit (the tracker boxes of Create and Properties) takes
+            // `DarkMode_Explorer`, the only class that darkens its scroll bars; the others keep
+            // `DarkMode_CFD`, whose frame is the dark grey of the combo boxes
+            "edit" if style & ES_MULTILINE as u32 != 0 => theme_control(hwnd, Kind::Explorer),
             "edit" => theme_control(hwnd, Kind::Cfd),
             "combobox" => {
                 theme_control(hwnd, Kind::Cfd);

@@ -1,9 +1,12 @@
 # Win32 dark mode: design
 
-Status: **built** (D64; slices 1-7 in 1.2.24-1.2.28, 2026-11-09), after the design below was
+Status: **built** (D64; slices 1-7 in 1.2.24-1.2.29, 2026-11-09), after the design below was
 written on the same day. `crates/win32/src/theme.rs` is the implementation; §7's slices read as
-the commit history. Left open: see BACKLOG "Themes" (a 17763 VM, 150/200 % screenshots, the
-updater's marquee bar and the message boxes, which stay the system's).
+the commit history. 1.2.29 fixed what the Windows 11 VM runs found (the flip back to light under
+System, remote windows and Connect to Remote light, multi-line edits' scroll bars, the tab
+strip's labels at 150 %) and checked the live flip and 150/200 %. Left open: see BACKLOG
+"Themes" (a 17763 VM; the updater's marquee bar, the message boxes and the file picker, which
+stay the system's).
 
 ## 1. Goal and non-goals
 

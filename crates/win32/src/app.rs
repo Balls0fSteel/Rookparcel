@@ -672,6 +672,12 @@ fn language_choice() -> String {
     Prefs::load(base_data_dir().join("rookparcel.ini")).get("ui.language").unwrap_or_default().to_owned()
 }
 
+/// The theme every window of this computer has (`ui.theme` of the local settings; a remote
+/// window's own folder takes it over, as the language), read before any window exists.
+fn theme_choice() -> String {
+    Prefs::load(base_data_dir().join("rookparcel.ini")).get("ui.theme").unwrap_or_default().to_owned()
+}
+
 /// `rookparcel.lock` in `dir`, held until the process ends; `Err` after telling the user that
 /// another process has it, or that a portable folder cannot be written (never a fall-back to
 /// `%APPDATA%`, which would split one user's data in two); `None` when it cannot be made
@@ -695,6 +701,10 @@ fn lock_folder(dir: &Path) -> Result<Option<lockfile::Lock>, ()> {
 pub fn run(args: Args) -> i32 {
     // before any window or message box
     let lang_problems = init_language();
+    // light or dark, decided before any window exists (D64): the profile prompt and the
+    // Connect to Remote dialog come before the settings below are loaded, and a remote window
+    // takes this computer's theme (found light on the Windows 11 VM, 2026-11-09)
+    crate::theme::init(crate::theme::Mode::from_key(&theme_choice()));
     unsafe {
         let icc = INITCOMMONCONTROLSEX {
             dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
@@ -740,6 +750,11 @@ pub fn run(args: Args) -> i32 {
         match language_choice().as_str() {
             "" => prefs.remove("ui.language"),
             code => prefs.set("ui.language", code),
+        }
+        // and the theme (D64)
+        match theme_choice().as_str() {
+            "" => prefs.remove("ui.theme"),
+            key => prefs.set("ui.theme", key),
         }
     }
     let mut opts = Options::load(&prefs, &downloads_folder());

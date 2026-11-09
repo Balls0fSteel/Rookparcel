@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-09_152030_1794234030
+Last updated: 2026-11-09_181244_1794244364
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D60](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -21,11 +21,11 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** all 12 slices merged (1.2.6-1.2.18) and validated on the unlocked VM with real input (slice L): every window and dialog; 100,000 demo torrents listed in 0.48 s, sorted in 47-66 ms, 194 MB. **1.2.19, the first release with it, is published (2026-11-06)**; `update.txt` says `stable=1.2.19`. Open (BACKLOG "macOS"): arm64 and Retina by hand (the owner has only the Intel VM).
 
-- **Renamed PaTorrent to Rookparcel** (D59, 1.2.2): names, peer ID `-RP1014-`, remote protocol 16, a one-time takeover of PaTorrent's folders, registry, desktop entries and services; repository, Pages, wiki and screenshots renamed. 1.2.5 was the first release as Rookparcel. Open: upgrading a real PaTorrent 1.2 install on Windows, Linux, macOS and the Flatpak.
+- **Renamed PaTorrent to Rookparcel** (D59, 1.2.2; first released as 1.2.5): names, peer ID `-RP1014-`, remote protocol 16, a one-time takeover of PaTorrent's folders, registry, desktop entries and services. Open: upgrading a real PaTorrent 1.2 install on each platform.
 
 - **Artwork (2026-11-05):** the Postal Rook won ([concepts](docs/art/rookparcel-candidates-2026-11-05/README.md), [small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
 
-- **Releases:** 1.0.1 (D19, D34), 1.1.0 (D35), 1.1.17, 1.1.40 ([notes](docs/releases/)); hand checks are below. **1.2.0** (published 2026-11-05, [notes](docs/releases/1.2.0.md)) ships profiles (D42), D50-D55 and the bug-hunt/backlog fixes.
+- **Releases:** 1.0.1 to 1.2.21 ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes.
 - **Benchmarks:** [2026-10-27 results](docs/BENCHMARKS.md), `tools/bench`: 10,000 torrents after restart use 60 MB (qBittorrent 612 MB); one-peer download 3,592 MiB/s, 1.04 CPU s/GiB.
 - CI, FreeBSD, Fuzz and the Release run (with the native macOS job) were green for `v1.2.19` (recorded, not a live check).
 - Scale baseline on this development PC (2026-10-23): Win32 lists 100,000 torrents in 1.16 s, GUI-thread idle CPU 0.05-0.10%, working set 232 MB. Name sort 49 ms, Ctrl+A 4.7 ms, add 19 ms, remove one 14 ms. The low-end-machine gate remains open.
@@ -33,7 +33,9 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Next steps
 
-**1.2.21, published 2026-11-07:** the Files tab shows the folder tree by default in all four UIs, with a toggle to 2.2.1's list (D62), and fixes a GTK abort with any torrent listed (since 1.2.0's row shading); hand checks in BACKLOG "Files tab folder tree". A nox Docker image goes to GHCR on tags; the first push is untested. Next on macOS: drop the legacy notification centre (BACKLOG "macOS" (A)).
+**1.2.29, prepared 2026-11-09, not yet released:** the theme pass and the Win32 dark mode (1.2.22-1.2.29) tested on the Xubuntu, Windows 11 and macOS VMs and this PC, with four Win32 fixes and one GTK fix (changelog); release notes in [docs/releases/1.2.29.md](docs/releases/1.2.29.md). To release (RELEASING.md, no pull request): merge into `main`, tag `v1.2.29`, check the draft's files, publish, then the site news entry and the wiki copy (`docs/wiki/Dark-mode.md` is new).
+
+**1.2.21, published 2026-11-07:** the Files tab's folder tree in all four UIs (D62) and a GTK abort fix; hand checks in BACKLOG "Files tab folder tree"; the nox Docker image's first push is untested. Next on macOS: drop the legacy notification centre (BACKLOG "macOS" (A)).
 
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 
@@ -41,8 +43,8 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 - **E.** Profiles and portable mode (D42): shipped in **1.2.0** (D58), built and checked on VMs, GNOME, KDE, Flatpak, AppImages and a real Mac. Remaining hand checks: [BACKLOG](docs/BACKLOG.md#profiles-and-portable-mode-d42).
 - **F.** Microsoft Store release: D46 approved 2026-11-04 (free MSIX, individual account, settings shared with the setup copy, all markets and 34 languages, the Postal Rook icon, D60); build per [STORE.md](docs/STORE.md).
 - **G.** Smart disk I/O (D48, [DISKIO.md](docs/DISKIO.md)) shipped in 1.1.36-1.1.40; real-disk busy-throttle measurements remain in BACKLOG "Disk and storage". **Keep ping low** (D49, [LOWPING.md](docs/LOWPING.md)) shipped in 1.1.29-1.1.31; 1.1.32 passed a bloated-line test (~480 ms to 9 ms at 80-92% line use). Next: the owner's gaming line, a Mac run, and BACKLOG items including 2.2.1's "Stop transfers on user interaction".
-- **H.** Approved 2026-11-04 (D56): 2.2.1's web search engines (empty default list), icon skins, and dark mode; research in [BACKLOG](docs/BACKLOG.md#themes-researched-2026-11-02_110639_1793613999-theme-pass-2026-11-09_152030_1794234030), each designed before code. **Theme pass (2026-11-09, D63):** Web UI themes (nine built-in, third-party CSS files, server and per-browser choice), the shared `frontend::palette`, GTK dark fixes. **Win32 dark mode (D64, 1.2.24-1.2.28):** built as [DARKMODE.md](docs/DARKMODE.md) designed it: System/Light/Dark on UI Settings, every window and dialog, light untouched; hand checks in BACKLOG "Themes". Icon skins and web search engines remain.
-- **I.** The owner's six points (2026-11-04, [PROPOSALS.md](docs/PROPOSALS.md)): D50 Files filter, D51 search helper, D53 Setup Guide, D54 "Use only this network" and D55 help texts shipped in 1.2.0. D52 native macOS GUI is designed (D61, [MACOS_GUI.md](docs/MACOS_GUI.md)); slices are checked on the owner's macOS VM. [BUGHUNT-2026-11-05.md](docs/BUGHUNT-2026-11-05.md) records all 38 findings. 1.2.0 takes peer ID `-PA1013-` for the wire changes (owner, 2026-11-05). **Open:** a real VPN run, a real first start through the guide, the GUI looks; the Win32 test binary's rare heap fault under parallel load (BACKLOG "Validation"; run its tests on one thread meanwhile).
+- **H.** Approved 2026-11-04 (D56): 2.2.1's web search engines (empty default list), icon skins, and dark mode; research in [BACKLOG](docs/BACKLOG.md#themes-researched-2026-11-02_110639_1793613999-theme-pass-2026-11-09_152030_1794234030), each designed before code. **Theme pass (2026-11-09, D63):** Web UI themes (nine built-in, third-party CSS files, server and per-browser choice), the shared `frontend::palette`, GTK dark fixes. **Win32 dark mode (D64, 1.2.24-1.2.29):** built as [DARKMODE.md](docs/DARKMODE.md) designed it: System/Light/Dark on UI Settings, every window and dialog, light untouched; hand checks in BACKLOG "Themes". Icon skins and web search engines remain.
+- **I.** The owner's six points (2026-11-04, [PROPOSALS.md](docs/PROPOSALS.md)): D50, D51, D53, D54 and D55 shipped in 1.2.0; D52 is the native macOS GUI (D61, shipped 1.2.19). [BUGHUNT-2026-11-05.md](docs/BUGHUNT-2026-11-05.md) records all 38 findings. **Open:** a real VPN run, a real first start through the guide, the GUI looks; the Win32 test binary's rare heap fault under parallel load (BACKLOG "Validation"; run its tests on one thread meanwhile).
 
 0. **Owner hand-test findings (2026-10-27):** fixed in 1.0.2-1.0.8; re-test on a fresh Win32 build ([BACKLOG](docs/BACKLOG.md#owner-hand-test-findings-2026-10-27_225501_1793138101)).
 1. Run the installer's wizard and the all-users UAC path once on a real PC, and register `RP` with the client-ID lists (item 14).

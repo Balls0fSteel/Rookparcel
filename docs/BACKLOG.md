@@ -272,17 +272,23 @@ That broad check does not establish that every detailed case below was tried.
 The owner's wish (PLAN, Future improvements): included themes and third-party ones, with no
 extra resource use. What landed (D63): the Web UI's nine themes with third-party CSS files, a
 server and a per-browser choice; `frontend::palette` for the drawn parts; GTK's bars, maps and
-Blocks cells follow a dark theme and `is_dark` also reads the XDG portal's colour scheme; the
-scheduler's Off cell is the surface colour in every UI. Still open:
+Blocks cells follow a dark theme (the GTK theme's name, `gtk-application-prefer-dark-theme` or
+`GTK_THEME=<name>:dark`; the Settings portal's colour scheme was read in 1.2.23-1.2.28 and
+dropped in 1.2.29, since plain GTK 4 widgets do not follow it and it put dark icons over light
+widgets); the scheduler's Off cell is the surface colour in every UI. Still open:
 
-- **Win32 dark mode (D64, 1.2.24-1.2.28):** built as [DARKMODE.md](DARKMODE.md) designed it.
-  Still to check by hand: a Windows 10 1809 (17763) VM, where ordinal 135 is
-  `AllowDarkModeForApp` and the DWM attribute is 19; 150 % and 200 % DPI screenshots in dark
-  (the hidden desktop has the session's DPI); a live flip of Windows' *Choose your mode* with
-  dialogs open; the updater's marquee progress bar and the message boxes stay the system's (the
-  marquee needs the visual style, `MessageBoxW` cannot be themed); the header's drag image stays
-  light while a column is dragged; the Advanced page's `*` marks and the Preferences note under
-  Theme are plain text. **Found 2026-11-09:** in light the torrent list's `#` column shows
+- **Win32 dark mode (D64, 1.2.24-1.2.29):** built as [DARKMODE.md](DARKMODE.md) designed it.
+  Checked on the Windows 11 VM (2026-11-09, 1.2.29; `tools/win32-shots` run in the console
+  session through `tools/windows-clean/desktop/in-session.ps1`, 150/200 % through a 3840x2400
+  screen mode and `SPI_SETLOGICALDPIOVERRIDE`, which offers only 125 % at 1024x768): the live
+  flip of Windows' *Choose your mode* both ways with Preferences and the Add URL prompt open
+  (`flip-test.ps1`), dark and light at 100, 150 and 200 %. Still to check by hand: a Windows 10
+  1809 (17763) VM, where ordinal 135 is `AllowDarkModeForApp` and the DWM attribute is 19; the
+  file picker (a system dialog) follows Windows' own mode, not the preference; the updater's
+  marquee progress bar and the message boxes stay the system's (the marquee needs the visual
+  style, `MessageBoxW` cannot be themed); the header's drag image stays light while a column is
+  dragged; the Advanced page's `*` marks and the Preferences note under Theme are plain text;
+  multi-line edits have `DarkMode_Explorer`'s light frame (the price of dark scroll bars). **Found 2026-11-09:** in light the torrent list's `#` column shows
   nothing where the text is `*` (finished torrents): the plain list view hides the one-character
   text in its 28 px column, most likely because `LVS_EX_SUBITEMIMAGES` reserves image room in
   every subitem; dark draws the right-aligned cells itself (`controls::dark_cell_text`) and shows
@@ -295,9 +301,12 @@ scheduler's Off cell is the surface colour in every UI. Still open:
   `DrawPalette` fields) could sit beside the skin.
 - **Hand checks of the themes:** each built-in on a real phone and in Safari; a third-party
   file on a hosted (Windows program) Web UI, whose settings folder is the themes folder's
-  parent; Windows High Contrast (`forced-colors`) with the bars; the GTK bars on the Xubuntu VM
-  under `Adwaita:dark`, `HighContrastInverse` and the portal's `prefer-dark`; a GTK tray icon
-  with a symbolic variant for dark panels; the macOS status item as a template image (today the
+  parent; Windows High Contrast (`forced-colors`) with the bars; the GTK bars under
+  `HighContrastInverse` (`Adwaita:dark` and the portal's `prefer-dark` were run on the Xubuntu VM
+  on 2026-11-09: dark icons and bars under the first, light widgets and icons under the second);
+  the Mac app in dark on an unlocked VM screen (the 2026-11-09 snapshot drew the detail tab
+  strip white with no labels, where light shows them: `cacheDisplayInRect` or real); a GTK tray
+  icon with a symbolic variant for dark panels; the macOS status item as a template image (today the
   coloured mark, D60).
 
 ## Localisation

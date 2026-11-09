@@ -41,4 +41,11 @@ Beside it: `switch-test.ps1` starts a dark build, switches Preferences > UI Sett
 (control 1110: System 0, Light 1, Dark 2) to Light and back by posted messages and pictures the
 main window and a dialog after each switch; `measure-columns.ps1` reads the torrent list's column
 widths, header, DPI and rectangles twice, for a run that looks different without an obvious
-cause; `compare.py` prints the differing pixel count and the clustered bounding boxes of two PNGs.
+cause; `compare.py` prints the differing pixel count and the clustered bounding boxes of two PNGs;
+`flip-test.ps1` is for a test machine or VM only: with Theme = System it writes Windows' own
+`AppsUseLightTheme` value (dark, light, dark, light), broadcasts `WM_SETTINGCHANGE
+"ImmersiveColorSet"` as the Settings app does and pictures the main window, the open Preferences
+and the Add URL prompt after each flip, then puts the value back. On the Windows 11 VM the
+scripts run in the console session through `tools/windows-clean/desktop/in-session.ps1` with
+`-RunHidden` pointing at a copy of run_hidden.ps1; 150 % and 200 % need a screen mode bigger than
+1024x768 first (`SPI_SETLOGICALDPIOVERRIDE` offers 125 % at most there).
