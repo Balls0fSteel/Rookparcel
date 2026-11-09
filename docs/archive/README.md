@@ -1,6 +1,6 @@
 # Planning and changelog history
 
-Last updated: 2026-11-09_170626_1794240386
+Last updated: 2026-11-09_171930_1794241170
 
 Start with [PLAN.md](../../PLAN.md) and [CHANGELOG.md](../../CHANGELOG.md). Active decision rationale is in [DECISIONS.md](../DECISIONS.md); detailed unfinished work is in [BACKLOG.md](../BACKLOG.md).
 
@@ -69,3 +69,4 @@ Keep archives as plain Markdown so Git diffs, repository browsing and targeted s
 | [Changelog, 2026-11-06, the macOS GUI's wave 2 and slices K-L (v1.2.14-v1.2.18)](CHANGELOG-2026-11-06-macos-wave2-v1.2.14-v1.2.18-2026-11-06_232629_1794003989.md) | `2026-11-06_141108_1793970668` through `2026-11-06_160049_1793977249` | 5 complete entries moved on 2026-11-06_232629_1794003989: Mac RSS (1.2.14), import, profiles, remote and the Setup Guide (1.2.15), search (1.2.16), the validation on the VM (1.2.17) and the switch of macOS releases to the native app (1.2.18), with their validation. |
 | [Changelog, 2026-11-06 (1.2.19 release)](CHANGELOG-2026-11-06-v1.2.19-release-2026-11-09_153839_1794235119.md) | `2026-11-06_162621_1793978781` through `2026-11-06_201236_1793992356` | Five entries moved verbatim from the root changelog on 2026-11-09_153839_1794235119: version 1.2.19 (slice L follow-ups, the stopped magnet reconnect), its release preparation, the tag and first native macOS release run, the Mac VM note, the notifications fix and the publication. |
 | [Changelog, 2026-11-06 to 2026-11-07 (1.2.20, 1.2.21)](CHANGELOG-2026-11-06-v1.2.20-v1.2.21-2026-11-09_170626_1794240386.md) | `2026-11-06_232629_1794003989` through `2026-11-07_135959_1794056399` | 5 entries moved verbatim from the root changelog on 2026-11-09_170626_1794240386: the Add Torrent filter and type-ahead (1.2.20), the Files tab folder tree (1.2.21), the nox Docker image on GHCR, and the 1.2.21 release prepared and published. |
+| [Changelog, 2026-11-09 (theme pass, 1.2.22 and 1.2.23)](CHANGELOG-2026-11-09-theme-pass-v1.2.22-v1.2.23-2026-11-09_171930_1794241170.md) | `2026-11-09_153839_1794235119` through `2026-11-09_153952_1794235192` | 3 entries moved verbatim from the root changelog on 2026-11-09_171930_1794241170: the shared palette and GTK dark fixes (1.2.22), the Web UI themes and dark-mode fixes (1.2.23, D63), and the Win32 dark-mode design (DARKMODE.md) with D63. |
