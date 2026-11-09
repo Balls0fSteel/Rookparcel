@@ -303,9 +303,10 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   file on a hosted (Windows program) Web UI, whose settings folder is the themes folder's
   parent; Windows High Contrast (`forced-colors`) with the bars; the GTK bars under
   `HighContrastInverse` (`Adwaita:dark` and the portal's `prefer-dark` were run on the Xubuntu VM
-  on 2026-11-09: dark icons and bars under the first, light widgets and icons under the second);
-  the Mac app in dark on an unlocked VM screen (the 2026-11-09 snapshot drew the detail tab
-  strip white with no labels, where light shows them: `cacheDisplayInRect` or real); a GTK tray
+  on 2026-11-09: dark icons and bars under the first, light widgets and icons under the second;
+  the Mac app in dark was seen on the unlocked Mac VM's screen the same day and is right, while
+  its `ROOKPARCEL_SNAPSHOTS` picture draws the tab strip white: a `cacheDisplayInRect` artefact);
+  a GTK tray
   icon with a symbolic variant for dark panels; the macOS status item as a template image (today the
   coloured mark, D60).
 
