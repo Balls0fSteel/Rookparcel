@@ -749,6 +749,7 @@ ThemeHighContrast=Alto contraste
 ThemePostalRook=Gralha postal
 WebTheme=Tema
 PrefBadTheme=O nome de um tema tem de 1 a 40 letras minúsculas, dígitos e hífens.
+PrefThemeUnavailable=Este Windows não consegue exibir o tema escuro; o claro é usado.
 CreateAutoDetect=(detectar automaticamente)
 CreateHybrid=Híbrido (v1 + v2)
 CreateV1=v1

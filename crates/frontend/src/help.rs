@@ -45,8 +45,14 @@ fn adv_key(name: &str) -> String {
 fn page_settings() -> &'static HashMap<&'static str, H> {
     static MAP: OnceLock<HashMap<&'static str, H>> = OnceLock::new();
     MAP.get_or_init(|| {
-        let all =
-            Features { tray: true, desktop: true, packaged: false, updates: true, alternate_rows: true };
+        let all = Features {
+            tray: true,
+            desktop: true,
+            packaged: false,
+            updates: true,
+            alternate_rows: true,
+            theme: true,
+        };
         let pages = pref_pages::pages(all);
         pref_pages::fields(&pages).filter_map(|f| f.help_key().map(|h| (f.key, h))).collect()
     })

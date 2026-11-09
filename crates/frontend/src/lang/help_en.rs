@@ -66,6 +66,8 @@ helps! {
     PrefTheme = "The page's colours for everyone who opens this Web UI. System follows the browser's light or dark setting. Your own themes: CSS files in the webui/themes folder under the settings folder, listed here by name.";
     /// nox: crates/nox/src/webui/app.js (pa.theme in the browser's storage)
     PrefThemeBrowser = "A theme for this browser only, kept on this device and used instead of the server's choice. Server default follows the server's theme again.";
+    /// win32: crates/win32/src/theme.rs (ui.theme; D64)
+    PrefThemeDesktop = "The window's colours. System follows Windows' \"Choose your mode\" for apps; Light and Dark fix them. Windows High Contrast keeps its own colours. Dark needs Windows 10 version 1809 or later.";
     /// frontend: crates/frontend/src/options.rs (GuiOptions::alternate_rows)
     PrefAlternateRows = "Shades every other row of the lists, so long rows are easier to follow.";
     /// frontend: crates/win32/src/app.rs (fmt::title_speed), crates/gtk/src/app.rs

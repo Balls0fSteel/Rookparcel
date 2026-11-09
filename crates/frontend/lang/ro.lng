@@ -749,6 +749,7 @@ ThemeHighContrast=Contrast ridicat
 ThemePostalRook=Cioară poștașă
 WebTheme=Temă
 PrefBadTheme=Numele unei teme are între 1 și 40 de litere mici, cifre și cratime.
+PrefThemeUnavailable=Acest Windows nu poate afișa tema întunecată; se folosește cea deschisă.
 CreateAutoDetect=(detectare automată)
 CreateHybrid=Hibrid (v1 + v2)
 CreateV1=v1

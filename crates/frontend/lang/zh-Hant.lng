@@ -749,6 +749,7 @@ ThemeHighContrast=高對比
 ThemePostalRook=郵差禿鼻鴉
 WebTheme=佈景主題
 PrefBadTheme=佈景主題名稱為 1 到 40 個小寫字母、數字和連字號。
+PrefThemeUnavailable=此 Windows 無法顯示深色佈景主題，將使用淺色佈景主題。
 CreateAutoDetect=（自動偵測）
 CreateHybrid=混合 (v1 + v2)
 CreateV1=v1

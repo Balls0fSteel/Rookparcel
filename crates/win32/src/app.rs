@@ -745,6 +745,8 @@ pub fn run(args: Args) -> i32 {
     }
     let mut opts = Options::load(&prefs, &downloads_folder());
     controls::set_alternate_rows(opts.gui.alternate_rows);
+    // light or dark, decided before any window exists (D64)
+    crate::theme::init(crate::theme::Mode::from_key(&opts.gui.theme));
     // the first start of any profile (a settings file without keys) opens the Setup Guide
     // (D53), asked before the first keys are written
     let first_start = local && setup_guide::should_show(&prefs);
@@ -774,6 +776,7 @@ pub fn run(args: Args) -> i32 {
         let _ = prefs.save();
         opts = Options::load(&prefs, &downloads_folder());
         controls::set_alternate_rows(opts.gui.alternate_rows);
+        crate::theme::init(crate::theme::Mode::from_key(&opts.gui.theme));
     }
     if opts.gui.random_port && local {
         // µTorrent's "Randomize port each start" keeps the new port as the configured one
@@ -848,6 +851,7 @@ pub fn run(args: Args) -> i32 {
         if hwnd.is_null() {
             return 1;
         }
+        crate::theme::theme_window(hwnd);
         init(hwnd, session, prefs);
         with_app(|a| {
             a.listen.set_configured(settings::listen_port(&opts.settings));
@@ -3365,6 +3369,17 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 mmi.ptMinTrackSize = POINT { x: scale(420, dpi), y: scale(300, dpi) };
                 0
             }
+            crate::theme::WM_APP_THEME => {
+                apply_theme(hwnd);
+                0
+            }
+            // Windows' "Choose your mode" or High Contrast may have changed (D64)
+            WM_SETTINGCHANGE | WM_THEMECHANGED | WM_SYSCOLORCHANGE => {
+                if crate::theme::system_changed() {
+                    apply_theme(hwnd);
+                }
+                DefWindowProcW(hwnd, msg, wparam, lparam)
+            }
             WM_DPICHANGED => {
                 let r = &*(lparam as *const RECT);
                 apply_dpi(hwnd, crate::util::hiword(wparam) as u32);
@@ -4723,6 +4738,16 @@ unsafe fn show_setup_guide(hwnd: HWND) {
     }
 }
 
+/// The window follows a flipped theme (D64): the caption and the popups now; the controls,
+/// menus, icons and drawn parts come with their own slices.
+unsafe fn apply_theme(hwnd: HWND) {
+    unsafe {
+        crate::theme::theme_window(hwnd);
+        RedrawWindow(hwnd, null(), null_mut(), RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+        DrawMenuBar(hwnd);
+    }
+}
+
 /// Stores `o` and hands it to the engine and the window.
 fn apply_options(a: &mut App, o: &Options) {
     let old = Options::load(&a.prefs, &a.save_path);
@@ -4752,8 +4777,14 @@ fn apply_options_from(a: &mut App, old: &Options, o: &Options) {
     sync_title(a);
     if o.gui.alternate_rows != old.gui.alternate_rows {
         // every list repaints with the new shading (deferred: the state is borrowed here)
-        // every list repaints with the new shading (deferred: the state is borrowed here)
+        controls::set_alternate_rows(o.gui.alternate_rows);
         unsafe { RedrawWindow(a.hwnd, null(), null_mut(), RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN) };
+    }
+    if o.gui.theme != old.gui.theme
+        && crate::theme::set_preference(crate::theme::Mode::from_key(&o.gui.theme))
+    {
+        // the window re-themes itself once the state is released (D64)
+        unsafe { PostMessageW(a.hwnd, crate::theme::WM_APP_THEME, 0, 0) };
     }
     a.schedule = o.gui.schedule.clone();
     run_scheduler(a, Some(o));

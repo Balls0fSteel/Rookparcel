@@ -749,6 +749,7 @@ ThemeHighContrast=Tương phản cao
 ThemePostalRook=Quạ đưa thư
 WebTheme=Chủ đề
 PrefBadTheme=Tên chủ đề gồm 1 đến 40 chữ cái thường, chữ số và dấu gạch ngang.
+PrefThemeUnavailable=Windows này không thể hiển thị chủ đề tối; chủ đề sáng được sử dụng.
 CreateAutoDetect=(tự nhận diện)
 CreateHybrid=Lai (v1 + v2)
 CreateV1=v1

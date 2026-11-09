@@ -315,6 +315,7 @@ unsafe extern "system" fn input_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM
         match msg {
             WM_INITDIALOG => {
                 SetWindowLongPtrW(dlg, DWLP_USER, lp);
+                crate::theme::theme_window(dlg);
                 let st = &*(lp as *const InputState);
                 let (t, p, i) = (wide(&st.title), wide(&st.prompt), wide(&st.initial));
                 SetWindowTextW(dlg, t.as_ptr());

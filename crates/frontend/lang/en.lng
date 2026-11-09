@@ -1168,6 +1168,9 @@ ThemePostalRook=Postal Rook
 WebTheme=Theme
 PrefBadTheme=A theme name is 1 to 40 lower-case letters, digits and dashes.
 
+# Under the Windows program's Theme drop-down when this Windows cannot show dark mode.
+PrefThemeUnavailable=This Windows cannot show the dark theme; the light one is used.
+
 # Piece size: pick one from the total size.
 CreateAutoDetect=(auto detect)
 CreateHybrid=Hybrid (v1 + v2)
@@ -1615,6 +1618,7 @@ help.PrefUpdateBeta=Also offers pre-release (beta) versions when checking for up
 help.PrefConfirmDelete=Asks before removing torrents from the list, saying whether their files are deleted too. Off, Remove acts at once.
 help.PrefTheme=The page's colours for everyone who opens this Web UI. System follows the browser's light or dark setting. Your own themes: CSS files in the webui/themes folder under the settings folder, listed here by name.
 help.PrefThemeBrowser=A theme for this browser only, kept on this device and used instead of the server's choice. Server default follows the server's theme again.
+help.PrefThemeDesktop=The window's colours. System follows Windows' "Choose your mode" for apps; Light and Dark fix them. Windows High Contrast keeps its own colours. Dark needs Windows 10 version 1809 or later.
 help.PrefAlternateRows=Shades every other row of the lists, so long rows are easier to follow.
 help.PrefTitleSpeed=Puts the current download and upload speeds at the start of the main window's title, which also shows on the taskbar.
 help.PrefBalloons=Shows a notification at the tray icon, with the torrent's name, when a download completes.

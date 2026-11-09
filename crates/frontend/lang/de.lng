@@ -749,6 +749,7 @@ ThemeHighContrast=Hoher Kontrast
 ThemePostalRook=Post-Saatkrähe
 WebTheme=Design
 PrefBadTheme=Ein Designname besteht aus 1 bis 40 Kleinbuchstaben, Ziffern und Bindestrichen.
+PrefThemeUnavailable=Dieses Windows kann das dunkle Design nicht anzeigen; das helle wird verwendet.
 CreateAutoDetect=(automatisch)
 CreateHybrid=Hybrid (v1 + v2)
 CreateV1=v1

@@ -749,6 +749,7 @@ ThemeHighContrast=Hög kontrast
 ThemePostalRook=Postråka
 WebTheme=Tema
 PrefBadTheme=Ett temanamn är 1 till 40 små bokstäver, siffror och bindestreck.
+PrefThemeUnavailable=Denna Windows kan inte visa det mörka temat; det ljusa används.
 CreateAutoDetect=(automatisk)
 CreateHybrid=Hybrid (v1 + v2)
 CreateV1=v1

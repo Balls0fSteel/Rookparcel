@@ -130,7 +130,14 @@ pub fn as_options(choice: &Control, o: &Options) -> Option<Vec<(String, String)>
 
 /// The Preferences field `key` (every page, everything a toolkit can offer).
 fn pref_field(key: &str) -> Field {
-    let all = Features { tray: true, desktop: true, packaged: false, updates: true, alternate_rows: true };
+    let all = Features {
+        tray: true,
+        desktop: true,
+        packaged: false,
+        updates: true,
+        alternate_rows: true,
+        theme: true,
+    };
     *pref_pages::fields(&pref_pages::pages(all))
         .find(|f| f.key == key)
         .unwrap_or_else(|| panic!("no Preferences field {key}"))
@@ -263,8 +270,14 @@ mod tests {
     use super::*;
     use crate::lang::H;
 
-    const ALL: Features =
-        Features { tray: true, desktop: true, packaged: false, updates: true, alternate_rows: true };
+    const ALL: Features = Features {
+        tray: true,
+        desktop: true,
+        packaged: false,
+        updates: true,
+        alternate_rows: true,
+        theme: true,
+    };
 
     fn opts() -> Options {
         Options::load(&Prefs::default(), "/dl")

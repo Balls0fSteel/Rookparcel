@@ -749,6 +749,7 @@ ThemeHighContrast=Høy kontrast
 ThemePostalRook=Postkornkråke
 WebTheme=Tema
 PrefBadTheme=Et temanavn er 1 til 40 små bokstaver, sifre og bindestreker.
+PrefThemeUnavailable=Denne Windows-versjonen kan ikke vise det mørke temaet; det lyse brukes.
 CreateAutoDetect=(automatisk)
 CreateHybrid=Hybrid (v1 + v2)
 CreateV1=v1

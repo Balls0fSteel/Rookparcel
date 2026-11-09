@@ -227,6 +227,8 @@ fn build(mtm: MainThreadMarker) -> State {
         packaged: false,
         updates,
         alternate_rows: true,
+        // macOS follows the system appearance (D61); no drop-down of its own
+        theme: false,
     });
     if !crate::mac::associations_settable() {
         // outside the bundle or in another profile: no bundle id to register (autostart works)

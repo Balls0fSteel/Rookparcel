@@ -749,6 +749,7 @@ ThemeHighContrast=ハイ コントラスト
 ThemePostalRook=郵便ミヤマガラス
 WebTheme=テーマ
 PrefBadTheme=テーマ名は 1～40 文字で、英小文字、数字、ハイフンを使います。
+PrefThemeUnavailable=この Windows ではダークテーマを表示できないため、ライトテーマを使用します。
 CreateAutoDetect=(自動検出)
 CreateHybrid=ハイブリッド (v1 + v2)
 CreateV1=v1

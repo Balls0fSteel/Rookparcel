@@ -749,6 +749,7 @@ ThemeHighContrast=Nagy kontraszt
 ThemePostalRook=Postás varjú
 WebTheme=Téma
 PrefBadTheme=A téma neve 1–40 kisbetű, számjegy és kötőjel.
+PrefThemeUnavailable=Ez a Windows nem tudja megjeleníteni a sötét témát; a világos van használatban.
 CreateAutoDetect=(automatikus)
 CreateHybrid=Hibrid (v1 + v2)
 CreateV1=v1

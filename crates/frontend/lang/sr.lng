@@ -749,6 +749,7 @@ ThemeHighContrast=Висок контраст
 ThemePostalRook=Поштански гачац
 WebTheme=Тема
 PrefBadTheme=Назив теме има 1 до 40 малих латиничних слова, цифара и цртица.
+PrefThemeUnavailable=Овај Windows не може да прикаже тамну тему; користи се светла.
 CreateAutoDetect=(аутоматски)
 CreateHybrid=Хибридни (v1 + v2)
 CreateV1=v1

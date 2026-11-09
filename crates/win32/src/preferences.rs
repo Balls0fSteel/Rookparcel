@@ -117,6 +117,9 @@ const ID_SHOW_ADD: u16 = id(1, 6);
 const ID_ALT_ROWS: u16 = id(1, 7);
 const ID_ACTIVATE: u16 = id(1, 8);
 const ID_TITLE_SPEED: u16 = id(1, 9);
+/// The Theme drop-down (D64) and the note under it when this Windows cannot show dark.
+const ID_THEME: u16 = id(1, 10);
+const ID_THEME_NOTE: u16 = id(1, 11);
 // Directories
 const ID_DL_DIR: u16 = id(2, 1);
 const ID_DL_BROWSE: u16 = id(2, 2);
@@ -259,6 +262,7 @@ impl Field {
 /// ([`pref_pages::Field::help_key`]). Every field the Win32 dialog shows is here (a test).
 const FIELD_KEYS: &[(u16, &str)] = &[
     (ID_LANG, "ui.language"),
+    (ID_THEME, "ui.theme"),
     (ID_ASSOC_TORRENT, "assoc.torrent"),
     (ID_ASSOC_MAGNET, "assoc.magnet"),
     (ID_CHECK_ASSOC, "ui.check_assoc"),
@@ -389,7 +393,14 @@ const SHARES: &[(u16, u16)] = &[
 /// Every control with a help text, the labels in front of fields included (`labels`: label id
 /// and the field it names, from [`build`]).
 fn control_help(labels: &[(u16, u16)]) -> Vec<(u16, H)> {
-    let all = Features { tray: true, desktop: true, packaged: false, updates: true, alternate_rows: true };
+    let all = Features {
+        tray: true,
+        desktop: true,
+        packaged: false,
+        updates: true,
+        alternate_rows: true,
+        theme: true,
+    };
     let pages = pref_pages::pages(all);
     let mut out: Vec<(u16, H)> = FIELD_KEYS
         .iter()
@@ -841,6 +852,8 @@ struct State<'a> {
     webui: WebView,
     /// The General page's language list: `(ui.language value, text)`.
     languages: Vec<(String, String)>,
+    /// The UI Settings page's Theme list: `(ui.theme value, text)` (D64).
+    themes: Vec<(String, String)>,
     /// The Connection page's "Network" drop-down: `(rule choice, text)` (`network::rule_choices`).
     networks: Vec<(String, String)>,
     /// The page tree's symbols ([`rookparcel_frontend::icons::UiIcon`] order).
@@ -892,6 +905,7 @@ impl<'a> State<'a> {
             integration: Status::default(),
             webui: WebView::default(),
             languages: Vec::new(),
+            themes: Vec::new(),
             networks: Vec::new(),
             images: 0,
             tips: None,
@@ -1001,18 +1015,22 @@ fn build() -> (Vec<u16>, Vec<(u16, u16)>) {
     b.ctl(BUTTON, ID_UPDATE_BETA, CHECK, [8, 186, 290, 10], tr!(PrefUpdateBeta));
 
     b.page(1);
-    b.group([0, 0, W, 74], tr!(PrefDisplay));
+    b.group([0, 0, W, 102], tr!(PrefDisplay));
     b.ctl(BUTTON, ID_CONFIRM_DELETE, CHECK, [8, 14, 290, 10], tr!(PrefConfirmDelete));
-    b.ctl(BUTTON, ID_ALT_ROWS, CHECK, [8, 28, 290, 10], tr!(PrefAlternateRows));
-    b.ctl(BUTTON, ID_TITLE_SPEED, CHECK, [8, 42, 290, 10], tr!(PrefTitleSpeed));
-    b.ctl(BUTTON, ID_BALLOONS, CHECK, [8, 56, 290, 10], tr!(PrefBalloons));
-    b.group([0, 80, W, 46], tr!(PrefTray));
-    b.ctl(BUTTON, ID_CLOSE_TRAY, CHECK, [8, 94, 290, 10], tr!(PrefCloseToTray));
-    b.ctl(BUTTON, ID_MIN_TRAY, CHECK, [8, 108, 290, 10], tr!(PrefMinimizeToTray));
-    b.group([0, 132, W, 60], tr!(PrefWhenAdding));
-    b.ctl(BUTTON, ID_ADD_STOPPED, CHECK, [8, 146, 290, 10], tr!(PrefDontStart));
-    b.ctl(BUTTON, ID_ACTIVATE, CHECK, [8, 160, 290, 10], tr!(PrefActivateWindow));
-    b.ctl(BUTTON, ID_SHOW_ADD, CHECK, [8, 174, 290, 10], tr!(PrefShowAddDialog));
+    b.label_for([8, 30, 100, 9], tr!(PrefTheme), ID_THEME);
+    b.ctl(COMBOBOX, ID_THEME, COMBO, [112, 28, 180, 120], "");
+    // the note when this Windows cannot show dark (D64); empty otherwise
+    b.ctl(STATIC, ID_THEME_NOTE, C, [112, 44, 190, 9], "");
+    b.ctl(BUTTON, ID_ALT_ROWS, CHECK, [8, 56, 290, 10], tr!(PrefAlternateRows));
+    b.ctl(BUTTON, ID_TITLE_SPEED, CHECK, [8, 70, 290, 10], tr!(PrefTitleSpeed));
+    b.ctl(BUTTON, ID_BALLOONS, CHECK, [8, 84, 290, 10], tr!(PrefBalloons));
+    b.group([0, 108, W, 46], tr!(PrefTray));
+    b.ctl(BUTTON, ID_CLOSE_TRAY, CHECK, [8, 122, 290, 10], tr!(PrefCloseToTray));
+    b.ctl(BUTTON, ID_MIN_TRAY, CHECK, [8, 136, 290, 10], tr!(PrefMinimizeToTray));
+    b.group([0, 160, W, 60], tr!(PrefWhenAdding));
+    b.ctl(BUTTON, ID_ADD_STOPPED, CHECK, [8, 174, 290, 10], tr!(PrefDontStart));
+    b.ctl(BUTTON, ID_ACTIVATE, CHECK, [8, 188, 290, 10], tr!(PrefActivateWindow));
+    b.ctl(BUTTON, ID_SHOW_ADD, CHECK, [8, 202, 290, 10], tr!(PrefShowAddDialog));
 
     b.page(2);
     b.group([0, 0, W, 96], tr!(PrefDownloadLocation));
@@ -1320,6 +1338,18 @@ unsafe fn init(dlg: HWND, st: &mut State<'_>) {
             let w = wide(name);
             send(item(dlg, ID_LANG), CB_ADDSTRING, 0, w.as_ptr() as LPARAM);
         }
+        st.themes = pref_pages::THEME_CHOICES
+            .iter()
+            .map(|(k, s)| ((*k).to_owned(), lang::text(*s).to_owned()))
+            .collect();
+        for (_, name) in &st.themes {
+            let w = wide(name);
+            send(item(dlg, ID_THEME), CB_ADDSTRING, 0, w.as_ptr() as LPARAM);
+        }
+        if !crate::theme::available() {
+            let note = wide(tr!(PrefThemeUnavailable));
+            SetWindowTextW(item(dlg, ID_THEME_NOTE), note.as_ptr());
+        }
         // the shared list (None / Socks4 / Socks5 / HTTP), indexed as `proxy_to_ui` counts
         for label in PROXY_TYPES {
             let w = wide(lang::text(label));
@@ -1543,6 +1573,10 @@ unsafe fn write_controls(dlg: HWND, st: &mut State<'_>) {
         let language = st.languages.iter().position(|(c, _)| *c == st.opts.gui.language).unwrap_or(0);
         send(item(dlg, ID_LANG), CB_SETCURSEL, language, 0);
         st.shown.push((ID_LANG, language.to_string()));
+        let mode = crate::theme::Mode::from_key(&st.opts.gui.theme).key();
+        let theme = st.themes.iter().position(|(c, _)| c == mode).unwrap_or(0);
+        send(item(dlg, ID_THEME), CB_SETCURSEL, theme, 0);
+        st.shown.push((ID_THEME, theme.to_string()));
         let (kind, auth) = proxy_to_ui(&st.opts.settings);
         send(item(dlg, ID_PROXY_TYPE), CB_SETCURSEL, kind, 0);
         st.shown.push((ID_PROXY_TYPE, kind.to_string()));
@@ -1933,6 +1967,12 @@ unsafe fn read_controls(dlg: HWND, st: &mut State<'_>) -> Result<(), (u16, Strin
         if shown(ID_LANG) != Some(language.to_string().as_str()) {
             if let Some((code, _)) = st.languages.get(language) {
                 o.gui.language.clone_from(code);
+            }
+        }
+        let theme = send(item(dlg, ID_THEME), CB_GETCURSEL, 0, 0).max(0) as usize;
+        if shown(ID_THEME) != Some(theme.to_string().as_str()) {
+            if let Some((key, _)) = st.themes.get(theme) {
+                o.gui.theme.clone_from(key);
             }
         }
         let table = sched_table(dlg);
@@ -2467,8 +2507,14 @@ mod tests {
     /// the focus (the Advanced table: the selected row).
     #[test]
     fn every_setting_has_help() {
-        let all =
-            Features { tray: true, desktop: true, packaged: false, updates: true, alternate_rows: true };
+        let all = Features {
+            tray: true,
+            desktop: true,
+            packaged: false,
+            updates: true,
+            alternate_rows: true,
+            theme: true,
+        };
         let pages = pref_pages::pages(all);
         for f in pref_pages::fields(&pages) {
             assert!(FIELD_KEYS.iter().any(|(_, k)| *k == f.key), "{} has no control in FIELD_KEYS", f.key);

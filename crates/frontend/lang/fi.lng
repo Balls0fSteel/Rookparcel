@@ -749,6 +749,7 @@ ThemeHighContrast=Suuri kontrasti
 ThemePostalRook=Postimustavaris
 WebTheme=Teema
 PrefBadTheme=Teeman nimessä on 1–40 pientä kirjainta, numeroa ja yhdysmerkkiä.
+PrefThemeUnavailable=Tämä Windows ei voi näyttää tummaa teemaa; käytössä on vaalea.
 CreateAutoDetect=(automaattinen)
 CreateHybrid=Hybridi (v1 + v2)
 CreateV1=v1

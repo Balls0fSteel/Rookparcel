@@ -86,6 +86,9 @@ pub struct GuiOptions {
     /// [`crate::lang::LANGUAGES`], or empty for the system's. Used from the next start
     /// (`lang::init`).
     pub language: String,
+    /// Preferences > UI Settings "Theme" (`ui.theme`, the Win32 client, D64): `system` (follow
+    /// Windows, the default, stored as nothing), `light` or `dark`; the Web UI's theme ids.
+    pub theme: String,
     /// Preferences > General > Privacy: "Check for updates automatically" (`update.check`, on
     /// by default as in µTorrent) and "Update to beta versions" (`update.beta`), see
     /// [`crate::update`].
@@ -131,6 +134,7 @@ impl GuiOptions {
             ip_filter_path: prefs.get("ipfilter.path").unwrap_or_default().to_owned(),
             schedule: Schedule::load(prefs),
             language: prefs.get("ui.language").unwrap_or_default().trim().to_owned(),
+            theme: prefs.get("ui.theme").unwrap_or_default().trim().to_owned(),
             check_updates: prefs.get_bool("update.check", true),
             update_beta: prefs.get_bool("update.beta", false),
         }
@@ -176,6 +180,10 @@ impl GuiOptions {
             prefs.remove("ui.language");
         } else {
             prefs.set("ui.language", self.language.trim());
+        }
+        match self.theme.trim() {
+            "" | "system" => prefs.remove("ui.theme"),
+            theme => prefs.set("ui.theme", theme),
         }
         prefs.set_bool("update.check", self.check_updates);
         prefs.set_bool("update.beta", self.update_beta);
@@ -341,6 +349,7 @@ mod tests {
             ip_filter_path: r"E:\lists\level1.p2p".into(),
             schedule: crate::scheduler::Schedule { enabled: true, limited_up_kib: 25, ..Default::default() },
             language: "en".into(),
+            theme: "dark".into(),
             check_updates: false,
             update_beta: true,
         };

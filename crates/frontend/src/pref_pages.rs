@@ -137,6 +137,9 @@ pub struct Features {
     pub updates: bool,
     /// The lists shade every other row (`ui.alternate_rows`): UI Settings shows its box.
     pub alternate_rows: bool,
+    /// A light or dark window (`ui.theme`, D64): UI Settings shows the Theme drop-down (the
+    /// Win32 client; GTK and macOS follow the desktop).
+    pub theme: bool,
 }
 
 const KB: i64 = 1024;
@@ -207,6 +210,14 @@ fn tr_owned(s: S) -> String {
 
 fn language_choices(o: &Options) -> Vec<(String, String)> {
     lang::choices(&o.gui.language, &lang::system_languages())
+}
+
+/// The Theme drop-down (`ui.theme`): System, Light, Dark, as the Web UI's theme ids.
+pub const THEME_CHOICES: [(&str, S); 3] =
+    [("system", S::ThemeSystem), ("light", S::ThemeLight), ("dark", S::ThemeDark)];
+
+fn theme_choices(_: &Options) -> Vec<(String, String)> {
+    THEME_CHOICES.iter().map(|(k, s)| ((*k).to_owned(), tr_owned(*s))).collect()
 }
 
 const fn field(key: &'static str, label: Option<S>, control: Control) -> Field {
@@ -328,6 +339,18 @@ pub fn pages(features: Features) -> Vec<Page> {
             |o, v| o.gui.confirm_delete = v,
         )),
     ];
+    if features.theme {
+        ui.push(F(field(
+            "ui.theme",
+            Some(S::PrefTheme),
+            Control::Choice {
+                choices: theme_choices,
+                get: |o| o.gui.theme.clone(),
+                set: |o, v| o.gui.theme = v.trim().to_owned(),
+            },
+        )
+        .help(H::PrefThemeDesktop)));
+    }
     if features.alternate_rows {
         ui.push(F(checkbox(
             "ui.alternate_rows",
@@ -1268,6 +1291,7 @@ mod tests {
             packaged: false,
             updates: true,
             alternate_rows: true,
+            theme: true,
         });
         let mut seen = std::collections::HashSet::new();
         for f in fields(&pages) {
@@ -1302,6 +1326,7 @@ mod tests {
             packaged: true,
             updates: false,
             alternate_rows: false,
+            theme: false,
         });
         let desktop = |f: &&Field| f.key.starts_with("assoc.") || f.key == "ui.check_assoc";
         assert_eq!(fields(&packaged).filter(desktop).count(), 5);
@@ -1467,8 +1492,14 @@ mod tests {
     /// here; and every row of the Advanced table has one too.
     #[test]
     fn every_control_has_a_help_text() {
-        let all =
-            Features { tray: true, desktop: true, packaged: false, updates: true, alternate_rows: true };
+        let all = Features {
+            tray: true,
+            desktop: true,
+            packaged: false,
+            updates: true,
+            alternate_rows: true,
+            theme: true,
+        };
         for page in pages(all).iter().chain(&pages(Features { packaged: true, ..all })) {
             for item in &page.items {
                 let needs = matches!(item, Item::Field(_) | Item::Button { .. } | Item::SchedTable);

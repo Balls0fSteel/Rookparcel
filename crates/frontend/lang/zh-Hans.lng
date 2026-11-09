@@ -749,6 +749,7 @@ ThemeHighContrast=高对比度
 ThemePostalRook=邮差秃鼻乌鸦
 WebTheme=主题
 PrefBadTheme=主题名称为 1 到 40 个小写字母、数字和连字符。
+PrefThemeUnavailable=此 Windows 无法显示深色主题，将使用浅色主题。
 CreateAutoDetect=（自动检测）
 CreateHybrid=混合 (v1 + v2)
 CreateV1=v1

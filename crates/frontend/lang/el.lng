@@ -749,6 +749,7 @@ ThemeHighContrast=Υψηλή αντίθεση
 ThemePostalRook=Ταχυδρομικό χαβαρόνι
 WebTheme=Θέμα
 PrefBadTheme=Το όνομα θέματος έχει 1 έως 40 πεζά λατινικά γράμματα, ψηφία και παύλες.
+PrefThemeUnavailable=Αυτά τα Windows δεν μπορούν να εμφανίσουν το σκούρο θέμα· χρησιμοποιείται το ανοιχτό.
 CreateAutoDetect=(αυτόματη ανίχνευση)
 CreateHybrid=Υβριδικό (v1 + v2)
 CreateV1=v1

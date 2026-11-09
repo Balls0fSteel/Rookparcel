@@ -749,6 +749,7 @@ ThemeHighContrast=Yüksek Karşıtlık
 ThemePostalRook=Postacı Ekin Kargası
 WebTheme=Tema
 PrefBadTheme=Tema adı 1 ile 40 arasında küçük harf, rakam ve tireden oluşur.
+PrefThemeUnavailable=Bu Windows koyu temayı gösteremiyor; açık tema kullanılıyor.
 CreateAutoDetect=(otomatik algıla)
 CreateHybrid=Karma (v1 + v2)
 CreateV1=v1

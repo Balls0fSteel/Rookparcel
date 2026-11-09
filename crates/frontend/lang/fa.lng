@@ -749,6 +749,7 @@ ThemeHighContrast=کنتراست بالا
 ThemePostalRook=کلاغ پستی
 WebTheme=پوسته
 PrefBadTheme=نام پوسته ۱ تا ۴۰ نویسه است: حروف کوچک a-z، رقم‌ها و خط تیره.
+PrefThemeUnavailable=این ویندوز نمی‌تواند پوستهٔ تیره را نمایش دهد؛ پوستهٔ روشن استفاده می‌شود.
 CreateAutoDetect=(تشخیص خودکار)
 CreateHybrid=دورگه (v1 + v2)
 CreateV1=v1

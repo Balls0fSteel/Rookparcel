@@ -31,9 +31,9 @@ use std::ptr::{null, null_mut};
 use rookparcel_frontend::tr;
 use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, HWND, WIN32_ERROR};
 use windows_sys::Win32::System::Registry::{
-    HKEY, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE, REG_OPTION_NON_VOLATILE, REG_SZ, RRF_RT_REG_EXPAND_SZ,
-    RRF_RT_REG_SZ, RegCloseKey, RegCreateKeyExW, RegDeleteKeyW, RegDeleteTreeW, RegDeleteValueW,
-    RegEnumValueW, RegGetValueW, RegOpenKeyExW, RegSetValueExW,
+    HKEY, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE, REG_OPTION_NON_VOLATILE, REG_SZ, RRF_RT_REG_DWORD,
+    RRF_RT_REG_EXPAND_SZ, RRF_RT_REG_SZ, RegCloseKey, RegCreateKeyExW, RegDeleteKeyW, RegDeleteTreeW,
+    RegDeleteValueW, RegEnumValueW, RegGetValueW, RegOpenKeyExW, RegSetValueExW,
 };
 use windows_sys::Win32::UI::Shell::{SHCNE_ASSOCCHANGED, SHCNF_IDLIST, SHChangeNotify, ShellExecuteW};
 use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
@@ -516,6 +516,26 @@ pub(crate) fn get_in(root: HKEY, path: &str, name: Option<&str>) -> Option<Strin
         let e =
             RegGetValueW(root, p.as_ptr(), ptr(&n), flags, null_mut(), buf.as_mut_ptr().cast(), &mut bytes);
         (e == ERROR_SUCCESS).then(|| crate::util::from_wide(&buf))
+    }
+}
+
+/// A DWORD value under `root` (`None` = the key's default value).
+pub(crate) fn get_dword_in(root: HKEY, path: &str, name: Option<&str>) -> Option<u32> {
+    let p = wide(path);
+    let n = opt_wide(name);
+    unsafe {
+        let mut value = 0u32;
+        let mut bytes = size_of::<u32>() as u32;
+        let e = RegGetValueW(
+            root,
+            p.as_ptr(),
+            ptr(&n),
+            RRF_RT_REG_DWORD,
+            null_mut(),
+            (&mut value as *mut u32).cast(),
+            &mut bytes,
+        );
+        (e == ERROR_SUCCESS).then_some(value)
     }
 }
 

@@ -133,7 +133,14 @@ mod tests {
     use crate::prefs::Prefs;
 
     fn all() -> Vec<Page> {
-        pages(Features { tray: true, desktop: true, packaged: false, updates: true, alternate_rows: true })
+        pages(Features {
+            tray: true,
+            desktop: true,
+            packaged: false,
+            updates: true,
+            alternate_rows: true,
+            theme: true,
+        })
     }
 
     /// The controls: what was written, with `edits` over it.

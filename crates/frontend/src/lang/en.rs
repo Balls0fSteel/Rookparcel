@@ -1064,6 +1064,8 @@ strings! {
     /// The phone toolbar's More menu: the theme submenu.
     WebTheme = "Theme";
     PrefBadTheme = "A theme name is 1 to 40 lower-case letters, digits and dashes.";
+    /// Under the Windows program's Theme drop-down when this Windows cannot show dark mode.
+    PrefThemeUnavailable = "This Windows cannot show the dark theme; the light one is used.";
 
     // ---- Create New Torrent: choices and errors
 

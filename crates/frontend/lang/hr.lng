@@ -749,6 +749,7 @@ ThemeHighContrast=Visoki kontrast
 ThemePostalRook=Poštanski gačac
 WebTheme=Tema
 PrefBadTheme=Naziv teme ima 1 do 40 malih slova, znamenki i crtica.
+PrefThemeUnavailable=Ovaj Windows ne može prikazati tamnu temu; koristi se svijetla.
 CreateAutoDetect=(automatski)
 CreateHybrid=Hibridni (v1 + v2)
 CreateV1=v1

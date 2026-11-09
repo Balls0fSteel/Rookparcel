@@ -749,6 +749,7 @@ ThemeHighContrast=Kontras Tinggi
 ThemePostalRook=Gagak Pos
 WebTheme=Tema
 PrefBadTheme=Nama tema terdiri dari 1 sampai 40 huruf kecil, angka, dan tanda hubung.
+PrefThemeUnavailable=Windows ini tidak dapat menampilkan tema gelap; tema terang yang digunakan.
 CreateAutoDetect=(deteksi otomatis)
 CreateHybrid=Hibrida (v1 + v2)
 CreateV1=v1

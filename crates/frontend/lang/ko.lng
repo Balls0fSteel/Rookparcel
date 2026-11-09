@@ -749,6 +749,7 @@ ThemeHighContrast=고대비
 ThemePostalRook=우편 떼까마귀
 WebTheme=테마
 PrefBadTheme=테마 이름은 1~40자의 영문 소문자, 숫자, 하이픈입니다.
+PrefThemeUnavailable=이 Windows에서는 다크 테마를 표시할 수 없어 라이트 테마를 사용합니다.
 CreateAutoDetect=(자동 감지)
 CreateHybrid=하이브리드 (v1 + v2)
 CreateV1=v1

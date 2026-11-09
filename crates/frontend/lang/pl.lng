@@ -749,6 +749,7 @@ ThemeHighContrast=Wysoki kontrast
 ThemePostalRook=Gawron pocztowy
 WebTheme=Motyw
 PrefBadTheme=Nazwa motywu to od 1 do 40 małych liter, cyfr i myślników.
+PrefThemeUnavailable=Ten system Windows nie może wyświetlić ciemnego motywu; używany jest jasny.
 CreateAutoDetect=(automatycznie)
 CreateHybrid=Hybrydowy (v1 + v2)
 CreateV1=v1

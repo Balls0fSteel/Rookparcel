@@ -144,6 +144,8 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
         // a Flatpak is updated by Flathub
         updates: rookparcel_frontend::update::AVAILABLE && !crate::integration::packaged(),
         alternate_rows: true,
+        // GTK follows the desktop's theme (D63); no drop-down of its own
+        theme: false,
     });
     if !crate::integration::associations_settable() {
         // a Flatpak: the package's own entry declares the types, autostart still works

@@ -327,6 +327,7 @@ impl Prefs {
     pub fn gui(&self) -> GuiOptions {
         GuiOptions {
             download_dir: self.save_path.clone(),
+            theme: String::new(),
             move_completed: self.move_completed,
             completed_dir: self.completed_dir.clone(),
             move_only_default: self.move_only_default,
@@ -365,6 +366,7 @@ impl Prefs {
         let mine = self.gui();
         *g = GuiOptions {
             alternate_rows: g.alternate_rows,
+            theme: g.theme.clone(),
             title_speed: g.title_speed,
             check_association: g.check_association,
             close_to_tray: g.close_to_tray,

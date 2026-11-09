@@ -749,6 +749,7 @@ ThemeHighContrast=ความคมชัดสูง
 ThemePostalRook=อีกาไปรษณีย์
 WebTheme=ธีม
 PrefBadTheme=ชื่อธีมเป็นตัวอักษรละตินตัวพิมพ์เล็ก ตัวเลข และขีดกลาง ยาว 1 ถึง 40 ตัว
+PrefThemeUnavailable=Windows นี้ไม่สามารถแสดงธีมมืดได้ จึงใช้ธีมสว่างแทน
 CreateAutoDetect=(ตรวจหาอัตโนมัติ)
 CreateHybrid=ไฮบริด (v1 + v2)
 CreateV1=v1

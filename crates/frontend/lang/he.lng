@@ -749,6 +749,7 @@ ThemeHighContrast=ניגודיות גבוהה
 ThemePostalRook=עורב הדואר
 WebTheme=ערכת נושא
 PrefBadTheme=שם ערכת נושא הוא 1 עד 40 אותיות לטיניות קטנות, ספרות ומקפים.
+PrefThemeUnavailable=Windows זה אינו יכול להציג את ערכת הנושא הכהה; נעשה שימוש בבהירה.
 CreateAutoDetect=(זיהוי אוטומטי)
 CreateHybrid=היברידי (v1 + v2)
 CreateV1=v1

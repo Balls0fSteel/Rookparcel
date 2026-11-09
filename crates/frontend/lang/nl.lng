@@ -749,6 +749,7 @@ ThemeHighContrast=Hoog contrast
 ThemePostalRook=Postroek
 WebTheme=Thema
 PrefBadTheme=Een themanaam bestaat uit 1 tot 40 kleine letters, cijfers en streepjes.
+PrefThemeUnavailable=Deze Windows kan het donkere thema niet tonen; het lichte wordt gebruikt.
 CreateAutoDetect=(automatisch)
 CreateHybrid=Hybride (v1 + v2)
 CreateV1=v1

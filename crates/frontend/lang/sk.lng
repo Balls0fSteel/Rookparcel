@@ -749,6 +749,7 @@ ThemeHighContrast=Vysoký kontrast
 ThemePostalRook=Poštový havran
 WebTheme=Motív
 PrefBadTheme=Názov motívu má 1 až 40 malých písmen, číslic a pomlčiek.
+PrefThemeUnavailable=Tento systém Windows nedokáže zobraziť tmavý motív; používa sa svetlý.
 CreateAutoDetect=(automaticky)
 CreateHybrid=Hybridný (v1 + v2)
 CreateV1=v1

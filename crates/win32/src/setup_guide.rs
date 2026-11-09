@@ -663,8 +663,14 @@ mod tests {
 
     use super::*;
 
-    const ALL: Features =
-        Features { tray: true, desktop: true, packaged: false, updates: true, alternate_rows: true };
+    const ALL: Features = Features {
+        tray: true,
+        desktop: true,
+        packaged: false,
+        updates: true,
+        alternate_rows: true,
+        theme: true,
+    };
 
     struct Fixture {
         dlg: HWND,
