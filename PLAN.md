@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-09_181244_1794244364
+Last updated: 2026-11-09_195222_1794250342
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D60](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -25,17 +25,15 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 - **Artwork (2026-11-05):** the Postal Rook won ([concepts](docs/art/rookparcel-candidates-2026-11-05/README.md), [small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
 
-- **Releases:** 1.0.1 to 1.2.21 ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes.
+- **Releases:** 1.0.1 to 1.2.29 ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes.
 - **Benchmarks:** [2026-10-27 results](docs/BENCHMARKS.md), `tools/bench`: 10,000 torrents after restart use 60 MB (qBittorrent 612 MB); one-peer download 3,592 MiB/s, 1.04 CPU s/GiB.
-- CI, FreeBSD, Fuzz and the Release run (with the native macOS job) were green for `v1.2.19` (recorded, not a live check).
+- CI, FreeBSD and the Release run were green for `v1.2.29`; Fuzz last ran green on the commit before it, a Win32-only change apart (recorded, not a live check).
 - Scale baseline on this development PC (2026-10-23): Win32 lists 100,000 torrents in 1.16 s, GUI-thread idle CPU 0.05-0.10%, working set 232 MB. Name sort 49 ms, Ctrl+A 4.7 ms, add 19 ms, remove one 14 ms. The low-end-machine gate remains open.
 - The app icon is the Postal Rook (D60): drawn marks below 48 px, the generated stamp from 48 px (`assets/rookparcel-icons`).
 
 ## Next steps
 
-**1.2.29, prepared 2026-11-09, not yet released:** the theme pass and the Win32 dark mode (1.2.22-1.2.29) tested on the Xubuntu, Windows 11 and macOS VMs and this PC, with four Win32 fixes and one GTK fix (changelog); release notes in [docs/releases/1.2.29.md](docs/releases/1.2.29.md). To release (RELEASING.md, no pull request): merge into `main`, tag `v1.2.29`, check the draft's files, publish, then the site news entry and the wiki copy (`docs/wiki/Dark-mode.md` is new).
-
-**1.2.21, published 2026-11-07:** the Files tab's folder tree in all four UIs (D62) and a GTK abort fix; hand checks in BACKLOG "Files tab folder tree"; the nox Docker image's first push is untested. Next on macOS: drop the legacy notification centre (BACKLOG "macOS" (A)).
+**1.2.29, published 2026-11-09:** the theme pass and the Win32 dark mode (1.2.22-1.2.29, D63, D64), tested on the Xubuntu, Windows 11 and macOS VMs and this PC ([notes](docs/releases/1.2.29.md)); `update.txt` says `stable=1.2.29`; the wiki has the Dark-mode page. Open hand checks in BACKLOG "Themes" (a Windows 10 1809 VM, a phone and Safari for the Web UI themes) and "Files tab folder tree"; the nox Docker image's first push is still untested. Next on macOS: drop the legacy notification centre (BACKLOG "macOS" (A)).
 
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 
