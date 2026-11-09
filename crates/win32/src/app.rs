@@ -32,7 +32,6 @@ use rookparcel_frontend::import;
 use rookparcel_frontend::lang::{self, S};
 use rookparcel_frontend::model::{Filter, TorrentList};
 use rookparcel_frontend::options::{self, GuiOptions, Options};
-use rookparcel_frontend::palette::LIGHT;
 use rookparcel_frontend::pref_pages::Features;
 use rookparcel_frontend::prefs::Prefs;
 use rookparcel_frontend::properties::{self, Properties, TorrentProps};
@@ -4773,9 +4772,9 @@ unsafe fn show_setup_guide(hwnd: HWND) {
     }
 }
 
-/// The window follows a flipped theme (D64): the caption, the popups, the controls and, through
-/// [`apply_dpi`], every icon set and menu bitmap (they come in a light and a dark palette); the
-/// drawn parts and the dialogs come with their own slices.
+/// The window follows a flipped theme (D64): the caption, the popups, the controls, the drawn
+/// panels (they ask `theme::draw()` at each paint) and, through [`apply_dpi`], every icon set and
+/// menu bitmap (they come in a light and a dark palette); the dialogs come with their own slice.
 unsafe fn apply_theme(hwnd: HWND) {
     unsafe {
         crate::theme::theme_window(hwnd);
@@ -4800,6 +4799,11 @@ fn theme_controls(a: &App) {
         theme_control(a.files_clear, Kind::Explorer);
         crate::theme::check_box(a.files_tree);
         crate::theme::status_bar(a.status);
+        crate::theme::tab_control(a.tabs);
+        for page in Page::ALL.into_iter().filter(|p| p.is_list()) {
+            crate::theme::list(a.pages[page.index()]);
+        }
+        crate::theme::list(a.piece_list);
         let search_menu = GetDlgItem(a.hwnd, IDC_SEARCH_MENU as i32);
         tooltip(a.toolbar, TB_GETTOOLTIPS);
         tooltip(search_menu, TB_GETTOOLTIPS);
@@ -6866,11 +6870,14 @@ unsafe fn list_custom_draw(cd: &mut NMLVCUSTOMDRAW) -> LRESULT {
                 if bar.right <= bar.left {
                     return CDRF_DODEFAULT as LRESULT;
                 }
-                let frame = CreateSolidBrush(details::rgb(LIGHT.bar_frame));
-                let back = CreateSolidBrush(details::rgb(LIGHT.bar_bg));
+                let frame = CreateSolidBrush(details::rgb(crate::theme::draw().bar_frame));
+                let back = CreateSolidBrush(details::rgb(crate::theme::draw().bar_bg));
                 // µTorrent: blue while downloading, green once complete.
-                let fill =
-                    CreateSolidBrush(details::rgb(if finished { LIGHT.bar_green } else { LIGHT.bar_blue }));
+                let fill = CreateSolidBrush(details::rgb(if finished {
+                    crate::theme::draw().bar_green
+                } else {
+                    crate::theme::draw().bar_blue
+                }));
                 FillRect(hdc, &bar, back);
                 let w = ((bar.right - bar.left - 2) as i64 * ppm as i64 / 1_000_000) as i32;
                 let done = RECT {
@@ -6888,7 +6895,7 @@ unsafe fn list_custom_draw(cd: &mut NMLVCUSTOMDRAW) -> LRESULT {
                 let mut r = bar;
                 let old = SelectObject(hdc, font);
                 SetBkMode(hdc, TRANSPARENT as i32);
-                SetTextColor(hdc, details::rgb(LIGHT.bar_fg));
+                SetTextColor(hdc, details::rgb(crate::theme::draw().bar_fg));
                 DrawTextW(
                     hdc,
                     text.as_ptr(),

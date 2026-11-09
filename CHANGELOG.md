@@ -4,6 +4,11 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-09_165009_1794239409: Version 1.2.26: Win32 dark mode, slice 4: the detail tabs, panels and lists
+
+- The detail panels (`details.rs`: General's bars, the piece map, the Blocks cells, the speed graph) take `theme::draw()` (`palette::LIGHT` or `DARK`) for everything they draw and `theme::sys()`/`theme::brush()` for the surfaces, frames, rules and hint text; the Done column's bar in `app.rs` the same. The tab strip is painted by `theme::tab_control`'s subclass in dark (strip, tabs with their icons and texts, the body's frame joined to the selected tab); the four detail list pages and the Pieces list go through `theme::list`.
+- **Validation:** Win32 121 tests; the light capture equals the baseline but for the caption's version, the Theme row and timing (Logger, RSS, a caret); in dark the main window is now dark throughout. Dialogs stay light until the next slice.
+
 ## 2026-11-09_164250_1794238970: Version 1.2.25: Win32 dark mode, slices 2 and 3: the main window's controls, toolbar, menu bar and icons
 
 - **Lists, tree, status bar, Files controls (slice 2):** `controls::row_background` and `selection_colours` read `theme::sys()` (light: the same `GetSysColor` bytes; dark: the row shading lightens instead of darkening); `theme::list` gives a list view and its header the `DarkMode_Explorer`/`DarkMode_ItemsView` classes, the dark background and text colours and a header painted by a subclass (`DarkMode_ItemsView` draws black text); `theme::tree` the tree view; `theme::status_bar` paints the status bar's parts, icons, dividers and size grip in dark; `theme::check_box` paints a check box's caption (the themed button ignores `WM_CTLCOLORSTATIC`) over the theme's dark glyph; `theme::ctl_color` answers the `WM_CTLCOLOR*` family; the main window fills its client area and the splitter gaps in dark (`WM_ERASEBKGND`) and the Files tab's count and Tree view box take the window colours.

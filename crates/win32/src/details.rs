@@ -3,18 +3,17 @@
 //! The Pieces panel paints the piece map and holds a list view of the pieces being downloaded
 //! under it (µTorrent 2.2.1's Pieces list), its Blocks column drawn by [`block_bar`].
 
+use crate::theme::{self, Brush};
 use rookparcel_core::{PartialPiece, TorrentStatus};
 use rookparcel_frontend::detail::{self, BlockKind, PieceShade, SPEED_SAMPLES};
 pub use rookparcel_frontend::detail::{Detail, Tab as Page};
-use rookparcel_frontend::palette::LIGHT;
 use rookparcel_frontend::{columns::RowExtra, fmt, tr};
 use windows_sys::Win32::Foundation::POINT;
 use windows_sys::Win32::Foundation::{COLORREF, RECT};
 use windows_sys::Win32::Graphics::Gdi::{
-    COLOR_BTNFACE, COLOR_BTNSHADOW, COLOR_GRAYTEXT, COLOR_WINDOW, COLOR_WINDOWTEXT, CreatePen,
-    CreateSolidBrush, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_RIGHT, DT_RTLREADING, DT_SINGLELINE,
-    DT_VCENTER, DeleteObject, DrawTextW, FillRect, FrameRect, GetSysColor, GetSysColorBrush, HDC, HFONT,
-    LineTo, MoveToEx, PS_SOLID, Polyline, SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
+    CreatePen, CreateSolidBrush, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_RIGHT, DT_RTLREADING,
+    DT_SINGLELINE, DT_VCENTER, DeleteObject, DrawTextW, FillRect, FrameRect, HDC, HFONT, LineTo, MoveToEx,
+    PS_SOLID, Polyline, SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
 };
 
 use crate::util::{rtl, scale, wide};
@@ -42,10 +41,10 @@ unsafe fn text(hdc: HDC, s: &str, rc: &RECT, flags: u32) {
 /// A horizontal bar with one cell per piece: `value(i)` in 0..=1 is the fill strength.
 unsafe fn piece_bar(hdc: HDC, rc: &RECT, pieces: usize, color: u32, value: impl Fn(usize) -> f32) {
     unsafe {
-        FrameRect(hdc, rc, GetSysColorBrush(COLOR_BTNSHADOW));
+        FrameRect(hdc, rc, theme::brush(Brush::Border));
         let inner = RECT { left: rc.left + 1, top: rc.top + 1, right: rc.right - 1, bottom: rc.bottom - 1 };
         let w = (inner.right - inner.left).max(0) as usize;
-        fill(hdc, &inner, LIGHT.bar_bg);
+        fill(hdc, &inner, theme::draw().bar_bg);
         if pieces == 0 || w == 0 {
             return;
         }
@@ -66,7 +65,7 @@ unsafe fn piece_bar(hdc: HDC, rc: &RECT, pieces: usize, color: u32, value: impl 
                 end += 1;
             }
             if v > 0.0 {
-                let c = LIGHT.blend(color, v);
+                let c = theme::draw().blend(color, v);
                 let r = RECT {
                     left: inner.left + x as i32,
                     top: inner.top,
@@ -98,10 +97,10 @@ impl PaintCtx<'_> {
 
 pub unsafe fn paint(page: Page, c: &PaintCtx<'_>) {
     unsafe {
-        let face = if page == Page::Speed { COLOR_WINDOW } else { COLOR_BTNFACE };
-        FillRect(c.hdc, &c.rc, GetSysColorBrush(face));
+        let face = if page == Page::Speed { Brush::Window } else { Brush::Face };
+        FillRect(c.hdc, &c.rc, theme::brush(face));
         SetBkMode(c.hdc, TRANSPARENT as i32);
-        SetTextColor(c.hdc, GetSysColor(COLOR_WINDOWTEXT));
+        SetTextColor(c.hdc, theme::sys().window_text);
         let old = SelectObject(c.hdc, c.font);
         match page {
             Page::General => general(c),
@@ -141,24 +140,20 @@ unsafe fn general(c: &PaintCtx<'_>) {
             let detail = c.detail;
             if i == 0 {
                 match &detail.have {
-                    Some(h) => {
-                        piece_bar(c.hdc, &bar, pieces, LIGHT.bar_blue, |p| if h.get(p) { 1.0 } else { 0.0 })
-                    }
+                    Some(h) => piece_bar(c.hdc, &bar, pieces, theme::draw().bar_blue, |p| {
+                        if h.get(p) { 1.0 } else { 0.0 }
+                    }),
                     None => {
                         let done = st.progress_ppm as usize;
-                        piece_bar(
-                            c.hdc,
-                            &bar,
-                            1000,
-                            LIGHT.bar_blue,
-                            |p| if p * 1000 < done { 1.0 } else { 0.0 },
-                        )
+                        piece_bar(c.hdc, &bar, 1000, theme::draw().bar_blue, |p| {
+                            if p * 1000 < done { 1.0 } else { 0.0 }
+                        })
                     }
                 }
             } else {
                 let av = &detail.availability;
                 let have = detail.have.as_ref();
-                piece_bar(c.hdc, &bar, av.len(), LIGHT.bar_green, |p| {
+                piece_bar(c.hdc, &bar, av.len(), theme::draw().bar_green, |p| {
                     if have.is_some_and(|h| h.get(p)) { 1.0 } else { (av[p] as f32 / 3.0).min(1.0) }
                 });
             }
@@ -203,7 +198,7 @@ unsafe fn section(c: &PaintCtx<'_>, title: &str, y: i32) -> i32 {
         let old = SelectObject(c.hdc, c.bold);
         text(c.hdc, title, &RECT { left, top: y, right, bottom: y + line }, DT_LEFT);
         SelectObject(c.hdc, old);
-        let pen = CreatePen(PS_SOLID, 1, GetSysColor(COLOR_BTNSHADOW));
+        let pen = CreatePen(PS_SOLID, 1, theme::sys().shadow);
         let old = SelectObject(c.hdc, pen);
         let mid = y + line / 2;
         MoveToEx(c.hdc, left + c.s(70), mid, std::ptr::null_mut());
@@ -228,7 +223,7 @@ unsafe fn pair(c: &PaintCtx<'_>, x: i32, y: i32, w: i32, label: &str, value: &st
 
 unsafe fn hint(c: &PaintCtx<'_>, s: &str) {
     unsafe {
-        SetTextColor(c.hdc, GetSysColor(COLOR_GRAYTEXT));
+        SetTextColor(c.hdc, theme::sys().gray_text);
         let r = RECT {
             left: c.rc.left + c.s(8),
             top: c.rc.top + c.s(8),
@@ -269,20 +264,20 @@ pub unsafe fn block_bar(hdc: HDC, rc: &RECT, p: &PartialPiece) {
         return;
     }
     unsafe {
-        fill(hdc, rc, LIGHT.bar_bg);
+        fill(hdc, rc, theme::draw().bar_bg);
         for (kind, start, len) in detail::block_runs(p) {
             let color = match kind {
                 BlockKind::Free => continue,
-                BlockKind::Requested => LIGHT.block_requested,
-                BlockKind::Writing => LIGHT.bar_green,
-                BlockKind::Finished => LIGHT.bar_blue,
+                BlockKind::Requested => theme::draw().block_requested,
+                BlockKind::Writing => theme::draw().bar_green,
+                BlockKind::Finished => theme::draw().bar_blue,
             };
             let x0 = rc.left + 1 + (start as i64 * w / n) as i32;
             // at least a pixel, so one requested block among a thousand still shows
             let x1 = (rc.left + 1 + ((start + len) as i64 * w / n) as i32).max(x0 + 1);
             fill(hdc, &RECT { left: x0, top: rc.top + 1, right: x1, bottom: rc.bottom - 1 }, color);
         }
-        FrameRect(hdc, rc, GetSysColorBrush(COLOR_BTNSHADOW));
+        FrameRect(hdc, rc, theme::brush(Brush::Border));
     }
 }
 
@@ -321,15 +316,15 @@ unsafe fn pieces(c: &PaintCtx<'_>) {
             let y = c.rc.top + header + ((i / cols) as i32) * (cell + gap);
             let rc = RECT { left: x, top: y, right: x + cell, bottom: y + cell };
             let color = match d.piece_shade(i) {
-                PieceShade::Have => LIGHT.bar_blue,
-                PieceShade::Downloading => LIGHT.block_requested,
-                PieceShade::Available(0) => LIGHT.availability[0],
-                PieceShade::Available(1) => LIGHT.availability[1],
-                PieceShade::Available(2 | 3) => LIGHT.availability[2],
-                PieceShade::Available(_) => LIGHT.availability[3],
+                PieceShade::Have => theme::draw().bar_blue,
+                PieceShade::Downloading => theme::draw().block_requested,
+                PieceShade::Available(0) => theme::draw().availability[0],
+                PieceShade::Available(1) => theme::draw().availability[1],
+                PieceShade::Available(2 | 3) => theme::draw().availability[2],
+                PieceShade::Available(_) => theme::draw().availability[3],
             };
             fill(c.hdc, &rc, color);
-            FrameRect(c.hdc, &rc, GetSysColorBrush(COLOR_BTNSHADOW));
+            FrameRect(c.hdc, &rc, theme::brush(Brush::Border));
         }
         if shown < n {
             let y = bottom - c.s(18);
@@ -354,8 +349,8 @@ unsafe fn speed(c: &PaintCtx<'_>) {
     }
     let top = detail::speed_scale(&d.speed);
     unsafe {
-        FrameRect(c.hdc, &plot, GetSysColorBrush(COLOR_BTNSHADOW));
-        let grid = CreatePen(PS_SOLID, 1, rgb(LIGHT.grid_line));
+        FrameRect(c.hdc, &plot, theme::brush(Brush::Border));
+        let grid = CreatePen(PS_SOLID, 1, rgb(theme::draw().grid_line));
         let old = SelectObject(c.hdc, grid);
         for i in 1..4 {
             let y = plot.top + (plot.bottom - plot.top) * i / 4;
@@ -383,8 +378,8 @@ unsafe fn speed(c: &PaintCtx<'_>) {
         let (down, up) = d.speed.back().copied().unwrap_or((0, 0));
         let mut x = plot.left;
         for (label, color) in [
-            (tr!(SpeedDownload, rate = fmt::speed_always(down)), LIGHT.graph_down),
-            (tr!(SpeedUpload, rate = fmt::speed_always(up)), LIGHT.graph_up),
+            (tr!(SpeedDownload, rate = fmt::speed_always(down)), theme::draw().graph_down),
+            (tr!(SpeedUpload, rate = fmt::speed_always(up)), theme::draw().graph_up),
         ] {
             let swatch = RECT {
                 left: x,
@@ -405,7 +400,7 @@ unsafe fn speed(c: &PaintCtx<'_>) {
 
         let w = (plot.right - plot.left - 2) as usize;
         let h = (plot.bottom - plot.top - 2) as f64;
-        for (series, color) in [(0usize, LIGHT.graph_down), (1, LIGHT.graph_up)] {
+        for (series, color) in [(0usize, theme::draw().graph_down), (1, theme::draw().graph_up)] {
             let n = d.speed.len();
             if n < 2 {
                 continue;

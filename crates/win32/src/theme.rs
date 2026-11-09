@@ -44,10 +44,12 @@ use windows_sys::Win32::UI::Controls::{
     CDIS_CHECKED, CDIS_DISABLED, CDIS_HOT, CDIS_SELECTED, CDRF_DODEFAULT, CDRF_NOTIFYITEMDRAW,
     CDRF_SKIPDEFAULT, CloseThemeData, DRAWITEMSTRUCT, DrawThemeBackground, GetThemePartSize, HDF_CENTER,
     HDF_JUSTIFYMASK, HDF_RIGHT, HDF_SORTDOWN, HDF_SORTUP, HDI_FORMAT, HDI_TEXT, HDITEMW, HDM_GETITEMW,
-    LVM_GETHEADER, LVM_SETBKCOLOR, LVM_SETTEXTBKCOLOR, LVM_SETTEXTCOLOR, NM_CUSTOMDRAW, NMCUSTOMDRAW, NMHDR,
-    NMTBCUSTOMDRAW, ODS_DISABLED, ODS_GRAYED, ODS_HOTLIGHT, ODS_INACTIVE, ODS_NOACCEL, ODS_SELECTED,
-    OpenThemeData, SB_GETICON, SB_GETPARTS, SB_GETRECT, SB_GETTEXTLENGTHW, SB_GETTEXTW, SB_ISSIMPLE,
-    SB_SIMPLEID, SBARS_SIZEGRIP, SetWindowTheme, TBCDRF_NOBACKGROUND, TBCDRF_NOEDGES, TBCDRF_USECDCOLORS,
+    HIMAGELIST, ILD_TRANSPARENT, ImageList_Draw, ImageList_GetIconSize, LVM_GETHEADER, LVM_SETBKCOLOR,
+    LVM_SETTEXTBKCOLOR, LVM_SETTEXTCOLOR, NM_CUSTOMDRAW, NMCUSTOMDRAW, NMHDR, NMTBCUSTOMDRAW, ODS_DISABLED,
+    ODS_GRAYED, ODS_HOTLIGHT, ODS_INACTIVE, ODS_NOACCEL, ODS_SELECTED, OpenThemeData, SB_GETICON,
+    SB_GETPARTS, SB_GETRECT, SB_GETTEXTLENGTHW, SB_GETTEXTW, SB_ISSIMPLE, SB_SIMPLEID, SBARS_SIZEGRIP,
+    SetWindowTheme, TBCDRF_NOBACKGROUND, TBCDRF_NOEDGES, TBCDRF_USECDCOLORS, TCIF_IMAGE, TCIF_TEXT, TCITEMW,
+    TCM_ADJUSTRECT, TCM_GETCURSEL, TCM_GETIMAGELIST, TCM_GETITEMCOUNT, TCM_GETITEMRECT, TCM_GETITEMW,
     TS_DRAW, TVM_SETBKCOLOR, TVM_SETLINECOLOR, TVM_SETTEXTCOLOR,
 };
 use windows_sys::Win32::UI::HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi, SystemParametersInfoForDpi};
@@ -1226,6 +1228,123 @@ pub unsafe fn menu_bar_line(hwnd: HWND) {
         let rc = RECT { left: bar.left, top: bar.bottom, right: bar.right, bottom: bar.bottom + 1 };
         FillRect(hdc, &rc, brush(Brush::Face));
         ReleaseDC(hwnd, hdc);
+    }
+}
+
+// ---- tab controls ---------------------------------------------------------------------------
+
+/// A tab control: painted by [`tab_proc`] in dark (the themed strip is light; the pages are
+/// siblings over its body, so only the strip and the body's frame are drawn).
+///
+/// # Safety
+/// `tabs` is a tab control of this thread.
+pub unsafe fn tab_control(tabs: HWND) {
+    // SAFETY: the caller's tab control.
+    unsafe {
+        subclass(tabs, tab_proc);
+        if is_dark() || SWITCHED.load(Ordering::Relaxed) {
+            InvalidateRect(tabs, null(), 1);
+        }
+    }
+}
+
+unsafe extern "system" fn tab_proc(
+    hwnd: HWND,
+    msg: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    _: usize,
+    _: usize,
+) -> LRESULT {
+    // SAFETY: the subclassed tab control's messages.
+    unsafe {
+        match msg {
+            WM_ERASEBKGND if is_dark() => 1,
+            WM_PAINT if is_dark() => {
+                paint_tabs(hwnd);
+                0
+            }
+            WM_NCDESTROY => {
+                RemoveWindowSubclass(hwnd, Some(tab_proc), SUBCLASS_ID);
+                DefSubclassProc(hwnd, msg, wp, lp)
+            }
+            _ => DefSubclassProc(hwnd, msg, wp, lp),
+        }
+    }
+}
+
+unsafe fn paint_tabs(hwnd: HWND) {
+    // SAFETY: a paint cycle on the tab control; the item buffers are ours.
+    unsafe {
+        let mut ps: PAINTSTRUCT = std::mem::zeroed();
+        let hdc = BeginPaint(hwnd, &mut ps);
+        let mut client: RECT = std::mem::zeroed();
+        GetClientRect(hwnd, &mut client);
+        FillRect(hdc, &client, brush(Brush::Face));
+        let n = SendMessageW(hwnd, TCM_GETITEMCOUNT, 0, 0).max(0) as usize;
+        let current = SendMessageW(hwnd, TCM_GETCURSEL, 0, 0);
+        // the body's frame: the display area plus the border the control keeps around it
+        let mut body = client;
+        SendMessageW(hwnd, TCM_ADJUSTRECT, 0, &mut body as *mut _ as LPARAM);
+        body.left -= 1;
+        body.right += 1;
+        body.bottom += 1;
+        body.top -= 1;
+        let font = SendMessageW(hwnd, WM_GETFONT, 0, 0) as HGDIOBJ;
+        let old = SelectObject(hdc, font);
+        SetBkMode(hdc, TRANSPARENT as i32);
+        let s = sys();
+        let dpi = GetDpiForWindow(hwnd);
+        let images = SendMessageW(hwnd, TCM_GETIMAGELIST, 0, 0) as HIMAGELIST;
+        let (mut icx, mut icy) = (0, 0);
+        if images != 0 {
+            ImageList_GetIconSize(images, &mut icx, &mut icy);
+        }
+        let pad = scaled(6, dpi);
+        let gap = scaled(4, dpi);
+        FrameRect(hdc, &body, brush(Brush::Border));
+        for i in 0..n {
+            let mut rc: RECT = std::mem::zeroed();
+            SendMessageW(hwnd, TCM_GETITEMRECT, i, &mut rc as *mut _ as LPARAM);
+            let selected = i as isize == current;
+            if selected {
+                // the selected tab stands 2 px taller and joins the body
+                rc.top -= 2;
+                rc.bottom = body.top + 1;
+                FillRect(hdc, &rc, brush(Brush::Window));
+                let top = RECT { left: rc.left, top: rc.top, right: rc.right, bottom: rc.bottom - 1 };
+                FrameRect(hdc, &top, brush(Brush::Border));
+                // the body's top border is open under it
+                line(hdc, rc.left + 1, body.top, rc.right - 1, body.top + 1, Brush::Window);
+            } else {
+                FillRect(hdc, &rc, brush(Brush::Header));
+                FrameRect(hdc, &rc, brush(Brush::Border));
+            }
+            let mut text = [0u16; 128];
+            let mut item: TCITEMW = std::mem::zeroed();
+            item.mask = TCIF_TEXT | TCIF_IMAGE;
+            item.pszText = text.as_mut_ptr();
+            item.cchTextMax = text.len() as i32;
+            SendMessageW(hwnd, TCM_GETITEMW, i, &mut item as *mut _ as LPARAM);
+            let mut x = rc.left + pad;
+            let mid = (rc.top + rc.bottom) / 2 + if selected { 1 } else { 0 };
+            if images != 0 && item.iImage >= 0 {
+                ImageList_Draw(images, item.iImage, hdc, x, mid - icy / 2, ILD_TRANSPARENT);
+                x += icx + gap;
+            }
+            SetTextColor(hdc, s.window_text);
+            let len = text.iter().position(|&c| c == 0).unwrap_or(text.len()) as i32;
+            let mut text_rc = RECT { left: x, top: rc.top, right: rc.right - pad, bottom: rc.bottom };
+            DrawTextW(
+                hdc,
+                text.as_mut_ptr(),
+                len,
+                &mut text_rc,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX,
+            );
+        }
+        SelectObject(hdc, old);
+        EndPaint(hwnd, &ps);
     }
 }
 
