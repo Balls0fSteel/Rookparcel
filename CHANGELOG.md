@@ -4,6 +4,11 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-09_153952_1794235192: Theme pass: Win32 dark mode designed, D63 recorded, plan and backlog updated
+
+- [DARKMODE.md](docs/DARKMODE.md) designs the Win32 dark mode (owner's choice: design only this pass): the DWM title bar, the undocumented `uxtheme` ordinals and `DarkMode_Explorer` for the common controls, menu bar and dialog owner draw, a Win32 `SysPalette` beside `frontend::palette::DARK`, the `ui.theme` preference, risks and eight slices.
+- D63 in [DECISIONS.md](docs/DECISIONS.md); BACKLOG "Themes" says what landed and what is still open (Win32 dark mode, icon skins, the hand checks); PLAN step H and Future improvements updated. No program changed: no version bump.
+
 ## 2026-11-09_153929_1794235169: Version 1.2.23: Web UI themes (D63) and dark-mode fixes
 
 - **Dark-mode bugs found by eye (mock nox in the built-in browser):** the Done column's percentage inherited the muted row colour on stopped, queued and finished rows, grey on grey at about 2:1; the scheduler's cells were hard-coded, a white "Turn off" block in dark; the Pieces canvas painted downloading pieces in the light orange whatever the mode; the Speed graph's line colours were JavaScript constants; the modal backdrops one fixed grey; no `theme-color` for a phone's browser chrome; the canvases never repainted on a scheme change. Fixed with new tokens on `:root` (`--bar-fg`, `--graph-dl`, `--graph-ul`, `--scrim`, `--sched-full/-limited/-off/-seed`, Off being `var(--bg)`), `theme-color` metas for light and dark, a `forced-colors` block that keeps the bars' fills under Windows High Contrast, and the dark seed green `#3f9e55` for 3:1 text (the palette's value).

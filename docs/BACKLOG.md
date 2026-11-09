@@ -246,7 +246,8 @@ That broad check does not establish that every detailed case below was tried.
   only at the end, restored tab/split positions. The piece map now renders visible
   rows only; check it with many pieces on a real desktop. Details follow the
   first selected torrent, with no focused-row preference or View hide control.
-  Bars/maps retain Win32 white/blue/green colors even in a dark theme.
+  Bars/maps follow `frontend::palette::DARK` under a dark theme since the 2026-11-09 theme
+  pass; the scheduler grid only picks a theme change up when its dialog is opened again.
 - Desktop integration: check GNOME/KDE, X11/Wayland, every box and Apply,
   `xdg-mime` defaults, file-manager/browser opens, restart/moved executable,
   login autostart/minimized, startup question and a missing XDG applications
@@ -266,27 +267,29 @@ That broad check does not establish that every detailed case below was tried.
   provisionally Verdigris via `app-icon.txt`; non-MSVC Windows builds retain a
   generic icon and Explorer may cache an old icon after a swap.
 
-## Themes (researched 2026-11-02_110639_1793613999)
+## Themes (researched 2026-11-02_110639_1793613999; theme pass 2026-11-09_152030_1794234030)
 
 The owner's wish (PLAN, Future improvements): included themes and third-party ones, with no
-extra resource use, probably Windows only. Findings, cheapest first; owner to choose.
+extra resource use. What landed (D63): the Web UI's nine themes with third-party CSS files, a
+server and a per-browser choice; `frontend::palette` for the drawn parts; GTK's bars, maps and
+Blocks cells follow a dark theme and `is_dark` also reads the XDG portal's colour scheme; the
+scheduler's Off cell is the surface colour in every UI. Still open:
 
-- **GTK** follows the desktop theme (our drawn widgets switch light/dark already, except the
-  bars and maps above); **the Web UI** has a dark mode, and CSS themes would be easy. The real
-  choice is Win32.
-- **Icon skins (recommended first):** 2.2.1 read replacement images from its settings folder
-  (`toolbar.bmp`, `tstatus.bmp` and, from memory, others: confirm against the owner's copy;
-  its exe is UPX-packed, so the names were not read from it) and people shared packs. We
-  would load PNG strips from the settings folder at start, falling back to the built-in
-  icons; nothing is loaded or kept when no pack is there.
-- **A colour file** for what we draw ourselves (graphs, the pieces bar, progress bars, list
-  colours): a small text file beside the skin; pairs with dark mode.
-- **Dark mode:** the dark title bar is documented (`DWMWA_USE_IMMERSIVE_DARK_MODE`), but dark
-  common controls still need undocumented `uxtheme.dll` ordinals (133
-  `AllowDarkModeForWindow`, 135 `SetPreferredAppMode`) and the `DarkMode_Explorer` theme for
-  list and tree views; menus, tabs, headers, group boxes and buttons need custom drawing in
-  every dialog. Chromium and Notepad++ do it; it is a lot of work and may break with a Windows
-  update. A separate decision.
+- **Win32 dark mode:** designed in [DARKMODE.md](DARKMODE.md) (title bar by DWM, undocumented
+  `uxtheme` ordinals 133/135/136/104 and the `DarkMode_Explorer` theme for the common controls,
+  custom-drawn menus, tabs, headers and group boxes; eight slices). Not started.
+- **Icon skins:** 2.2.1 read replacement images from its settings folder (`toolbar.bmp`,
+  `tstatus.bmp` and, from memory, others: confirm against the owner's copy; its exe is
+  UPX-packed, so the names were not read from it) and people shared packs. We would load PNG
+  strips from the settings folder at start, falling back to the built-in icons; nothing is
+  loaded or kept when no pack is there. A colour file for the drawn parts (the
+  `DrawPalette` fields) could sit beside the skin.
+- **Hand checks of the themes:** each built-in on a real phone and in Safari; a third-party
+  file on a hosted (Windows program) Web UI, whose settings folder is the themes folder's
+  parent; Windows High Contrast (`forced-colors`) with the bars; the GTK bars on the Xubuntu VM
+  under `Adwaita:dark`, `HighContrastInverse` and the portal's `prefer-dark`; a GTK tray icon
+  with a symbolic variant for dark panels; the macOS status item as a template image (today the
+  coloured mark, D60).
 
 ## Localisation
 

@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-07_135959_1794056399
+Last updated: 2026-11-09_152030_1794234030
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D60](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -41,7 +41,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 - **E.** Profiles and portable mode (D42): shipped in **1.2.0** (D58), built and checked on VMs, GNOME, KDE, Flatpak, AppImages and a real Mac. Remaining hand checks: [BACKLOG](docs/BACKLOG.md#profiles-and-portable-mode-d42).
 - **F.** Microsoft Store release: D46 approved 2026-11-04 (free MSIX, individual account, settings shared with the setup copy, all markets and 34 languages, the Postal Rook icon, D60); build per [STORE.md](docs/STORE.md).
 - **G.** Smart disk I/O (D48, [DISKIO.md](docs/DISKIO.md)) shipped in 1.1.36-1.1.40; real-disk busy-throttle measurements remain in BACKLOG "Disk and storage". **Keep ping low** (D49, [LOWPING.md](docs/LOWPING.md)) shipped in 1.1.29-1.1.31; 1.1.32 passed a bloated-line test (~480 ms to 9 ms at 80-92% line use). Next: the owner's gaming line, a Mac run, and BACKLOG items including 2.2.1's "Stop transfers on user interaction".
-- **H.** Approved 2026-11-04 (D56): 2.2.1's web search engines (empty default list), icon skins, and dark mode; research in [BACKLOG](docs/BACKLOG.md#themes-researched-2026-11-02_110639_1793613999), each designed before code.
+- **H.** Approved 2026-11-04 (D56): 2.2.1's web search engines (empty default list), icon skins, and dark mode; research in [BACKLOG](docs/BACKLOG.md#themes-researched-2026-11-02_110639_1793613999-theme-pass-2026-11-09_152030_1794234030), each designed before code. **Theme pass (2026-11-09, D63):** Web UI themes (nine built-in, third-party CSS files, server and per-browser choice), the shared `frontend::palette`, GTK dark fixes; Win32 dark mode designed in [DARKMODE.md](docs/DARKMODE.md), not started. Icon skins and web search engines remain.
 - **I.** The owner's six points (2026-11-04, [PROPOSALS.md](docs/PROPOSALS.md)): D50 Files filter, D51 search helper, D53 Setup Guide, D54 "Use only this network" and D55 help texts shipped in 1.2.0. D52 native macOS GUI is designed (D61, [MACOS_GUI.md](docs/MACOS_GUI.md)); slices are checked on the owner's macOS VM. [BUGHUNT-2026-11-05.md](docs/BUGHUNT-2026-11-05.md) records all 38 findings. 1.2.0 takes peer ID `-PA1013-` for the wire changes (owner, 2026-11-05). **Open:** a real VPN run, a real first start through the guide, the GUI looks; the Win32 test binary's rare heap fault under parallel load (BACKLOG "Validation"; run its tests on one thread meanwhile).
 
 0. **Owner hand-test findings (2026-10-27):** fixed in 1.0.2-1.0.8; re-test on a fresh Win32 build ([BACKLOG](docs/BACKLOG.md#owner-hand-test-findings-2026-10-27_225501_1793138101)).
@@ -106,7 +106,7 @@ Owner priorities recorded 2026-10-21 and reaffirmed 2026-10-23. Goals 1 and 3 ar
 - BEP 44 DHT items/ed25519, BEP 51 sample-infohash querying and BEP 55 holepunch after 1.0 unless cheap. Detailed remaining engine/test gaps are in the backlog.
 - Split `core` only if compile times justify it; consider io_uring disk/network on Linux and IOCP file I/O on Windows.
 - Continuous work: meaningful scale regression baselines, parser fuzzing, per-release security review and a wider interop matrix (including rTorrent and µTorrent).
-- Theming (owner's wish: included and third-party themes, no extra resource use): researched, options in [BACKLOG](docs/BACKLOG.md#themes-researched-2026-11-02_110639_1793613999); next step H.
+- Theming (owner's wish: included and third-party themes, no extra resource use): the Web UI has them (D63); Win32 dark mode is designed in [DARKMODE.md](docs/DARKMODE.md); icon skins and the open checks are in [BACKLOG](docs/BACKLOG.md#themes-researched-2026-11-02_110639_1793613999-theme-pass-2026-11-09_152030_1794234030).
 
 ## Known TODOs
 
