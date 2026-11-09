@@ -44,6 +44,20 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.29" data-date="2026-11-09" aria-labelledby="v1.2.29-h">
+      <h2 id="v1.2.29-h"><a href="#v1.2.29"><time datetime="2026-11-09">Mon 9 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.29</span></a></h2>
+      <p class="news-lede">Dark mode on Windows, following Windows' own setting or fixed in Preferences, and themes for the Web UI: nine built in, a choice per server and per browser, and your own CSS files.</p>
+      <ul class="changes">
+        <li><span class="tag tag-plat">Windows</span><span class="vh">:</span> <span>Preferences &gt; UI Settings &gt; Theme: System follows <em>Choose your mode</em> for apps and changes with it live; Light and Dark fix the colours.</span></li>
+        <li><span class="tag tag-plat">Windows</span><span class="vh">:</span> <span>Every window follows: menus, toolbar, lists, detail tabs, status bar, every dialog, remote windows, and a dark icon set. High Contrast keeps the system's colours.</span></li>
+        <li><span class="tag tag-area">Web UI</span><span class="vh">:</span> <span>Themes: System, Light, Dark, Midnight, Slate, Solarized Dark and Light, High Contrast and Postal Rook, chosen for everyone under Preferences or for one browser only.</span></li>
+        <li><span class="tag tag-area">Web UI</span><span class="vh">:</span> <span>Your own theme: a CSS file in the <code>webui/themes</code> folder under the settings folder appears in the lists.</span></li>
+        <li><span class="tag tag-plat">GTK</span><span class="vh">:</span> <span>The progress bars, the piece map, the Blocks cells and the scheduler follow a dark GTK theme; the icons follow the GTK theme, not the desktop's preference alone.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>Windows: "Alternate list background color" took effect only at the next start.</span></li>
+      </ul>
+      <p class="news-note">Dark on Windows needs Windows 10 version 1809 or later; message boxes and the file picker stay the system's. Versions 1.2.22 to 1.2.28 were development steps; this entry covers them.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.29">Download 1.2.29 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.29.md">Full release notes</a></p>
+    </article>
     <article class="news-entry" id="v1.2.21" data-date="2026-11-07" aria-labelledby="v1.2.21-h">
       <h2 id="v1.2.21-h"><a href="#v1.2.21"><time datetime="2026-11-07">Sat 7 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.21</span></a></h2>
       <p class="news-lede">The Files tab shows a torrent's files in their folders, as the Add Torrent dialog does, in every app; one click gives back the single list of paths. The Add Torrent dialog gets a file filter, and <code>rookparcel-nox</code> comes as a Docker image.</p>
