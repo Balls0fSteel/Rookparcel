@@ -5,24 +5,28 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use rookparcel_frontend::typeahead;
 use windows_sys::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT};
-use windows_sys::Win32::Graphics::Gdi::{CreateSolidBrush, DeleteObject, DrawFocusRect, FillRect};
+use windows_sys::Win32::Graphics::Gdi::{
+    CreateSolidBrush, DT_END_ELLIPSIS, DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE, DT_VCENTER, DeleteObject,
+    DrawFocusRect, DrawTextW, FillRect, SetBkMode, SetTextColor, TRANSPARENT,
+};
 use windows_sys::Win32::UI::Controls::{
     CDDS_ITEMPOSTPAINT, CDDS_ITEMPREPAINT, CDDS_PREPAINT, CDDS_SUBITEM, CDIS_FOCUS, CDIS_SELECTED,
-    CDRF_DODEFAULT, CDRF_NOTIFYITEMDRAW, CDRF_NOTIFYPOSTPAINT, CDRF_NOTIFYSUBITEMDRAW, HDF_SORTDOWN,
-    HDF_SORTUP, HDI_FORMAT, HDITEMW, HDM_GETITEMW, HDM_SETITEMW, LVCF_FMT, LVCF_SUBITEM, LVCF_TEXT,
-    LVCF_WIDTH, LVCFMT_LEFT, LVCFMT_RIGHT, LVCOLUMNW, LVFI_PARTIAL, LVFI_STRING, LVFI_SUBSTRING, LVFI_WRAP,
-    LVIR_BOUNDS, LVIR_LABEL, LVIS_FOCUSED, LVIS_SELECTED, LVITEMW, LVM_DELETECOLUMN, LVM_GETCOLUMNORDERARRAY,
-    LVM_GETCOLUMNWIDTH, LVM_GETHEADER, LVM_GETITEMRECT, LVM_GETITEMSTATE, LVM_GETNEXTITEM,
-    LVM_GETSELECTEDCOUNT, LVM_GETSUBITEMRECT, LVM_INSERTCOLUMNW, LVM_SETEXTENDEDLISTVIEWSTYLE,
-    LVM_SETITEMCOUNT, LVM_SETITEMSTATE, LVNI_FOCUSED, LVNI_SELECTED, LVS_EX_DOUBLEBUFFER,
-    LVS_EX_FULLROWSELECT, LVS_EX_HEADERDRAGDROP, LVS_EX_LABELTIP, LVS_OWNERDATA, LVS_REPORT,
-    LVS_SHAREIMAGELISTS, LVS_SHOWSELALWAYS, LVSICF_NOINVALIDATEALL, LVSICF_NOSCROLL, NMLVCUSTOMDRAW,
-    NMLVFINDITEMW, WC_LISTVIEWW,
+    CDRF_DODEFAULT, CDRF_NOTIFYITEMDRAW, CDRF_NOTIFYPOSTPAINT, CDRF_NOTIFYSUBITEMDRAW, CDRF_SKIPDEFAULT,
+    HDF_SORTDOWN, HDF_SORTUP, HDI_FORMAT, HDITEMW, HDM_GETITEMW, HDM_SETITEMW, LVCF_FMT, LVCF_SUBITEM,
+    LVCF_TEXT, LVCF_WIDTH, LVCFMT_JUSTIFYMASK, LVCFMT_LEFT, LVCFMT_RIGHT, LVCOLUMNW, LVFI_PARTIAL,
+    LVFI_STRING, LVFI_SUBSTRING, LVFI_WRAP, LVIR_BOUNDS, LVIR_LABEL, LVIS_FOCUSED, LVIS_SELECTED, LVITEMW,
+    LVM_DELETECOLUMN, LVM_GETCOLUMNORDERARRAY, LVM_GETCOLUMNW, LVM_GETCOLUMNWIDTH, LVM_GETHEADER,
+    LVM_GETITEMRECT, LVM_GETITEMSTATE, LVM_GETITEMTEXTW, LVM_GETNEXTITEM, LVM_GETSELECTEDCOUNT,
+    LVM_GETSUBITEMRECT, LVM_INSERTCOLUMNW, LVM_SETEXTENDEDLISTVIEWSTYLE, LVM_SETITEMCOUNT, LVM_SETITEMSTATE,
+    LVNI_FOCUSED, LVNI_SELECTED, LVS_EX_DOUBLEBUFFER, LVS_EX_FULLROWSELECT, LVS_EX_HEADERDRAGDROP,
+    LVS_EX_LABELTIP, LVS_OWNERDATA, LVS_REPORT, LVS_SHAREIMAGELISTS, LVS_SHOWSELALWAYS,
+    LVSICF_NOINVALIDATEALL, LVSICF_NOSCROLL, NMLVCUSTOMDRAW, NMLVFINDITEMW, WC_LISTVIEWW,
 };
+use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::GetFocus;
 use windows_sys::Win32::UI::WindowsAndMessaging::{WS_CHILD, WS_CLIPSIBLINGS, WS_EX_CLIENTEDGE, WS_TABSTOP};
 
-use crate::util::{child, from_wide_ptr, send, wide};
+use crate::util::{child, from_wide_ptr, scale, send, wide};
 
 /// Creates an owner-data report list view (the frontend keeps the rows).
 pub unsafe fn create_report(parent: HWND, id: usize, header_drag: bool) -> HWND {
@@ -93,6 +97,50 @@ pub unsafe fn set_sort_arrow(lv: HWND, count: usize, col: Option<usize>, descend
             }
             send(header, HDM_SETITEMW, i, &item as *const _ as LPARAM);
         }
+    }
+}
+
+/// In dark the list view's `DarkMode_Explorer` class pads its cells more than the plain list
+/// does, so a right-aligned number that fits in light ("7.71 GB" in a 70 px Size column) comes
+/// out as "7.71 ..."; the cell's text is drawn here instead, with the plain list's padding, and
+/// the default drawing skipped. Left-aligned cells keep their position under the class, so they
+/// are left to the control. `None` while light, for left-aligned cells and outside a paint.
+pub unsafe fn dark_cell_text(cd: &mut NMLVCUSTOMDRAW) -> Option<LRESULT> {
+    if !crate::theme::is_dark() || !is_paint(cd) {
+        return None;
+    }
+    unsafe {
+        let lv = cd.nmcd.hdr.hwndFrom;
+        let row = cd.nmcd.dwItemSpec;
+        let sub = cd.iSubItem as usize;
+        let mut col: LVCOLUMNW = zeroed();
+        col.mask = LVCF_FMT;
+        if send(lv, LVM_GETCOLUMNW, sub, &mut col as *mut _ as LPARAM) == 0
+            || col.fmt & LVCFMT_JUSTIFYMASK != LVCFMT_RIGHT
+        {
+            return None;
+        }
+        let mut text = [0u16; 256];
+        let mut item: LVITEMW = zeroed();
+        item.iSubItem = sub as i32;
+        item.pszText = text.as_mut_ptr();
+        item.cchTextMax = text.len() as i32;
+        let n = send(lv, LVM_GETITEMTEXTW, row, &mut item as *mut _ as LPARAM).max(0) as i32;
+        let cell = cell_rect(lv, row, sub);
+        let pad = scale(6, GetDpiForWindow(lv));
+        let mut rc =
+            RECT { left: cell.left + pad, top: cell.top, right: cell.right - pad, bottom: cell.bottom };
+        let hdc = cd.nmcd.hdc;
+        SetBkMode(hdc, TRANSPARENT as i32);
+        SetTextColor(hdc, cd.clrText);
+        DrawTextW(
+            hdc,
+            text.as_ptr(),
+            n,
+            &mut rc,
+            DT_RIGHT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX,
+        );
+        Some(CDRF_SKIPDEFAULT as LRESULT)
     }
 }
 
@@ -323,7 +371,7 @@ pub unsafe fn selection_custom_draw(cd: &mut NMLVCUSTOMDRAW) -> LRESULT {
             CDDS_ITEMPREPAINT => selection_pre_paint(cd) | CDRF_NOTIFYSUBITEMDRAW as LRESULT,
             s if s == CDDS_ITEMPREPAINT | CDDS_SUBITEM => {
                 selection_cell_colours(cd);
-                CDRF_DODEFAULT as LRESULT
+                dark_cell_text(cd).unwrap_or(CDRF_DODEFAULT as LRESULT)
             }
             CDDS_ITEMPOSTPAINT => {
                 selection_post_paint(cd);

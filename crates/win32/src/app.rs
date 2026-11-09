@@ -6847,7 +6847,7 @@ unsafe fn list_custom_draw(cd: &mut NMLVCUSTOMDRAW) -> LRESULT {
                 if is_done == Some(true) && controls::is_paint(cd) {
                     CDRF_NOTIFYPOSTPAINT as LRESULT
                 } else {
-                    CDRF_DODEFAULT as LRESULT
+                    controls::dark_cell_text(cd).unwrap_or(CDRF_DODEFAULT as LRESULT)
                 }
             }
             ITEM_SUB_POST => {
@@ -6930,7 +6930,7 @@ unsafe fn pieces_custom_draw(cd: &mut NMLVCUSTOMDRAW) -> LRESULT {
                 if cd.iSubItem as usize == detail::PIECE_BLOCKS_COLUMN && controls::is_paint(cd) {
                     CDRF_NOTIFYPOSTPAINT as LRESULT
                 } else {
-                    CDRF_DODEFAULT as LRESULT
+                    controls::dark_cell_text(cd).unwrap_or(CDRF_DODEFAULT as LRESULT)
                 }
             }
             ITEM_SUB_POST => {

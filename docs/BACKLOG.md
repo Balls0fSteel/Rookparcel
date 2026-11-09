@@ -282,7 +282,11 @@ scheduler's Off cell is the surface colour in every UI. Still open:
   dialogs open; the updater's marquee progress bar and the message boxes stay the system's (the
   marquee needs the visual style, `MessageBoxW` cannot be themed); the header's drag image stays
   light while a column is dragged; the Advanced page's `*` marks and the Preferences note under
-  Theme are plain text.
+  Theme are plain text. **Found 2026-11-09:** in light the torrent list's `#` column shows
+  nothing where the text is `*` (finished torrents): the plain list view hides the one-character
+  text in its 28 px column, most likely because `LVS_EX_SUBITEMIMAGES` reserves image room in
+  every subitem; dark draws the right-aligned cells itself (`controls::dark_cell_text`) and shows
+  the `*`. Decide whether light should show it too (a visible change to 2.2.1's look here).
 - **Icon skins:** 2.2.1 read replacement images from its settings folder (`toolbar.bmp`,
   `tstatus.bmp` and, from memory, others: confirm against the owner's copy; its exe is
   UPX-packed, so the names were not read from it) and people shared packs. We would load PNG

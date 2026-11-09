@@ -36,3 +36,9 @@ help pane or detail panel caught mid-paint; anything else is a change. Window co
 in the PNGs (DWM's rounding lies outside the surface), the same in every run. Connect to Remote
 starts a second `rookparcel.exe --remote`; the script enumerates every window on the hidden
 desktop and stops the whole process tree at the end.
+
+Beside it: `switch-test.ps1` starts a dark build, switches Preferences > UI Settings > Theme
+(control 1110: System 0, Light 1, Dark 2) to Light and back by posted messages and pictures the
+main window and a dialog after each switch; `measure-columns.ps1` reads the torrent list's column
+widths, header, DPI and rectangles twice, for a run that looks different without an obvious
+cause; `compare.py` prints the differing pixel count and the clustered bounding boxes of two PNGs.
