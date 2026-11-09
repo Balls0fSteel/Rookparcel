@@ -312,10 +312,12 @@ pub fn input(owner: HWND, title: &str, prompt: &str, initial: &str) -> Option<St
 
 unsafe extern "system" fn input_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
     unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
         match msg {
             WM_INITDIALOG => {
                 SetWindowLongPtrW(dlg, DWLP_USER, lp);
-                crate::theme::theme_window(dlg);
                 let st = &*(lp as *const InputState);
                 let (t, p, i) = (wide(&st.title), wide(&st.prompt), wide(&st.initial));
                 SetWindowTextW(dlg, t.as_ptr());

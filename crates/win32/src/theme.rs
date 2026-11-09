@@ -11,10 +11,6 @@
 //! draws itself, which asks [`sys`] for the system-colour stand-ins and [`draw`] for the drawn
 //! parts' palette (`frontend::palette`).
 
-// The colours, brushes and control theming come into use slice by slice (DARKMODE.md §7); the
-// allowance goes once the last slice has landed.
-#![allow(dead_code)]
-
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
 use std::sync::OnceLock;
@@ -31,22 +27,25 @@ use windows_sys::Win32::Graphics::Gdi::{
     DT_HIDEPREFIX, DT_LEFT, DT_NOCLIP, DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE, DT_VCENTER, DT_WORDBREAK,
     DeleteObject, DrawFocusRect, DrawFrameControl, DrawTextW, EndPaint, FillRect, FrameRect, GetSysColor,
     GetSysColorBrush, GetWindowDC, HBRUSH, HDC, HFONT, HGDIOBJ, InvalidateRect, OPAQUE, PAINTSTRUCT,
-    ReleaseDC, SelectObject, SetBkColor, SetBkMode, SetTextColor, TRANSPARENT,
+    RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE, RedrawWindow, ReleaseDC, SelectObject, SetBkColor,
+    SetBkMode, SetTextColor, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::{
     GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
 };
 use windows_sys::Win32::System::Registry::HKEY_CURRENT_USER;
 use windows_sys::Win32::System::SystemInformation::{GetVersionExW, OSVERSIONINFOW};
+use windows_sys::Win32::System::Threading::GetCurrentThreadId;
 use windows_sys::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows_sys::Win32::UI::Controls::{
     BP_CHECKBOX, BP_RADIOBUTTON, BST_CHECKED, BST_INDETERMINATE, CDDS_ITEMPREPAINT, CDDS_PREPAINT,
     CDIS_CHECKED, CDIS_DISABLED, CDIS_HOT, CDIS_SELECTED, CDRF_DODEFAULT, CDRF_NOTIFYITEMDRAW,
-    CDRF_SKIPDEFAULT, CloseThemeData, DRAWITEMSTRUCT, DrawThemeBackground, GetThemePartSize, HDF_CENTER,
-    HDF_JUSTIFYMASK, HDF_RIGHT, HDF_SORTDOWN, HDF_SORTUP, HDI_FORMAT, HDI_TEXT, HDITEMW, HDM_GETITEMW,
-    HIMAGELIST, ILD_TRANSPARENT, ImageList_Draw, ImageList_GetIconSize, LVM_GETHEADER, LVM_SETBKCOLOR,
-    LVM_SETTEXTBKCOLOR, LVM_SETTEXTCOLOR, NM_CUSTOMDRAW, NMCUSTOMDRAW, NMHDR, NMTBCUSTOMDRAW, ODS_DISABLED,
-    ODS_GRAYED, ODS_HOTLIGHT, ODS_INACTIVE, ODS_NOACCEL, ODS_SELECTED, OpenThemeData, SB_GETICON,
+    CDRF_SKIPDEFAULT, CLR_DEFAULT, COMBOBOXINFO, CloseThemeData, DRAWITEMSTRUCT, DrawThemeBackground,
+    GetComboBoxInfo, GetThemePartSize, HDF_CENTER, HDF_JUSTIFYMASK, HDF_RIGHT, HDF_SORTDOWN, HDF_SORTUP,
+    HDI_FORMAT, HDI_TEXT, HDITEMW, HDM_GETITEMW, HIMAGELIST, ILD_TRANSPARENT, ImageList_Draw,
+    ImageList_GetIconSize, LVM_GETHEADER, LVM_SETBKCOLOR, LVM_SETTEXTBKCOLOR, LVM_SETTEXTCOLOR,
+    NM_CUSTOMDRAW, NMCUSTOMDRAW, NMHDR, NMTBCUSTOMDRAW, ODS_DISABLED, ODS_GRAYED, ODS_HOTLIGHT, ODS_INACTIVE,
+    ODS_NOACCEL, ODS_SELECTED, OpenThemeData, PBM_SETBARCOLOR, PBM_SETBKCOLOR, PBS_MARQUEE, SB_GETICON,
     SB_GETPARTS, SB_GETRECT, SB_GETTEXTLENGTHW, SB_GETTEXTW, SB_ISSIMPLE, SB_SIMPLEID, SBARS_SIZEGRIP,
     SetWindowTheme, TBCDRF_NOBACKGROUND, TBCDRF_NOEDGES, TBCDRF_USECDCOLORS, TCIF_IMAGE, TCIF_TEXT, TCITEMW,
     TCM_ADJUSTRECT, TCM_GETCURSEL, TCM_GETIMAGELIST, TCM_GETITEMCOUNT, TCM_GETITEMRECT, TCM_GETITEMW,
@@ -56,13 +55,15 @@ use windows_sys::Win32::UI::HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi, Sys
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetFocus, IsWindowEnabled};
 use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    BM_GETSTATE, BS_AUTORADIOBUTTON, BS_MULTILINE, BS_RADIOBUTTON, BST_PUSHED, DI_NORMAL, DrawIconEx,
-    GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMenuBarInfo, GetMenuItemInfoW, GetParent, GetWindowLongW,
-    GetWindowRect, GetWindowTextLengthW, GetWindowTextW, HICON, HMENU, MENUBARINFO, MENUITEMINFOW,
-    MIIM_STRING, NONCLIENTMETRICSW, OBJID_MENU, SM_CXSMICON, SPI_GETHIGHCONTRAST, SPI_GETNONCLIENTMETRICS,
-    SendMessageW, SystemParametersInfoW, UISF_HIDEACCEL, UISF_HIDEFOCUS, WM_APP, WM_CTLCOLORBTN,
-    WM_CTLCOLORDLG, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_GETFONT,
-    WM_NCDESTROY, WM_NOTIFY, WM_PAINT, WM_QUERYUISTATE, WM_THEMECHANGED, WS_EX_LAYOUTRTL,
+    BM_GETSTATE, BS_3STATE, BS_AUTO3STATE, BS_AUTOCHECKBOX, BS_AUTORADIOBUTTON, BS_CHECKBOX, BS_GROUPBOX,
+    BS_MULTILINE, BS_RADIOBUTTON, BS_TYPEMASK, BST_PUSHED, DI_NORMAL, DrawIconEx, EnumChildWindows,
+    EnumThreadWindows, GWL_STYLE, GetClassNameW, GetClientRect, GetMenuBarInfo, GetMenuItemInfoW, GetParent,
+    GetWindowLongW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, HICON, HMENU, MENUBARINFO,
+    MENUITEMINFOW, MIIM_STRING, NONCLIENTMETRICSW, OBJID_MENU, PostMessageW, SM_CXSMICON,
+    SPI_GETHIGHCONTRAST, SPI_GETNONCLIENTMETRICS, SendMessageW, SystemParametersInfoW, UISF_HIDEACCEL,
+    UISF_HIDEFOCUS, WM_APP, WM_CTLCOLORBTN, WM_CTLCOLORDLG, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX,
+    WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_GETFONT, WM_INITDIALOG, WM_NCDESTROY, WM_NOTIFY, WM_PAINT,
+    WM_QUERYUISTATE, WM_THEMECHANGED,
 };
 use windows_sys::core::w;
 
@@ -967,9 +968,9 @@ unsafe fn paint_check(hwnd: HWND) {
         if theme != 0 {
             GetThemePartSize(theme, hdc, part, (base + variant) as i32, null(), TS_DRAW, &mut glyph);
         }
-        let rtl = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32 & WS_EX_LAYOUTRTL != 0;
+        // (a mirrored dialog mirrors the device context too, so left is right there by itself)
         let gy = rc.top + (rc.bottom - rc.top - glyph.cy) / 2;
-        let gx = if rtl { rc.right - glyph.cx } else { rc.left };
+        let gx = rc.left;
         let glyph_rc = RECT { left: gx, top: gy, right: gx + glyph.cx, bottom: gy + glyph.cy };
         if theme != 0 {
             DrawThemeBackground(theme, hdc, part, (base + variant) as i32, &glyph_rc, null());
@@ -984,11 +985,7 @@ unsafe fn paint_check(hwnd: HWND) {
         let dpi = GetDpiForWindow(hwnd);
         let gap = scaled(3, dpi);
         let mut text_rc = rc;
-        if rtl {
-            text_rc.right = gx - gap;
-        } else {
-            text_rc.left = glyph_rc.right + gap;
-        }
+        text_rc.left = glyph_rc.right + gap;
         let font = SendMessageW(hwnd, WM_GETFONT, 0, 0) as HGDIOBJ;
         let old = SelectObject(hdc, font);
         SetBkMode(hdc, TRANSPARENT as i32);
@@ -1348,9 +1345,300 @@ unsafe fn paint_tabs(hwnd: HWND) {
     }
 }
 
+// ---- dialogs --------------------------------------------------------------------------------
+
+/// The static control's type bits and the etched horizontal line (not in windows-sys).
+const SS_TYPEMASK: u32 = 0x1f;
+const SS_ETCHEDHORZ: u32 = 0x10;
+
+/// The one line every dialog procedure starts with: `WM_INITDIALOG` themes the dialog and its
+/// controls (and lets the procedure go on), the `WM_CTLCOLOR*` family answers in dark, and
+/// [`WM_APP_THEME`] re-themes after a switch. `None` means the procedure handles the message.
+///
+/// # Safety
+/// The dialog procedure's own arguments.
+pub unsafe fn dialog_message(dlg: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<isize> {
+    // SAFETY: the dialog procedure's own window and message arguments.
+    unsafe {
+        match msg {
+            WM_INITDIALOG => {
+                dialog_init(dlg);
+                None
+            }
+            WM_APP_THEME => {
+                dialog_init(dlg);
+                RedrawWindow(
+                    dlg,
+                    null(),
+                    null_mut(),
+                    RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN,
+                );
+                Some(0)
+            }
+            WM_CTLCOLORDLG | WM_CTLCOLORSTATIC | WM_CTLCOLORBTN | WM_CTLCOLOREDIT | WM_CTLCOLORLISTBOX => {
+                ctl_color(msg, wparam, lparam)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// A dialog and every control in it follow the mode: the caption, then each child by its class
+/// (the classification `fit::kind` uses). Light at the first show does nothing but install the
+/// subclasses, which do nothing while light.
+///
+/// # Safety
+/// `dlg` is a dialog of this thread.
+pub unsafe fn dialog_init(dlg: HWND) {
+    // SAFETY: the caller's dialog; the callback gets each child.
+    unsafe {
+        theme_window(dlg);
+        EnumChildWindows(dlg, Some(theme_child), 0);
+    }
+}
+
+unsafe extern "system" fn theme_child(hwnd: HWND, _: LPARAM) -> i32 {
+    // SAFETY: a child window of the dialog being themed.
+    unsafe {
+        theme_by_class(hwnd);
+    }
+    1
+}
+
+/// One control, by its window class.
+///
+/// # Safety
+/// `hwnd` is a control of this thread.
+pub unsafe fn theme_by_class(hwnd: HWND) {
+    // SAFETY: class name and style of the caller's control.
+    unsafe {
+        let mut class = [0u16; 40];
+        let n = GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32).max(0) as usize;
+        let class = String::from_utf16_lossy(&class[..n]);
+        let style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+        match class.to_ascii_lowercase().as_str() {
+            "button" => match (style & BS_TYPEMASK as u32) as i32 {
+                t if t == BS_GROUPBOX => subclass(hwnd, group_proc),
+                t if [
+                    BS_CHECKBOX,
+                    BS_AUTOCHECKBOX,
+                    BS_3STATE,
+                    BS_AUTO3STATE,
+                    BS_RADIOBUTTON,
+                    BS_AUTORADIOBUTTON,
+                ]
+                .contains(&t) =>
+                {
+                    check_box(hwnd)
+                }
+                _ => theme_control(hwnd, Kind::Explorer),
+            },
+            "static" => {
+                if style & SS_TYPEMASK == SS_ETCHEDHORZ {
+                    subclass(hwnd, etched_proc);
+                }
+            }
+            "edit" => theme_control(hwnd, Kind::Cfd),
+            "combobox" => {
+                theme_control(hwnd, Kind::Cfd);
+                let mut info: COMBOBOXINFO = std::mem::zeroed();
+                info.cbSize = size_of::<COMBOBOXINFO>() as u32;
+                if GetComboBoxInfo(hwnd, &mut info) != 0 {
+                    theme_control(info.hwndList, Kind::Explorer);
+                }
+            }
+            "syslistview32" => list(hwnd),
+            "systreeview32" => tree(hwnd),
+            "systabcontrol32" => tab_control(hwnd),
+            "msctls_progress32" => progress(hwnd),
+            "msctls_updown32" | "scrollbar" | "tooltips_class32" => theme_control(hwnd, Kind::Explorer),
+            _ => {}
+        }
+    }
+}
+
+/// A progress bar: the visual style off and our colours in dark (the themed bar is light); a
+/// marquee bar keeps its style, as the marquee needs it.
+///
+/// # Safety
+/// `bar` is a progress bar of this thread.
+pub unsafe fn progress(bar: HWND) {
+    // SAFETY: the caller's progress bar.
+    unsafe {
+        if GetWindowLongW(bar, GWL_STYLE) as u32 & PBS_MARQUEE != 0 {
+            return;
+        }
+        let dark = is_dark();
+        if !dark && !SWITCHED.load(Ordering::Relaxed) {
+            return;
+        }
+        if dark {
+            SetWindowTheme(bar, w!(""), w!(""));
+            SendMessageW(bar, PBM_SETBKCOLOR, 0, sys().button_face as LPARAM);
+            SendMessageW(bar, PBM_SETBARCOLOR, 0, bgr(draw().bar_blue) as LPARAM);
+        } else {
+            SetWindowTheme(bar, null(), null());
+            SendMessageW(bar, PBM_SETBKCOLOR, 0, CLR_DEFAULT as LPARAM);
+            SendMessageW(bar, PBM_SETBARCOLOR, 0, CLR_DEFAULT as LPARAM);
+        }
+        InvalidateRect(bar, null(), 1);
+    }
+}
+
+/// The group box subclass: in dark, the frame and the caption are painted here (the themed
+/// caption is black). Only the frame and the caption: the inside stays the dialog's, as the
+/// theme leaves it, so the controls inside are not painted over.
+unsafe extern "system" fn group_proc(
+    hwnd: HWND,
+    msg: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    _: usize,
+    _: usize,
+) -> LRESULT {
+    // SAFETY: the subclassed group box's messages.
+    unsafe {
+        match msg {
+            WM_ERASEBKGND if is_dark() => 1,
+            WM_PAINT if is_dark() => {
+                paint_group(hwnd);
+                0
+            }
+            WM_NCDESTROY => {
+                RemoveWindowSubclass(hwnd, Some(group_proc), SUBCLASS_ID);
+                DefSubclassProc(hwnd, msg, wp, lp)
+            }
+            _ => DefSubclassProc(hwnd, msg, wp, lp),
+        }
+    }
+}
+
+unsafe fn paint_group(hwnd: HWND) {
+    // SAFETY: a paint cycle on the group box.
+    unsafe {
+        let mut ps: PAINTSTRUCT = std::mem::zeroed();
+        let hdc = BeginPaint(hwnd, &mut ps);
+        let mut rc: RECT = std::mem::zeroed();
+        GetClientRect(hwnd, &mut rc);
+        let font = SendMessageW(hwnd, WM_GETFONT, 0, 0) as HGDIOBJ;
+        let old = SelectObject(hdc, font);
+        let mut text = text_of(hwnd);
+        let mut size: RECT = std::mem::zeroed();
+        // the caption's & is a mnemonic, shown as the dialog's keyboard cues say
+        let prefix = if SendMessageW(hwnd, WM_QUERYUISTATE, 0, 0) as u32 & UISF_HIDEACCEL != 0 {
+            DT_HIDEPREFIX
+        } else {
+            0
+        };
+        if !text.is_empty() {
+            DrawTextW(
+                hdc,
+                text.as_mut_ptr(),
+                text.len() as i32,
+                &mut size,
+                DT_CALCRECT | DT_SINGLELINE | prefix,
+            );
+        }
+        let cap_h = if text.is_empty() { 0 } else { size.bottom - size.top };
+        let frame = RECT { left: rc.left, top: rc.top + cap_h / 2, right: rc.right, bottom: rc.bottom };
+        FrameRect(hdc, &frame, brush(Brush::Border));
+        if !text.is_empty() {
+            let dpi = GetDpiForWindow(hwnd);
+            let x = rc.left + scaled(9, dpi);
+            let pad = scaled(2, dpi);
+            let cap = RECT {
+                left: x - pad,
+                top: rc.top,
+                right: x + (size.right - size.left) + pad,
+                bottom: rc.top + cap_h,
+            };
+            // the caption sits on the dialog's surface, over the frame
+            let parent_brush =
+                SendMessageW(GetParent(hwnd), WM_CTLCOLORSTATIC, hdc as WPARAM, hwnd as LPARAM) as HBRUSH;
+            FillRect(hdc, &cap, if parent_brush.is_null() { brush(Brush::Face) } else { parent_brush });
+            SetBkMode(hdc, TRANSPARENT as i32);
+            let s = sys();
+            SetTextColor(hdc, if IsWindowEnabled(hwnd) != 0 { s.window_text } else { s.gray_text });
+            let mut text_rc = RECT { left: x, top: rc.top, right: cap.right, bottom: rc.top + cap_h };
+            DrawTextW(
+                hdc,
+                text.as_mut_ptr(),
+                text.len() as i32,
+                &mut text_rc,
+                DT_LEFT | DT_SINGLELINE | prefix,
+            );
+        }
+        SelectObject(hdc, old);
+        EndPaint(hwnd, &ps);
+    }
+}
+
+/// The etched-line static's subclass: in dark, a one-pixel rule in the border colour.
+unsafe extern "system" fn etched_proc(
+    hwnd: HWND,
+    msg: u32,
+    wp: WPARAM,
+    lp: LPARAM,
+    _: usize,
+    _: usize,
+) -> LRESULT {
+    // SAFETY: the subclassed static's messages.
+    unsafe {
+        match msg {
+            WM_ERASEBKGND if is_dark() => 1,
+            WM_PAINT if is_dark() => {
+                let mut ps: PAINTSTRUCT = std::mem::zeroed();
+                let hdc = BeginPaint(hwnd, &mut ps);
+                let mut rc: RECT = std::mem::zeroed();
+                GetClientRect(hwnd, &mut rc);
+                FillRect(hdc, &rc, brush(Brush::Face));
+                let mid = (rc.top + rc.bottom) / 2;
+                line(hdc, rc.left, mid, rc.right, mid + 1, Brush::Border);
+                EndPaint(hwnd, &ps);
+                0
+            }
+            WM_NCDESTROY => {
+                RemoveWindowSubclass(hwnd, Some(etched_proc), SUBCLASS_ID);
+                DefSubclassProc(hwnd, msg, wp, lp)
+            }
+            _ => DefSubclassProc(hwnd, msg, wp, lp),
+        }
+    }
+}
+
+// ---- a switch while dialogs are open --------------------------------------------------------
+
+/// Every dialog of this thread but `except` gets [`WM_APP_THEME`], so the open ones (Preferences,
+/// Add, the modeless Search Results) follow a switch too; one flash each is accepted.
+///
+/// # Safety
+/// Called on the GUI thread.
+pub unsafe fn broadcast(except: HWND) {
+    // SAFETY: the thread's own top-level windows; the callback only posts a message.
+    unsafe {
+        EnumThreadWindows(GetCurrentThreadId(), Some(post_theme), except as LPARAM);
+    }
+}
+
+unsafe extern "system" fn post_theme(hwnd: HWND, except: LPARAM) -> i32 {
+    // SAFETY: a top-level window of this thread.
+    unsafe {
+        if hwnd != except as HWND {
+            let mut class = [0u16; 16];
+            let n = GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32).max(0) as usize;
+            // the dialog class
+            if class[..n] == [b'#' as u16, b'3' as u16, b'2' as u16, b'7' as u16, b'7' as u16, b'0' as u16] {
+                PostMessageW(hwnd, WM_APP_THEME, 0, 0);
+            }
+        }
+    }
+    1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 
     fn inputs(pref: Mode) -> Inputs {
         Inputs { pref, windows_dark: Some(true), high_contrast: false, build: 22631, uxtheme: true }
@@ -1435,6 +1723,54 @@ mod tests {
             assert_eq!(sys().button_text, GetSysColor(COLOR_BTNTEXT));
         }
         assert_eq!(draw(), &rookparcel_frontend::palette::LIGHT);
+    }
+
+    /// A hidden dialog with one control of each class the program uses: themed without a
+    /// panic in light (where nothing changes), and the classification holds for each.
+    #[test]
+    fn every_control_class_is_themed_without_panicking() {
+        use crate::dialogs::{BUTTON, COMBOBOX, Class, EDIT, STATIC, Template};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            BS_AUTOCHECKBOX, BS_GROUPBOX, BS_PUSHBUTTON, CBS_DROPDOWNLIST, CreateDialogIndirectParamW,
+            DLGTEMPLATE, DestroyWindow, WS_CHILD, WS_VISIBLE,
+        };
+        unsafe extern "system" fn nop(_: HWND, _: u32, _: WPARAM, _: LPARAM) -> isize {
+            0
+        }
+        let mut t = Template::new(300, 300);
+        let c = WS_CHILD | WS_VISIBLE;
+        t.item(BUTTON, 1, c | BS_PUSHBUTTON as u32, [7, 7, 50, 14], "OK");
+        t.item(BUTTON, 2, c | BS_AUTOCHECKBOX as u32, [7, 27, 100, 10], "Check");
+        t.item(BUTTON, 3, c | BS_GROUPBOX as u32, [7, 47, 200, 60], "Group");
+        t.item(STATIC, 4, c, [7, 117, 100, 9], "Label");
+        t.item(STATIC, 5, c | SS_ETCHEDHORZ, [7, 130, 200, 1], "");
+        t.item(EDIT, 6, c, [7, 137, 100, 13], "");
+        t.item(COMBOBOX, 7, c | CBS_DROPDOWNLIST as u32, [7, 157, 100, 60], "");
+        t.item(Class::Name("SysListView32"), 8, c, [7, 177, 200, 40], "");
+        t.item(Class::Name("SysTreeView32"), 9, c, [7, 222, 100, 30], "");
+        t.item(Class::Name("SysTabControl32"), 10, c, [110, 222, 100, 30], "");
+        t.item(Class::Name("msctls_progress32"), 11, c, [7, 257, 200, 10], "");
+        let template = t.finish();
+        unsafe {
+            let dlg = CreateDialogIndirectParamW(
+                GetModuleHandleW(null()),
+                template.as_ptr() as *const DLGTEMPLATE,
+                null_mut(),
+                Some(nop),
+                0,
+            );
+            assert!(!dlg.is_null());
+            dialog_init(dlg);
+            // light: the WM_CTLCOLOR family is left to the dialog manager
+            for msg in
+                [WM_CTLCOLORDLG, WM_CTLCOLORSTATIC, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX]
+            {
+                assert_eq!(dialog_message(dlg, msg, 0, 0), None, "{msg}");
+            }
+            assert_eq!(dialog_message(dlg, WM_INITDIALOG, 0, 0), None, "the procedure goes on");
+            assert_eq!(dialog_message(dlg, WM_APP_THEME, 0, 0), Some(0));
+            DestroyWindow(dlg);
+        }
     }
 
     #[test]

@@ -22,10 +22,10 @@ use rookparcel_frontend::prefs::Prefs;
 use rookparcel_frontend::{fmt, lang, tr};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
-    COLOR_WINDOW, CreateCompatibleBitmap, CreateCompatibleDC, DFC_BUTTON, DFCS_BUTTON3STATE,
-    DFCS_BUTTONCHECK, DFCS_CHECKED, DT_CALCRECT, DT_NOPREFIX, DT_SINGLELINE, DeleteDC, DeleteObject,
-    DrawFrameControl, DrawTextW, FillRect, GetDC, GetMonitorInfoW, GetSysColorBrush, HFONT, InvalidateRect,
-    MONITOR_DEFAULTTONEAREST, MONITORINFO, MapWindowPoints, MonitorFromWindow, ReleaseDC, SelectObject,
+    CreateCompatibleBitmap, CreateCompatibleDC, DFC_BUTTON, DFCS_BUTTON3STATE, DFCS_BUTTONCHECK,
+    DFCS_CHECKED, DT_CALCRECT, DT_NOPREFIX, DT_SINGLELINE, DeleteDC, DeleteObject, DrawFrameControl,
+    DrawTextW, FillRect, GetDC, GetMonitorInfoW, HFONT, InvalidateRect, MONITOR_DEFAULTTONEAREST,
+    MONITORINFO, MapWindowPoints, MonitorFromWindow, ReleaseDC, SelectObject,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_NORMAL, GetDiskFreeSpaceExW,
@@ -291,6 +291,9 @@ unsafe fn set_check(dlg: HWND, id: u16, on: bool) {
 
 unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
     unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
         if msg == WM_INITDIALOG {
             SetWindowLongPtrW(dlg, DWLP_USER, lp);
             init(dlg, &mut *(lp as *mut State));
@@ -563,6 +566,7 @@ unsafe fn tips(dlg: HWND, st: &mut State) {
                 if tip.is_null() {
                     return;
                 }
+                crate::theme::theme_control(tip, crate::theme::Kind::Explorer);
                 // a long comment wraps rather than running off the screen
                 send(tip, TTM_SETMAXTIPWIDTH, 0, dlu(dlg, 240) as LPARAM);
             }
@@ -676,7 +680,7 @@ unsafe fn check_images(lv: HWND) -> HIMAGELIST {
         ReleaseDC(null_mut(), screen);
         let old = SelectObject(dc, bmp);
         let all = RECT { left: 0, top: 0, right: cx * 3, bottom: cy };
-        FillRect(dc, &all, GetSysColorBrush(COLOR_WINDOW));
+        FillRect(dc, &all, crate::theme::brush(crate::theme::Brush::Window));
         let theme = OpenThemeDataForDpi(lv, w!("BUTTON"), dpi);
         let states = [CBS_UNCHECKEDNORMAL, CBS_CHECKEDNORMAL, CBS_MIXEDNORMAL];
         let classic = [DFCS_BUTTONCHECK, DFCS_BUTTONCHECK | DFCS_CHECKED, DFCS_BUTTON3STATE | DFCS_CHECKED];
@@ -693,8 +697,7 @@ unsafe fn check_images(lv: HWND) -> HIMAGELIST {
             CloseThemeData(theme);
         }
         SelectObject(dc, old);
-        let window = windows_sys::Win32::Graphics::Gdi::GetSysColor(COLOR_WINDOW);
-        ImageList_AddMasked(list, bmp, window);
+        ImageList_AddMasked(list, bmp, crate::theme::sys().window);
         DeleteObject(bmp);
         DeleteDC(dc);
         list

@@ -104,6 +104,9 @@ unsafe fn layout(dlg: HWND) {
 
 unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
     unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
         match msg {
             WM_INITDIALOG => {
                 SetWindowTextW(dlg, wide(&title()).as_ptr());

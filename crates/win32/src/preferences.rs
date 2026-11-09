@@ -1264,6 +1264,9 @@ pub fn adapters_changed() {
 
 unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
     unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
         if msg == WM_INITDIALOG {
             OPEN.with(|o| o.set(dlg));
             SetWindowLongPtrW(dlg, DWLP_USER, lp);
@@ -1338,10 +1341,8 @@ unsafe fn init(dlg: HWND, st: &mut State<'_>) {
             let w = wide(name);
             send(item(dlg, ID_LANG), CB_ADDSTRING, 0, w.as_ptr() as LPARAM);
         }
-        st.themes = pref_pages::THEME_CHOICES
-            .iter()
-            .map(|(k, s)| ((*k).to_owned(), lang::text(*s).to_owned()))
-            .collect();
+        st.themes =
+            crate::theme::Mode::ALL.map(|m| (m.key().to_owned(), lang::text(m.label()).to_owned())).to_vec();
         for (_, name) in &st.themes {
             let w = wide(name);
             send(item(dlg, ID_THEME), CB_ADDSTRING, 0, w.as_ptr() as LPARAM);

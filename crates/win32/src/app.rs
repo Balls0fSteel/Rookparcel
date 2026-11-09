@@ -4784,6 +4784,8 @@ unsafe fn apply_theme(hwnd: HWND) {
         }
         RedrawWindow(hwnd, null(), null_mut(), RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
         DrawMenuBar(hwnd);
+        // the open dialogs follow
+        crate::theme::broadcast(hwnd);
     }
 }
 

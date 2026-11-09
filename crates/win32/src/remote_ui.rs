@@ -177,6 +177,9 @@ unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
     // SAFETY: plain dialog-procedure calls; DWLP_USER holds the `State` passed in WM_INITDIALOG,
     // which lives until DialogBoxIndirectParamW returns.
     unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
         let set = |id: u16, s: &str| {
             let w = wide(s);
             SetWindowTextW(GetDlgItem(dlg, id as i32), w.as_ptr());

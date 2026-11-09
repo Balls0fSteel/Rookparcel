@@ -275,9 +275,14 @@ server and a per-browser choice; `frontend::palette` for the drawn parts; GTK's 
 Blocks cells follow a dark theme and `is_dark` also reads the XDG portal's colour scheme; the
 scheduler's Off cell is the surface colour in every UI. Still open:
 
-- **Win32 dark mode:** designed in [DARKMODE.md](DARKMODE.md) (title bar by DWM, undocumented
-  `uxtheme` ordinals 133/135/136/104 and the `DarkMode_Explorer` theme for the common controls,
-  custom-drawn menus, tabs, headers and group boxes; eight slices). Not started.
+- **Win32 dark mode (D64, 1.2.24-1.2.27):** built as [DARKMODE.md](DARKMODE.md) designed it.
+  Still to check by hand: a Windows 10 1809 (17763) VM, where ordinal 135 is
+  `AllowDarkModeForApp` and the DWM attribute is 19; 150 % and 200 % DPI screenshots in dark
+  (the hidden desktop has the session's DPI); a live flip of Windows' *Choose your mode* with
+  dialogs open; the updater's marquee progress bar and the message boxes stay the system's (the
+  marquee needs the visual style, `MessageBoxW` cannot be themed); the header's drag image stays
+  light while a column is dragged; the Advanced page's `*` marks and the Preferences note under
+  Theme are plain text.
 - **Icon skins:** 2.2.1 read replacement images from its settings folder (`toolbar.bmp`,
   `tstatus.bmp` and, from memory, others: confirm against the owner's copy; its exe is
   UPX-packed, so the names were not read from it) and people shared packs. We would load PNG

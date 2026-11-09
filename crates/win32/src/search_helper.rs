@@ -236,6 +236,9 @@ fn picker_template() -> Vec<u16> {
 
 unsafe extern "system" fn picker_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
     unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
         if msg == WM_INITDIALOG {
             SetWindowLongPtrW(dlg, DWLP_USER, lp);
             picker_init(dlg, &mut *(lp as *mut Picker<'_>));

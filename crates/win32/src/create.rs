@@ -182,6 +182,9 @@ unsafe fn set_check(dlg: HWND, id: u16, on: bool) {
 
 unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
     unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
         if msg == WM_INITDIALOG {
             SetWindowLongPtrW(dlg, DWLP_USER, lp);
             init(dlg, &(*(lp as *const State)).remembered);

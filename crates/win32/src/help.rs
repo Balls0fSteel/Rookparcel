@@ -151,7 +151,7 @@ pub unsafe fn control_tip(owner: HWND, ctl: HWND, text: &str) {
 
 unsafe fn tooltip(dlg: HWND) -> HWND {
     unsafe {
-        CreateWindowExW(
+        let tip = CreateWindowExW(
             0,
             TOOLTIPS_CLASSW,
             null(),
@@ -164,7 +164,9 @@ unsafe fn tooltip(dlg: HWND) -> HWND {
             null_mut(),
             GetModuleHandleW(null()),
             null(),
-        )
+        );
+        crate::theme::theme_control(tip, crate::theme::Kind::Explorer);
+        tip
     }
 }
 

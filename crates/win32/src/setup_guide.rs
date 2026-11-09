@@ -18,9 +18,8 @@ use rookparcel_frontend::setup_guide::{self, Answers, Guide};
 use rookparcel_frontend::tr;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
-    COLOR_BTNFACE, COLOR_GRAYTEXT, CreateFontIndirectW, DT_CALCRECT, DT_NOPREFIX, DT_WORDBREAK, DeleteObject,
-    DrawTextW, FW_BOLD, GetDC, GetObjectW, GetSysColor, GetSysColorBrush, HDC, HFONT, LOGFONTW, ReleaseDC,
-    SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
+    CreateFontIndirectW, DT_CALCRECT, DT_NOPREFIX, DT_WORDBREAK, DeleteObject, DrawTextW, FW_BOLD, GetDC,
+    GetObjectW, HDC, HFONT, LOGFONTW, ReleaseDC, SelectObject, SetBkMode, SetTextColor, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Controls::BST_CHECKED;
@@ -386,6 +385,11 @@ unsafe fn layout(dlg: HWND, st: &State) {
 
 unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
     unsafe {
+        if msg != WM_CTLCOLORSTATIC {
+            if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+                return r;
+            }
+        }
         if msg == WM_INITDIALOG {
             SetWindowLongPtrW(dlg, DWLP_USER, lp);
             init(dlg, &mut *(lp as *mut State));
@@ -407,12 +411,12 @@ unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
                     .flatten()
                     .any(|r| matches!(r, Row::Text { id: i, help: true, .. } if *i == id));
                 if !help {
-                    return 0;
+                    return crate::theme::ctl_color(msg, wp, lp).unwrap_or(0);
                 }
                 let dc = wp as HDC;
-                SetTextColor(dc, GetSysColor(COLOR_GRAYTEXT));
+                SetTextColor(dc, crate::theme::sys().gray_text);
                 SetBkMode(dc, TRANSPARENT as i32);
-                GetSysColorBrush(COLOR_BTNFACE) as isize
+                crate::theme::brush(crate::theme::Brush::Face) as isize
             }
             WM_DESTROY => {
                 if !st.bold.is_null() {

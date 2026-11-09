@@ -544,6 +544,9 @@ unsafe fn layout(dlg: HWND) {
 
 unsafe extern "system" fn results_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
     unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
         if msg == WM_INITDIALOG {
             SetWindowLongPtrW(dlg, DWLP_USER, lp);
             results_init(dlg, &mut *(lp as *mut Results));
@@ -997,6 +1000,9 @@ fn sources_template() -> Vec<u16> {
 
 unsafe extern "system" fn sources_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
     unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
         if msg == WM_INITDIALOG {
             SetWindowLongPtrW(dlg, DWLP_USER, lp);
             sources_init(dlg, &mut *(lp as *mut Sources<'_>));
@@ -1374,6 +1380,9 @@ fn source_template() -> Vec<u16> {
 
 unsafe extern "system" fn source_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
     unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
         if msg == WM_INITDIALOG {
             SetWindowLongPtrW(dlg, DWLP_USER, lp);
             let st = &*(lp as *const FormState);

@@ -261,6 +261,9 @@ unsafe fn show(dlg: HWND, st: &State) {
 
 unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
     unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
         let st = GetWindowLongPtrW(dlg, DWLP_USER) as *mut State;
         match msg {
             WM_INITDIALOG => {

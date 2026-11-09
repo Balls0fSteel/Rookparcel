@@ -35,6 +35,7 @@
 
 **Reference**
 - [Preferences](Preferences-reference)
+- [Dark mode](Dark-mode)
 - [Keyboard shortcuts](Keyboard-shortcuts)
 - [Tray and startup](Tray-notifications-and-startup)
 - [Troubleshooting, FAQ](Troubleshooting-and-FAQ)

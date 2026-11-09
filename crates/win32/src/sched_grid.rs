@@ -9,15 +9,13 @@ use std::mem::zeroed;
 use std::ptr::null;
 
 use rookparcel_frontend::lang;
-use rookparcel_frontend::palette::LIGHT;
 use rookparcel_frontend::scheduler::{CELLS, DAY_NAMES, DAYS, HOURS, Mode, drag_line, hover_text};
 use windows_sys::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
-    BeginPaint, BitBlt, COLOR_BTNFACE, COLOR_BTNTEXT, COLOR_GRAYTEXT, CreateCompatibleBitmap,
-    CreateCompatibleDC, CreateSolidBrush, DT_CALCRECT, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_RTLREADING,
-    DT_SINGLELINE, DT_VCENTER, DeleteDC, DeleteObject, DrawTextW, EndPaint, FillRect, FrameRect, GetSysColor,
-    GetSysColorBrush, HDC, HFONT, HGDIOBJ, InvalidateRect, PAINTSTRUCT, SRCCOPY, SelectObject, SetBkMode,
-    SetTextColor, TRANSPARENT,
+    BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateSolidBrush, DT_CALCRECT, DT_CENTER,
+    DT_END_ELLIPSIS, DT_LEFT, DT_RTLREADING, DT_SINGLELINE, DT_VCENTER, DeleteDC, DeleteObject, DrawTextW,
+    EndPaint, FillRect, FrameRect, HDC, HFONT, HGDIOBJ, InvalidateRect, PAINTSTRUCT, SRCCOPY, SelectObject,
+    SetBkMode, SetTextColor, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{IsWindowEnabled, ReleaseCapture, SetCapture};
@@ -78,7 +76,16 @@ fn bgr(c: u32) -> COLORREF {
 /// speed, 0xa2 Limited, 0xd4 Seeding only).
 fn color(m: Mode, enabled: bool) -> COLORREF {
     if enabled {
-        return bgr(LIGHT.sched_cell(m));
+        return bgr(crate::theme::draw().sched_cell(m));
+    }
+    if crate::theme::is_dark() {
+        // the same order of greys on the dark surface (D64)
+        return match m {
+            Mode::Full => bgr(0x606060),
+            Mode::Limited => bgr(0x808080),
+            Mode::Off => bgr(crate::theme::draw().surface),
+            Mode::SeedOnly => bgr(0x9a9a9a),
+        };
     }
     let g = match m {
         Mode::Full => 0x38,
@@ -187,19 +194,20 @@ unsafe fn paint(hwnd: HWND, g: &Grid) {
 unsafe fn draw(hwnd: HWND, dc: HDC, rc: &RECT, g: &Grid) {
     unsafe {
         let enabled = IsWindowEnabled(hwnd) != 0;
-        FillRect(dc, rc, GetSysColorBrush(COLOR_BTNFACE));
+        FillRect(dc, rc, crate::theme::brush(crate::theme::Brush::Face));
         let font = send(GetParent(hwnd), WM_GETFONT, 0, 0) as HFONT;
         let old_font = SelectObject(dc, font as HGDIOBJ);
         SetBkMode(dc, TRANSPARENT as i32);
-        SetTextColor(dc, GetSysColor(if enabled { COLOR_BTNTEXT } else { COLOR_GRAYTEXT }));
+        let sys = crate::theme::sys();
+        SetTextColor(dc, if enabled { sys.button_text } else { sys.gray_text });
         let l = Layout::new(rc.right, rc.bottom);
         for h in (0..HOURS).step_by(3) {
             let c = l.cell_rect(0, h);
             let r = RECT { left: c.left - l.cell_w, top: 0, right: c.left + 2 * l.cell_w, bottom: l.top };
             text(dc, &h.to_string(), &r, DT_CENTER);
         }
-        // black grid lines, as µTorrent's
-        let frame = CreateSolidBrush(0x0000_0000);
+        // black grid lines, as µTorrent's (the border colour on a dark surface)
+        let frame = CreateSolidBrush(if crate::theme::is_dark() { sys.border } else { 0x0000_0000 });
         let brushes = Mode::ALL.map(|m| CreateSolidBrush(color(m, enabled)));
         let brush = |m: Mode| brushes[Mode::ALL.iter().position(|&x| x == m).unwrap_or(0)];
         let white = brush(Mode::Off);
