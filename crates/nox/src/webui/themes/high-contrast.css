@@ -1,0 +1,34 @@
+/* name: High Contrast */
+/* Black and white with a yellow selection; the bars keep dark fills so their text stays legible. */
+:root {
+  color-scheme: dark;
+  --bg: #000000;
+  --bg2: #000000;
+  --fg: #ffffff;
+  --muted: #c0c0c0;
+  --line: #ffffff;
+  --accent: #ffff00;
+  --sel: #ffff00;
+  --sel-fg: #000000;
+  --sel-blur: #404040;
+  --focus: #ffff00;
+  --hdr: #000000;
+  --bar-bg: #202020;
+  --bar-dl: #0066cc;
+  --bar-seed: #008800;
+  --bar-stop: #606060;
+  --bar-err: #cc0000;
+  --bar-check: #a08000;
+  --blk-req: #ffa500;
+  --err: #ff6060;
+  --menu-bg: #000000;
+  --shadow: rgba(255, 255, 255, 0.4);
+  --bar-fg: #ffffff;
+  --graph-dl: #00ff00;
+  --graph-ul: #ff4040;
+  --scrim: rgba(0, 0, 0, 0.7);
+  --sched-full: #008800;
+  --sched-limited: #00aaaa;
+  --sched-off: var(--bg);
+  --sched-seed: #0066cc;
+}

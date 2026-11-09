@@ -2943,7 +2943,7 @@ fn native_prefs_survive_a_restart() {
         );
 
         let body = format!(
-            r#"{{"listen_port":{port},"dir.download":"{}","enable_lsd":true,"webui.session_timeout":120,"webui.current_password":"{PASS}"}}"#,
+            r#"{{"listen_port":{port},"dir.download":"{}","enable_lsd":true,"webui.session_timeout":120,"webui.theme":"dark","webui.current_password":"{PASS}"}}"#,
             download.to_string_lossy().replace('\\', "\\\\")
         );
         let r = t.pa(&sid, "/pa/prefs", &body);
@@ -2968,6 +2968,7 @@ fn native_prefs_survive_a_restart() {
     assert_eq!(value("dir.download"), Json::Str(download.to_string_lossy().into_owned()));
     assert_eq!(value("enable_lsd"), Json::Bool(true));
     assert_eq!(value("webui.session_timeout"), Json::Int(120));
+    assert_eq!(value("webui.theme"), Json::Str("dark".into()));
     assert_eq!(value("download_rate_limit"), Json::Int(102400));
     // the harness's own settings that were never stored are kept (DHT off)
     assert_eq!(value("enable_dht"), Json::Bool(false));
@@ -3624,4 +3625,116 @@ fn request_paths_follow_the_save_roots() {
     };
     assert_eq!(set(&outside.to_string_lossy()), before);
     assert_eq!(set(&inside), inside);
+}
+
+/// The page's themes (D63): the built-in files are served like the other statics before the
+/// login, `system` has no file, nothing outside `/themes/<id>.css` is reachable, third-party
+/// files in the settings directory are listed by name and served within the size cap, and
+/// `webui.theme` is an ordinary preference (no current password) that takes only theme ids.
+#[test]
+fn themes_are_served_listed_and_chosen() {
+    let t = Harness::start("themes");
+    let built_in = [
+        "light",
+        "dark",
+        "midnight",
+        "slate",
+        "solarized-dark",
+        "solarized-light",
+        "high-contrast",
+        "postal-rook",
+    ];
+    for id in built_in {
+        let path = format!("/themes/{id}.css");
+        let r = t.req("GET", &path, &[], Body::None);
+        assert_eq!(r.status, 200, "{path}");
+        assert_eq!(r.header("content-type"), Some("text/css; charset=UTF-8"), "{path}");
+        assert_eq!(r.header("cache-control"), Some("no-cache"), "{path}");
+        assert!(r.header("content-security-policy").is_none(), "{path}");
+        assert!(r.body.len() < 4 * 1024, "{path}: {} bytes", r.body.len());
+        assert!(r.text().contains("color-scheme:"), "{path}");
+        let etag = r.header("etag").unwrap_or_else(|| panic!("{path}: no ETag")).to_owned();
+        let again = t.req("GET", &path, &[("If-None-Match", &etag)], Body::None);
+        assert_eq!((again.status, again.body.len()), (304, 0), "{path}");
+        assert_eq!(t.req("POST", &path, &[], Body::Form("")).status, 405, "{path}");
+    }
+    for bad in [
+        "/themes/system.css",
+        "/themes/light.CSS",
+        "/themes/light.css/",
+        "/themes/../style.css",
+        "/themes/..%2Fstyle.css",
+        "/themes/a%2Fb.css",
+        "/themes/light",
+        "/themes/",
+        "/themes/nope.css",
+    ] {
+        assert_eq!(t.req("GET", bad, &[], Body::None).status, 404, "{bad}");
+    }
+    // third-party files beside the state: listed by the name in their first comment
+    let themes = t.dir.join("state").join("webui").join("themes");
+    std::fs::create_dir_all(&themes).unwrap();
+    let mine = "/* name: Mine */
+:root { color-scheme: dark; --bg: #000000; }
+";
+    std::fs::write(themes.join("mine.css"), mine).unwrap();
+    std::fs::write(
+        themes.join("plain.css"),
+        ":root { --bg: #111111; }
+",
+    )
+    .unwrap();
+    std::fs::write(themes.join("big.css"), vec![b' '; 64 * 1024 + 1]).unwrap();
+    std::fs::write(themes.join("Bad Name.css"), ":root {}").unwrap();
+    std::fs::write(themes.join("notes.txt"), ":root {}").unwrap();
+    let r = t.req("GET", "/themes/mine.css", &[], Body::None);
+    assert_eq!((r.status, r.text().as_str()), (200, mine));
+    assert_eq!(r.header("content-type"), Some("text/css; charset=UTF-8"));
+    let etag = r.header("etag").expect("an ETag").to_owned();
+    assert_eq!(t.req("GET", "/themes/mine.css", &[("If-None-Match", &etag)], Body::None).status, 304);
+    assert_eq!(t.req("GET", "/themes/big.css", &[], Body::None).status, 404);
+    assert_eq!(t.req("GET", "/themes/notes.css", &[], Body::None).status, 404);
+    let sid = t.login();
+    let options = |t: &Harness| -> Vec<(String, String)> {
+        let m = t.get(&sid, "/pa/prefs").json();
+        let f = m.get("fields").unwrap().get("webui.theme").unwrap();
+        assert_eq!(f.get("type"), Some(&Json::from("choice")));
+        let Some(Json::Arr(o)) = f.get("options") else { panic!("{f:?}") };
+        o.iter()
+            .map(|p| match p {
+                Json::Arr(v) => (s(v.first()).to_owned(), s(v.get(1)).to_owned()),
+                other => panic!("{other:?}"),
+            })
+            .collect()
+    };
+    let o = options(&t);
+    assert_eq!(o[0].0, "system");
+    assert_eq!(o.len(), built_in.len() + 1 + 2, "{o:?}");
+    assert!(o.contains(&("mine".to_owned(), "Mine".to_owned())), "{o:?}");
+    assert!(o.contains(&("plain".to_owned(), "plain".to_owned())), "{o:?}");
+    assert!(!o.iter().any(|(id, _)| id == "big" || id.contains(' ')), "{o:?}");
+    // the preference: no current password needed, ids only
+    let m = t.get(&sid, "/pa/prefs").json();
+    assert_eq!(
+        m.get("fields").unwrap().get("webui.theme").unwrap().get("value"),
+        Some(&Json::from("system"))
+    );
+    let r = t.pa(&sid, "/pa/prefs", r#"{"webui.theme":"mine"}"#);
+    assert_eq!(r.status, 204, "{}", r.text());
+    let m = t.get(&sid, "/pa/prefs").json();
+    assert_eq!(m.get("fields").unwrap().get("webui.theme").unwrap().get("value"), Some(&Json::from("mine")));
+    for bad in [r#"{"webui.theme":"../x"}"#, r#"{"webui.theme":"Light"}"#, r#"{"webui.theme":""}"#] {
+        let r = t.pa(&sid, "/pa/prefs", bad);
+        assert_eq!(r.status, 400, "{bad}");
+        assert!(r.text().contains("webui.theme"), "{bad}: {}", r.text());
+    }
+    // a file since removed stays in the list, as the value set, until another is chosen
+    std::fs::remove_file(themes.join("mine.css")).unwrap();
+    assert_eq!(t.req("GET", "/themes/mine.css", &[], Body::None).status, 404);
+    let o = options(&t);
+    assert_eq!(o.last(), Some(&("mine".to_owned(), "mine".to_owned())), "{o:?}");
+    // the Display group shows the field and the browser's own picker
+    let m = t.get(&sid, "/pa/prefs").json();
+    let pages = m.get("pages").unwrap().to_json();
+    assert!(pages.contains(r#""f":"webui.theme""#) && pages.contains(r#""local":"theme""#), "{pages}");
 }

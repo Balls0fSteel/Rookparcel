@@ -229,6 +229,10 @@ impl Client {
                     .collect(),
             )
         };
+        let themes: Vec<Json> = super::theme::choices(&st.settings_dir, &st.prefs.theme)
+            .into_iter()
+            .map(|(v, t)| Json::Arr(vec![v.into(), t.into()]))
+            .collect();
         let detail = Json::obj()
             .with("trackers", defs(&detail::TRACKER_COLUMNS))
             .with("peers", defs(&detail::PEER_COLUMNS))
@@ -242,6 +246,9 @@ impl Client {
             .with("labels", Json::Arr(labels))
             .with("detail", detail)
             .with("confirm_delete", st.prefs.confirm_delete)
+            // the server's theme and the list to pick from (D63)
+            .with("theme", st.prefs.theme.as_str())
+            .with("themes", Json::Arr(themes))
             // a desktop client hosts the Web UI (docs/WEBUI.md)
             .with("hosted", st.hosted);
         // a newer Rookparcel nox's update check found (never hosted)
@@ -1005,6 +1012,11 @@ mod tests {
         let hello = c.hello(&st);
         assert_eq!(hello.get("t"), Some(&Json::from("hello")));
         assert_eq!(hello.get("columns").map(|c| matches!(c, Json::Arr(v) if v.len() == 24)), Some(true));
+        // the theme and the list to pick from (D63): the built-ins, system first
+        assert_eq!(hello.get("theme"), Some(&Json::from("system")));
+        let Some(Json::Arr(themes)) = hello.get("themes") else { panic!("{hello:?}") };
+        assert_eq!(themes.len(), super::super::theme::BUILT_IN.len());
+        assert_eq!(themes[0], Json::Arr(vec!["system".into(), "System (light or dark)".into()]));
     }
 
     #[test]

@@ -66,6 +66,62 @@
     },
   };
 
+  // ---- theme (D63) ----------------------------------------------------------------------
+  // A theme is one CSS file of custom properties after style.css (themes/<id>.css); "system"
+  // is no file: the browser's light or dark setting. The browser's own choice (pa.theme, from
+  // Preferences > UI Settings or the phone's More menu) wins over the server's (webui.theme,
+  // carried by hello and cached here so a reload paints the right colours before the socket).
+  let serverTheme = store.get("pa.themeServer", "system");
+  let themeLink = null;
+  const redraws = []; // canvases that paint again when the colours change
+  function effectiveTheme() {
+    return store.get("pa.theme", "") || serverTheme || "system";
+  }
+  function themeChanged() {
+    const hdr = getComputedStyle(document.documentElement).getPropertyValue("--hdr").trim();
+    if (hdr) for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.content = hdr;
+    for (const f of redraws) f();
+  }
+  function applyTheme() {
+    const id = effectiveTheme();
+    const href = id === "system" ? "" : "themes/" + encodeURIComponent(id) + ".css";
+    if (!href) {
+      if (themeLink) themeLink.remove();
+      themeLink = null;
+      themeChanged();
+      return;
+    }
+    if (themeLink && themeLink.getAttribute("href") === href) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.onload = () => {
+      // the old sheet goes only once the new one is in, so nothing flashes unthemed
+      if (themeLink && themeLink !== link) themeLink.remove();
+      themeLink = link;
+      themeChanged();
+    };
+    link.onerror = () => {
+      // a third-party file since removed: back to the server's choice, then to System
+      link.remove();
+      if (store.get("pa.theme", "")) store.set("pa.theme", "");
+      else if (serverTheme !== "system") serverTheme = "system";
+      applyTheme();
+    };
+    document.head.appendChild(link);
+  }
+  function setBrowserTheme(id) {
+    store.set("pa.theme", id || "");
+    applyTheme();
+  }
+  function setServerTheme(id) {
+    serverTheme = id || "system";
+    store.set("pa.themeServer", serverTheme);
+    applyTheme();
+  }
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", themeChanged);
+  applyTheme();
+
   // ---- state ---------------------------------------------------------------------------
   let ws = null;
   let closing = false; // a deliberate close (logout): no reconnect
@@ -430,6 +486,7 @@
     labels = m.labels || [];
     labelCounts = new Map();
     confirmDelete = m.confirm_delete !== false;
+    setServerTheme(m.theme);
     updateNotice(m.update);
     mergeColumns(m.columns);
     saveLayout();
@@ -959,6 +1016,15 @@
   $("tb-more").addEventListener("click", (ev) => {
     if (!hello) return;
     const none = selectedCount() === 0;
+    // the browser's theme (D63): the server's choice first, then hello's list
+    const themeItems = () => {
+      const own = store.get("pa.theme", "");
+      const items = [{ label: T("ThemeFollowServer"), chk: !own, run: () => setBrowserTheme("") }];
+      for (const [id, text] of hello.themes || []) {
+        items.push({ label: text, chk: own === id, run: () => setBrowserTheme(id) });
+      }
+      return items;
+    };
     const sortBy = hello.columns.map((c) => ({
       label: c.title,
       chk: sort[0] === c.id,
@@ -985,6 +1051,7 @@
         },
         { label: T("WebSortBy"), sub: sortBy },
         { label: T("WebSortDescending"), chk: !!sort[1], run: () => setSort([sort[0], !sort[1]]) },
+        { label: T("WebTheme"), sub: themeItems() },
         "-",
         { label: T("MenuPreferences"), run: () => $("tb-prefs").click() },
         { label: T("MenuRss"), run: () => openRss(0) },
@@ -1704,8 +1771,6 @@
   // folders collapsed in it by path, for one torrent: kept across updates and priority changes
   let filesTree = store.get("pa.filesTree", true) !== false;
   const filesCollapsed = { id: null, paths: new Set() };
-  const DOWN_COLOR = "#2aa52a";
-  const UP_COLOR = "#d23c3c";
 
   function clearDetail() {
     detailView = null;
@@ -2325,7 +2390,7 @@
             ctx.globalAlpha = 1;
           }
         }
-        ctx.fillStyle = "#e8a000";
+        ctx.fillStyle = css.getPropertyValue("--blk-req").trim() || "#e8a000";
         for (const p of data.downloading || []) {
           const x = Math.floor((p * cols) / n);
           ctx.fillRect(x * pw, h - 6, Math.max(2, Math.ceil(pw)), 6);
@@ -2335,6 +2400,7 @@
       ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
     };
     new ResizeObserver(draw).observe(head);
+    redraws.push(draw);
     return {
       tab,
       id,
@@ -2380,6 +2446,8 @@
       const muted = css.getPropertyValue("--muted").trim() || "#6d6d6d";
       const line = css.getPropertyValue("--line").trim() || "#d9d9d9";
       const bg = css.getPropertyValue("--bg").trim() || "#fff";
+      const downColor = css.getPropertyValue("--graph-dl").trim() || "#2aa52a";
+      const upColor = css.getPropertyValue("--graph-ul").trim() || "#d23c3c";
       ctx.clearRect(0, 0, w, h);
       ctx.font = "11px Segoe UI, system-ui, sans-serif";
       ctx.textBaseline = "middle";
@@ -2431,7 +2499,7 @@
       if (n >= 2) {
         const step = (right - left - 2) / (keep - 1);
         [0, 1].forEach((series) => {
-          ctx.strokeStyle = series === 0 ? DOWN_COLOR : UP_COLOR;
+          ctx.strokeStyle = series === 0 ? downColor : upColor;
           ctx.lineWidth = 2;
           ctx.beginPath();
           for (let i = 0; i < n; i++) {
@@ -2447,7 +2515,7 @@
       // legend
       let x = left;
       ctx.textAlign = "left";
-      [DOWN_COLOR, UP_COLOR].forEach((color, i) => {
+      [downColor, upColor].forEach((color, i) => {
         ctx.fillStyle = color;
         ctx.fillRect(x, 6, 10, 10);
         ctx.fillStyle = fg;
@@ -2456,6 +2524,7 @@
       });
     };
     new ResizeObserver(draw).observe(el);
+    redraws.push(draw);
     return {
       tab,
       id,
@@ -4318,6 +4387,23 @@
       b.dataset.action = it.action;
       return b;
     }
+    if (it.local === "theme") {
+      // the browser's own theme (D63): kept here, applied at once, never sent
+      const l = document.createElement("label");
+      l.className = "pf sel";
+      const sp = document.createElement("span");
+      sp.textContent = it.label;
+      l.appendChild(sp);
+      const inp = document.createElement("select");
+      inp.appendChild(new Option(T("ThemeFollowServer"), ""));
+      for (const [value, text] of prefField("webui.theme").options) inp.appendChild(new Option(text, value));
+      inp.value = store.get("pa.theme", "");
+      if (inp.value !== store.get("pa.theme", "")) inp.value = "";
+      inp.addEventListener("change", () => setBrowserTheme(inp.value));
+      if (it.help) inp.title = it.help;
+      l.appendChild(inp);
+      return l;
+    }
     if (it.f && prefField(it.f).type === "schedule") return renderSchedule(it);
     const l = document.createElement("label");
     if (it.stub !== undefined) {
@@ -4813,6 +4899,7 @@
         return;
       }
       if (prefsEdits.has("ui.confirm_delete")) confirmDelete = !!prefsEdits.get("ui.confirm_delete");
+      if (prefsEdits.has("webui.theme")) setServerTheme(prefsEdits.get("webui.theme"));
       // a new language: the server's texts follow at once, the page's with a reload (lang.js)
       if (prefsEdits.has("ui.language")) {
         location.reload();

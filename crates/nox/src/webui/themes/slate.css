@@ -1,0 +1,34 @@
+/* name: Slate */
+/* Blue-grey surfaces with soft contrast, in the spirit of ruTorrent's Agent46. */
+:root {
+  color-scheme: dark;
+  --bg: #2b3440;
+  --bg2: #323d4b;
+  --fg: #dfe6ee;
+  --muted: #9fb0c0;
+  --line: #44515f;
+  --accent: #6aa0d8;
+  --sel: #3d5a7e;
+  --sel-fg: #ffffff;
+  --sel-blur: #3a4654;
+  --focus: #7fb2e6;
+  --hdr: #303a47;
+  --bar-bg: #3a4654;
+  --bar-dl: #5b93d6;
+  --bar-seed: #4fa567;
+  --bar-stop: #6c7a89;
+  --bar-err: #d9605f;
+  --bar-check: #d4ad3f;
+  --blk-req: #e0a233;
+  --err: #ff8a80;
+  --menu-bg: #323d4b;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --bar-fg: #ffffff;
+  --graph-dl: #5fcf6a;
+  --graph-ul: #ef7070;
+  --scrim: rgba(0, 0, 0, 0.5);
+  --sched-full: #3f9f4b;
+  --sched-limited: #8fd09a;
+  --sched-off: var(--bg);
+  --sched-seed: #6aa0d8;
+}

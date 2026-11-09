@@ -1,0 +1,34 @@
+/* name: Dark */
+/* The page's own dark colours, whatever the browser's setting (docs/WEBUI.md "Themes"). */
+:root {
+  color-scheme: dark;
+  --bg: #1e1f22;
+  --bg2: #26282c;
+  --fg: #e4e4e4;
+  --muted: #9a9a9a;
+  --line: #3a3d42;
+  --accent: #5aa0f0;
+  --sel: #2d4f7a;
+  --sel-fg: #ffffff;
+  --sel-blur: #33363b;
+  --focus: #6fa6ea;
+  --hdr: #25272b;
+  --bar-bg: #3a3d42;
+  --bar-dl: #4b8fe0;
+  --bar-seed: #3f9e55;
+  --bar-stop: #6b6b6b;
+  --bar-err: #d9605f;
+  --bar-check: #d7b141;
+  --blk-req: #d99a1e;
+  --err: #ff7b72;
+  --menu-bg: #2a2c30;
+  --shadow: rgba(0, 0, 0, 0.6);
+  --bar-fg: #ffffff;
+  --graph-dl: #4fc04f;
+  --graph-ul: #e06060;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --sched-full: #40b040;
+  --sched-limited: #a0e8a0;
+  --sched-off: var(--bg);
+  --sched-seed: #60a0e0;
+}

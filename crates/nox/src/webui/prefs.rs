@@ -40,7 +40,7 @@ use rookparcel_frontend::tr;
 use super::auth::{self, PasswordHash};
 use super::json::Json;
 use super::path_policy::PathPolicy;
-use super::{Prefs, Shared, State, unix_now};
+use super::{Prefs, Shared, State, theme, unix_now};
 
 /// A field's type, as the page sees it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,6 +64,9 @@ pub enum Kind {
     /// "Use only this network"'s drop-down (D54, `frontend::network::rule_choices`): the
     /// engine host's adapters, listed as `[value, text]` like [`Kind::Language`].
     Network,
+    /// The Web UI's theme (D63, `super::theme`): an id, listed as `[value, text]` like
+    /// [`Kind::Language`], the built-ins and the third-party files.
+    Theme,
 }
 
 impl Kind {
@@ -76,7 +79,7 @@ impl Kind {
             Kind::Enum(_) => "enum",
             Kind::Password => "password",
             Kind::Schedule => "schedule",
-            Kind::Language | Kind::Network => "choice",
+            Kind::Language | Kind::Network | Kind::Theme => "choice",
         }
     }
 }
@@ -662,6 +665,10 @@ pub(crate) static FIELDS: &[Field] = &[
         |w| Value::Int(w.prefs.session_timeout as i64),
         |w, v| w.prefs.session_timeout = int(&v) as u64
     ),
+    field!("webui.theme", Some(S::PrefTheme), Kind::Theme, |w| Value::Str(w.prefs.theme.clone()), |w, v| w
+        .prefs
+        .theme =
+        string(v).trim().to_owned()),
 ];
 
 /// The 2.2.1 wording of the engine settings the pages show (the Advanced table shows the
@@ -836,6 +843,8 @@ impl Def {
                     }),
             },
             Kind::Text | Kind::Folder | Kind::Password | Kind::Network => Ok(Value::Str(text.to_owned())),
+            Kind::Theme if theme::valid_id(t) => Ok(Value::Str(t.to_owned())),
+            Kind::Theme => Err(tr!(PrefBadTheme).to_owned()),
             Kind::Schedule => match scheduler::parse_table(t) {
                 Some(_) => Ok(Value::Str(t.to_owned())),
                 None => Err(tr!(SettingBadSchedule, count = scheduler::CELLS)),
@@ -915,6 +924,11 @@ fn note(text: impl Into<String>) -> Json {
     Json::obj().with("note", text.into())
 }
 
+/// A control the page keeps for itself (nothing is sent): `theme`, the browser's own theme.
+fn local(what: &str, label: &str, help: H) -> Json {
+    Json::obj().with("local", what).with("label", label).with("help", lang::help(help))
+}
+
 fn group(title: Option<&str>, items: Vec<Json>) -> Json {
     Json::obj().with("title", title.map_or(Json::Null, Json::from)).with("items", Json::Arr(items))
 }
@@ -978,7 +992,14 @@ fn pages(settings_dir: &Path, hosted: bool) -> Vec<Json> {
             "ui",
             tr!(PageUi),
             vec![
-                group(Some(tr!(PrefDisplay)), vec![f("ui.confirm_delete")]),
+                group(
+                    Some(tr!(PrefDisplay)),
+                    vec![
+                        f("ui.confirm_delete"),
+                        f("webui.theme"),
+                        local("theme", tr!(PrefThemeBrowser), H::PrefThemeBrowser),
+                    ],
+                ),
                 group(Some(tr!(PrefWhenAdding)), vec![f("ui.add_stopped"), f("ui.show_add_dialog")]),
             ],
         ),
@@ -1243,6 +1264,11 @@ pub(crate) fn model(shared: &Shared, st: &State) -> Json {
                 let options = choices.into_iter().map(|(v, t)| Json::Arr(vec![v.into(), t.into()])).collect();
                 j.set("options", Json::Arr(options));
             }
+            Kind::Theme => {
+                let choices = theme::choices(&shared.settings_dir, &w.prefs.theme);
+                let options = choices.into_iter().map(|(v, t)| Json::Arr(vec![v.into(), t.into()])).collect();
+                j.set("options", Json::Arr(options));
+            }
             _ => {}
         }
         if def.readonly() {
@@ -1332,6 +1358,9 @@ pub(crate) fn validate(w: &Working) -> Result<(), Refusal> {
     }
     if let Err(why) = network::check_rule(&w.settings.network_rule) {
         return refuse("net.network_range", &why);
+    }
+    if !theme::valid_id(&w.prefs.theme) {
+        return refuse("webui.theme", tr!(PrefBadTheme));
     }
     if w.prefs.save_path.trim().is_empty() {
         return refuse("dir.download", tr!(PrefNoDownloadDir));
@@ -1644,6 +1673,7 @@ fn store(st: &mut State, changed: &[&'static str]) {
     o.set("webui.max_auth_fail_count", p.max_auth_fail_count);
     o.set("webui.ban_duration", p.ban_duration);
     o.set("webui.session_timeout", p.session_timeout);
+    o.set("webui.theme", &p.theme);
 }
 
 /// Reads the stored preferences (`State::options`) back into `st.settings` and `st.prefs`,
@@ -1694,6 +1724,8 @@ pub(crate) fn read_back(st: &mut State) -> bool {
         max_auth_fail_count: u32_of("webui.max_auth_fail_count").unwrap_or(p.max_auth_fail_count),
         ban_duration: u64_of("webui.ban_duration").unwrap_or(p.ban_duration),
         session_timeout: u64_of("webui.session_timeout").unwrap_or(p.session_timeout),
+        // a name that could not be set through the page is left out (an edited file)
+        theme: o.get("webui.theme").filter(|t| theme::valid_id(t)).map_or(p.theme.clone(), str::to_owned),
         ..p.clone()
     };
     changed |=

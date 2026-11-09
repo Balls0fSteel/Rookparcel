@@ -25,7 +25,7 @@ use super::http::{
 };
 use super::json::{self, Json};
 use super::torrent::{self, Extra};
-use super::{ClientSession, Entry, MAX_SESSIONS, Reply, ReplyKind, Shared, State, prefs};
+use super::{ClientSession, Entry, MAX_SESSIONS, Reply, ReplyKind, Shared, State, prefs, theme};
 
 /// The qBittorrent release whose WebAPI (2.11.2) this implements; clients pick features by it.
 pub const COMPAT_VERSION: &str = "v5.0.0";
@@ -53,7 +53,7 @@ pub struct StaticFile {
 }
 
 impl StaticFile {
-    fn new(path: &'static str, content_type: &'static str, body: &'static [u8]) -> StaticFile {
+    pub(super) fn new(path: &'static str, content_type: &'static str, body: &'static [u8]) -> StaticFile {
         StaticFile { path, content_type, body, etag: format!("\"{}\"", Sha1::digest(body).to_hex()) }
     }
 }
@@ -109,12 +109,19 @@ pub fn static_file(path: &str) -> Option<&'static StaticFile> {
     STATIC_FILES.iter().find(|f| f.path == path)
 }
 
+/// Whether the request's `If-None-Match` names `etag` (or `*`).
+pub(super) fn etag_matches(head: &Head, etag: &str) -> bool {
+    head.header("if-none-match")
+        .is_some_and(|v| v.split(',').any(|t| t.trim().trim_start_matches("W/") == etag || t.trim() == "*"))
+}
+
 /// A static file, or `304 Not Modified` when the client's `If-None-Match` names its ETag.
-fn serve_static(f: &'static StaticFile, head: &Head) -> Response {
-    let matches = head.header("if-none-match").is_some_and(|v| {
-        v.split(',').any(|t| t.trim().trim_start_matches("W/") == f.etag || t.trim() == "*")
-    });
-    let r = if matches { Response::new(304, "", "") } else { Response::new(200, f.content_type, f.body) };
+pub(super) fn serve_static(f: &'static StaticFile, head: &Head) -> Response {
+    let r = if etag_matches(head, &f.etag) {
+        Response::new(304, "", "")
+    } else {
+        Response::new(200, f.content_type, f.body)
+    };
     let r = r.with_header("ETag", f.etag.clone()).with_header("Cache-Control", "no-cache");
     if f.path == "/" { r.with_header("Content-Security-Policy", PAGE_CSP) } else { r }
 }
@@ -475,6 +482,13 @@ fn serve_inner(shared: &Shared, req: &Request) -> Response {
             return Response::text(405, "Method Not Allowed").with_header("Allow", "GET, HEAD");
         }
         return serve_static(f, head);
+    }
+    if let Some(rest) = head.path.strip_prefix("/themes/") {
+        // the page's themes (D63), CSS only, before the login like the other statics
+        if !read {
+            return Response::text(405, "Method Not Allowed").with_header("Allow", "GET, HEAD");
+        }
+        return theme::serve(&shared.settings_dir, rest.strip_suffix(".css").unwrap_or(""), head);
     }
     if let Some(endpoint) = head.path.strip_prefix("/pa/") {
         // the native commands (docs/WEBUI.md "Commands"): JSON in, 204 or {"error"} out

@@ -40,6 +40,8 @@ More: [Tray, notifications and startup](Tray-notifications-and-startup), [Adding
 | Setting | What it does |
 |---|---|
 | **Confirm when deleting torrents** | Asks before removing torrents from the list, saying whether their files are deleted too. Off, **Remove** acts at once. |
+| **Theme** (Web UI only) | The Web UI page's colours for everyone who opens it: System (light or dark), Light, Dark, Midnight, Slate, Solarized Dark, Solarized Light, High Contrast, Postal Rook, and your own CSS files from the `webui/themes` folder under the settings folder ([Web UI](Web-UI)). |
+| **Theme in this browser** (Web UI only) | A theme for this browser only, kept on this device and used instead of the server's choice. **Server default** follows the server's theme again. |
 | **Alternate list background color** | Shades every other row of the lists. |
 | **Show current speed in the title bar** | Puts the current download and upload speeds at the start of the main window's title, which also shows on the taskbar. |
 | **Show balloon notifications in tray** | Shows a notification, with the torrent's name, when a download completes. |

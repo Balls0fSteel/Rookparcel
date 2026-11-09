@@ -33,6 +33,7 @@ mod remote;
 pub(crate) mod rss;
 mod search;
 mod server;
+pub(crate) mod theme;
 
 pub use rss::Rss;
 pub mod torrent;
@@ -271,6 +272,9 @@ pub(crate) struct Prefs {
     pub max_auth_fail_count: u32,
     pub ban_duration: u64,
     pub session_timeout: u64,
+    /// The page's theme for everyone (D63, [`theme`]): a built-in id or a third-party file's
+    /// name; `system` follows the browser.
+    pub theme: String,
 }
 
 impl Prefs {
@@ -312,6 +316,7 @@ impl Prefs {
             max_auth_fail_count: 5,
             ban_duration: 3600,
             session_timeout: 3600,
+            theme: theme::SYSTEM.to_owned(),
         };
         p.set_gui(&gui);
         p
@@ -474,6 +479,8 @@ pub(crate) struct State {
     pub stats: SessionStats,
     pub settings: Settings,
     pub prefs: Prefs,
+    /// Where third-party themes are looked for ([`Shared::settings_dir`]).
+    pub settings_dir: PathBuf,
     pub username: String,
     pub password: PasswordHash,
     /// The API key (`webui.api_key`, hashed like the password), when one is set.
@@ -927,6 +934,7 @@ impl WebUi {
         let shared = Arc::new_cyclic(|this| Shared {
             handle,
             state: Mutex::new(State {
+                settings_dir: settings_dir.clone(),
                 torrents: HashMap::new(),
                 by_hash: HashMap::new(),
                 by_key: HashMap::new(),
@@ -1703,6 +1711,7 @@ impl State {
     #[cfg(test)]
     pub(crate) fn for_tests() -> State {
         State {
+            settings_dir: PathBuf::from("."),
             torrents: HashMap::new(),
             by_hash: HashMap::new(),
             by_key: HashMap::new(),

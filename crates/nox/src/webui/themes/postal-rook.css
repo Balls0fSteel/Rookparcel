@@ -1,0 +1,34 @@
+/* name: Postal Rook */
+/* The brand's colours (D60, assets/rookparcel-icons): paper, navy, stamp red, kraft and gold. */
+:root {
+  color-scheme: light;
+  --bg: #f7eedc;
+  --bg2: #efe4cc;
+  --fg: #14233d;
+  --muted: #6d7882;
+  --line: #d9cdb2;
+  --accent: #b8352a;
+  --sel: #e9d9b9;
+  --sel-fg: #14233d;
+  --sel-blur: #ede3cf;
+  --focus: #b8352a;
+  --hdr: #f3e8d2;
+  --bar-bg: #eadfc6;
+  --bar-dl: #5b8fd6;
+  --bar-seed: #7fae6a;
+  --bar-stop: #b0a48c;
+  --bar-err: #d2695f;
+  --bar-check: #d9a66a;
+  --blk-req: #f2c14e;
+  --err: #b8352a;
+  --menu-bg: #fbf4e6;
+  --shadow: rgba(20, 35, 61, 0.25);
+  --bar-fg: #14233d;
+  --graph-dl: #5e8c4a;
+  --graph-ul: #b8352a;
+  --scrim: rgba(20, 35, 61, 0.35);
+  --sched-full: #5e8c4a;
+  --sched-limited: #a9c99a;
+  --sched-off: var(--bg);
+  --sched-seed: #5b8fd6;
+}

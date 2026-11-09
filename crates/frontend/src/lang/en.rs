@@ -1041,6 +1041,29 @@ strings! {
     PrefBadSubnet = "\"{entry}\" is not an IP address or a subnet (such as 192.168.1.0/24).";
     /// {count} is the number of hours in a week.
     SettingBadSchedule = "expected {count} hours, each 0 (full speed), 1 (turn off), 2 (limited) or 3 (seeding only)";
+    /// Preferences > UI Settings > Display Options in the Web UI (D63): the page's colours.
+    PrefTheme = "Theme:";
+    /// The same list, chosen for one browser only.
+    PrefThemeBrowser = "Theme in this browser:";
+    /// The browser-only list's first entry: use the server's theme.
+    ThemeFollowServer = "Server default";
+    /// The default theme: light or dark as the browser or system is set.
+    ThemeSystem = "System (light or dark)";
+    ThemeLight = "Light";
+    ThemeDark = "Dark";
+    /// A near-black theme.
+    ThemeMidnight = "Midnight";
+    /// A blue-grey theme.
+    ThemeSlate = "Slate";
+    /// The Solarized palette (a proper name) on its dark and light bases.
+    ThemeSolarizedDark = "Solarized Dark";
+    ThemeSolarizedLight = "Solarized Light";
+    ThemeHighContrast = "High Contrast";
+    /// The program's own colours, named after its icon, the postal rook.
+    ThemePostalRook = "Postal Rook";
+    /// The phone toolbar's More menu: the theme submenu.
+    WebTheme = "Theme";
+    PrefBadTheme = "A theme name is 1 to 40 lower-case letters, digits and dashes.";
 
     // ---- Create New Torrent: choices and errors
 

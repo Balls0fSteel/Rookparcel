@@ -62,6 +62,10 @@ helps! {
     // ---- Preferences > UI Settings
     /// frontend: crates/win32/src/app.rs (ui.confirm_delete before Remove), crates/nox/src/webui/prefs.rs
     PrefConfirmDelete = "Asks before removing torrents from the list, saying whether their files are deleted too. Off, Remove acts at once.";
+    /// nox: crates/nox/src/webui/theme.rs (webui.theme; D63)
+    PrefTheme = "The page's colours for everyone who opens this Web UI. System follows the browser's light or dark setting. Your own themes: CSS files in the webui/themes folder under the settings folder, listed here by name.";
+    /// nox: crates/nox/src/webui/app.js (pa.theme in the browser's storage)
+    PrefThemeBrowser = "A theme for this browser only, kept on this device and used instead of the server's choice. Server default follows the server's theme again.";
     /// frontend: crates/frontend/src/options.rs (GuiOptions::alternate_rows)
     PrefAlternateRows = "Shades every other row of the lists, so long rows are easier to follow.";
     /// frontend: crates/win32/src/app.rs (fmt::title_speed), crates/gtk/src/app.rs

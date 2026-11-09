@@ -1,0 +1,34 @@
+/* name: Solarized Dark */
+/* Ethan Schoonover's Solarized palette on the dark base. */
+:root {
+  color-scheme: dark;
+  --bg: #002b36;
+  --bg2: #073642;
+  --fg: #93a1a1;
+  --muted: #657b83;
+  --line: #164b5a;
+  --accent: #268bd2;
+  --sel: #0d4f63;
+  --sel-fg: #fdf6e3;
+  --sel-blur: #073642;
+  --focus: #268bd2;
+  --hdr: #073642;
+  --bar-bg: #073642;
+  --bar-dl: #268bd2;
+  --bar-seed: #859900;
+  --bar-stop: #586e75;
+  --bar-err: #dc322f;
+  --bar-check: #b58900;
+  --blk-req: #cb4b16;
+  --err: #dc322f;
+  --menu-bg: #073642;
+  --shadow: rgba(0, 0, 0, 0.6);
+  --bar-fg: #fdf6e3;
+  --graph-dl: #859900;
+  --graph-ul: #dc322f;
+  --scrim: rgba(0, 43, 54, 0.6);
+  --sched-full: #859900;
+  --sched-limited: #2aa198;
+  --sched-off: var(--bg);
+  --sched-seed: #268bd2;
+}

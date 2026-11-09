@@ -36,10 +36,12 @@ What it is not: a copy of qBittorrent's Web UI or of µTorrent's `/gui/?list=1` 
    plain ES2020, embedded with `include_bytes!`, under 220 KB in total uncompressed (counted
    with LF line ends; 200 KB until the torrent search's panel took it to about 208 KB,
    2026-10-30: the owner to confirm the new budget). The server
-   side stays `std` only (D4).
+   side stays `std` only (D4). The themes (D63) are separate small CSS files outside this
+   budget, each fetched only when chosen.
 4. **Works on a phone.** The same page, responsive. The remote app is the URL.
 5. **Beyond 2.2.1.** Push instead of polling, keyboard selection and shortcuts, dark mode by
-   `prefers-color-scheme` (the web page is not bound by D13's strict desktop look), labels, RSS,
+   `prefers-color-scheme` and selectable themes, D63 (the web page is not bound by D13's strict
+   desktop look), labels, RSS,
    the scheduler and per-torrent limits in the remote as Phase 5 lands them in the engine.
 
 ## Architecture
@@ -376,7 +378,34 @@ category searches everything.
 
 Desktop (the 2.2.1 window): toolbar; category tree on the left with counts; the list; the detail
 tabs below; the status bar. Splitters by drag, layout persisted in `localStorage`. Light theme by
-default, dark by `prefers-color-scheme`.
+default, dark by `prefers-color-scheme`, or one of the themes below.
+
+### Themes (D63)
+
+`style.css` carries the page's colours as custom properties on `:root` (22 colour tokens plus
+`--bar-fg`, `--graph-dl`, `--graph-ul`, `--scrim` and the four `--sched-*` cells) with the dark
+set under `prefers-color-scheme: dark`; that is the **System** theme, the default. Every other
+theme is one CSS file that sets the same tokens and `color-scheme` once, loaded after
+`style.css` as a second `<link>` from `/themes/<id>.css`, so it overrides both blocks by source
+order. The built-ins (`crates/nox/src/webui/themes/`, embedded, each under 4 KiB) are `light`,
+`dark`, `midnight`, `slate`, `solarized-dark`, `solarized-light`, `high-contrast` and
+`postal-rook`. Third-party themes are `*.css` files in `webui/themes` under the settings
+directory (`--config-dir`; hosted by the Windows program, its settings folder), named by the
+`/* name: ... */` comment on their first line or else by the file name; an id is 1 to 40
+lower-case letters, digits and dashes, the file at most 64 KiB, read on each request. A theme
+file sets only custom properties: the page's CSP (`default-src 'self'`) refuses `url(...)`,
+`@import` and web fonts anyway. Nothing is read when the folder is absent.
+
+Two settings, one precedence: the browser's own choice (`pa.theme` in `localStorage`, from
+**Preferences > UI Settings > Theme in this browser** or the phone's More menu) over the
+server's `webui.theme` (the same page's **Theme**, default `system`), carried by `hello` with the
+list of `[id, name]` pairs. The page caches the server's value (`pa.themeServer`) and applies
+the resolved theme as its first act, before the login form shows, so a reload paints the right
+colours before the socket is up; the new sheet replaces the old one only once it has loaded,
+and a theme file that fails to load (a removed third-party file) falls back to the server's
+choice, then to System. The two canvases (Pieces, Speed) repaint on a theme change and on a
+`prefers-color-scheme` change. `/themes/` is served before the login like the other statics,
+with an `ETag` and `Cache-Control: no-cache`.
 
 The list is virtualized: a scroll container sized to `total * rowHeight`, a pool of row
 elements for the visible window plus overscan, column headers with click-to-sort, drag to
@@ -424,7 +453,8 @@ keep it strict), so only IP addresses and `localhost` pass; the 400 answer names
 Web UI > Server domains (`webui.domain_list`), where a Docker or LAN host name is allowed
 ([INTEGRATIONS.md](INTEGRATIONS.md) gap 3). Added:
 `Content-Security-Policy: default-src 'self'` (so no inline script or style in the HTML),
-`X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `ETag` on the static files.
+`X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `ETag` on the static files
+and the theme files (`/themes/<id>.css`, CSS only, ids `[a-z0-9-]`, no other file is reachable).
 A new password ends every other login: their sessions, WebSockets and `/pa/remote`
 connections; the session that changed it stays.
 

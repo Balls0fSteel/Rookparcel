@@ -23,6 +23,14 @@
   --err: #c0392b;
   --menu-bg: #ffffff;
   --shadow: rgba(0, 0, 0, 0.2);
+  --bar-fg: #000000;
+  --graph-dl: #2aa52a;
+  --graph-ul: #d23c3c;
+  --scrim: rgba(0, 0, 0, 0.35);
+  --sched-full: #40b040;
+  --sched-limited: #a0e8a0;
+  --sched-off: var(--bg);
+  --sched-seed: #60a0e0;
   --row-h: 22px;
   --tree-w: 180px;
   --detail-h: 180px;
@@ -43,7 +51,7 @@
     --hdr: #25272b;
     --bar-bg: #3a3d42;
     --bar-dl: #4b8fe0;
-    --bar-seed: #4caf64;
+    --bar-seed: #3f9e55;
     --bar-stop: #6b6b6b;
     --bar-err: #d9605f;
     --bar-check: #d7b141;
@@ -51,7 +59,15 @@
     --err: #ff7b72;
     --menu-bg: #2a2c30;
     --shadow: rgba(0, 0, 0, 0.6);
+    --bar-fg: #ffffff;
+    --graph-dl: #4fc04f;
+    --graph-ul: #e06060;
+    --scrim: rgba(0, 0, 0, 0.55);
   }
+}
+/* Windows High Contrast: the bars, piece cells and scheduler cells keep their fills */
+@media (forced-colors: active) {
+  .row .bar i, .pbar i, .sched-c, .sched-legend i, .dt td .blk { forced-color-adjust: none; }
 }
 
 * { box-sizing: border-box; }
@@ -252,7 +268,7 @@ body.drag-size { cursor: col-resize; user-select: none; }
 .row.st-paused .bar i, .row.st-stopped .bar i, .row.st-queued .bar i { background: var(--bar-stop); }
 .row.st-error .bar i { background: var(--bar-err); }
 .row.st-checking .bar i, .row.st-metadata .bar i, .row.st-moving .bar i { background: var(--bar-check); }
-.row .cell.done span { position: relative; display: block; text-align: center; font-size: 11px; }
+.row .cell.done span { position: relative; display: block; text-align: center; font-size: 11px; color: var(--bar-fg); }
 .body .empty { position: absolute; left: 0; right: 0; top: 24px; text-align: center; color: var(--muted); }
 
 /* detail tabs */
@@ -404,7 +420,7 @@ body.drag-size { cursor: col-resize; user-select: none; }
   color: var(--fg);
   box-shadow: 2px 2px 10px var(--shadow);
 }
-#add::backdrop { background: rgba(0, 0, 0, 0.35); }
+#add::backdrop { background: var(--scrim); }
 #add h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
 #add form { display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 56px); }
 .add-cols { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 10px; min-height: 0; flex: 1 1 auto; }
@@ -448,7 +464,7 @@ body.drag-size { cursor: col-resize; user-select: none; }
   color: var(--fg);
   box-shadow: 2px 2px 10px var(--shadow);
 }
-#prefs::backdrop { background: rgba(0, 0, 0, 0.35); }
+#prefs::backdrop { background: var(--scrim); }
 #prefs h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
 #prefs-form { display: flex; flex-direction: column; gap: 8px; height: 100%; }
 #prefs select { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; }
@@ -486,10 +502,10 @@ div.pg { border: 0; padding: 0 8px; }
 .sched-d { line-height: 18px; }
 .sched-c { height: 18px; border: 1px solid var(--line); cursor: pointer; }
 .sched.disabled .sched-c { cursor: default; }
-.m0 { background: #40b040; }
-.m2 { background: #a0e8a0; }
-.m1 { background: #ffffff; }
-.m3 { background: #60a0e0; }
+.m0 { background: var(--sched-full); }
+.m2 { background: var(--sched-limited); }
+.m1 { background: var(--sched-off); }
+.m3 { background: var(--sched-seed); }
 .sched-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .sched-legend i { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--line); margin-inline-end: 5px; vertical-align: -2px; }
 .sched-info { min-height: 1.4em; color: var(--muted); }
@@ -543,7 +559,7 @@ div.pg { border: 0; padding: 0 8px; }
   color: var(--fg);
   box-shadow: 2px 2px 10px var(--shadow);
 }
-#props::backdrop { background: rgba(0, 0, 0, 0.35); }
+#props::backdrop { background: var(--scrim); }
 #props h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #props-form { display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 56px); }
 .props-tabs { display: flex; border-bottom: 1px solid var(--line); }
@@ -607,7 +623,7 @@ div.pg { border: 0; padding: 0 8px; }
 }
 #rss { width: min(980px, calc(100vw - 32px)); height: min(620px, calc(100vh - 32px)); }
 #rss-feed { width: min(480px, calc(100vw - 32px)); }
-#rss::backdrop, #rss-feed::backdrop { background: rgba(0, 0, 0, 0.35); }
+#rss::backdrop, #rss-feed::backdrop { background: var(--scrim); }
 #rss h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
 #rss-body { display: flex; flex-direction: column; gap: 8px; height: 100%; }
 #rss select, #rss input:not([type]) { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; min-width: 0; }
@@ -680,7 +696,7 @@ div.pg { border: 0; padding: 0 8px; }
 #find-edit { width: min(520px, calc(100vw - 32px)); }
 #find-helper { width: min(520px, calc(100vw - 32px)); }
 #find-sites { width: min(720px, calc(100vw - 32px)); height: min(560px, calc(100vh - 32px)); }
-#find::backdrop, #find-sources::backdrop, #find-edit::backdrop, #find-helper::backdrop, #find-sites::backdrop { background: rgba(0, 0, 0, 0.35); }
+#find::backdrop, #find-sources::backdrop, #find-edit::backdrop, #find-helper::backdrop, #find-sites::backdrop { background: var(--scrim); }
 #find h2, #find-sources h2, #find-edit h2, #find-helper h2, #find-sites h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
 #find-body, #find-sources-body { display: flex; flex-direction: column; gap: 8px; height: 100%; }
 #find select, #find input:not([type="checkbox"]) { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; min-width: 0; }
@@ -759,7 +775,7 @@ div.pg { border: 0; padding: 0 8px; }
   #split-v, #split-h, #hdr { display: none; }
   #right { grid-template-rows: minmax(0, 1fr); }
 
-  #scrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, 0.35); }
+  #scrim { display: block; position: fixed; inset: 0; z-index: 55; background: var(--scrim); }
   #scrim[hidden] { display: none; }
 
   #tree {

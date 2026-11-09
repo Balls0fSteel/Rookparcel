@@ -1136,6 +1136,38 @@ PrefBadSubnet="{entry}" is not an IP address or a subnet (such as 192.168.1.0/24
 # {count} is the number of hours in a week.
 SettingBadSchedule=expected {count} hours, each 0 (full speed), 1 (turn off), 2 (limited) or 3 (seeding only)
 
+# Preferences > UI Settings > Display Options in the Web UI (D63): the page's colours.
+PrefTheme=Theme:
+
+# The same list, chosen for one browser only.
+PrefThemeBrowser=Theme in this browser:
+
+# The browser-only list's first entry: use the server's theme.
+ThemeFollowServer=Server default
+
+# The default theme: light or dark as the browser or system is set.
+ThemeSystem=System (light or dark)
+ThemeLight=Light
+ThemeDark=Dark
+
+# A near-black theme.
+ThemeMidnight=Midnight
+
+# A blue-grey theme.
+ThemeSlate=Slate
+
+# The Solarized palette (a proper name) on its dark and light bases.
+ThemeSolarizedDark=Solarized Dark
+ThemeSolarizedLight=Solarized Light
+ThemeHighContrast=High Contrast
+
+# The program's own colours, named after its icon, the postal rook.
+ThemePostalRook=Postal Rook
+
+# The phone toolbar's More menu: the theme submenu.
+WebTheme=Theme
+PrefBadTheme=A theme name is 1 to 40 lower-case letters, digits and dashes.
+
 # Piece size: pick one from the total size.
 CreateAutoDetect=(auto detect)
 CreateHybrid=Hybrid (v1 + v2)
@@ -1581,6 +1613,8 @@ help.PrefDefaultApps=Opens Windows Settings at Default apps, on Rookparcel's own
 help.PrefCheckUpdates=About ten seconds after start and then every 12 hours, asks the project website whether a newer release is out and tells you. Nothing is downloaded or installed without asking. Help > Check for Updates works either way.
 help.PrefUpdateBeta=Also offers pre-release (beta) versions when checking for updates. A pre-release build always hears of the next pre-release, whatever this says.
 help.PrefConfirmDelete=Asks before removing torrents from the list, saying whether their files are deleted too. Off, Remove acts at once.
+help.PrefTheme=The page's colours for everyone who opens this Web UI. System follows the browser's light or dark setting. Your own themes: CSS files in the webui/themes folder under the settings folder, listed here by name.
+help.PrefThemeBrowser=A theme for this browser only, kept on this device and used instead of the server's choice. Server default follows the server's theme again.
 help.PrefAlternateRows=Shades every other row of the lists, so long rows are easier to follow.
 help.PrefTitleSpeed=Puts the current download and upload speeds at the start of the main window's title, which also shows on the taskbar.
 help.PrefBalloons=Shows a notification at the tray icon, with the torrent's name, when a download completes.

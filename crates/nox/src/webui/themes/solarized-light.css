@@ -1,0 +1,34 @@
+/* name: Solarized Light */
+/* Ethan Schoonover's Solarized palette on the light base. */
+:root {
+  color-scheme: light;
+  --bg: #fdf6e3;
+  --bg2: #eee8d5;
+  --fg: #586e75;
+  --muted: #93a1a1;
+  --line: #d3cbb7;
+  --accent: #268bd2;
+  --sel: #cfe0ea;
+  --sel-fg: #073642;
+  --sel-blur: #e5dfcc;
+  --focus: #268bd2;
+  --hdr: #f5eedb;
+  --bar-bg: #eee8d5;
+  --bar-dl: #268bd2;
+  --bar-seed: #859900;
+  --bar-stop: #93a1a1;
+  --bar-err: #dc322f;
+  --bar-check: #b58900;
+  --blk-req: #cb4b16;
+  --err: #dc322f;
+  --menu-bg: #fdf6e3;
+  --shadow: rgba(0, 0, 0, 0.2);
+  --bar-fg: #073642;
+  --graph-dl: #859900;
+  --graph-ul: #dc322f;
+  --scrim: rgba(0, 43, 54, 0.35);
+  --sched-full: #859900;
+  --sched-limited: #2aa198;
+  --sched-off: var(--bg);
+  --sched-seed: #268bd2;
+}
