@@ -231,8 +231,10 @@ def main():
         if got:
             want = [NAME, os.path.join(dl_dir, NAME), "", h, str(size), "name=" + NAME, "end"]
             note(got == want, "Run Program: every argument arrived whole", got)
-        log = L.log()
-        note("Run Program: started" in log and "ended" in log, "Run Program: start and end are logged")
+        # the "ended" line is written with the alert after the program's exit, a moment after
+        # its file appears
+        logged = lambda: "Run Program: started" in L.log() and "ended" in L.log()
+        note(bool(wait("the program's Logger lines", logged, 15)), "Run Program: start and end are logged")
 
         # ---- Statistics
         s_l, s_s = L.state_of_server(), S.state_of_server()

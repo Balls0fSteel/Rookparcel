@@ -1,6 +1,6 @@
 # Planning and changelog history
 
-Last updated: 2026-11-09_171930_1794241170
+Last updated: 2026-11-10_210923_1794341363
 
 Start with [PLAN.md](../../PLAN.md) and [CHANGELOG.md](../../CHANGELOG.md). Active decision rationale is in [DECISIONS.md](../DECISIONS.md); detailed unfinished work is in [BACKLOG.md](../BACKLOG.md).
 
@@ -78,3 +78,4 @@ Keep archives as plain Markdown so Git diffs, repository browsing and targeted s
 | [Changelog, 2026-11-10 (1.2.35 to 1.2.37, the site's Donate pages)](CHANGELOG-2026-11-10-v1.2.35-v1.2.37-site-donate-2026-11-10_151945_1794320385.md) | `2026-11-10_094303_1794300183` through `2026-11-10_105049_1794304249` | 4 entries moved verbatim from the root changelog on 2026-11-10_151945_1794320385: the website's Donate pages, the Win32 notes that were cut off with the audit of cut-off texts (1.2.35), the Logger without the trackers that do not answer (1.2.36), and the GTK client's lower buttons and fields (1.2.37). |
 | [Changelog, 2026-11-10 (1.2.38)](CHANGELOG-2026-11-10-v1.2.38-2026-11-10_154556_1794321956.md) | `2026-11-10_112228_1794306148` | 1 entry moved verbatim from the root changelog on 2026-11-10_154556_1794321956: the first-run guide in the Mac disk image and the step-by-step install guide on the site (1.2.38). |
 | [Changelog, 2026-11-10 (1.2.39, 1.2.40)](CHANGELOG-2026-11-10-v1.2.39-v1.2.40-2026-11-10_184543_1794332743.md) | `2026-11-10_133253_1794313973` through `2026-11-10_140349_1794315829` | 2 entries moved verbatim from the root changelog on 2026-11-10_184543_1794332743: Help > Statistics with all-time totals kept by the engine (1.2.39) and the trackers added to new downloads, typed or from an https list (1.2.40). |
+| [Changelog, 2026-11-10 (1.2.41, the end-to-end run)](CHANGELOG-2026-11-10-v1.2.41-e2e-2026-11-10_210923_1794341363.md) | `2026-11-10_151945_1794320385` through `2026-11-10_152837_1794320917` | 2 entries moved verbatim from the root changelog on 2026-11-10_210923_1794341363: Run Program on added and finished, without a shell, changeable only locally (1.2.41, D67), and 1.2.39 to 1.2.41 run end to end with two real daemons (`tools/nox-e2e`). |
