@@ -130,6 +130,10 @@ pub(crate) struct Torrent {
     /// resume data, kept while `ti` comes and goes, and saved in resume data. `None` when there
     /// are none.
     pub created: Option<Box<Created>>,
+    /// BEP 27's private flag, from the metadata and kept in resume data while `ti` comes and
+    /// goes (`TorrentStatus::private`). `None` before the metadata, and for a record from
+    /// before 1.2.30 until its metadata is next read.
+    pub private: Option<bool>,
     /// v2: one merkle tree per file with the root and piece layer, built from `ti` when a peer
     /// first asks for hashes; dropped with `ti`.
     pub merkle_trees: Option<Vec<MerkleTree>>,
@@ -253,6 +257,7 @@ impl Torrent {
             save_path,
             ti: None,
             created: None,
+            private: None,
             merkle_trees: None,
             layer_fetch: None,
             total_size: 0,
@@ -338,6 +343,7 @@ impl Torrent {
         if self.created.is_none() {
             self.created = Created::of(&ti);
         }
+        self.private = Some(ti.is_private());
         self.ti = Some(ti);
         self.merkle_trees = None;
         self.wanted_pieces = None;
@@ -728,6 +734,7 @@ impl Torrent {
             flags: self.flags,
             error: self.error.clone().unwrap_or_default(),
             has_metadata: self.has_metadata(),
+            private: self.private,
             is_finished: finished,
             is_seeding: self.is_seed(),
             super_seeding: self.super_seeding(),
@@ -857,6 +864,7 @@ impl Torrent {
             comment: self.created.as_ref().map(|c| c.comment.clone()).unwrap_or_default(),
             created_by: self.created.as_ref().map(|c| c.created_by.clone()).unwrap_or_default(),
             creation_date: self.created.as_ref().and_then(|c| c.creation_date),
+            private: self.private,
             info: None,
         }
     }
@@ -1145,6 +1153,44 @@ mod tests {
         t.drop_metadata();
         assert!(t.wanted_pieces.is_none());
         assert_eq!(t.resume_data().wanted_pieces, None);
+    }
+
+    /// Whether a torrent is private is known from its metadata on, stays known without it, and
+    /// travels in resume data; a record from before 1.2.30 leaves it unknown.
+    #[test]
+    fn the_private_flag_outlives_the_metadata() {
+        let (bytes, _) = make_torrent(&[("a", 20_000)], 16 * 1024);
+        let ti = Arc::new(TorrentInfo::from_bytes(&bytes).unwrap());
+        let new = || {
+            Torrent::new(
+                TorrentId::default(),
+                ti.info_hashes(),
+                String::new(),
+                "/x".into(),
+                TorrentFlags::DEFAULT,
+            )
+        };
+        let mut t = new();
+        assert_eq!(t.private, None, "no metadata yet");
+        t.set_metadata(ti.clone());
+        t.drop_metadata();
+        assert_eq!(t.private, Some(ti.is_private()));
+
+        let mut r = ResumeData::decode(&t.resume_data().encode()).unwrap();
+        assert_eq!(r.private, Some(false));
+        let mut restored = new();
+        super::super::apply_resume(&mut restored, &r);
+        assert_eq!(restored.private, Some(false));
+        r.private = Some(true);
+        let r = ResumeData::decode(&r.encode()).unwrap();
+        let mut restored = new();
+        super::super::apply_resume(&mut restored, &r);
+        assert_eq!(restored.private, Some(true));
+        let mut old = r;
+        old.private = None;
+        let mut restored = new();
+        super::super::apply_resume(&mut restored, &ResumeData::decode(&old.encode()).unwrap());
+        assert_eq!(restored.private, None, "an older record does not say");
     }
 
     #[test]

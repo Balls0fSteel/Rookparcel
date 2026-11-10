@@ -994,7 +994,7 @@ fn extra<'a>(st: &'a State, e: &Entry) -> Extra<'a> {
     Extra {
         category: st.torrent_categories.get(&e.hash).map_or("", String::as_str),
         last_activity: e.last_activity,
-        private: st.meta.get(&e.hash).is_some_and(|m| m.private),
+        private: e.status.private.unwrap_or_else(|| st.meta.get(&e.hash).is_some_and(|m| m.private)),
         seed_goal: SeedGoal::load_override(&st.options, &e.status.info_hashes.key_hex()),
     }
 }

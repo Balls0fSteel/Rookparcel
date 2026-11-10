@@ -974,6 +974,7 @@ fn jitter_swarm(st: &mut TorrentStatus, seed: u64, rng: &mut Rng) {
 
 fn set_metadata(st: &mut TorrentStatus, total: u64) {
     st.has_metadata = true;
+    st.private = Some(false);
     st.total = total;
     st.total_wanted = total;
     st.piece_length = piece_length_for(total);
@@ -982,6 +983,7 @@ fn set_metadata(st: &mut TorrentStatus, total: u64) {
 
 fn set_metadata_from(st: &mut TorrentStatus, ti: &TorrentInfo) {
     st.has_metadata = true;
+    st.private = Some(ti.is_private());
     st.total = ti.total_size();
     st.total_wanted = ti.total_size();
     st.piece_length = ti.piece_length();

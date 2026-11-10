@@ -197,7 +197,7 @@
 </table>
 <!-- /bench:table-versions -->
       </div>
-      <p>Downloading, adding and starting are unchanged. Memory grew by about 6 MB with the update check that <code>rookparcel-nox</code> has made since 1.1.17 (one HTTPS request shortly after it starts). Idle CPU with 10,000 torrents rose from 0.07% to 0.33% of one core in the 1.2 releases; with 1,000 torrents it did not change. That is a regression we have not explained yet.</p>
+      <p>Downloading, adding and starting are unchanged. Memory grew by about 6 MB with the update check that <code>rookparcel-nox</code> has made since 1.1.17 (one HTTPS request shortly after it starts). Idle CPU with 10,000 torrents rose from 0.07% to 0.33% of one core in the 1.2 releases; with 1,000 torrents it did not change. That regression is found and fixed for the next release, 1.2.30: after each start, the 1.2 releases read every torrent's stored metadata once more to learn which torrents are private, a little each second, and with 10,000 torrents that work ran into the minute we measure. A build with the fix measured 0.12% in the same test on 10 November, beside 0.10% for 1.0.1 and 0.33% for 1.2.29.</p>
     </section>
 
     <section class="section" id="method" aria-labelledby="method-h">

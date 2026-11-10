@@ -66,7 +66,7 @@ The published 1.0.1 and 1.1.40 Linux releases ran as `--control` entries beside 
 
 - **Unchanged:** download speed and CPU per GiB, add, start, memory right after adding.
 - **Memory:** about 6 MB more since 1.1.17's update check (see the 1.1.40 check below), and 0.5 to 0.9 MB more in 1.2.29 than in 1.1.40.
-- **Regression, idle CPU with 10,000 torrents:** 0.33% of one core (0.25 to 0.37) against 0.07% for 1.0.1 and 0.10% for 1.1.40; the ranges do not overlap. Not at 1,000 torrents. Still under the 1% target of `docs/ARCHITECTURE.md`, but above qBittorrent's 0.10% now. Unexplained; BACKLOG "Validation and development environment".
+- **Regression, idle CPU with 10,000 torrents:** 0.33% of one core (0.25 to 0.37) against 0.07% for 1.0.1 and 0.10% for 1.1.40; the ranges do not overlap. Not at 1,000 torrents. Still under the 1% target of `docs/ARCHITECTURE.md`, but above qBittorrent's 0.10% now. Found and fixed in 1.2.30: see "The idle CPU regression" below.
 - The first Rookparcel run of the session was the slow one again (2,124 MiB/s, as on 2026-10-27).
 
 ## Engine and GUIs, 2026-11-10 (1.2.29 against 1.0.1)
@@ -88,12 +88,30 @@ On the development PC (Windows 11, i9-13900K), nothing else running, release bui
 | Add a magnet / remove one, until painted (ms) | 17-20 / 15-28 | 16-20 / 12 |
 | Remove 1,000, wall (ms) | 510-536 | 463-502 |
 
-- **Regressions:** the process's idle CPU about three times 1.0.1's (off the GUI thread; the same direction as the daemon's on Linux), the list 0.1 s later, 15 MB more memory.
+- **Regressions:** the process's idle CPU about three times 1.0.1's (off the GUI thread; fixed in 1.2.30, below), the list 0.1 s later, 15 MB more memory.
 - **Better:** the Name sort.
 - With `--demo 100000` (2,000 torrents moving, three runs): rows after 0.16-0.29 s, sorts 32-48 / 19-23 / 56-61 ms, GUI thread 1.2-1.4%, working set 221-225 MB: as on 2026-10-23.
 - While it closes, 1.2.29's working set rose from 270 MB to 358 MB twice and 640 MB once (one sample each, 5 s apart; 1.0.1 not sampled there): to be looked at.
 
 **Mac GUI** (release build on the Intel macOS 15.8 VM, `--demo 100000`, three runs): the list after 0.54-0.57 s (0.48 s on 2026-11-06, one run), 191 MB by `top` (194 MB). The sort was not timed again.
+
+## The idle CPU regression, found and fixed 2026-11-10 (1.2.30)
+
+Two causes, both work that grew with the number of torrents:
+
+- **The daemon after a restart (the 0.33%).** Since 1.1.78 the Web UI asked the engine for every restored torrent's metadata, 128 torrents per status tick, to learn its private flag (`isPrivate` in the list). Each answer read and parsed the info dictionary from `metadata.pack`: about 1.2% of a core on the engine thread for 78 s with 10,000 torrents, of which the idle window (60 to 120 s after the start) caught the end. Found by per-thread CPU in 20 s steps and `strace` (an `lseek` and a `read` of the pack per torrent). A release-by-release run put it between 1.1.40 (0.10%) and 1.2.0 (0.32%); 1.2.5, 1.2.19 and 1.2.21 measured 0.37, 0.28 and 0.22%. Fix: the engine keeps the flag (`TorrentStatus::private`, `lt-private` in resume data, remote protocol 17), so nothing is read. Records written before 1.2.30 are asked once, as before, and the engine saves the answer: the first start after the upgrade still has the pass, the second has not (checked on 1.2.29's records).
+- **The engine with many stopped torrents (the Win32 process at 100,000).** `lsd_tick` counted the running torrents on every tick by walking every slot (since the staggered LSD of 2026-10-30, 1.1.x). `perf` on a build with line tables, 100,000 stopped torrents in `rookparcel-nox`: 66% of the engine thread's idle time in that walk, 23 clock ticks in 30 s (0.77% of a core); 1 tick with the fix, which walks the active torrents only. `lt-swarm load --idle` never showed it because it runs without LSD.
+
+Measured with the fix (`docs/benchmarks/2026-11-10-ubuntu-vm-idle-fix-1.2.30.jsonl`; 10,000 torrents, three rounds, medians with the range; the 1.2.30 binary built on the VM from the working tree, with line tables):
+
+| | 1.0.1 | 1.2.29 | 1.2.30 (fix) |
+|---|---:|---:|---:|
+| Idle CPU after a restart (%) | 0.10 (0.08–0.10) | 0.33 (0.33–0.35) | 0.12 (0.10–0.12) |
+| Idle CPU after adding (%) | 0.08 (0.07–0.12) | 0.08 (0.08–0.12) | 0.10 (0.08–0.10) |
+| Add (s) | 1.26 | 1.30 | 1.33 |
+| Memory after a restart (MB) | 60.3 | 67.1 | 67.4 |
+
+Win32 at 100,000 real torrents on the development PC, two runs: the process idles at 0.36-0.39% (1.2.29: 0.81-0.96%; 1.0.1 the same morning: 0.26%), its engine thread uses 60-95 ms of CPU in the idle minute (1.2.29: about 350 ms; 1.0.1: about 50 ms). The site's tables stay those of the published 1.2.29 until a release with the fix is measured in a full run.
 
 ## Earlier results, 2026-10-27 (Rookparcel 1.0.1)
 

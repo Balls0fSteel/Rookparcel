@@ -36,6 +36,10 @@ pub struct TorrentStatus {
     /// Empty when there is no error.
     pub error: String,
     pub has_metadata: bool,
+    /// BEP 27's private flag (no DHT, PEX or local discovery). The engine keeps it in resume
+    /// data, so a stopped torrent says it without its metadata loaded. `None`: no metadata
+    /// yet, or a record from before 1.2.30 whose metadata was not read since.
+    pub private: Option<bool>,
     pub is_finished: bool,
     pub is_seeding: bool,
     /// BEP 16 super seeding (µTorrent "initial seeding") is in effect (libtorrent

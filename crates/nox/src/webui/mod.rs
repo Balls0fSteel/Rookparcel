@@ -81,9 +81,11 @@ pub const LOG_LINES: usize = 500;
 pub const SPEED_SAMPLES: usize = 600;
 /// A speed ring no client looked at for this many ticks is dropped.
 const SPEED_IDLE_TICKS: u64 = 600;
-/// Restored torrents whose metadata (the private flag) is asked of the engine per status tick:
-/// one blocking engine round trip each, on the thread feeding the alerts (a hosting window's
-/// GUI thread), so few per tick; 100k restored torrents take a quarter of an hour of ticks.
+/// Torrents restored from records older than 1.2.30, which do not say whether the torrent is
+/// private (`TorrentStatus::private` is `None`), asked of the engine per status tick: one
+/// blocking engine round trip and a read of the metadata each, on the thread feeding the alerts
+/// (a hosting window's GUI thread), so few per tick; 100k such torrents take a quarter of an
+/// hour of ticks, once (the engine saves the answer).
 const META_PER_TICK: usize = 128;
 
 /// How to start the Web UI.
@@ -496,9 +498,10 @@ pub(crate) struct State {
     /// Torrent hash -> category.
     pub torrent_categories: HashMap<String, String>,
     pub meta: HashMap<String, Meta>,
-    /// Torrents whose metadata arrived (or that were restored with it) without an entry in
-    /// `meta` yet: their private flag is asked of the engine a few per status tick
-    /// ([`META_PER_TICK`]), so a restored torrent's `isPrivate` is right without a Properties visit.
+    /// Torrents with metadata whose status does not say whether they are private (restored
+    /// from a record older than 1.2.30) and without an entry in `meta` yet: asked of the engine
+    /// a few per status tick ([`META_PER_TICK`]), so their `isPrivate` is right without a
+    /// Properties visit.
     pub meta_wanted: VecDeque<TorrentId>,
     /// The stored preferences, as the frontend's preferences keys (what the Win32 client keeps
     /// in `rookparcel.ini`): the engine settings that differ from the defaults as `lt.<name>`,
@@ -1533,7 +1536,7 @@ impl State {
         let key = s.info_hashes.key_hex();
         let active = s.download_payload_rate > 0 || s.upload_payload_rate > 0;
         let had_metadata = self.torrents.get(&s.id).is_some_and(|e| e.status.has_metadata);
-        if s.has_metadata && !had_metadata && !self.meta.contains_key(&hash) {
+        if s.has_metadata && s.private.is_none() && !had_metadata && !self.meta.contains_key(&hash) {
             self.meta_wanted.push_back(s.id);
         }
         match self.torrents.get_mut(&s.id) {
@@ -1775,8 +1778,9 @@ mod tests {
         }
     }
 
-    /// A torrent seen with metadata (restored, or its magnet's metadata arrived) is queued once
-    /// for its private flag; one whose metadata the shim already has is not.
+    /// A torrent seen with metadata whose status does not say whether it is private (a record
+    /// older than 1.2.30) is queued once for the flag; one whose metadata the shim already has,
+    /// or whose status says it, is not.
     #[test]
     fn torrents_with_new_metadata_are_queued_for_their_private_flag() {
         let mut st = State::for_tests();
@@ -1791,6 +1795,11 @@ mod tests {
         st.meta.insert(torrent::hash_of(&b.info_hashes), Meta::default());
         st.update(b, 0);
         assert_eq!(st.meta_wanted.len(), 1, "the shim has its metadata");
+        let mut c = status(3, 3);
+        c.has_metadata = true;
+        c.private = Some(true);
+        st.update(c, 0);
+        assert_eq!(st.meta_wanted.len(), 1, "the engine said it");
     }
 
     /// Hosted: a torrent's first sight takes the host's label and pause mark, `by_key` finds

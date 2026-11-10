@@ -46,8 +46,9 @@ pub const OLD_UPGRADE: &str = "patorrent-remote";
 /// The request header naming the client's protocol version.
 pub const VERSION_HEADER: &str = "X-Rookparcel-Remote";
 /// The protocol version: both ends must run the same one (messages are positional). 16 came
-/// with the rename to Rookparcel (D59), whose token and header names changed.
-pub const PROTOCOL: u32 = 16;
+/// with the rename to Rookparcel (D59), whose token and header names changed; 17 with
+/// `TorrentStatus::private`.
+pub const PROTOCOL: u32 = 17;
 /// The largest frame either side accepts (a status update of 100,000 torrents is about
 /// 60 MB).
 pub const MAX_FRAME: usize = 256 << 20;

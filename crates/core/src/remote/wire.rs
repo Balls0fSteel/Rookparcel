@@ -386,6 +386,7 @@ wire_struct!(TorrentStatus {
     flags,
     error,
     has_metadata,
+    private,
     is_finished,
     is_seeding,
     super_seeding,

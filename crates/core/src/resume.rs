@@ -73,6 +73,9 @@ pub(crate) struct ResumeData {
     pub comment: String,
     pub created_by: String,
     pub creation_date: Option<i64>,
+    /// BEP 27's private flag (`lt-private`), so a stopped torrent says it without its metadata
+    /// loaded; `None` in records from before 1.2.30.
+    pub private: Option<bool>,
     /// The bencoded info dictionary, when embedded (libtorrent's `info` key).
     pub info: Option<Vec<u8>>,
 }
@@ -168,6 +171,9 @@ impl ResumeData {
         if let Some(d) = self.creation_date {
             *e.key("creation date") = int(d);
         }
+        if let Some(p) = self.private {
+            *e.key("lt-private") = int(p as i64);
+        }
         if let Some(info) = &self.info {
             // Verbatim, so the info-hash of the embedded dictionary is preserved exactly.
             *e.key("info") = Entry::Preformatted(info.clone());
@@ -262,6 +268,7 @@ impl ResumeData {
             comment: root.dict_find_str("comment").unwrap_or_default().to_owned(),
             created_by: root.dict_find_str("created by").unwrap_or_default().to_owned(),
             creation_date: root.dict_find_int_value("creation date"),
+            private: root.dict_find_int_value("lt-private").map(|v| v != 0),
             ..Default::default()
         };
         if let Some(p) = root.dict_find_string_value("pieces") {
@@ -560,6 +567,7 @@ mod tests {
             comment: "a comment".into(),
             created_by: "mktorrent".into(),
             creation_date: Some(951_782_400),
+            private: Some(true),
             info: Some(b"d4:name1:xe".to_vec()),
             ..Default::default()
         };

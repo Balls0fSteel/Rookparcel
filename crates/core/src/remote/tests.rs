@@ -42,6 +42,7 @@ fn status() -> TorrentStatus {
         flags: TorrentFlags::AUTO_MANAGED | TorrentFlags::SUPER_SEEDING,
         error: "disk full".into(),
         has_metadata: true,
+        private: Some(true),
         is_finished: true,
         is_seeding: true,
         super_seeding: true,

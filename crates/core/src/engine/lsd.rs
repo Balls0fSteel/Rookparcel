@@ -342,11 +342,11 @@ impl Engine {
         self.lsd.resends.clear();
     }
 
+    /// The active torrents, from `live` (every active torrent is in it): `lsd_tick` asks on
+    /// every tick, and a walk over every slot there cost 100,000 stopped torrents most of a
+    /// percent of a core while idle.
     fn lsd_running(&self) -> Vec<TorrentId> {
-        self.torrent_ids()
-            .into_iter()
-            .filter(|&id| self.torrent_ref(id).is_some_and(|t| t.is_active()))
-            .collect()
+        self.live.iter().copied().filter(|&id| self.torrent_ref(id).is_some_and(|t| t.is_active())).collect()
     }
 
     /// A torrent just started: announce it soon (libtorrent `prioritize_lsd`).

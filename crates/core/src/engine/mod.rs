@@ -1691,6 +1691,14 @@ impl Engine {
                     _ => None,
                 };
                 let meta = ti.and_then(|ti| self.torrent_ref(id).map(|t| t.metadata_summary(&ti)));
+                // a record from before 1.2.30 learns its private flag here, once
+                if let (Some(m), Some(t)) = (&meta, self.torrent(id)) {
+                    if t.private.is_none() {
+                        t.private = Some(m.private);
+                        t.resume_dirty = true;
+                        t.status_dirty = true;
+                    }
+                }
                 let _ = tx.send(meta);
             }
             Command::PostTorrentFile(id) => {
@@ -4110,6 +4118,10 @@ fn apply_resume(t: &mut Torrent, r: &ResumeData) {
     t.apply_renames();
     if let Some(c) = torrent::Created::new(&r.comment, &r.created_by, r.creation_date) {
         t.created = Some(c);
+    }
+    // the metadata itself, when loaded, has said it already
+    if t.private.is_none() {
+        t.private = r.private;
     }
 }
 
