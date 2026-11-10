@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-10_151945_1794320385
+Last updated: 2026-11-10_152837_1794320917
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D60](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -49,7 +49,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 **1.2.38, not released (2026-11-10): the first-run guide** (the owner's request): `How to open Rookparcel.html` in the Mac disk image and `site/install.html`, a step-by-step install guide per system with drawn dialogs. The page must be on the site (`main`) before the release, as the dmg file links it. Open in BACKLOG "macOS" and "Website": the dmg step on a Release run, the steps on a real Mac of each version, real screenshots and translations of the guide.
 
-**1.2.39, not released (2026-11-10): Help > Statistics** (the owner's request, D65): all-time totals kept by the engine in `stats.dat`, session waste, the same window in the three GUIs and the Web UI; remote protocol 18. Open in BACKLOG "Statistics, trackers and Run Program". **1.2.40, not released:** Preferences > Advanced > Trackers (D66): trackers appended to new public downloads from a typed list and an https list that is only ever parsed as tracker addresses; the Web UI changes it only with the current password. **1.2.41, not released:** Preferences > Advanced > Run Program (D67): a program on added and on finished, started without a shell with the codes filled in per argument; the lines change only locally (the Web UI: loopback and the current password, or `--webui-remote-run-program`), never through the qBittorrent API or a remote GUI. All three want the hand checks in BACKLOG before a release, the GTK and Mac windows first: none of them ran.
+**1.2.39, not released (2026-11-10): Help > Statistics** (the owner's request, D65): all-time totals kept by the engine in `stats.dat`, session waste, the same window in the three GUIs and the Web UI; remote protocol 18. Open in BACKLOG "Statistics, trackers and Run Program". **1.2.40, not released:** Preferences > Advanced > Trackers (D66): trackers appended to new public downloads from a typed list and an https list that is only ever parsed as tracker addresses; the Web UI changes it only with the current password. **1.2.41, not released:** Preferences > Advanced > Run Program (D67): a program on added and on finished, started without a shell with the codes filled in per argument; the lines change only locally (the Web UI: loopback and the current password, or `--webui-remote-run-program`), never through the qBittorrent API or a remote GUI. The three passed an end-to-end run with two real daemons (`tools/nox-e2e`, 31 checks). All three want the hand checks in BACKLOG before a release, the GTK and Mac windows first: none of them ran.
 
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 

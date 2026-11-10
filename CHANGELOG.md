@@ -4,6 +4,15 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-10_152837_1794320917: 1.2.39 to 1.2.41 run end to end with two real daemons (`tools/nox-e2e`)
+
+- **What ran:** `tools/nox-e2e/e2e.py` starts two `rookparcel-nox` processes of the 1.2.41 debug build on 127.0.0.1, scratch state, low priority: a seeder with a 3 MB file named `Rook's test & more (1) %TEMP% ;x --delete.bin`, and a leecher that adds it as a magnet. 31 checks, all passed; without a list address 27.
+- **Run Program:** a change without the password, one with the right password and a forwarding header, an open quote and qBittorrent's `autorun_*` keys were all refused, the remote one logged with its address; set locally with the password, the program ran once at the finish and got seven arguments, each whole: the name twice (alone and inside `name=%N`), the data's path, an empty label, the hash, the size. Nothing ran again after a restart.
+- **Trackers:** an http address, a junk line and a change without the password were refused. The typed tracker and the 20 trackers of a real https list (`trackers_best.txt` of ngosang/trackerslist on GitHub, one GET) were on the magnet's download after its metadata, the typed one first; the seeder, which has no list, got none. After a restart the list came from `trackers-url.txt`.
+- **Statistics:** all-time download on the leecher and upload on the seeder equal the file's size; the total came back after a restart with nothing moved in the new session, and stayed when the torrent was removed.
+- **Seen, not new:** the Web UI's server-made date texts (the list's "downloaded" time, Statistics' Counted Since, Added On) are in UTC, because nox never sets the display offset the GUIs set; noted in BACKLOG.
+- **Still not done:** the three GUIs with real transfers; the GTK and Mac windows at all; a second machine; `.bat` targets; a private torrent through the daemons (covered by nox's integration test only).
+
 ## 2026-11-10_151945_1794320385: Version 1.2.41: Run Program on added and finished, without a shell, changeable only locally
 
 - **Asked by the owner:** qBittorrent's "Run external program", carefully: attackers who got into exposed qBittorrent Web UIs set that option to download and run scripts (CVE-2023-30801; their fix was a random first password, the option stayed settable by any session). Chosen: local only with an opt-in for remote; events added and finished (D67).

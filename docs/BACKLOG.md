@@ -1081,6 +1081,12 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   at 150/200 %, in a right-to-left language and through a live theme switch; a long translation
   in each; the Web UI dialog in the nine themes and right-to-left; a real download and upload
   with the window open; an upgrade of a real profile (the totals start from the torrents' sums).
+- **Web UI dates are UTC** (seen 2026-11-10 in the end-to-end run): nox never calls
+  `fmt::set_utc_offset`, so every date text the server formats (Added On, Completed On, RSS
+  times, the tracker list's status, Statistics' Counted Since) is UTC, not the server's or the
+  browser's time. Older than these features; decide whose clock the page should show.
+- **`tools/nox-e2e/e2e.py`** reruns the three features end to end (two daemons on loopback);
+  run it before a release that touches them. Windows only as written.
 - **Run Program (1.2.41), hand checks:** a real program on a real finished download from
   each client (Win32, GTK, Mac, nox), with a torrent whose name has quotes, `&` and a leading
   dash; a `.bat` and a PowerShell script on Windows, a shell script on Linux and the Mac; the
