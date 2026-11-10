@@ -45,6 +45,20 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.46" data-date="2026-11-11" aria-labelledby="v1.2.46-h">
+      <h2 id="v1.2.46-h"><a href="#v1.2.46"><time datetime="2026-11-11">Wed 11 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.46</span></a></h2>
+      <p class="news-lede">A file that is gone no longer makes Rookparcel hash the whole torrent at every start: only that file is downloaded again. The Logger loses its most frequent line.</p>
+      <ul class="changes">
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>A missing file costs only its own pieces. Before, a start hashed every file of the torrent when one was gone, for example an installer that a virus scanner removes each time it is downloaded.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>The torrents behind such a check no longer wait at "Checking 0.0 %": checks run one at a time on each drive, and that long check is gone.</span></li>
+        <li><span class="tag tag-area">Engine</span><span class="vh">:</span> <span>A file that is too short or cannot be read still gets a full check.</span></li>
+        <li><span class="tag tag-area">Logger</span><span class="vh">:</span> <span>A missing file is named, for example "setup.exe is missing: 3 pieces to download again".</span></li>
+        <li><span class="tag tag-area">Logger</span><span class="vh">:</span> <span>"received N peers" after every tracker answer is left out; the Trackers tab has the numbers.</span></li>
+      </ul>
+      <p class="news-note">If a virus scanner keeps removing a file, exclude the download folder there, or set the file to Don't Download in the Files tab.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.46">Download 1.2.46 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.46.md">Full release notes</a></p>
+    </article>
+
     <article class="news-entry" id="v1.2.45" data-date="2026-11-10" aria-labelledby="v1.2.45-h">
       <h2 id="v1.2.45-h"><a href="#v1.2.45"><time datetime="2026-11-10">Tue 10 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.45</span></a></h2>
       <p class="news-lede">Rookparcel no longer stops your seeds by itself: the seeding goal of 150 % acts only once you switch it on, and a torrent you start again keeps seeding.</p>
