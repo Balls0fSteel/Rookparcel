@@ -4,6 +4,13 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-10_105049_1794304249: Version 1.2.37: lower buttons and fields in the GTK client
+
+- **Reported by the owner:** the GTK client's buttons are very thick beside the Windows and Mac ones; nothing undocumented in the fix.
+- **Cause:** the client set no size, so the theme decided: push buttons, entries and drop-downs 34 px high and the toolbar strip 44 px (measured on the Xubuntu VM), against 14 dialog units (about 23 px) on Windows.
+- **Fix:** four rules in the application's own stylesheet (`CSS` in `crates/gtk/src/app.rs`), only `min-height`, `min-width` and `padding`: label buttons (`button.text-button`, the class GTK gives them itself), the toolbar's buttons, `entry`/`spinbutton`, and the buttons of drop-downs and menu buttons. Buttons and fields are now 26-28 px and level in a row; the toolbar strip is 36 px. Column headers, check boxes, tabs and the sidebar are untouched; the buttons keep their width.
+- **Validation:** before and after pictures on the Xubuntu VM (Xvfb, GTK 4.22, the client's own window snapshots, a mock daemon): the main window, Preferences (General, Connection, Bandwidth), Create New Torrent, RSS Downloader and Add Torrent from URL in GTK's default theme, and the same tour under Greybird. No text or icon is cut, rows stay level, the dialogs are 13-58 px lower. Clippy `-D warnings` for the GTK crate (Linux target, stand-in pkg-config) and fmt. **Not done:** a real desktop session and scaled displays; Add New Torrent, Properties, the search windows and the Setup Guide were not opened; other themes (Yaru, Arc, Breeze) not tried. **Seen, not new:** Create New Torrent logs GTK's "natural size must be >= min size" for a box, before the change too.
+
 ## 2026-11-10_103428_1794303268: Version 1.2.36: the Logger without the trackers that do not answer
 
 - **Asked by the owner:** the Logger filled with lines about trackers not answering, which is normal for public trackers; log only when a torrent is private and none of its trackers can connect.

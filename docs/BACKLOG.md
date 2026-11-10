@@ -202,6 +202,12 @@ mirror the bitmaps) and the tray menu on screen; the Web UI (`nox`) was not audi
   Properties need scrolling); re-check D50's Ctrl+A in the Files list on Linux. Not checked: the
   remote-window case, an empty label, nested labels.
 
+- Lower buttons and fields (1.2.37, 2026-11-10_105049_1794304249; `CSS` in `crates/gtk/src/app.rs`):
+  checked under Xvfb in GTK's default theme and Greybird. Open: the owner's look on a real
+  desktop (is 26-28 px right beside Windows?), Add New Torrent, Properties, the search windows
+  and the Setup Guide, Yaru/Arc/Breeze, a scaled display. Create New Torrent logs GTK's "natural
+  size must be >= min size" for one box (older than this change): find the box.
+
 CI builds/tests the GTK client, and the owner found the GUI fine on 2026-10-23.
 That broad check does not establish that every detailed case below was tried.
 

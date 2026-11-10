@@ -372,12 +372,21 @@ fn create_profile(app: &gtk::Application, then: impl FnOnce() + 'static) {
     });
 }
 
-/// The few style rules the window needs: the Done column's taller bar with its text on it.
+/// The few style rules the window needs: the Done column's taller bar with its text on it,
+/// and lower buttons and fields. The theme's push button is about 34 px high, far above the
+/// Win32 and Mac ones (14 dialog units, about 23 px); these rules bring buttons, entries and
+/// drop-downs to about 28 px, level with each other in a row. `.text-button` is the class GTK
+/// itself gives a button that holds only a label, so column headers, the spin buttons' arrows
+/// and the window controls keep the theme's size.
 const CSS: &str = "
 progressbar.pa-done, progressbar.pa-done > trough { min-width: 16px; }
 progressbar.pa-done > trough, progressbar.pa-done > trough > progress { min-height: 16px; }
 .pa-done-text { font-size: smaller; }
 button.pa-expander { min-width: 16px; min-height: 16px; padding: 0; }
+button.text-button { min-height: 18px; padding-top: 3px; padding-bottom: 3px; }
+.toolbar > button { min-height: 16px; min-width: 16px; padding: 4px 6px; }
+entry, spinbutton { min-height: 26px; }
+dropdown > button, menubutton > button { min-height: 18px; padding-top: 3px; padding-bottom: 3px; }
 ";
 
 /// The alternate row shading (`ui.alternate_rows`): the odd rows that [`crate::table::stripe`]
