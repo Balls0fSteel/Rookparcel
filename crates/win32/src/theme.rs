@@ -11,6 +11,8 @@
 //! draws itself, which asks [`sys`] for the system-colour stand-ins and [`draw`] for the drawn
 //! parts' palette (`frontend::palette`).
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::ptr::{null, null_mut};
 use std::sync::OnceLock;
@@ -48,10 +50,10 @@ use windows_sys::Win32::UI::Controls::{
     LVM_GETITEMRECT, LVM_SETBKCOLOR, LVM_SETTEXTBKCOLOR, LVM_SETTEXTCOLOR, LVS_REPORT, LVS_TYPEMASK,
     NM_CUSTOMDRAW, NMCUSTOMDRAW, NMHDR, NMTBCUSTOMDRAW, ODS_DISABLED, ODS_GRAYED, ODS_HOTLIGHT, ODS_INACTIVE,
     ODS_NOACCEL, ODS_SELECTED, OpenThemeData, PBM_SETBARCOLOR, PBM_SETBKCOLOR, PBS_MARQUEE, SB_GETICON,
-    SB_GETPARTS, SB_GETRECT, SB_GETTEXTLENGTHW, SB_GETTEXTW, SB_ISSIMPLE, SB_SIMPLEID, SBARS_SIZEGRIP,
-    SetWindowTheme, TBCDRF_NOBACKGROUND, TBCDRF_NOEDGES, TBCDRF_USECDCOLORS, TCIF_IMAGE, TCIF_TEXT, TCITEMW,
-    TCM_ADJUSTRECT, TCM_GETCURSEL, TCM_GETIMAGELIST, TCM_GETITEMCOUNT, TCM_GETITEMRECT, TCM_GETITEMW,
-    TS_DRAW, TVM_SETBKCOLOR, TVM_SETLINECOLOR, TVM_SETTEXTCOLOR,
+    SB_GETPARTS, SB_GETRECT, SB_GETTEXTLENGTHW, SB_GETTEXTW, SB_ISSIMPLE, SB_SETTEXTW, SB_SIMPLEID,
+    SBARS_SIZEGRIP, SetWindowTheme, TBCDRF_NOBACKGROUND, TBCDRF_NOEDGES, TBCDRF_USECDCOLORS, TCIF_IMAGE,
+    TCIF_TEXT, TCITEMW, TCM_ADJUSTRECT, TCM_GETCURSEL, TCM_GETIMAGELIST, TCM_GETITEMCOUNT, TCM_GETITEMRECT,
+    TCM_GETITEMW, TS_DRAW, TVM_SETBKCOLOR, TVM_SETLINECOLOR, TVM_SETTEXTCOLOR,
 };
 use windows_sys::Win32::UI::HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi, SystemParametersInfoForDpi};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetFocus, IsWindowEnabled};
@@ -905,6 +907,13 @@ unsafe fn header_custom_draw(cd: &NMCUSTOMDRAW) -> LRESULT {
     CDRF_SKIPDEFAULT as LRESULT
 }
 
+thread_local! {
+    /// The simple-mode text of each status bar (the help of a menu item or toolbar button), kept
+    /// as it is set: the control does not hand it back (`SB_GETTEXTW` with `SB_SIMPLEID` answers
+    /// nothing), and [`paint_status`] needs it in dark.
+    static SIMPLE_TEXT: RefCell<HashMap<usize, Vec<u16>>> = RefCell::new(HashMap::new());
+}
+
 /// The status bar's subclass: in dark, painted here (the themed one is light).
 unsafe extern "system" fn status_proc(
     hwnd: HWND,
@@ -922,7 +931,18 @@ unsafe extern "system" fn status_proc(
                 paint_status(hwnd);
                 0
             }
+            SB_SETTEXTW if wp & 0xff == SB_SIMPLEID as usize => {
+                let mut text = Vec::new();
+                let mut p = lp as *const u16;
+                while !p.is_null() && *p != 0 {
+                    text.push(*p);
+                    p = p.add(1);
+                }
+                SIMPLE_TEXT.with(|t| t.borrow_mut().insert(hwnd as usize, text));
+                DefSubclassProc(hwnd, msg, wp, lp)
+            }
             WM_NCDESTROY => {
+                SIMPLE_TEXT.with(|t| t.borrow_mut().remove(&(hwnd as usize)));
                 RemoveWindowSubclass(hwnd, Some(status_proc), SUBCLASS_ID);
                 DefSubclassProc(hwnd, msg, wp, lp)
             }
@@ -968,7 +988,21 @@ unsafe fn paint_status(hwnd: HWND) {
             );
         };
         if SendMessageW(hwnd, SB_ISSIMPLE, 0, 0) != 0 {
-            draw_part(SB_SIMPLEID as usize, client);
+            let mut text =
+                SIMPLE_TEXT.with(|t| t.borrow().get(&(hwnd as usize)).cloned()).unwrap_or_default();
+            let mut text_rc = RECT {
+                left: client.left + pad,
+                top: client.top,
+                right: client.right - pad,
+                bottom: client.bottom,
+            };
+            DrawTextW(
+                hdc,
+                text.as_mut_ptr(),
+                text.len() as i32,
+                &mut text_rc,
+                DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX,
+            );
         } else {
             let n = SendMessageW(hwnd, SB_GETPARTS, 0, 0).max(0) as usize;
             for part in 0..n {

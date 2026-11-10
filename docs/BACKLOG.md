@@ -288,18 +288,18 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   marquee progress bar and the message boxes stay the system's (the marquee needs the visual
   style, `MessageBoxW` cannot be themed); the header's drag image stays light while a column is
   dragged; the Advanced page's `*` marks and the Preferences note under Theme are plain text;
-  multi-line edits have `DarkMode_Explorer`'s light frame (the price of dark scroll bars). **Found 2026-11-09:** in light the torrent list's `#` column shows
-  nothing where the text is `*` (finished torrents): the plain list view hides the one-character
-  text in its 28 px column, most likely because `LVS_EX_SUBITEMIMAGES` reserves image room in
-  every subitem; dark draws the right-aligned cells itself (`controls::dark_cell_text`) and shows
-  the `*`. Decide whether light should show it too (a visible change to 2.2.1's look here).
+  multi-line edits have `DarkMode_Explorer`'s light frame (the price of dark scroll bars). **Icon room (1.2.32, 2026-11-10):** the torrent
+  list answers -1 instead of `I_IMAGENONE` outside the Name column, so no cell keeps an icon's
+  room: the `#` column's `*` (found missing 2026-11-09) and Size are whole in light after a
+  switch, and left-aligned cells start 18 px further left in both themes (the owner may want
+  the old indent back: say so). `controls::dark_cell_text` was written around that room and is
+  probably no longer needed; removing it wants a dark pixel comparison first (after a switch
+  to light, right-aligned numbers sit 2 px left of a fresh light start).
   **Column lines (1.2.31, 2026-11-10):** `theme::paint_list` takes `DarkMode_Explorer`'s column
   lines out of the area below a report list's rows. To check by hand: a selection rectangle
   dragged over the empty area, flicker while a column or the window is resized, and 150/200 %
-  (the lines' width there was not measured). **Seen in the owner's screenshots of 1.2.30
-  (2026-11-10), not reproduced or looked into:** the dark main window's status bar was empty
-  (the hidden-desktop captures show its text), and in light the Size column read "1.51 ..."
-  where dark showed "1.51 GB" (possibly after a live switch from dark).
+  (the lines' width there was not measured). **Status bar (1.2.32):** the dark bar draws its
+  simple-mode help text; to see by hand with the pointer over a toolbar button.
 - **Icon skins:** 2.2.1 read replacement images from its settings folder (`toolbar.bmp`,
   `tstatus.bmp` and, from memory, others: confirm against the owner's copy; its exe is
   UPX-packed, so the names were not read from it) and people shared packs. We would load PNG

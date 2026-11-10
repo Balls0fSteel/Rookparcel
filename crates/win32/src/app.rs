@@ -6518,10 +6518,16 @@ unsafe fn on_notify(hwnd: HWND, nm: *const NMHDR) -> LRESULT {
             (IDC_LIST, LVN_GETDISPINFOW) => {
                 let di = &mut *(nm as *mut NMLVDISPINFOW);
                 if di.item.mask & LVIF_IMAGE != 0 {
+                    // Outside the Name column the answer is -1, not I_IMAGENONE: with
+                    // LVS_EX_SUBITEMIMAGES the list keeps an icon's room in a cell that says
+                    // I_IMAGENONE. That room indented the left-aligned cells and, once a
+                    // visual-style class had been set (dark, or light after a switch), cut the
+                    // right-aligned ones ("1.51 ..." in Size, nothing in #).
                     di.item.iImage = with_app(|a| {
-                        if a.feed_view.is_some()
-                            || a.shown.get(di.item.iSubItem as usize) != Some(&Column::Name)
-                        {
+                        if a.shown.get(di.item.iSubItem as usize) != Some(&Column::Name) {
+                            return Some(-1);
+                        }
+                        if a.feed_view.is_some() {
                             return None;
                         }
                         let tid = *a.list.view().get(di.item.iItem as usize)?;
