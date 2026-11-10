@@ -6,6 +6,7 @@ whole build from site/testdata/releases.json (a made-up releases answer).
 
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -253,6 +254,8 @@ class Pages(unittest.TestCase):
         self.assertNotIn("GTK", files)
         self.assertNotIn("macOS 15", files)
         self.assertIn('href="#gatekeeper"', files)
+        self.assertIn('href="install.html#macos"', files)
+        self.assertNotIn("right-click", files)  # macOS 15 and newer have no such way in
         self.assertEqual(blocks["files-other"], "")
         # the dmg row comes first, without an architecture
         self.assertLess(files.index("Rookparcel-1.4.0-macos.dmg"), files.index("macos-arm64.tar.gz"))
@@ -386,6 +389,47 @@ class News(unittest.TestCase):
         self.assertNotIn("1.1.7<", line)
 
 
+class InstallGuide(unittest.TestCase):
+    PAGE = (Path(__file__).parent / "install.html").read_text(encoding="utf-8")
+
+    def test_linked_anchors_exist(self):
+        for anchor in b.GUIDE_ANCHORS:
+            self.assertIn(f'id="{anchor}"', self.PAGE, anchor)
+            self.assertIn(f"#{anchor}", b.guide(anchor))
+
+    def test_chooser_matches_the_paths(self):
+        # every chooser button names a path of its own system, and every path has a button
+        paths = {}
+        for system in re.split(r'<section class="guide-sys', self.PAGE)[1:]:
+            name = re.search(r'data-sys="([a-z]+)"', system).group(1)
+            for path in re.findall(r'<section class="guide-path" id="([a-z0-9-]+)"', system):
+                paths[path] = name
+        self.assertEqual(len(paths), 8)
+        picked = {}
+        for row in re.split(r'<div class="pick-row" data-for="', self.PAGE)[1:]:
+            name = row.split('"', 1)[0]
+            for path in re.findall(r'data-pick-path="([a-z0-9-]+)"', row.split("</div>\n      </div>")[0]):
+                picked[path] = name
+        self.assertEqual(picked, paths)
+
+    def test_steps_are_numbered_in_order(self):
+        for path in re.split(r'<section class="guide-path"', self.PAGE)[1:]:
+            numbers = re.findall(r'<span class="num">(\d+)</span>', path.split("</section>")[0])
+            self.assertEqual(numbers, [str(i + 1) for i in range(len(numbers))])
+            self.assertGreaterEqual(len(numbers), 3)
+
+    def test_dmg_guide_has_the_same_command(self):
+        # the file in the disk image and the page give the same way past Gatekeeper
+        dmg = (Path(__file__).parent.parent / "packaging" / "macos"
+               / "How to open Rookparcel.html").read_text(encoding="utf-8")
+        command = "xattr -dr com.apple.quarantine /Applications/Rookparcel.app"
+        for text in (dmg, self.PAGE):
+            self.assertIn(command, text)
+            self.assertIn("Open Anyway", text)
+        self.assertNotIn("<script", dmg)
+        self.assertNotRegex(dmg, r'(src|href)="(?!https://balls0fsteel\.github\.io/Rookparcel/)')
+
+
 class WholeBuild(unittest.TestCase):
     def test_build_from_sample(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -395,7 +439,7 @@ class WholeBuild(unittest.TestCase):
                 Manifest.HEAD + "stable=1.0.0\nprerelease=1.1.0-rc.10\n").encode("utf-8"))
             self.assertTrue((out / ".nojekyll").is_file())
             for page in ("index.html", "download.html", "faq.html", "docs.html", "404.html",
-                         "news.html", "benchmarks.html", "donate.html"):
+                         "news.html", "benchmarks.html", "donate.html", "install.html"):
                 text = (out / page).read_text(encoding="utf-8")
                 self.assertNotIn("<!-- build:", text, page)
                 nav = text.split("</nav>")[0]

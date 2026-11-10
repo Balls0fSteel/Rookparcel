@@ -136,12 +136,16 @@ Unpack it and start `rookparcel-gtk`. A `rookparcel.ini` file beside the binary 
 ## macOS
 
 1. Open `Rookparcel-<version>-macos.dmg` and drag `Rookparcel.app` to Applications.
-2. The app is ad-hoc signed and not notarised, so Gatekeeper refuses it the first time. Right-click (or Control-click) the app, choose **Open**, then click **Open**. If macOS offers no Open button, open **System Settings > Privacy & Security** and click **Open Anyway** there.
-3. Or remove the quarantine flag in Terminal:
+2. The app is ad-hoc signed and not notarised, so Gatekeeper refuses it the first time. Allow it once:
+   - **macOS 15 Sequoia and newer:** double-click the app and click **Done** in the warning. Open **System Settings > Privacy & Security**, scroll to **Security** and click **Open Anyway** (the button is there for about an hour). Confirm with **Open Anyway** and your password or Touch ID.
+   - **macOS 11 to 14:** Control-click (or right-click) the app, choose **Open**, then click **Open**.
+3. Or, also when macOS says the app "is damaged", remove the quarantine flag in Terminal:
 
    ```bash
    xattr -dr com.apple.quarantine /Applications/Rookparcel.app
    ```
+
+The disk image has these steps in `How to open Rookparcel.html`, and the website's [install guide](https://balls0fsteel.github.io/Rookparcel/install.html#macos) shows them with pictures.
 
 The app runs on macOS 11 Big Sur or newer, on Apple silicon and Intel Macs alike: the one `Rookparcel.app` holds both. Settings and torrents go to `~/Library/Application Support/Rookparcel/mac`.
 

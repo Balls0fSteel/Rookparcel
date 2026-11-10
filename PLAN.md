@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-10_105049_1794304249
+Last updated: 2026-11-10_112228_1794306148
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D60](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -46,6 +46,8 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 **1.2.36, not released (2026-11-10): the Logger without tracker noise** (the owner's request): failed announces and scrapes stay on the Trackers tab; the engine writes one Logger line when a private torrent's last tracker stops answering. Open: a look at a real session's Logger with public and private torrents (no test runs a private torrent against a dead tracker end to end).
 
 **1.2.37, not released (2026-11-10): lower buttons and fields in the GTK client** (the owner's report): 26-28 px in place of the theme's 34, by four rules in the client's stylesheet. Open in BACKLOG "GTK desktop checks": the owner's look on a real desktop, the dialogs not opened in the check, other themes and scaled displays.
+
+**1.2.38, not released (2026-11-10): the first-run guide** (the owner's request): `How to open Rookparcel.html` in the Mac disk image and `site/install.html`, a step-by-step install guide per system with drawn dialogs. The page must be on the site (`main`) before the release, as the dmg file links it. Open in BACKLOG "macOS" and "Website": the dmg step on a Release run, the steps on a real Mac of each version, real screenshots and translations of the guide.
 
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 

@@ -90,15 +90,21 @@ elevates through UAC and starts from a clean registry):
   binary's slices into `LSMinimumSystemVersion` and the run's summary. nox needs macOS 11 on
   Apple silicon and 10.14 on Intel (`SecTrustEvaluateWithError`, D9).
 - **Ad-hoc signed, not notarised:** Gatekeeper refuses it the first time ("cannot be opened
-  because the developer cannot be verified" / "is damaged"). Right-click (or Control-click)
-  `Rookparcel.app` > Open, then Open (on macOS 15, System Settings > Privacy & Security > Open
-  Anyway); or remove the quarantine flag after copying it to Applications:
+  because the developer cannot be verified" / "Not Opened" / "is damaged"). On macOS 15 and
+  newer: open it once, click Done, then System Settings > Privacy & Security > Open Anyway
+  (offered for about an hour) and confirm. On macOS 11 to 14: Control-click (or right-click)
+  `Rookparcel.app` > Open, then Open. Or remove the quarantine flag after copying it to
+  Applications:
 
   ```bash
   xattr -dr com.apple.quarantine /Applications/Rookparcel.app
   ```
 
   The nox tarball's binary the same way: `xattr -d com.apple.quarantine rookparcel-nox`.
+- **The guide in the disk image:** the dmg carries `How to open Rookparcel.html`
+  (`packaging/macos/`), one file with these steps and no script; the job fails when the
+  mounted image lacks it. The website's `install.html` has the same steps with every other
+  system's; change the two together.
 - **How the `.app` is made** (`.github/scripts/macos_bundle.py native`):
   `Contents/MacOS/Rookparcel` is the universal binary itself, which links only the system's
   libraries and frameworks (the job fails otherwise, and when nox does); `Contents/Info.plist`

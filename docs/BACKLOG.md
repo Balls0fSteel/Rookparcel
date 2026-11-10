@@ -838,6 +838,13 @@ What was ported is listed in PORTING.md "Upstream fixes after 2.0.11".
   `github-pages` environment takes `main` and `v*` tags). The first release
   published after this will be the first release-event run. Its screenshots
   are from the Win32 demo; GTK and Web UI screenshots would help.
+- Install guide (1.2.38, 2026-11-10_112228_1794306148): `site/install.html` and the dmg's
+  `How to open Rookparcel.html`. Open: the dmg step on a Release run and the file opened from
+  the mounted image; the macOS steps and dialog texts on a real Mac of 15 or newer and of
+  11 to 14; the Windows drawings beside real SmartScreen and UAC windows; the page with
+  JavaScript off and in Safari; real screenshots in place of the drawings; translations
+  (with the multilingual guide, V2.0 goal 4); `docs/wiki/Installing-Rookparcel.md` still says
+  1.1.40 is the latest release and that the Mac app is unreleased.
 
 ## Profiles and portable mode (D42)
 

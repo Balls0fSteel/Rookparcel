@@ -574,6 +574,132 @@ details[open] > summary { margin-bottom: .6rem; }
 details pre { margin-bottom: .6rem; }
 pre.sums { font-size: .78rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* ---- install guide ------------------------------------------------------------------------- */
+
+.guide [hidden] { display: none !important; }
+.guide-link { margin: 1.5rem 0 0; font-weight: 600; }
+
+.guide-pick {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .9rem 1.1rem;
+  margin-top: 1.5rem;
+  display: grid;
+  gap: .7rem;
+}
+.pick-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; }
+.pick-label { font-weight: 700; min-width: 7.5rem; }
+.pick-btns { display: flex; flex-wrap: wrap; gap: .4rem; }
+.pick {
+  font: inherit;
+  color: var(--text);
+  background: linear-gradient(var(--lv-head-1), var(--lv-head-2));
+  border: 1px solid var(--bevel-lo);
+  border-radius: 4px;
+  padding: .35rem .8rem;
+  cursor: pointer;
+}
+.pick small { color: var(--muted); font-family: var(--mono); font-size: .78rem; margin-inline-start: .3rem; }
+.pick:hover { border-color: var(--text); }
+.pick[aria-pressed="true"] {
+  background: var(--sunken);
+  border-color: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--brand);
+  font-weight: 700;
+}
+.pick:disabled { opacity: .5; cursor: default; border-color: var(--border); }
+
+.guide-path { scroll-margin-top: 1rem; }
+.guide-path > h3 { border-bottom: 1px solid var(--border); padding-bottom: .3rem; }
+.guide-steps { list-style: none; padding: 0; margin: 0 0 1rem; display: grid; gap: .8rem; }
+.guide-steps > li {
+  margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .9rem 1.1rem .2rem;
+  min-width: 0;
+}
+.guide-steps h4 { display: flex; align-items: center; gap: .6rem; font-size: 1.1rem; margin: 0 0 .6rem; }
+.guide-steps h4:focus { outline: none; }
+.guide-steps .num {
+  flex: none;
+  width: 1.8rem; height: 1.8rem;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--btn-text);
+  font-size: .95rem;
+  display: grid;
+  place-items: center;
+}
+.guide-nav { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; margin-bottom: 1.5rem; }
+.guide-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.guide-next:not(:disabled) { border-color: var(--brand); font-weight: 700; }
+.guide-all {
+  font: inherit;
+  color: var(--link);
+  background: none;
+  border: 0;
+  padding: .35rem 0;
+  text-decoration: underline;
+  text-underline-offset: .15em;
+  cursor: pointer;
+  margin-inline-start: auto;
+}
+
+/* drawings of the systems' own dialogs: what to look for, not their exact look */
+.mock {
+  max-width: 24rem;
+  background: var(--sunken);
+  color: var(--text);
+  border: 1px solid var(--bevel-lo);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: .9rem 1rem 1rem;
+  margin: 0 0 1rem;
+  font-size: .9rem;
+  line-height: 1.4;
+  overflow: hidden;
+}
+.mock-bar {
+  margin: -.9rem -1rem .8rem;
+  padding: .3rem 1rem;
+  background: linear-gradient(var(--lv-head-1), var(--lv-head-2));
+  border-bottom: 1px solid var(--lv-line);
+  font-size: .8rem;
+  color: var(--muted);
+}
+.mock-title { font-weight: 700; margin-bottom: .4rem; }
+.mock .mock-text { margin: 0 0 .2rem; color: var(--muted); }
+.mock-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; margin-top: .9rem; }
+.mock-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; }
+.mock-row .mock-text { flex: 1 1 10rem; margin: 0; }
+.mock-btn {
+  background: var(--surface);
+  border: 1px solid var(--bevel-lo);
+  border-radius: 5px;
+  padding: .2rem .8rem;
+  white-space: nowrap;
+}
+.mock-link { text-decoration: underline; }
+.mock .press { outline: 3px solid var(--brand); outline-offset: 3px; font-weight: 700; }
+.mock-win { background: #005a9e; color: #ffffff; border-color: #00447a; border-radius: 0; }
+.mock-win .mock-title { font-size: 1.15rem; font-weight: 400; }
+.mock-win .mock-text { color: #ffffff; }
+.mock-win .mock-btn { background: #00447a; border-color: #ffffff; border-radius: 0; color: #ffffff; }
+.mock-win .press { outline-color: #ffd17a; }
+.mock-mac { max-width: 17rem; border-radius: 14px; text-align: center; }
+.mock-mac .mock-btns { flex-direction: column; gap: .35rem; }
+.mock-mac .mock-btn { border-radius: 7px; padding: .3rem .8rem; }
+@media (forced-colors: active) {
+  .mock .press { outline-color: Highlight; }
+  .pick[aria-pressed="true"] { border-color: Highlight; box-shadow: inset 0 0 0 2px Highlight; }
+}
+@media print {
+  .guide-pick, .guide-nav { display: none; }
+}
+
 /* ---- FAQ and docs -------------------------------------------------------------------------- */
 
 .toc {

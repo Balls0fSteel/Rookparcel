@@ -49,7 +49,7 @@ The **General** tab shows "Your address as trackers see it:", which tells you wh
 The programs are not code-signed, so the systems warn the first time:
 
 - **Windows:** "Windows protected your PC". Click **More info**, then **Run anyway**.
-- **macOS:** the app is refused until you open it with a right-click > **Open**. If macOS offers no Open button, click **Open Anyway** in **System Settings > Privacy & Security**.
+- **macOS:** the app is refused until you allow it once. On macOS 15 and newer, try to open it, click **Done**, then click **Open Anyway** in **System Settings > Privacy & Security**. On macOS 11 to 14, Control-click the app and choose **Open**. See [Installing Rookparcel](Installing-Rookparcel#macos).
 
 To make sure a file is the one that was published, compare its checksum with the `SHA256SUMS` file of the release. Details for each platform are in [Installing Rookparcel](Installing-Rookparcel).
 

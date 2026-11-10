@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How to open Rookparcel</title>
+<meta name="color-scheme" content="light dark">
+<!-- Shipped in the macOS disk image (.github/workflows/release.yml, "dmg and tarballs").
+     One file: no script, nothing loaded from elsewhere. The same steps, with every other
+     system, are on the website: site/install.html. Keep the two in step. -->
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f7f3ea; --surface: #ffffff; --text: #16202e; --muted: #4b5363; --border: #d8d0c2;
+  --link: #1e4a8a; --brand: #b8352a; --code-bg: #efe8da; --note-bg: #edf1f7; --note-line: #1d3256;
+  --focus: #c4864a; --press: #1558c0; --press-text: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1420; --surface: #151d2b; --text: #ebe6dc; --muted: #aab2c0; --border: #2c3647;
+    --link: #9cc0ff; --brand: #e0675a; --code-bg: #1d2636; --note-bg: #172338; --note-line: #6f8fc7;
+    --focus: #f2c14e; --press: #83baff; --press-text: #0e1420;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.6 system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  overflow-wrap: break-word;
+}
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .4em; border-bottom: 3px solid var(--brand); padding-bottom: .3em; }
+h2 { font-size: 1.25rem; line-height: 1.25; margin: 1.8em 0 .5em; }
+p, ol, pre { margin: 0 0 1em; }
+ol { padding-inline-start: 1.4em; }
+li + li { margin-top: .5em; }
+a { color: var(--link); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.lead { font-size: 1.1rem; color: var(--muted); }
+code, pre { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .9em; }
+code { background: var(--code-bg); padding: .1em .35em; border-radius: 4px; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: .75em 1em; overflow-x: auto; }
+pre code { background: none; padding: 0; overflow-wrap: normal; }
+.note { background: var(--note-bg); border-inline-start: 4px solid var(--note-line); border-radius: 0 6px 6px 0; padding: .7rem 1rem; }
+.mock {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px; margin: .6em 0 1em; max-width: 340px; font-size: .9rem; line-height: 1.4;
+}
+.mock b { display: block; margin-bottom: .3em; }
+.mock span { display: block; color: var(--muted); }
+.mock .row { display: flex; gap: 8px; margin-top: 12px; }
+.mock i {
+  font-style: normal; border: 1px solid var(--border); border-radius: 6px; padding: 3px 12px;
+  color: var(--text); flex: 1; text-align: center;
+}
+.mock i.press { background: var(--press); border-color: var(--press); color: var(--press-text); font-weight: 600; }
+@media print { body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>How to open Rookparcel</h1>
+<p class="lead">macOS blocks Rookparcel the first time, because the app is not notarised by Apple. Allowing it takes a minute and is needed only once.</p>
+
+<h2>1. Copy it to Applications</h2>
+<p>Drag <code>Rookparcel.app</code> onto the <strong>Applications</strong> folder in this window. Then open it from Applications, not from this disk image.</p>
+
+<h2>2. Allow it: macOS 15 Sequoia and newer</h2>
+<ol>
+  <li>Double-click <strong>Rookparcel</strong> in Applications. macOS says it could not verify the app. Click <strong>Done</strong> (not Move to Trash).
+    <div class="mock" role="img" aria-label="Drawing of the warning: Rookparcel Not Opened, with the buttons Move to Trash and Done. Done is marked.">
+      <b>“Rookparcel” Not Opened</b>
+      <span>Apple could not verify “Rookparcel” is free of malware…</span>
+      <div class="row"><i>Move to Trash</i><i class="press">Done</i></div>
+    </div>
+  </li>
+  <li>Open <strong>System Settings</strong> (Apple menu) and click <strong>Privacy &amp; Security</strong> in the sidebar.</li>
+  <li>Scroll down to <strong>Security</strong>. Next to “Rookparcel was blocked…”, click <strong>Open Anyway</strong>. The button is there for about an hour after step 1.
+    <div class="mock" role="img" aria-label="Drawing of the Security section in Privacy and Security: a line saying Rookparcel was blocked, and the button Open Anyway, marked.">
+      <b>Security</b>
+      <span>“Rookparcel” was blocked to protect your Mac.</span>
+      <div class="row"><i class="press">Open Anyway</i></div>
+    </div>
+  </li>
+  <li>Confirm with <strong>Open Anyway</strong>, then your password or Touch ID.</li>
+</ol>
+<p>From then on Rookparcel opens with a double-click like any other app.</p>
+
+<h2>2. Allow it: macOS 11 to 14</h2>
+<ol>
+  <li>In Applications, Control-click (or right-click) <strong>Rookparcel</strong> and choose <strong>Open</strong>.</li>
+  <li>In the warning, click <strong>Open</strong>.</li>
+</ol>
+
+<h2>If it says “is damaged”, or you prefer the Terminal</h2>
+<p>Open <strong>Terminal</strong> (in Applications &gt; Utilities), paste this line and press Return:</p>
+<pre><code>xattr -dr com.apple.quarantine /Applications/Rookparcel.app</code></pre>
+<p>It removes the “downloaded from the internet” mark from the copy in Applications; nothing else changes. Then open Rookparcel as usual.</p>
+
+<h2>Why macOS asks</h2>
+<p class="note">Apple verifies only apps whose makers pay for its developer programme and send each version to Apple (“notarisation”). Rookparcel does not do that yet, so macOS cannot tell who made it and warns. To check that your download is the published file, compare its checksum with <code>SHA256SUMS</code> of the release.</p>
+<p>The first time, macOS may also ask whether Rookparcel may find devices on your local network. Allow it if you want local peer discovery and port mapping on your router.</p>
+<p>The full guide, with pictures for every system:<br>
+<a href="https://balls0fsteel.github.io/Rookparcel/install.html#macos">balls0fsteel.github.io/Rookparcel/install.html</a></p>
+</main>
+</body>
+</html>

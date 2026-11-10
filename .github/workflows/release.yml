@@ -514,6 +514,8 @@ jobs:
           ditto Rookparcel.app dmg/Rookparcel.app
           ln -s /Applications dmg/Applications
           cp LICENSE.md THIRD-PARTY-NOTICES.md dmg/
+          # the first-run steps past Gatekeeper, readable before the app can be opened
+          cp "packaging/macos/How to open Rookparcel.html" dmg/
           dmg="Rookparcel-$version-macos.dmg"
           # hdiutil on the runners sometimes fails with "Resource busy": try again
           for i in 1 2 3 4 5; do
@@ -529,6 +531,7 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$mnt/Rookparcel.app"
           lipo -archs "$mnt/Rookparcel.app/Contents/MacOS/Rookparcel"
           ls -la "$mnt"
+          test -f "$mnt/How to open Rookparcel.html"
           hdiutil detach "$mnt"
 
           for arch in arm64 x86_64; do

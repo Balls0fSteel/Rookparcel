@@ -364,6 +364,17 @@ def how_to_start(kind: str, assets: list) -> str:
     return old_names(_how_to_start(kind, assets), assets[0].name)
 
 
+# The install guide's anchors that the "Starting it" texts link to (site/install.html).
+GUIDE_ANCHORS = ("windows-setup", "windows-zip", "linux-appimage", "linux-flatpak", "linux-tar",
+                 "macos")
+
+
+def guide(anchor: str) -> str:
+    """A link to one path of the install guide."""
+    assert anchor in GUIDE_ANCHORS, anchor
+    return f'<a href="install.html#{anchor}">Step by step</a>.'
+
+
 def _how_to_start(kind: str, assets: list) -> str:
     a = assets[0]
     n = a.name
@@ -373,32 +384,35 @@ def _how_to_start(kind: str, assets: list) -> str:
         alt = f'<p class="alt">The same with {names}.</p>'
     if kind == "windows-setup":
         return (f"<p>Run <code>{esc(n)}</code>. Running the installer of a newer version later "
-                "upgrades the installed copy in place.</p>")
+                f"upgrades the installed copy in place. {guide('windows-setup')}</p>")
     if kind == "windows-zip":
-        return (f"<p>Unzip <code>{esc(n)}</code> anywhere and start <code>rookparcel.exe</code>.</p>")
+        return (f"<p>Unzip <code>{esc(n)}</code> anywhere and start <code>rookparcel.exe</code>. "
+                f"{guide('windows-zip')}</p>")
     if kind == "appimage":
         return ("<p>Make it executable and run it:</p>"
                 + commands(f"chmod +x {n}", f"./{n}") + alt
                 + "<p>Without FUSE 2 on the system, start it with "
-                "<code>--appimage-extract-and-run</code>.</p>")
+                f"<code>--appimage-extract-and-run</code>. {guide('linux-appimage')}</p>")
     if kind == "flatpak":
         return ("<p>The bundle holds the application; the runtime comes from Flathub:</p>"
                 + commands("flatpak remote-add --if-not-exists --user flathub "
                            "https://dl.flathub.org/repo/flathub.flatpakrepo",
                            f"flatpak install --user {n}",
-                           "flatpak run io.github.balls0fsteel.Rookparcel") + alt)
+                           "flatpak run io.github.balls0fsteel.Rookparcel") + alt
+                + f"<p>{guide('linux-flatpak')}</p>")
     if kind == "linux-tar":
         return ("<p>Unpack it and start the GUI:</p>"
                 + commands(f"tar -xzf {n}", f"./{stem(n)}/rookparcel-gtk") + alt
                 + "<p>The folder also has <code>rookparcel-nox</code>, the desktop entry and the "
-                "systemd units (<code>systemd/system</code>, <code>systemd/user</code>).</p>")
+                "systemd units (<code>systemd/system</code>, <code>systemd/user</code>). "
+                f"{guide('linux-tar')}</p>")
     if kind == "nox-appimage":
         return ("<p>A terminal program; this starts it with the Web UI on port 8080:</p>"
                 + commands(f"chmod +x {n}", f"./{n} run --webui 8080 --webui-pass PASS") + alt)
     if kind in ("dmg", "gtk-dmg"):
         return (f"<p>Open <code>{esc(n)}</code> and drag <code>Rookparcel.app</code> to "
-                "Applications. The first time, right-click (or Control-click) it, choose Open, "
-                'then Open again: see <a href="#gatekeeper">Gatekeeper</a>.</p>')
+                "Applications. macOS refuses it the first time and has to be told to open it: "
+                f'see <a href="#gatekeeper">Gatekeeper</a>. {guide("macos")}</p>')
     if kind == "macos-nox":
         return ("<p>Unpack it and start the daemon with the Web UI on port 8080:</p>"
                 + commands(f"tar -xzf {n}", f"./{stem(n)}/rookparcel-nox run --webui 8080 --webui-pass PASS")
@@ -525,7 +539,8 @@ def hero_block(featured: Optional[Release], releases_url: str) -> str:
     if not featured:
         return ('<div class="cta"><p class="cta-buttons">'
                 f'<a class="btn btn-primary" href="{esc(releases_url)}">Download from GitHub</a> '
-                '<a class="btn btn-ghost" href="download.html#which">Which file do I need?</a></p></div>')
+                '<a class="btn btn-ghost" href="download.html#which">Which file do I need?</a> '
+                '<a class="btn btn-ghost" href="install.html">Install guide</a></p></div>')
     iso, nice = nice_date(featured.published)
     badge = "badge-pre" if featured.prerelease else "badge-stable"
     meta = f'<span class="badge {badge}">{esc(featured.label)}</span>'
@@ -535,7 +550,8 @@ def hero_block(featured: Optional[Release], releases_url: str) -> str:
         meta += f' · <a href="{esc(featured.url)}">Release notes</a>'
     return ('<div class="cta"><p class="cta-buttons">'
             f'<a class="btn btn-primary" href="download.html">Download Rookparcel {esc(featured.version)}</a> '
-            '<a class="btn btn-ghost" href="download.html#which">Which file do I need?</a></p>'
+            '<a class="btn btn-ghost" href="download.html#which">Which file do I need?</a> '
+            '<a class="btn btn-ghost" href="install.html">Install guide</a></p>'
             f'<p class="cta-meta">{meta}</p>{direct_links(featured)}</div>')
 
 
