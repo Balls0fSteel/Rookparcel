@@ -406,13 +406,23 @@ impl TrackerList {
 
     /// The page's status line for the list from the web; empty when it is switched off.
     pub fn status(&self) -> String {
-        if !self.config.from_url || self.config.url.is_empty() {
+        self.status_for(self.config.from_url, &self.config.url)
+    }
+
+    /// The status line for what a Preferences page shows now, applied or not: empty while its
+    /// box is off or its address empty, as [`TrackerList::status`] is once that is applied, so
+    /// the line never speaks of a list the page has switched off. An address other than the one
+    /// in use has no list and no error yet.
+    pub fn status_for(&self, from_url: bool, url: &str) -> String {
+        let url = url.trim();
+        if !from_url || url.is_empty() {
             return String::new();
         }
-        let have = (self.fetched_at > 0 && self.fetched_url == self.config.url).then(|| {
+        let have = (self.fetched_at > 0 && self.fetched_url == url).then(|| {
             tr!(TrackersStatusOk, count = count(&self.fetched), time = fmt::date_time(self.fetched_at))
         });
-        match (&self.error, have) {
+        let error = self.error.as_ref().filter(|_| url == self.config.url);
+        match (error, have) {
             (Some(e), Some(have)) => format!("{} {have}", tr!(TrackersStatusFailed, error = e.text())),
             (Some(e), None) => tr!(TrackersStatusFailed, error = e.text()),
             (None, Some(have)) => have,
@@ -585,6 +595,40 @@ mod tests {
         l.configure(Config { append: false, from_url: false, ..config });
         assert_eq!(l.take_tiers(), Some(Vec::new()));
         let _ = std::fs::remove_dir_all(cache.parent().unwrap());
+    }
+
+    /// The Preferences page's line follows its own box and address, applied or not (GTK showed
+    /// "20 trackers, downloaded ..." beside a box switched off while OK was refused).
+    #[test]
+    fn the_status_line_follows_what_the_page_shows() {
+        let url = "https://lists.example/t.txt";
+        let config = Config { append: false, typed: String::new(), from_url: true, url: url.into() };
+        let mut l = TrackerList::new(None, config.clone()).with_fetcher(good);
+        let none = tr!(TrackersStatusNone).to_owned();
+        assert_eq!((l.status(), l.status_for(true, url)), (none.clone(), none.clone()));
+        run(&mut l);
+        let ok = l.status();
+        assert!(ok.contains('2') && ok != none, "{ok}");
+        assert_eq!(l.status_for(true, &format!(" {url} ")), ok);
+        // the page's box switched off, not applied yet: nothing, as after Apply
+        assert_eq!(l.status_for(false, url), "");
+        assert_eq!(l.status_for(true, "  "), "");
+        // another address typed: that one has no list yet
+        assert_eq!(l.status_for(true, "https://other.example/x"), none);
+
+        // a failed fetch speaks of the address in use only
+        l.fetcher = bad;
+        l.refresh_now();
+        run(&mut l);
+        assert!(
+            l.status_for(true, url).starts_with(&tr!(TrackersStatusFailed, error = Reject::NotAList.text()))
+        );
+        assert_eq!(l.status_for(true, "https://other.example/x"), none);
+
+        // applied off: the line is empty; ticked again on the page, the kept list shows
+        l.configure(Config { from_url: false, ..config });
+        assert_eq!(l.status(), "");
+        assert_eq!(l.status_for(true, url), ok);
     }
 
     #[test]
