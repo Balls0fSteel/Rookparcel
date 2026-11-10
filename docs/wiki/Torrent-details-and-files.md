@@ -161,6 +161,8 @@ A graph of the download (green) and upload (red) speed of all torrents together 
 
 Rookparcel's log for this session, each line with the time. It shows torrents added and finished, moves, scheduler and Auto Shutdown changes, problems with watched folders and the IP filter, RSS downloads, imports and more. It keeps the last 1000 lines.
 
+A tracker that does not answer is shown on the [Trackers tab](#trackers), not here: with public torrents that is common and harmless, because peers also come from the DHT and peer exchange. The exception is a private torrent, which has only its trackers: when none of them answers, the Logger says so once, with the last error.
+
 When something does not work as expected, look here first. See also [Troubleshooting and FAQ](Troubleshooting-and-FAQ).
 
 ## Torrent Properties

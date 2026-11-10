@@ -1453,9 +1453,10 @@ fn autoload(st: &mut State, policy: &path_policy::PathPolicy, now: i64) -> Vec<(
 }
 
 /// Whether the Logger tab shows an alert: everything but the replies to `post_*` requests
-/// (the Win32 Logger's rule), the port mappers' step-by-step chatter and scrape results (one
+/// (the Win32 Logger's rule), the port mappers' step-by-step chatter, scrape results (one
 /// per stopped or queued torrent every half hour, `frontend::scrape`; the counts show in the
-/// Seeds and Peers columns).
+/// Seeds and Peers columns) and failed announces (on the Trackers tab; the engine logs a line
+/// of its own when a private torrent has no tracker left).
 fn logged(a: &Alert) -> bool {
     !matches!(
         a,
@@ -1472,6 +1473,7 @@ fn logged(a: &Alert) -> bool {
             | Alert::PortmapLog { .. }
             | Alert::ScrapeReply { .. }
             | Alert::ScrapeFailed { .. }
+            | Alert::TrackerError { .. }
     )
 }
 

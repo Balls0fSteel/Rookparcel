@@ -43,6 +43,8 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 **1.2.35, not released (2026-11-10): Win32 notes that were cut off** (the owner's Hungarian screenshot of Preferences > General): notes grow with their text (`fit::fit_note_height`), also the IP filter's status and the input prompts; `tools/win32-shots/capture.ps1 -Audit` lists cut-off texts per language and is clean for the 35 tables on what it opens. Open in BACKLOG "Localisation": state-dependent texts, message boxes and scaled displays are outside the audit.
 
+**1.2.36, not released (2026-11-10): the Logger without tracker noise** (the owner's request): failed announces and scrapes stay on the Trackers tab; the engine writes one Logger line when a private torrent's last tracker stops answering. Open: a look at a real session's Logger with public and private torrents (no test runs a private torrent against a dead tracker end to end).
+
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 
 - **C, D.** RSS in hosted mode and Torznab search (D41, 1.1.12-1.1.19): done; hand checks in BACKLOG. No alternative speed limits in the Win32 GUI (owner, 2026-10-30).

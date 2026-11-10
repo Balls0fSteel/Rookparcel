@@ -3089,6 +3089,10 @@ unsafe fn on_alerts(hwnd: HWND) {
                 Alert::PortmapLog { .. } => {}
                 // kept by `network::on_alert`; an open Preferences lists them
                 Alert::NetworkAdapters(_) => adapters = true,
+                // Failed announces and scrapes are on the Trackers tab: public trackers that do
+                // not answer are common, and the engine logs a line of its own when a private
+                // torrent has no tracker left (`Torrent::trackers_went_silent`).
+                Alert::TrackerError { .. } | Alert::ScrapeFailed { .. } => {}
                 other => {
                     let name = other.torrent().and_then(|id| a.list.get(id)).map(|st| st.name.clone());
                     let line = match name {

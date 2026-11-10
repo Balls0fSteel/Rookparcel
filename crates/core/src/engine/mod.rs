@@ -3292,7 +3292,20 @@ impl Engine {
                     tr.failed(message.clone(), now);
                     let times_in_row = tr.fails();
                     t.status_dirty = true;
+                    // the Loggers leave `TrackerError` out (it is on the Trackers tab): what
+                    // they show is this line, once, when a private torrent has no tracker left.
+                    // Without the URL, which holds the user's passkey.
+                    let silent = t.trackers_went_silent(index).then(|| {
+                        let message = match t.trackers.len() {
+                            1 => format!("the tracker does not answer: {message}"),
+                            n => format!("none of the {n} trackers answer; the last error: {message}"),
+                        };
+                        Alert::Log { id: Some(id), message }
+                    });
                     self.alert(Alert::TrackerError { id, url, times_in_row, message });
+                    if let Some(a) = silent {
+                        self.alert(a);
+                    }
                 }
             }
         }

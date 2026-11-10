@@ -433,6 +433,18 @@ impl Torrent {
         self.trackers.insert(pos, TrackerEntry::new(urls.intern(url), tier));
     }
 
+    /// After the announce to tracker `index` failed: whether that left a private torrent with
+    /// no tracker that answers, which is when the Logger gets a line. A private torrent has no
+    /// other source of peers; a public one finds them through the DHT, PEX and local
+    /// discovery, and public trackers that do not answer are common, so those failures show
+    /// only on the Trackers tab. True for the first failure of the last tracker that had not
+    /// failed, not for the retries after it: one line each time the torrent loses them all.
+    pub fn trackers_went_silent(&self, index: usize) -> bool {
+        self.private == Some(true)
+            && self.trackers.get(index).is_some_and(|tr| tr.fails() == 1)
+            && self.trackers.iter().all(|tr| tr.fails() > 0)
+    }
+
     /// libtorrent `replace_trackers`: the new list, ordered by tier (stably), without empty
     /// URLs and repeats. A URL that was in the list keeps its entry's state (next announce,
     /// `started` sent, scrape), as libtorrent keeps what a client passes back from `trackers()`;
@@ -1323,6 +1335,51 @@ mod tests {
         assert_eq!(t.trackers.capacity(), 2);
         t.replace_trackers(&[("udp://c".into(), 0)], urls);
         assert_eq!(t.trackers.capacity(), 1);
+    }
+
+    /// The Logger hears of failed announces once, when the last tracker of a private torrent
+    /// has failed, and again only after one of them had answered (or was added or reset).
+    #[test]
+    fn only_a_private_torrent_without_any_tracker_reports_it() {
+        let mut t = Torrent::new(
+            TorrentId::default(),
+            InfoHashes::v1(crate::types::Sha1Hash([1; 20])),
+            "a".into(),
+            "/x".into(),
+            TorrentFlags::DEFAULT,
+        );
+        let urls = &mut StrPool::default();
+        let now = Instant::now();
+        let fail = |t: &mut Torrent, i: usize| {
+            t.trackers[i].failed("timed out".into(), now);
+            t.trackers_went_silent(i)
+        };
+        t.add_tracker("udp://a", 0, urls);
+        t.add_tracker("udp://b", 1, urls);
+        // public, or not known to be private: never
+        for private in [None, Some(false)] {
+            t.private = private;
+            assert!(!fail(&mut t, 0) && !fail(&mut t, 1), "{private:?}");
+            t.trackers[0].reset();
+            t.trackers[1].reset();
+        }
+        t.private = Some(true);
+        // the other tracker has not failed
+        assert!(!fail(&mut t, 1));
+        // the last one failed: one line, not one per retry
+        assert!(fail(&mut t, 0));
+        assert!(!fail(&mut t, 1) && !fail(&mut t, 0));
+        // an answer, then silence again: the next line
+        t.trackers[0].announced(None, None, 1800, None, 0, now);
+        assert!(!fail(&mut t, 1));
+        assert!(fail(&mut t, 0));
+        // a new tracker is tried first
+        t.add_tracker("udp://c", 2, urls);
+        assert!(!fail(&mut t, 0));
+        assert!(fail(&mut t, 2));
+        // a stop forgets the failures: the next start reports again
+        t.trackers.iter_mut().for_each(TrackerEntry::reset);
+        assert!(!fail(&mut t, 0) && !fail(&mut t, 1) && fail(&mut t, 2));
     }
 
     /// A complete piece set without a picker is kept as `have_all` (libtorrent `m_have_all`),

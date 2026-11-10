@@ -1816,6 +1816,8 @@ fn on_alerts() {
                 Alert::PortmapLog { .. } => {}
                 // kept by `network::on_alert` for Preferences > Connection
                 Alert::NetworkAdapters(_) => {}
+                // on the Trackers tab; the engine logs a private torrent left without a tracker
+                Alert::TrackerError { .. } | Alert::ScrapeFailed { .. } => {}
                 other => {
                     let name = other.torrent().and_then(|id| a.list.get(id)).map(|st| st.name.clone());
                     a.detail.push_log(match name {
