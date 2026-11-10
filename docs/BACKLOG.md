@@ -291,8 +291,8 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   multi-line edits have `DarkMode_Explorer`'s light frame (the price of dark scroll bars). **Icon room (1.2.32, 2026-11-10):** the torrent
   list answers -1 instead of `I_IMAGENONE` outside the Name column, so no cell keeps an icon's
   room: the `#` column's `*` (found missing 2026-11-09) and Size are whole in light after a
-  switch, and left-aligned cells start 18 px further left in both themes (the owner may want
-  the old indent back: say so). `controls::dark_cell_text` was written around that room and is
+  switch, and left-aligned cells start 18 px further left in both themes (kept by the
+  owner, 2026-11-10). `controls::dark_cell_text` was written around that room and is
   probably no longer needed; removing it wants a dark pixel comparison first (after a switch
   to light, right-aligned numbers sit 2 px left of a fresh light start).
   **Column lines (1.2.31, 2026-11-10):** `theme::paint_list` takes `DarkMode_Explorer`'s column
