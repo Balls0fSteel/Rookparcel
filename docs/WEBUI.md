@@ -495,7 +495,8 @@ strictest rule (`prefs::RunGate`). `POST /pa/prefs` changes them only when the r
 or nox was started with `--webui-remote-run-program`, and then only with the current password
 like every security field. A request the gate refuses gets 400 with `RunErrRemote` before its
 password is looked at (no oracle, the session stays) and a Logger line with its address.
-`GET /pa/prefs` marks the four fields `readonly` for a session that cannot change them. The
+`GET /pa/prefs` marks the four fields `readonly` for a session that cannot change them and
+leaves its two command lines empty (whether each is on is shown), as the shim does. The
 flag is a command-line option only, never stored. The shim ignores qBittorrent's `autorun_*`
 keys in `setPreferences` and shows the program lines only to a local client; the remote GUI
 protocol has no way to carry the lines; a hosted Web UI leaves the page out. At the start nox
