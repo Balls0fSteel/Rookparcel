@@ -1090,6 +1090,28 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
     boxes are only made read-only while it creates a torrent, not greyed.
   - GTK under xfwm4 (stock GTK): the menu bar item stays highlighted while the window it opened
     has the focus; the About dialog has no title and shows its name selected.
+- **Found 2026-11-10 in the bug review before the release (1.2.44), not fixed:**
+  - nox behind a proxy on the same computer that adds no `X-Forwarded-For`, `Forwarded` or
+    `X-Real-IP` (nginx's bare `proxy_pass`, stunnel, `ssh -L`): every client is a loopback one,
+    so Run Program's gate is open to whoever has the password, and nox prints no warning (it
+    listens on loopback). The `Host` header does not tell (nginx sends the upstream's). Needs
+    the owner's choice: say so in WEBUI.md, or an explicit "this is behind a proxy" option.
+  - The "added" program runs for a magnet about a second after the link is added: before its
+    metadata, before its Add dialog is answered, and also when that dialog is cancelled.
+  - A typed tracker line that is no tracker is dropped without a word when its check box is
+    off (Win32 and GTK's OK/Apply; the Mac refuses it); more than 200 typed trackers are cut
+    to 200 without a word; a non-https address or an unrunnable line is stored while its box
+    is off.
+  - Win32: Update Now with an address not yet applied, then Cancel, deletes the cached list of
+    the applied address (refetched at once; lost if that fails). A long fetch error grows the
+    status line over the help pane. Statistics stays on screen when the main window goes to
+    the tray (as Search Results does).
+  - Mac (not verified): text typed in the tracker box, then its check box switched off while
+    the box has the focus, may be shown and never stored.
+  - Hosted Web UI: the host's tracker list is readable by every session (the page is not shown,
+    the fields are in `/pa/prefs`, `add_trackers` in the shim).
+  - nox: a `trackers.list` in `webui.json` that is not in its tidy form (edited by hand) makes
+    every preferences commit count as a tracker change (asks for the password; hosted: refused).
 - **Statistics (1.2.39), hand checks still open:** right-to-left in each client; a long
   translation in each client; the Web UI dialog in the nine themes and right-to-left; an
   upgrade of a real profile (the totals start from the torrents' sums).
@@ -1107,7 +1129,7 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   are not rate-limited in the `--log` file; no working-directory or environment options; nox
   without `--webui` has no Run Program. The safety note still says "only on this computer"
   when nox runs with `--webui-remote-run-program`. A magnet's "added" run gets the info hash
-  as %N (the name comes with the metadata). `shell_reads_codes` (1.2.43) knows cmd,
+  as %N (the name comes with the metadata). `shell_reads_codes` (1.2.43, 1.2.44) knows cmd,
   PowerShell and the Unix shells only: `python -c`, `perl -e`, `wsl`, `env sh -c` and the like
   stay the user's own risk. A remote session that sends exactly the stored line gets "no
   change", which confirms a fully guessed line (it never reveals one).

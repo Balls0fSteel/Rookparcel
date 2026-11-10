@@ -147,18 +147,54 @@ pub fn shell_reads_codes(args: &[String]) -> bool {
         "cmd" => true,
         "powershell" | "pwsh" => {
             // `-File` (or a prefix of it, `-f`, `/file`) before the first code: a script, whose
-            // arguments stay arguments
-            let file = |a: &String| {
+            // arguments stay arguments. PowerShell takes the first of `-File` and `-Command`
+            // (`-c`) and reads everything after it as that one's, so a `-File` behind a
+            // `-Command` is part of the command.
+            for a in &rest[..first_code] {
                 let o = a.strip_prefix(['-', '/']).unwrap_or("").to_ascii_lowercase();
-                !o.is_empty() && "file".starts_with(&o)
-            };
-            !rest[..first_code].iter().any(file)
+                if o.is_empty() {
+                    continue;
+                }
+                if "file".starts_with(&o) {
+                    return false;
+                }
+                if "command".starts_with(&o) {
+                    return true;
+                }
+            }
+            true
         }
         "sh" | "bash" | "dash" | "zsh" | "ksh" | "mksh" | "ash" | "fish" | "csh" | "tcsh" => {
             // the options before the first operand (the script, or -c's string)
-            rest.iter()
-                .take_while(|a| a.starts_with(['-', '+']) && a.len() > 1)
-                .any(|a| a == "--command" || (!a.starts_with("--") && a[1..].contains('c')))
+            let mut options = rest.iter();
+            while let Some(a) = options.next() {
+                if a.len() < 2 || !a.starts_with(['-', '+']) {
+                    break;
+                }
+                if let Some(long) = a.strip_prefix("--") {
+                    let long = long.split_once('=').map_or(long, |(name, _)| name);
+                    match long {
+                        // fish's `--init-command` runs a string as well
+                        "command" | "init-command" => return true,
+                        // these take a value, which is no operand: `--rcfile x -c "..."`
+                        "rcfile" | "init-file" if !a.contains('=') => {
+                            options.next();
+                        }
+                        _ => {}
+                    }
+                    continue;
+                }
+                let letters = &a[1..];
+                if letters.contains('c') || (name == "fish" && letters.contains('C')) {
+                    return true;
+                }
+                // `-o pipefail`, `-O extglob`: the next argument is the option's name, and
+                // `-c` may follow it
+                if letters.contains(['o', 'O']) {
+                    options.next();
+                }
+            }
+            false
         }
         _ => false,
     }
@@ -287,8 +323,10 @@ enum Event {
 pub struct RunProgram {
     on_added: Vec<String>,
     on_finished: Vec<String>,
-    /// Torrents whose alert came before the status update that describes them.
-    waiting: HashMap<TorrentId, (Event, Instant)>,
+    /// Torrents whose alert came before the status update that describes them: whether
+    /// "added" and "finished" wait (both, when a torrent finishes within one update of its
+    /// add), and since when.
+    waiting: HashMap<TorrentId, (bool, bool, Instant)>,
     /// New torrents a program was started for: their id is not run twice (a duplicate add).
     recent: HashMap<TorrentId, Instant>,
     queue: VecDeque<Vec<String>>,
@@ -336,10 +374,12 @@ impl RunProgram {
         let now = Instant::now();
         match alert {
             Alert::TorrentAdded { id, .. } if !self.on_added.is_empty() => {
-                self.waiting.insert(*id, (Event::Added, now));
+                let w = self.waiting.entry(*id).or_insert((false, false, now));
+                (w.0, w.2) = (true, now);
             }
             Alert::TorrentFinished { id } if !self.on_finished.is_empty() => {
-                self.waiting.insert(*id, (Event::Finished, now));
+                let w = self.waiting.entry(*id).or_insert((false, false, now));
+                (w.1, w.2) = (true, now);
             }
             Alert::TorrentRemoved { id, .. } => {
                 self.waiting.remove(id);
@@ -347,14 +387,19 @@ impl RunProgram {
             }
             Alert::StateUpdate(v) if !self.waiting.is_empty() => {
                 for st in v {
-                    if let Some((event, _)) = self.waiting.remove(&st.id) {
-                        self.event(event, st, &label_of, now, &mut log);
+                    if let Some((added, finished, _)) = self.waiting.remove(&st.id) {
+                        if added {
+                            self.event(Event::Added, st, &label_of, now, &mut log);
+                        }
+                        if finished {
+                            self.event(Event::Finished, st, &label_of, now, &mut log);
+                        }
                     }
                 }
             }
             _ => {}
         }
-        self.waiting.retain(|_, (_, at)| now.duration_since(*at) < NEW_FOR);
+        self.waiting.retain(|_, (_, _, at)| now.duration_since(*at) < NEW_FOR);
         self.recent.retain(|_, at| now.duration_since(*at) < NEW_FOR);
         while let Ok(line) = self.done_rx.try_recv() {
             self.running = self.running.saturating_sub(1);
@@ -474,6 +519,15 @@ mod tests {
             r#"/bin/bash -lc "notify-send %N""#,
             r#"/usr/bin/zsh --command "echo %I""#,
             r#"fish -c "echo %Z""#,
+            // an option with a value before -c
+            r#"bash -o pipefail -c "notify-send %N""#,
+            r#"/bin/sh -eo errexit -c "echo %N""#,
+            r#"bash -O extglob --rcfile /x/rc -c "echo %N""#,
+            r#"fish --command="echo %N" %N"#,
+            r#"fish -C "echo %N""#,
+            // -File behind -Command belongs to the command
+            r#"powershell -Command C:\x\a.ps1 -File %N"#,
+            r#"pwsh -c echo -f %N"#,
         ] {
             assert_eq!(split_command(line), shell, "{line}");
         }
@@ -485,6 +539,8 @@ mod tests {
             "/bin/sh /x/args.sh added %N",
             "bash -e /x/args.sh %N -c",
             "bash --norc /x/args.sh %N",
+            "bash -o pipefail /x/args.sh %N -c",
+            "bash --rcfile /x/rc /x/args.sh %N",
             // no code, or only a percent sign: nothing of a torrent's reaches the shell
             "cmd /c echo done",
             "cmd /c echo 100%%",
@@ -601,6 +657,21 @@ mod tests {
         feed(&mut r, Alert::TorrentFinished { id: c });
         feed(&mut r, Alert::TorrentRemoved { id: c, info_hashes: InfoHashes::default() });
         assert!(feed(&mut r, Alert::StateUpdate(vec![status(c, 5, 10)])).is_empty());
+
+        // added and finished within one status update (a small torrent, or one whose data
+        // was there): both programs, the added one first; with nothing downloaded only that
+        let d = TorrentId::new(4, 0);
+        feed(&mut r, added(d));
+        feed(&mut r, Alert::TorrentFinished { id: d });
+        let log = started(&feed(&mut r, Alert::StateUpdate(vec![status(d, 1, 10)])));
+        assert_eq!(log.len(), 2, "{log:?}");
+        assert!(log[0].contains("on-added") && log[1].contains("on-finished"), "{log:?}");
+        let e = TorrentId::new(5, 0);
+        feed(&mut r, added(e));
+        feed(&mut r, Alert::TorrentFinished { id: e });
+        let log = started(&feed(&mut r, Alert::StateUpdate(vec![status(e, 1, 0)])));
+        assert_eq!(log.len(), 1, "{log:?}");
+        assert!(log[0].contains("on-added"), "{log:?}");
 
         // switched off: nothing waits
         r.set("", "");

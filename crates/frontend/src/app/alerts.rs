@@ -42,6 +42,16 @@ impl Core {
             self.log(tr!(LogMovingCompleted, name, dir));
             self.handle.post_torrent_updates();
         }
+        // A torrent's first status: the label the Add dialog or an import stored for it, before
+        // Run Program reads it for %L (the same update starts the "added" program).
+        if let Alert::StateUpdate(v) = &alert {
+            for st in v.iter().filter(|st| !self.known.contains(&st.id)) {
+                if let Some(l) = self.prefs.get(&format!("torrent.{}.label", st.info_hashes.key_hex())) {
+                    let l = l.to_owned();
+                    self.list.set_label(st.id, &l);
+                }
+            }
+        }
         // Run Program (D67): every alert, it starts the programs itself
         let list = &self.list;
         let run_lines = match &mut self.run {

@@ -137,7 +137,8 @@ pub fn parse_fetched(body: &[u8]) -> Result<Parsed, Reject> {
     if p.count() == 0 {
         return Err(if p.invalid == 0 { Reject::Empty } else { Reject::NotAList });
     }
-    if p.invalid > p.count() {
+    // against every valid line, those past the limit included
+    if p.invalid > p.count() + p.dropped {
         return Err(Reject::NotAList);
     }
     Ok(p)

@@ -4,6 +4,16 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-10_202226_1794338546: Version 1.2.44: a bug review of everything since 1.2.30; five fixes
+
+- **Asked by the owner:** look over the changes waiting for the release and fix the bugs found. `git diff v1.2.30..HEAD` read in five parts: core here, and four read-only agents for the frontend, nox and the Web UI, Win32, and GTK with the Mac crate.
+- **Run Program, fixed (`core::run_program`):** a torrent that finished within one status update of being added (a small one, or one whose data was there) lost its "added" program: one waiting slot per torrent held the later event only. Both wait now. `shell_reads_codes` missed `-c` behind an option that takes a value (`bash -o pipefail -c "... %N"`, `--rcfile x -c`), fish's `--command=...`, `-C` and `--init-command`, and PowerShell's `-File` behind a `-Command` (part of the command there).
+- **%L, fixed (frontend `app/alerts.rs`, Win32 `app.rs`):** the "added" program got an empty label for a .torrent added with one in the Add dialog, and for imports: the runner read the list's label on the torrent's first status update, a few lines before that update restored it from the preferences. The label is restored first.
+- **Hosted Web UI, fixed:** a loopback session read the host's Run Program lines (`/pa/prefs` and the shim's `autorun_*`), which no browser may change there; hidden like for a remote session.
+- **Small:** a fetched tracker list with more valid lines than the 200 kept was weighed against the kept ones only and could be refused as "not a list"; GTK's Statistics window closes with the main window (`destroy_with_parent`).
+- **Looked at, left:** a reviewer's guess that the dark list paint (1.2.31) leaves lists without `LVS_EX_DOUBLEBUFFER` black was pictured before and after a fix on the hidden desktop (RSS filters, empty): identical and right, nothing changed. Refusing a remote request that names a Run Program line with its stored value was tried and taken back: two tests pin "the same value is no change" as chosen. The reviewers' other findings are in BACKLOG "Statistics, trackers and Run Program" (found 2026-11-10 in review).
+- **Validation:** tests on Windows: core lib (931), frontend (380 + 4), nox (all suites, 211), Win32 (140, one thread); `cargo check` of the workspace with the GTK and Mac crates. **Not done:** the GTK and Mac changes (one builder line; the shared `alerts.rs`) did not run on the VMs; no real transfer was repeated; the two Web UI changes ran in tests only.
+
 ## 2026-11-10_184543_1794332743: Version 1.2.43: release checks of Statistics, Trackers and Run Program on every client; shell lines refused; nox's stored settings before the engine
 
 - **Asked by the owner:** fix and check what 1.2.42's VM runs left before a release. Four agents in worktrees (Mac, GTK, Win32, nox from a second machine), merged here.

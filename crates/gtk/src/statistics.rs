@@ -34,6 +34,9 @@ pub fn show(parent: &impl IsA<gtk::Window>, stats: &SessionStats) {
     let window = gtk::Window::builder()
         .title(lang::plain(tr!(MenuStatistics)))
         .transient_for(parent)
+        // it goes with the main window: left open it would stay, with figures that stand still,
+        // for as long as the program takes to close
+        .destroy_with_parent(true)
         .modal(false)
         .resizable(false)
         .build();

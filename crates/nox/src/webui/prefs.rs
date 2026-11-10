@@ -1369,7 +1369,8 @@ fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
 /// and their page carries the reason; the gate itself is [`commit_request`]'s, whatever a page
 /// shows.
 pub(crate) fn model(shared: &Shared, st: &State, run: RunGate) -> Json {
-    let run_open = run == RunGate::Open;
+    // hosted: the lines are the host's own, which no browser changes ([`HOSTED_NO_RUN`])
+    let run_open = run == RunGate::Open && !st.hosted;
     let w = Working::from_state(st);
     let d = Working::defaults(st);
     let mut fields = Json::obj();
@@ -2702,6 +2703,10 @@ mod tests {
         let refused = commit_read(&shared, &mut st, &off, Some("s"), RunGate::Open, None).unwrap_err();
         assert_eq!(refused, ("run.finished_enabled".to_owned(), HOSTED_NO_RUN.to_owned()));
         assert!(st.prefs.run_finished_on);
+        // nor read: the host's line goes to no browser, this computer's included
+        let hosted = model(&shared, &st, RunGate::Open);
+        assert_eq!(value(&hosted, "run.finished"), Some(Json::Str(String::new())));
+        assert!(readonly(&hosted, "run.finished"));
         let mut g = GuiOptions::load(&rookparcel_frontend::prefs::Prefs::default(), "/dl");
         g.run_added = "host-added".to_owned();
         st.prefs.apply_to(&mut g);

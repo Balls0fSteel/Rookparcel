@@ -1028,6 +1028,9 @@ fn preferences(st: &State, shared: &Shared, local: bool) -> Json {
     let s = &st.settings;
     let p = &st.prefs;
     let _ = shared;
+    // hosted, the Run Program lines are the host's own: no Web UI session changes them, so
+    // none reads them (D67)
+    let local = local && !st.hosted;
     // The seeding goal as qBittorrent's share limits, which the *arr apps read to know when a
     // stopped download may be removed. Only a goal that stops counts: one that caps the upload
     // keeps the torrent seeding. The goal needs every set target, qBittorrent's limits any one,

@@ -2980,6 +2980,16 @@ unsafe fn on_alerts(hwnd: HWND) {
             for line in a.torrent_files.on_alert(&alert, &a.torrent_folders, &a.handle) {
                 a.detail.push_log(format!("{} {line}", now_hms()));
             }
+            // A torrent's first status: the label the Add dialog or an import stored for it,
+            // before Run Program reads it for %L (the same update starts the "added" program).
+            if let Alert::StateUpdate(v) = &alert {
+                for st in v.iter().filter(|st| !a.known.contains(&st.id)) {
+                    if let Some(l) = a.prefs.get(&format!("torrent.{}.label", st.info_hashes.key_hex())) {
+                        let l = l.to_owned();
+                        a.list.set_label(st.id, &l);
+                    }
+                }
+            }
             // Run Program (D67): it starts the programs itself and says so in the Logger
             let run_lines = match a.run_program.as_mut() {
                 Some(r) => r.on_alert(&alert, |id| Some(a.list.extra(id).label.to_owned())),
