@@ -1365,18 +1365,23 @@ fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
 /// fetched tracker list's status line, D66; `GET /pa/prefs/trackers` gives it alone).
 ///
 /// `run`: whether the asking session may change the Run Program lines (D67, [`RunGate`]). When
-/// not, the four fields are `readonly` in this answer and their page carries the reason; the
-/// gate itself is [`commit_request`]'s, whatever a page shows.
+/// not, the four fields are `readonly` in this answer, the two command lines are left empty
+/// and their page carries the reason; the gate itself is [`commit_request`]'s, whatever a page
+/// shows.
 pub(crate) fn model(shared: &Shared, st: &State, run: RunGate) -> Json {
     let run_open = run == RunGate::Open;
     let w = Working::from_state(st);
     let d = Working::defaults(st);
     let mut fields = Json::obj();
     for def in all() {
+        // a session that may not change the Run Program lines does not read them either, as
+        // the qBittorrent API's `autorun_*` go only to a client on this computer: a line can
+        // hold an address or a token (D67). Whether they are on is shown.
+        let hidden = !run_open && [pref_pages::RUN_ADDED, pref_pages::RUN_FINISHED].contains(&def.id());
         let mut j = Json::obj()
             .with("label", def.label())
             .with("type", def.kind().name())
-            .with("value", json_of(&def.get(&w)))
+            .with("value", json_of(&def.get(if hidden { &d } else { &w })))
             .with("default", json_of(&def.get(&d)));
         match def.kind() {
             Kind::Int { min, max } => {
@@ -1747,6 +1752,11 @@ fn commit_read(
         }
         if let RunGate::Closed(client) = run {
             let line = match client {
+                // a loopback client here is a proxy on this computer that passed the request on
+                // (`X-Real-IP` or `Forwarded` alone, or `X-Forwarded-For` naming loopback)
+                Some(addr) if addr.is_loopback() => {
+                    format!("Run Program: a change from {addr} was refused (passed on by a proxy)")
+                }
                 Some(addr) => {
                     format!("Run Program: a change from {addr} was refused (not this computer)")
                 }
@@ -2611,6 +2621,13 @@ mod tests {
             assert!(!readonly(&mine, id) && readonly(&theirs, id), "{id}");
         }
         assert!(!readonly(&theirs, "trackers.url"));
+        // the line itself only for a session that may change it; whether it is on, for both
+        let value = |m: &Json, id: &str| {
+            m.get("fields").and_then(|f| f.get(id)).and_then(|f| f.get("value")).cloned()
+        };
+        assert_eq!(value(&mine, "run.finished"), Some(Json::Str(LINE.into())));
+        assert_eq!(value(&theirs, "run.finished"), Some(Json::Str(String::new())));
+        assert_eq!(value(&theirs, "run.finished_enabled"), Some(Json::Bool(true)));
 
         // C: the gate of a request. A loopback peer is this computer unless a proxy passed the
         // request on; --webui-remote-run-program opens it for everyone
@@ -2635,6 +2652,12 @@ mod tests {
         for h in ["Forwarded: for=198.51.100.9\r\n", "X-Real-IP: 198.51.100.9\r\n"] {
             assert!(matches!(RunGate::of(&shared, &head(h), loopback), RunGate::Closed(_)), "{h}");
         }
+        // a proxy that names no address the Logger can show is logged as a proxy, not as a
+        // loopback client that is "not this computer"
+        let proxied = RunGate::of(&shared, &head("X-Real-IP: 198.51.100.9\r\n"), loopback);
+        assert!(commit_request(&shared, &off, "s", proxied, read).is_err());
+        let logged = shared.lock().log.back().unwrap().text.clone();
+        assert_eq!(logged, "Run Program: a change from 127.0.0.1 was refused (passed on by a proxy)");
         shared.remote_run_program = true;
         assert_eq!(RunGate::of(&shared, &head(""), lan), RunGate::Open);
         assert_eq!(RunGate::of(&shared, &head("X-Forwarded-For: 198.51.100.9\r\n"), loopback), RunGate::Open);

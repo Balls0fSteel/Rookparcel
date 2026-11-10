@@ -4268,8 +4268,9 @@ fn run_program_changes_only_on_this_computer_with_the_password() {
     let lines = logger_lines(&t, &sid, &hash);
     let refused = "Run Program: a change from 203.0.113.9 was refused (not this computer)";
     assert_eq!(lines.iter().filter(|l| *l == refused).count(), 3, "{lines:?}");
-    // (the other headers name no address the ban list would count: the proxy's own stands)
-    let proxy = "Run Program: a change from 127.0.0.1 was refused (not this computer)";
+    // (the other headers name no address the ban list would count: the proxy's own stands,
+    // logged as a proxy)
+    let proxy = "Run Program: a change from 127.0.0.1 was refused (passed on by a proxy)";
     assert_eq!(lines.iter().filter(|l| *l == proxy).count(), 3, "{lines:?}");
     // C: such a session sees the four read-only, with the reason on the page
     let theirs = t.req("GET", "/pa/prefs", &[("Cookie", &sid), ELSEWHERE], Body::None).json();
@@ -4286,6 +4287,10 @@ fn run_program_changes_only_on_this_computer_with_the_password() {
     let saved = (Json::Bool(false), String::new(), Json::Bool(true), RUN_NOWHERE.to_owned());
     assert_eq!(run_prefs(&t, &sid), saved, "read back, trimmed");
     assert!(t.web.run_program_enabled());
+    // a session from elsewhere sees that the line is on, not the line (as the shim's autorun_*)
+    let theirs = t.req("GET", "/pa/prefs", &[("Cookie", &sid), ELSEWHERE], Body::None).json();
+    assert_eq!(field(&theirs, "run.finished").get("value"), Some(&Json::Str(String::new())));
+    assert_eq!(field(&theirs, "run.finished_enabled").get("value"), Some(&Json::Bool(true)));
     // H: the daemon's starter has the line by the next batch of alerts
     wait_until("the starter armed", || t.web.run_program_armed());
     // the same values again are no change and need no password
