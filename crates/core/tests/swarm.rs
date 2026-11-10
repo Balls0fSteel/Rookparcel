@@ -469,6 +469,70 @@ fn download_through_a_udp_tracker_then_resume_without_recheck() {
     let _ = std::fs::remove_dir_all(seed_dir);
 }
 
+/// A session closed while a torrent's resume check is still queued or running saves what the
+/// resume data said, not "pieces unknown": the next start does not hash the files. (The owner's
+/// client rechecked every torrent after a restart, 2026-11-10: checks run one at a time per
+/// drive, so closing behind one long check caught all the torrents waiting for theirs.)
+#[test]
+fn closing_during_the_resume_check_keeps_the_pieces() {
+    // Two torrents on one drive; checks capped at 1 MB/s, so a full check of one (1.3 MB)
+    // holds the other's resume check back for a second.
+    let (a, b) = (fixture(None), fixture_padded(None, 10));
+    let (dir_a, dir_b) = (temp_dir("close-in-check-a"), temp_dir("close-in-check-b"));
+    let state = temp_dir("state-close-in-check");
+    write_files(&a, &dir_a);
+    write_files(&b, &dir_b);
+    let slow = || {
+        let settings = Settings { check_rate_limit: true, check_rate_mb: 1, ..settings() };
+        Session::start(SessionParams { settings, state_dir: Some(state.clone()), ..Default::default() })
+            .expect("session starts")
+    };
+    let hash_a = {
+        let s = slow();
+        let mut w = Watch::new(s.handle());
+        let id_a = add(&mut w, &a, &dir_a);
+        let id_b = add(&mut w, &b, &dir_b);
+        let hash_a = wait_state(&mut w, id_a, TorrentState::Seeding, 20).info_hashes;
+        wait_state(&mut w, id_b, TorrentState::Seeding, 20);
+        // B is hashed again; A, stopped and started, waits behind it with its resume data.
+        let (ta, tb) = (s.handle().torrent(id_a), s.handle().torrent(id_b));
+        tb.force_recheck();
+        wait_state(&mut w, id_b, TorrentState::CheckingFiles, 10);
+        ta.pause();
+        wait(&mut w, 10, "A paused", |x| {
+            status_of(x, id_a).filter(|s| s.flags.contains(TorrentFlags::PAUSED)).map(|_| ())
+        });
+        ta.resume();
+        wait_state(&mut w, id_a, TorrentState::CheckingResumeData, 10);
+        s.shutdown();
+        hash_a
+    };
+    // B's record says nothing now, so it is hashed at each start; closed at once, A's check
+    // may not have begun (whichever of the two comes first).
+    slow().shutdown();
+
+    let s = start(Some(state.clone()));
+    let mut w = Watch::new(s.handle());
+    let mut id_a = None;
+    // (the state changes come before the first status update names the torrents)
+    let mut hashed = Vec::new();
+    let st = wait(&mut w, 30, "A seeding after the restarts", |x| {
+        if let Alert::StateUpdate(v) = x {
+            id_a = id_a.or(v.iter().find(|s| s.info_hashes == hash_a).map(|s| s.id));
+        }
+        if let Alert::StateChanged { id, state: TorrentState::CheckingFiles, .. } = x {
+            hashed.push(*id);
+        }
+        status_of(x, id_a?).filter(|s| s.state == TorrentState::Seeding)
+    });
+    assert!(!hashed.contains(&st.id), "A resumed without a full recheck");
+    assert_eq!(st.total_done, st.total);
+    s.shutdown();
+    for d in [dir_a, dir_b, state] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
 /// A scripted peer that has everything but answers only some requests: every block of the first
 /// piece asked for, then block 0 of the next `partial` pieces. Returns the bytes it sent once the
 /// connection closes; `quota` turns true when it has sent all it will send. `requests` logs every

@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-10_083446_1794296086
+Last updated: 2026-11-10_084953_1794296993
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D60](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -36,6 +36,8 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 **1.2.29, published 2026-11-09:** the theme pass and the Win32 dark mode (1.2.22-1.2.29, D63, D64), tested on the Xubuntu, Windows 11 and macOS VMs and this PC ([notes](docs/releases/1.2.29.md)); `update.txt` says `stable=1.2.29`; the wiki has the Dark-mode page. Open hand checks in BACKLOG "Themes" (a Windows 10 1809 VM, a phone and Safari for the Web UI themes) and "Files tab folder tree"; the nox Docker image's first push is still untested. Next on macOS: drop the legacy notification centre (BACKLOG "macOS" (A)).
 
 **1.2.31-1.2.32, not released (2026-11-10):** Win32 dark lists no longer show `DarkMode_Explorer`'s column lines below the rows; the dark status bar draws its help line; the torrent list keeps no icon room outside the Name column (Size and `#` whole after a theme switch; left-aligned cells 18 px further left in both themes). Open in BACKLOG "Themes": a hand check of the selection rectangle, column resize and 150/200 %, and whether `dark_cell_text` can go.
+
+**1.2.33, not released (2026-11-10):** an engine fix for every platform, worth a release soon: closing (or pausing) while a torrent's resume check was still queued saved "pieces unknown", and the next start hashed every file; behind one long check that was every torrent on the drive (the owner's report). Open: a try with the installed client once it is 1.2.33 (start, force a recheck of a big torrent, exit, start: only that torrent is hashed).
 
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 

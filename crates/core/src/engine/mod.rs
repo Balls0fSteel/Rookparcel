@@ -2552,17 +2552,25 @@ impl Engine {
             picker.set_piece_priority(i as u32, p);
         }
         picker.set_sequential(t.flags.contains(TorrentFlags::SEQUENTIAL_DOWNLOAD));
-        let mode = match t.take_have() {
-            Some(have) if have.len() == ti.num_pieces() as usize => CheckMode::Resume(have),
+        // The resume data's set stays stored (with `unfinished`) until `on_checked`: checks
+        // wait their turn per drive, and a torrent stopped or saved before its own is done
+        // (the program closing behind one long check) must not forget its pieces, or the next
+        // start hashes every file.
+        let mode = match t.stored_have() {
+            Some(have) if have.len() == ti.num_pieces() as usize => CheckMode::Resume(have.to_bitfield()),
             _ => CheckMode::Full,
         };
         if matches!(mode, CheckMode::Full) {
             // A full check finds only whole pieces; partial blocks are not trusted.
+            t.set_have(None);
             t.unfinished.clear();
         }
         t.picker = Some(Box::new(picker));
         t.storage = Some(storage.clone());
         t.checking = true;
+        // the new picker knows nothing until this check is done, whatever an earlier run of the
+        // torrent found: it is not what resume data or a stop may save
+        t.checked = false;
         t.checked_pieces = 0;
         t.started_at = Some(Instant::now());
         t.status_dirty = true;
@@ -2630,7 +2638,10 @@ impl Engine {
         }
         let t = self.torrent(id).expect("exists");
         if let Some(mut p) = t.picker.take() {
-            if t.checked || !t.checking {
+            // Only a checked picker's set: while a check is queued or running the picker knows
+            // nothing yet and the resume data's set under check is still stored; after a check
+            // that failed nothing is known, and the next start checks again.
+            if t.checked {
                 t.set_have(Some(p.have().clone()));
                 t.unfinished = p.unfinished_pieces();
             }
@@ -2698,6 +2709,8 @@ impl Engine {
             Ok(res) => {
                 let was_finished_before = t.completed_time != 0;
                 let unfinished = std::mem::take(&mut t.unfinished);
+                // the picker has the checked set from here on
+                t.set_have(None);
                 let mut restored = Vec::new();
                 if let Some(p) = t.picker.as_mut() {
                     p.set_have(&res.have);

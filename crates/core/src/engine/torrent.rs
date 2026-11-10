@@ -484,18 +484,23 @@ impl Torrent {
         }
     }
 
+    /// The stored piece set, whatever the picker says: the resume data's set while the check
+    /// that confirms it is queued or running (`Engine::start_torrent` keeps it until
+    /// `on_checked`), so a torrent stopped or saved meanwhile does not forget its pieces.
+    pub fn stored_have(&self) -> Option<HaveRef<'_>> {
+        match &self.have {
+            Some(h) => Some(HaveRef::Bits(h)),
+            None if self.have_all => Some(HaveRef::All(self.num_pieces as usize)),
+            None => None,
+        }
+    }
+
     /// Stores the pieces we have while there is no picker; a complete set is kept as
     /// `have_all` (libtorrent drops a seed's bitfield the same way).
     pub fn set_have(&mut self, have: Option<Bitfield>) {
         let n = self.num_pieces as usize;
         self.have_all = have.as_ref().is_some_and(|h| n > 0 && h.len() == n && h.all_set());
         self.have = have.filter(|_| !self.have_all);
-    }
-
-    /// Takes the stored piece set (for the picker), as a bitfield even when it was `have_all`.
-    pub fn take_have(&mut self) -> Option<Bitfield> {
-        let all = std::mem::take(&mut self.have_all);
-        self.have.take().or_else(|| all.then(|| Bitfield::new(self.num_pieces as usize, true)))
     }
 
     pub fn num_have(&self) -> u32 {
@@ -821,11 +826,14 @@ impl Torrent {
             } else if self.checked || self.picker.is_none() {
                 self.have_bits().map(HaveRef::to_bitfield)
             } else {
-                None
+                // Being checked: the resume data's set while that is what is checked (it is
+                // what the record said already), nothing during a full check.
+                self.stored_have().map(HaveRef::to_bitfield)
             },
             unfinished: match &self.picker {
                 Some(p) if self.checked => p.unfinished_pieces(),
-                Some(_) => Vec::new(),
+                // the resume data's, until the check is done; empty during a full check
+                Some(_) => self.unfinished.clone(),
                 None if self.have.is_some() || self.have_all => self.unfinished.clone(),
                 None => Vec::new(),
             },
@@ -1338,9 +1346,10 @@ mod tests {
         assert_eq!(t.file_progress(), [20_000, 30_000, 10_000]);
         assert_eq!(t.settled_state(), TorrentState::Seeding);
         assert_eq!(t.resume_data().pieces, Some(Bitfield::new(4, true)));
-        // the picker gets the full set back
-        assert_eq!(t.take_have(), Some(Bitfield::new(4, true)));
-        assert!(!t.have_all && t.have_bits().is_none());
+        // the check gets the full set, as a bitfield
+        assert_eq!(t.stored_have().map(HaveRef::to_bitfield), Some(Bitfield::new(4, true)));
+        t.set_have(None);
+        assert!(!t.have_all && t.have_bits().is_none() && t.stored_have().is_none());
         // a partial set stays a bitfield; a set of the wrong length is not taken for all
         let mut some = Bitfield::new(4, true);
         some.set(2, false);
@@ -1351,5 +1360,47 @@ mod tests {
         t.set_have(Some(Bitfield::new(4, true)));
         t.set_have(None);
         assert!(!t.have_all && t.have_bits().is_none());
+    }
+
+    /// While the check of a start is queued or running the picker is empty, and the record
+    /// saved meanwhile (the program closing, the periodic save) still says what the resume data
+    /// said; during a full check it says nothing, so the next start checks again.
+    #[test]
+    fn resume_data_keeps_the_piece_set_while_it_is_checked() {
+        let (bytes, _) = make_torrent(&[("a", 20_000), ("b", 30_000), ("c", 10_000)], 16 * 1024);
+        let ti = Arc::new(TorrentInfo::from_bytes(&bytes).unwrap());
+        let mut t = Torrent::new(
+            TorrentId::default(),
+            ti.info_hashes(),
+            String::new(),
+            "/x".into(),
+            TorrentFlags::DEFAULT,
+        );
+        t.set_metadata(ti);
+        let picker = || Some(Box::new(PiecePicker::new(4, 16 * 1024, 10_848, BLOCK_SIZE)));
+        let mut some = Bitfield::new(4, true);
+        some.set(2, false);
+        let unfinished = vec![(2u32, Bitfield::new(1, true))];
+        for have in [Bitfield::new(4, true), some] {
+            // as `Engine::start_torrent` leaves it for a resume check
+            t.set_have(Some(have.clone()));
+            t.unfinished = unfinished.clone();
+            t.picker = picker();
+            t.checking = true;
+            t.checked = false;
+            assert_eq!(t.num_have(), 0, "the picker's set is what shows");
+            let r = t.resume_data();
+            assert_eq!(r.pieces, Some(have));
+            assert_eq!(r.unfinished, unfinished);
+        }
+        // a full check: nothing is stored
+        t.set_have(None);
+        t.unfinished.clear();
+        let r = t.resume_data();
+        assert_eq!((r.pieces, r.unfinished), (None, Vec::new()));
+        // checked: the picker's set
+        t.checking = false;
+        t.checked = true;
+        assert_eq!(t.resume_data().pieces, Some(Bitfield::new(4, false)));
     }
 }
