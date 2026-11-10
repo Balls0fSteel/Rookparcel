@@ -15,7 +15,7 @@ use rookparcel_core::{
     TrackerStatus, VERSION,
 };
 use rookparcel_frontend::detail::peer_flags;
-use rookparcel_frontend::seeding::{GoalAction, SeedGoal};
+use rookparcel_frontend::seeding::SeedGoal;
 use rookparcel_frontend::{icons, lang};
 
 use super::auth::{self, constant_time_eq, random_hex};
@@ -1032,11 +1032,12 @@ fn preferences(st: &State, shared: &Shared, local: bool) -> Json {
     // none reads them (D67)
     let local = local && !st.hosted;
     // The seeding goal as qBittorrent's share limits, which the *arr apps read to know when a
-    // stopped download may be removed. Only a goal that stops counts: one that caps the upload
-    // keeps the torrent seeding. The goal needs every set target, qBittorrent's limits any one,
+    // stopped download may be removed. Only a default goal that stops counts: one that is off
+    // or caps the upload keeps the torrent seeding (a torrent's own goal is reported with the
+    // torrent). The goal needs every set target, qBittorrent's limits any one,
     // so we stop later than this says, never earlier (docs/INTEGRATIONS.md gap 2).
     let goal = p.seeding_goal.goal;
-    let stops = p.seeding_goal.action() == GoalAction::Stop;
+    let stops = p.seeding_goal.default_stops();
     Json::obj()
         .with("locale", lang::current())
         .with("save_path", p.save_path.as_str())

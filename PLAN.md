@@ -1,8 +1,8 @@
 # Rookparcel plan
 
-Last updated: 2026-11-10_210923_1794341363
+Last updated: 2026-11-10_220442_1794344682
 
-Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D67](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
+Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D68](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
 ## Vision
 
@@ -36,6 +36,8 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 **1.2.29, published 2026-11-09:** the theme pass and the Win32 dark mode (1.2.22-1.2.29, D63, D64), tested on the Xubuntu, Windows 11 and macOS VMs and this PC ([notes](docs/releases/1.2.29.md)); `update.txt` says `stable=1.2.29`; the wiki has the Dark-mode page. Open hand checks in BACKLOG "Themes" (a Windows 10 1809 VM, a phone and Safari for the Web UI themes) and "Files tab folder tree"; the nox Docker image's first push is still untested. Next on macOS: drop the legacy notification centre (BACKLOG "macOS" (A)).
 
 **1.2.44, published 2026-11-10 (2026-11-10_210923_1794341363):** `update.txt` says `stable=1.2.44`; work goes on `main` (the branch `rename-rookparcel` was deleted after the release, 2026-11-10). Since 1.2.30: Win32 dark-list fixes (1.2.31-1.2.32); no full recheck after closing during a resume check (1.2.33, an engine fix for every platform); Help > Donate (1.2.34; `site/donate.html` is on `main`); Win32 notes that grow with their text (1.2.35); the Logger without tracker noise (1.2.36); lower GTK buttons (1.2.37); the Mac first-run guide and `site/install.html` (1.2.38, on `main`); Help > Statistics (1.2.39, D65, **remote protocol 18**); trackers for new downloads (1.2.40, D66); Run Program (1.2.41, D67); the VM runs and their fixes (1.2.42, 1.2.43: shell lines with codes refused, nox applies stored UPnP/DHT/LSD settings before the engine starts). A bug review of everything since 1.2.30 (1.2.44) fixed five things: the "added" program lost when a torrent finished at once, `-c` behind a shell option with a value, an empty %L, the host's Run Program lines readable in a hosted Web UI, GTK Statistics outliving the main window; what it found and left is in BACKLOG "Statistics, trackers and Run Program", the same-computer proxy case first (documented, the owner's choice). Every client ran the three new features with real transfers, and nox's local-only rule held from a second machine (changelog). Release text: `docs/releases/1.2.44.md` (protocol 18 means a 1.2.44 GUI and an older daemon do not mix). The site's news entry and the wiki are updated. Not done of RELEASING.md step 5 (changelog): the setup, zip, AppImages, Flatpaks, dmg and container image tried by hand on the VMs, and the update from 1.2.30 through Help > Check for Updates. Open: the 33 translations of 1.2.34-1.2.43 are machine-made; 1.2.44's GTK line and shared-frontend change have not run on the VMs; a try of 1.2.33's fix with the installed client (force a recheck of a big torrent, exit, start: only that one is hashed); a real session's Logger with private torrents (1.2.36); the owner's look at the GTK sizes on a real desktop (1.2.37); the dmg step and real Macs for the guide (1.2.38); the rest in BACKLOG "Themes", "Localisation", "GTK desktop checks", "macOS" and "Statistics, trackers and Run Program".
+
+**1.2.45, on `main`, not released (2026-11-10_220442_1794344682, D68):** the default seeding goal no longer stops anything until "Limit the upload rate to [0: stop]" is ticked (as µTorrent ships it); a goal acts on a torrent once, so a torrent started again seeds on; the Logger says what was reached; settings from before are carried over once. Open: a release (notes `docs/releases/1.2.45.md`, the site's news, `update.txt`), `docs/wiki` copied to the wiki, and the hand checks in BACKLOG "Seeding goals" (a real updated profile, the pages in the three GUIs and the Web UI).
 
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 
@@ -85,7 +87,7 @@ Q1-Q15 are resolved; their answers and the original Q10 interop setup are in the
 
 - UI artwork (D27-D30): the bold family passed its revision 6 review (131/131) and is integrated (gate 10); revisions 3-6 and their reviews are in the [changelog archive](docs/archive/README.md). Optional: hand-drawn 20 px globe and pylon, dedicated 48/64 px drawings, and a web-ui globe matching the network globe.
 - Compare Properties > Advanced and `rss.*` settings with the owner's real µTorrent 2.2.1 in `z_exclude_uTorrent/` (gitignored). Its Add dialog was inspected via scripted captures/control dumps; the remaining wording and behavior need comparison. The owner captured all 15 Preferences pages (General through Advanced > Run Program) as `z_exclude_uTorrent/screenshots/*.webp` on 2026-10-26: compare each page of our Preferences against them (Road to 1.0 item 9).
-- D46 and D50-D67 are settled; no decision is proposed.
+- D46 and D50-D68 are settled; no decision is proposed.
 - Decide the Flathub permission/submission approach (item 7); the recorded exception policy requires the owner's own text.
 
 

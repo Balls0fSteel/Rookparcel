@@ -36,7 +36,7 @@ use rookparcel_frontend::rss::view::{self as rss_view, FeedForm, ItemRow};
 use rookparcel_frontend::rss::{AddRequest, Download, FeedId, RssDownloader, Worker};
 use rookparcel_frontend::scheduler::{Mode, Schedule, Scheduler};
 use rookparcel_frontend::search::{Source as SearchSource, load_sources, store_sources};
-use rookparcel_frontend::seeding::{GoalAction, SeedGoal, SeedingGoal};
+use rookparcel_frontend::seeding::{SeedGoal, SeedingGoal};
 use rookparcel_frontend::status::{self, status_icon};
 use rookparcel_frontend::torrent_folders::{self, TorrentFiles, TorrentFolders, Watcher};
 use rookparcel_frontend::tracker_list::{self, TrackerList};
@@ -944,6 +944,8 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
         .unwrap_or_else(|| glib::home_dir().join("Downloads"))
         .to_string_lossy()
         .into_owned();
+    // a seeding goal stored before 1.2.45
+    rookparcel_frontend::seeding::migrate(&mut prefs);
     let mut opts = Options::load(&prefs, &downloads);
     // the first start of a profile, the default one included (D53): asked before
     // `first_run_settings` writes the first keys
@@ -1803,6 +1805,7 @@ fn on_alerts() {
                     let key = info_hashes.key_hex();
                     a.prefs.remove(&format!("torrent.{key}.label"));
                     a.prefs.remove(&format!("torrent.{key}.paused"));
+                    SeedGoal::forget(&mut a.prefs, &key);
                 }
                 Alert::RemoteDisconnected { ref message } => {
                     a.detail.push_log(format!("{} {}", now_hms(), alert.message()));
@@ -3000,17 +3003,10 @@ fn run_scheduler(a: &mut App, applied: Option<&Options>) {
 /// Preferences > Queueing's seeding goal (or the torrent's own, from Properties) for a finished
 /// torrent.
 fn seeding_goal(a: &mut App, st: &rookparcel_core::TorrentStatus) {
-    if !st.is_finished {
-        return;
+    let goal = a.seeding_goal;
+    if let Some(line) = goal.run(&mut a.prefs, st, &a.handle.torrent(st.id)) {
+        a.detail.push_log(format!("{} {line}", now_hms()));
     }
-    let own = SeedGoal::load_override(&a.prefs, &st.info_hashes.key_hex());
-    let Some(action) = a.seeding_goal.check(st, own) else { return };
-    action.apply(&a.handle.torrent(st.id));
-    let what = match action {
-        GoalAction::Stop => tr!(SeedingGoalStopped).to_owned(),
-        GoalAction::LimitUpload(b) => tr!(SeedingGoalLimited, rate = fmt::speed_always(b)),
-    };
-    a.detail.push_log(format!("{} {}", now_hms(), tr!(LogSeedingGoal, name = st.name, what)));
 }
 
 /// The name of the torrent in the list with info-hash `key` (`InfoHashes::key_hex`).

@@ -49,22 +49,31 @@ The seeding goal decides when a finished torrent has seeded enough. Under **Seed
 | **Minimum ratio (%): [0: no ratio goal]** | Upload this percentage of what the torrent downloaded. 150 means one and a half times. | 150 |
 | **Minimum seeding time (minutes): [0: no time goal]** | Seed for at least this many minutes. | 0 |
 
-With both set, both must be reached. With both at 0, there is no goal and torrents seed until you stop them.
+With both set, both must be reached. With both at 0, there is no goal.
+
+These two numbers do nothing by themselves. At first, torrents seed until you stop them, whatever their ratio.
 
 **When a torrent reaches the seeding goal (forced torrents never do):**
 
-- By default it is stopped. It leaves the queue and shows as **Finished**.
-- Tick **Limit the upload rate to (kB/s): [0: stop]** and enter a rate to keep it seeding slowly instead: its own upload limit is set to that rate. With 0, it is stopped anyway. A lower limit the torrent already has stays.
+- **Limit the upload rate to (kB/s): [0: stop]** puts the goal in force. It is off at first.
+- Ticked with 0, a torrent that reached the goal is stopped. It leaves the queue and shows as **Finished**.
+- Ticked with a rate, the torrent keeps seeding slowly: its own upload limit is set to that rate. A lower limit the torrent already has stays.
 
-The **Logger** tab writes "seeding goal reached, stopped" or "seeding goal reached, upload limited to ..." with the torrent's name.
+The **Logger** tab writes the torrent's name and what was reached, for example "seeding goal reached, stopped (ratio 1.523, goal 1.500)" or "seeding goal reached, upload limited to ...".
 
 Only queued torrents are checked: a force-started, stopped, checking or still-downloading torrent is left alone.
+
+A goal acts on a torrent once. If you start a torrent again after its goal stopped it, it seeds on until you stop it. It is stopped again only after you change the goal and the torrent reaches the new one.
+
+Until version 1.2.44 the goal was always in force and stopped every torrent at 150 %. An update leaves a goal you never changed switched off. A goal you had changed keeps stopping torrents: the box is ticked for you, with 0.
 
 ### A goal for one torrent
 
 1. Select the torrent and choose **Properties** (<kbd>Enter</kbd>).
 2. Under **Seeding Goal**, tick **Override default settings**.
 3. Set **Minimum ratio (%): [0: no ratio goal]** and **Minimum seeding time (minutes): [0: no time goal]**. Both 0 makes this torrent seed for ever.
+
+A torrent's own goal is always in force, also while the box in Preferences is off: the torrent is stopped when it reaches it (or its upload is limited, when the box is ticked with a rate).
 4. Click **OK**.
 
 ![The Torrent Properties dialog](images/properties.png)
@@ -96,7 +105,7 @@ It applies to torrents that finish from now on. More on folders and moving files
 ## In the GTK window and the Web UI
 
 - **GTK window**: the same Queueing page, Properties and menus.
-- **Web UI**: the same Queueing page. Its seeding goal box reads **Limit the upload rate instead of stopping the torrent**, with the rate beside it; 0 stops the torrent anyway. The torrent menu has the same queue and Initial Seeding items.
+- **Web UI**: the same Queueing page. Its seeding goal box reads **Stop the torrent or limit its upload rate**, with the rate beside it; 0 stops the torrent. The torrent menu has the same queue and Initial Seeding items.
 - **rookparcel-nox**: the queue limits and the seeding goal are set in its Web UI's Preferences. `--move-on-complete DIR` moves each torrent that finishes into a folder.
 
 ## Related pages

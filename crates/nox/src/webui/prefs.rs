@@ -454,7 +454,7 @@ pub(crate) static FIELDS: &[Field] = &[
     ),
     field!(
         "queue.seed_limit",
-        Some(S::PrefGoalLimitInstead),
+        Some(S::PrefGoalAct),
         Kind::Bool,
         |w| Value::Bool(w.prefs.seeding_goal.limit_upload),
         |w, v| w.prefs.seeding_goal.limit_upload = boolean(&v)

@@ -10,9 +10,8 @@ use super::{Core, Events, Power, UpdateOffer, Wakeup};
 use crate::auto_shutdown::{Action, Mode as AutoMode, Step};
 use crate::detail::Tab;
 use crate::options::Options;
-use crate::seeding::{GoalAction, SeedGoal};
 use crate::update::{Kind, Manifest, Version};
-use crate::{fmt, torrent_folders, tr};
+use crate::{torrent_folders, tr};
 
 impl Core {
     /// The timer's body, once a second: asks the engine for the torrents' and the session's
@@ -124,17 +123,10 @@ impl Core {
     /// Preferences > Queueing's seeding goal (or the torrent's own, from Properties) for a
     /// finished torrent.
     pub(super) fn seeding_goal(&mut self, st: &TorrentStatus) {
-        if !st.is_finished {
-            return;
+        let goal = self.seeding_goal;
+        if let Some(line) = goal.run(&mut self.prefs, st, &self.handle.torrent(st.id)) {
+            self.log(line);
         }
-        let own = SeedGoal::load_override(&self.prefs, &st.info_hashes.key_hex());
-        let Some(action) = self.seeding_goal.check(st, own) else { return };
-        action.apply(&self.handle.torrent(st.id));
-        let what = match action {
-            GoalAction::Stop => tr!(SeedingGoalStopped).to_owned(),
-            GoalAction::LimitUpload(b) => tr!(SeedingGoalLimited, rate = fmt::speed_always(b)),
-        };
-        self.log(tr!(LogSeedingGoal, name = st.name, what));
     }
 
     /// Preferences > Directories "Automatically load .torrents from": the new files in the

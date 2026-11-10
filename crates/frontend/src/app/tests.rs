@@ -278,13 +278,30 @@ fn seeding_only_hours_put_every_torrent_in_upload_mode() {
 fn a_seed_past_its_goal_is_stopped() {
     let mut s = Setup::new();
     s.options.gui.seed_ratio = 150;
+    // the goal's box: off, as it is at first, the default goal does nothing
+    s.options.gui.seed_limit_upload = true;
     let mut core = s.start("goal");
     let mut st = status(7, 7, "seed", true);
     st.all_time_upload = 300;
     st.all_time_download = 100;
     st.total_wanted_done = 100;
     core.handle_alerts(vec![Alert::StateUpdate(vec![st.clone()])]);
-    assert!(logged(&core, &tr!(LogSeedingGoal, name = "seed", what = tr!(SeedingGoalStopped))));
+    let line = format!(
+        "{} ({})",
+        tr!(LogSeedingGoal, name = "seed", what = tr!(SeedingGoalStopped)),
+        tr!(SeedingGoalRatio, ratio = "3.000", goal = "1.500")
+    );
+    assert!(logged(&core, &line), "the Logger says what was reached");
+    let stops = |c: &Core| c.detail().log.iter().filter(|l| l.contains(&line)).count();
+    assert_eq!(stops(&core), 1);
+    // started again by the user, it seeds on: the goal acts on a torrent once
+    core.handle_alerts(vec![Alert::StateUpdate(vec![st.clone()])]);
+    assert_eq!(stops(&core), 1);
+    // a goal changed since acts again
+    let key = hash(7).key_hex();
+    SeedGoal::store_override(core.prefs_mut(), &key, Some(SeedGoal { ratio_pct: 200, minutes: 0 }));
+    core.handle_alerts(vec![Alert::StateUpdate(vec![st.clone()])]);
+    assert!(logged(&core, &tr!(SeedingGoalRatio, ratio = "3.000", goal = "2.000")));
     // its own goal, higher, wins
     let mut other = status(8, 8, "own", true);
     other.all_time_upload = 300;

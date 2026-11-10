@@ -3286,7 +3286,13 @@ fn the_arr_apps_share_limits_round_trip() {
     let num = |v: Option<&Json>| v.and_then(Json::as_f64).unwrap_or(f64::NAN);
     let limits = |x: &Json| (num(x.get("ratio_limit")), num(x.get("seeding_time_limit")));
 
-    // the global seeding goal (150 %, then stop) as qBittorrent's share limits
+    // the global seeding goal (150 %) is not in force until its box is ticked: no limit yet
+    let p = t.get(&sid, "/api/v2/app/preferences").json();
+    assert_eq!(p.get("max_ratio_enabled").and_then(Json::as_bool), Some(false));
+    assert_eq!(num(p.get("max_ratio")), 1.5);
+    // ticked with a rate of 0 it stops, which is qBittorrent's share limit
+    let r = t.pa(&sid, "/pa/prefs", r#"{"queue.seed_limit":true,"queue.seed_limit_kib":0}"#);
+    assert_eq!(r.status, 204, "{}", r.text());
     let p = t.get(&sid, "/api/v2/app/preferences").json();
     assert_eq!(p.get("max_ratio_enabled").and_then(Json::as_bool), Some(true));
     assert_eq!(num(p.get("max_ratio")), 1.5);

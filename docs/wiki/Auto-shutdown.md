@@ -28,7 +28,7 @@ The choice lasts for this run only: every start of Rookparcel begins at **Disabl
 
 **Downloads complete** waits for every started torrent that has not finished downloading: running, forced or queued ones, including one that is checking, fetching a magnet link's file list, or held back by the scheduler. A torrent whose wanted files are all done counts as finished, even with skipped files left.
 
-**Everything completes** also waits for every started torrent that is seeding or queued to seed. A seed completes when its [seeding goal](Queueing-and-seeding#seeding-goal) stops it. A seed with no goal, or a force-started one, seeds on and holds the shutdown back, so set a goal before you choose an "Everything" item.
+**Everything completes** also waits for every started torrent that is seeding or queued to seed. A seed completes when its [seeding goal](Queueing-and-seeding#seeding-goal) stops it. A seed with no goal in force (the goal's box in Preferences > Queueing is off at first), or a force-started one, seeds on and holds the shutdown back, so put a goal in force before you choose an "Everything" item.
 
 In both cases:
 

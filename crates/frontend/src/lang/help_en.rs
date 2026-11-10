@@ -193,13 +193,13 @@ helps! {
     /// engine: crates/core/src/engine/torrent.rs (is_inactive, update_inactive), settings.dont_count_slow_torrents, inactive_down_rate, inactive_up_rate, auto_manage_startup
     PrefSlow = "A torrent moving less than about 2 kB/s for a minute stops taking a download or seed slot, so another can start; it still counts toward the total. inactive_down_rate and inactive_up_rate on the Advanced page set the speeds.";
     /// frontend: crates/frontend/src/seeding.rs (SeedGoal::reached, ratio in percent), crates/core/src/status.rs (ratio)
-    PrefRatio = "A queued torrent's goal: upload this percentage of what it downloaded, so 150 means one and a half times. 0 means no ratio goal; with a time goal too, both must be reached. Properties can set a torrent's own goal.";
+    PrefRatio = "The default goal of queued torrents: upload this percentage of what they downloaded, so 150 means one and a half times. 0 means no ratio goal; with a time goal too, both must be reached. The default goal does nothing until the box below is ticked. Properties can set a torrent's own goal, which always applies.";
     /// frontend: crates/frontend/src/seeding.rs (SeedGoal::reached, seeding_duration)
-    PrefSeedTime = "A queued torrent's goal: seed for this many minutes. 0 means no time goal; with a ratio goal too, both must be reached.";
-    /// frontend: crates/frontend/src/seeding.rs (SeedingGoal::action: LimitUpload when on and above 0, else Stop)
-    PrefGoalLimit = "Instead of stopping a torrent that reached its seeding goal, caps its upload rate at this number, so it keeps seeding slowly. 0, or the box off, stops it.";
-    /// nox: crates/nox/src/webui/prefs.rs (queue.seed_limit), crates/frontend/src/seeding.rs (SeedingGoal::action)
-    PrefGoalLimitInstead = "A torrent that reached its seeding goal keeps seeding at the upload rate below instead of stopping. With a rate of 0 it stops anyway.";
+    PrefSeedTime = "The default goal of queued torrents: seed for this many minutes. 0 means no time goal; with a ratio goal too, both must be reached. The default goal does nothing until the box below is ticked.";
+    /// frontend: crates/frontend/src/seeding.rs (SeedingGoal::goal_for: the default goal only with the box on; action: LimitUpload above 0, else Stop; run: once per torrent and goal)
+    PrefGoalLimit = "Puts the seeding goal above in force. Ticked, a torrent that reached the goal is stopped when this number is 0, or keeps seeding with its upload rate capped at this number. Off, as it is at first, torrents seed on past the goal. A torrent you start again after its goal seeds on.";
+    /// nox: crates/nox/src/webui/prefs.rs (queue.seed_limit), crates/frontend/src/seeding.rs (SeedingGoal::goal_for, action, run)
+    PrefGoalAct = "Puts the seeding goal above in force: a torrent that reached it is stopped when the rate below is 0, or keeps seeding at that upload rate. Off, as it is at first, torrents seed on past the goal. A torrent you start again after its goal seeds on.";
 
     // ---- Preferences > Scheduler
     /// frontend: crates/frontend/src/scheduler.rs (Schedule::mode_at: Full speed while off)

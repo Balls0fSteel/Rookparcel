@@ -139,9 +139,9 @@ More: [Connection, ports and firewall](Connection-ports-and-firewall).
 | **Maximum number of active downloads** | The most queued torrents downloading at once. -1 means no limit. |
 | **Maximum number of active seeds** | The most finished queued torrents seeding at once. -1 means no limit. |
 | **Don't count slow torrents toward these limits** | A torrent moving less than about 2 kB/s for a minute stops taking a slot, so another can start. |
-| **Minimum ratio (%)** (Seeding Goal) | Upload this percentage of what was downloaded; 150 means one and a half times. 0 means no ratio goal. |
-| **Minimum seeding time (minutes)** | Seed for this many minutes. 0 means no time goal. With both goals set, both must be reached. |
-| **Limit the upload rate to (kB/s): [0: stop]** | Instead of stopping a torrent that reached its goal, caps its upload rate, so it keeps seeding slowly. 0, or the box off, stops it. |
+| **Minimum ratio (%)** (Seeding Goal) | Upload this percentage of what was downloaded; 150 means one and a half times. 0 means no ratio goal. Does nothing until the box below is ticked. |
+| **Minimum seeding time (minutes)** | Seed for this many minutes. 0 means no time goal. With both goals set, both must be reached. Does nothing until the box below is ticked. |
+| **Limit the upload rate to (kB/s): [0: stop]** | Puts the seeding goal in force. Ticked, a torrent that reached the goal is stopped (0) or keeps seeding with its upload rate capped at the number. Off, as it is at first, torrents seed on past the goal. |
 
 More: [Queueing and seeding](Queueing-and-seeding).
 

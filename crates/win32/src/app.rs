@@ -41,7 +41,7 @@ use rookparcel_frontend::rss::{AddRequest, Download, FeedId, RssDownloader, Work
 use rookparcel_frontend::scheduler::{Mode, Schedule, Scheduler};
 use rookparcel_frontend::scrape::Scrapes;
 use rookparcel_frontend::search::{Source as SearchSource, load_sources, store_sources};
-use rookparcel_frontend::seeding::{GoalAction, SeedGoal, SeedingGoal};
+use rookparcel_frontend::seeding::{SeedGoal, SeedingGoal};
 use rookparcel_frontend::setup_guide;
 use rookparcel_frontend::status::{self, Category, status_icon};
 use rookparcel_frontend::torrent_folders::{self, TorrentFiles, TorrentFolders, Watcher};
@@ -771,6 +771,8 @@ pub fn run(args: Args) -> i32 {
             key => prefs.set("ui.theme", key),
         }
     }
+    // a seeding goal stored before 1.2.45
+    rookparcel_frontend::seeding::migrate(&mut prefs);
     let mut opts = Options::load(&prefs, &downloads_folder());
     controls::set_alternate_rows(opts.gui.alternate_rows);
     // light or dark, decided before any window exists (D64)
@@ -3063,6 +3065,7 @@ unsafe fn on_alerts(hwnd: HWND) {
                     a.keys.remove(&key);
                     a.prefs.remove(&format!("torrent.{key}.label"));
                     a.prefs.remove(&format!("torrent.{key}.paused"));
+                    SeedGoal::forget(&mut a.prefs, &key);
                     SeedGoal::store_override(&mut a.prefs, &key, None);
                     removed_any = true;
                 }
@@ -4331,17 +4334,10 @@ unsafe fn on_command(hwnd: HWND, id: u16) {
 /// A queued seed that reached its seeding goal (its own, else Preferences > Queueing's) is
 /// stopped or held to the goal's upload rate.
 fn seeding_goal(a: &mut App, st: &rookparcel_core::TorrentStatus) {
-    if !st.is_finished {
-        return;
+    let goal = a.seeding_goal;
+    if let Some(line) = goal.run(&mut a.prefs, st, &a.handle.torrent(st.id)) {
+        a.detail.push_log(format!("{} {line}", now_hms()));
     }
-    let own = SeedGoal::load_override(&a.prefs, &st.info_hashes.key_hex());
-    let Some(action) = a.seeding_goal.check(st, own) else { return };
-    action.apply(&a.handle.torrent(st.id));
-    let what = match action {
-        GoalAction::Stop => tr!(SeedingGoalStopped).to_owned(),
-        GoalAction::LimitUpload(b) => tr!(SeedingGoalLimited, rate = fmt::speed_always(b)),
-    };
-    a.detail.push_log(format!("{} {}", now_hms(), tr!(LogSeedingGoal, name = st.name, what)));
 }
 
 /// The context menu's Properties (and a double-click on a torrent that is not finished): the

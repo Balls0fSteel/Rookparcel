@@ -4,6 +4,16 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-10_220442_1794344682: Version 1.2.45: the default seeding goal is off until its box is ticked (D68)
+
+- **Reported by the owner:** of 41 seeds started together about half went back to paused at once. Cause: Preferences > Queueing's default goal (150 %) was always in force, and with "Limit the upload rate" off it stopped every queued seed past it, again after each Start. µTorrent 2.2.1 has the same 150 % with that box off and stops nothing.
+- **Changed (`frontend::seeding`):** the default goal acts only while "Limit the upload rate to (kB/s): [0: stop]" is ticked (0 stops, a rate caps); off, as at first, torrents seed on. A torrent's own goal (Properties, the Web API's share limits, an import) always acts, which the *arr apps' Remove Completed needs. A goal acts on a torrent once (`torrent.<key>.goal_done` = the goal that acted): a torrent started again seeds on, a changed goal acts again. `SeedingGoal::run` is the one implementation the Win32, GTK, Mac (shared model) and nox loops call; they had four copies.
+- **Carried over once (`seeding::migrate`, marker `queue.seed_goal_rule=2`, called where each program reads its settings):** a profile at the untouched 150 % / 0 minutes is left with the box off, so its goal is gone; a profile whose goal was changed gets the box ticked with 0 and keeps stopping. A new profile has nothing to carry.
+- **Logger:** the line names what was reached: "seeding goal reached, stopped (ratio 1.523, goal 1.500)", with the seeding time when that target is set.
+- **Web UI and shim:** the box reads "Stop the torrent or limit its upload rate" (`PrefGoalAct`, replacing `PrefGoalLimitInstead`); `app/preferences` reports `max_ratio_enabled` / `max_seeding_time_enabled` only for a default goal ticked with 0.
+- **Also:** a removed torrent's own goal keys are dropped in every client (only nox did). Three strings in 34 tables, machine-made; help texts, the wiki's Queueing, Preferences reference and Auto Shutdown pages, INTEGRATIONS, PORTING and `tools/arr-test`.
+- **Validation:** tests on Windows: frontend (381 + 4), nox (all suites), Win32 (140, one thread); new tests for the box-off default, the once-only rule and the carry-over; clippy `-D warnings` for the workspace, the GTK crate (Linux target) and the Mac crate (x86_64 darwin); fmt. **Not done:** no run of a real updated profile or of any GUI page; the GTK and Mac crates were only linted from Windows, not run; the wiki not copied to the wiki repository; no release.
+
 ## 2026-11-10_210923_1794341363: Release 1.2.44 published
 
 - **Done:** `main` at `8d04e05d` with CI, FreeBSD and Fuzz green; tag `v1.2.44`; the Release run built 13 files and `SHA256SUMS` and both container images (`:1.2.44`, `:latest`); published as the latest release (2026-11-10 20:09 UTC). Then the site's news entry pushed to `main` and `docs/wiki` copied to the wiki (seven pages changed).

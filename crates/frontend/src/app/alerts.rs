@@ -123,6 +123,7 @@ impl Core {
                 let key = info_hashes.key_hex();
                 self.prefs.remove(&format!("torrent.{key}.label"));
                 self.prefs.remove(&format!("torrent.{key}.paused"));
+                crate::seeding::SeedGoal::forget(&mut self.prefs, &key);
                 // the torrent shown went away
                 if shown(id) {
                     self.detail.select(None);

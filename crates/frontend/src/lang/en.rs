@@ -415,6 +415,11 @@ strings! {
     LogSeedingGoal = "{name}: seeding goal reached, {what}";
     SeedingGoalStopped = "stopped";
     SeedingGoalLimited = "upload limited to {rate}";
+    /// In brackets after the line above, what was reached: {ratio} and {goal} are share
+    /// ratios like 1.523.
+    SeedingGoalRatio = "ratio {ratio}, goal {goal}";
+    /// The same for the seeding time: {time} and {goal} are durations like 2h 5m.
+    SeedingGoalTime = "seeded {time}, goal {goal}";
 
     // ---- Message boxes and errors
 
@@ -815,7 +820,8 @@ strings! {
     PrefSeedTime = "Minimum seeding time (minutes): [0: no time goal]";
     PrefGoalReached = "When a torrent reaches the seeding goal (forced torrents never do):";
     PrefGoalLimit = "Limit the upload rate to (kB/s): [0: stop]";
-    PrefGoalLimitInstead = "Limit the upload rate instead of stopping the torrent";
+    /// The Web UI's box for the line above; off, nothing happens at the goal.
+    PrefGoalAct = "Stop the torrent or limit its upload rate";
     PrefAltUpRate = "Alternative upload rate (kB/s): [0: unlimited]";
     PrefAltDownRate = "Alternative download rate (kB/s): [0: unlimited]";
     PrefUseAltRates = "Use the alternative rate limits now";

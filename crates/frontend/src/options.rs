@@ -72,7 +72,7 @@ pub struct GuiOptions {
     pub seed_ratio: u32,
     pub seed_minutes: u32,
     /// "Limit the upload rate to X kB/s [0: stop]" when the goal is reached
-    /// (`queue.seed_limit`, `queue.seed_limit_kib`); off stops the torrent.
+    /// (`queue.seed_limit`, `queue.seed_limit_kib`); off, the default goal does nothing.
     pub seed_limit_upload: bool,
     pub seed_limit_kib: u32,
     /// Load the IP filter at start and on Apply (`ipfilter.enable`).
@@ -193,6 +193,7 @@ impl GuiOptions {
         prefs.set("queue.seed_time", self.seed_minutes);
         prefs.set_bool("queue.seed_limit", self.seed_limit_upload);
         prefs.set("queue.seed_limit_kib", self.seed_limit_kib);
+        prefs.set(crate::seeding::RULE_KEY, crate::seeding::RULE);
         prefs.set_bool("ipfilter.enable", self.ip_filter);
         if self.ip_filter_path.trim().is_empty() {
             prefs.remove("ipfilter.path");
@@ -353,7 +354,7 @@ mod tests {
         assert!(o.gui.confirm_delete && o.gui.close_to_tray && !o.gui.minimize_to_tray && o.gui.pex);
         assert!(!o.gui.ip_filter && o.gui.show_add_dialog && o.gui.activate_on_add);
         assert!(o.gui.check_updates && !o.gui.update_beta);
-        assert_eq!(o.gui.seeding_goal(), SeedingGoal::default(), "150 %, no time, stop");
+        assert_eq!(o.gui.seeding_goal(), SeedingGoal::default(), "150 %, no time, not in force");
         assert_eq!(o.gui.property_defaults(), Defaults { upload_slots: 0, seed_goal: SeedGoal::default() });
         assert!(!o.gui.move_completed && o.gui.move_only_default && o.gui.completed_dir.is_empty());
         assert!(!o.gui.move_add_label, "off by default, as in µTorrent");

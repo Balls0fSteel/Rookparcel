@@ -880,10 +880,12 @@ fn an_unused_category_survives_a_restart() {
 /// the torrent drops them again.
 #[test]
 fn the_arr_apps_limits_and_categories_are_the_hosts_keys() {
-    // the window's goal: no ratio, 30 minutes, then stop
+    // the window's goal: no ratio, 30 minutes, then stop (its box ticked, a rate of 0)
     let mut options = Prefs::default();
     options.set("queue.seed_ratio", 0);
     options.set("queue.seed_time", 30);
+    options.set("queue.seed_limit", 1);
+    options.set("queue.seed_limit_kib", 0);
     let t = Harness::start("arr", options, Some(PASS));
     let sid = t.login();
     let num = |v: Option<&Json>| v.and_then(Json::as_f64).unwrap_or(f64::NAN);

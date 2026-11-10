@@ -59,10 +59,10 @@ use rookparcel_core::{
 use rookparcel_frontend::options::GuiOptions;
 use rookparcel_frontend::scheduler::{Mode, Schedule, Scheduler};
 use rookparcel_frontend::scrape::Scrapes;
-use rookparcel_frontend::seeding::{GoalAction, SeedGoal, SeedingGoal};
+use rookparcel_frontend::seeding::{SeedGoal, SeedingGoal};
 use rookparcel_frontend::torrent_folders::{self, Poller, TorrentFiles, TorrentFolders};
+use rookparcel_frontend::tr;
 use rookparcel_frontend::tracker_list::{self, TrackerList};
-use rookparcel_frontend::{fmt, tr};
 
 use auth::{BanList, PasswordHash};
 use json::Json;
@@ -1034,6 +1034,10 @@ impl WebUi {
                 options.set(k, v);
             }
         }
+        if hosted.is_none() {
+            // a goal stored before 1.2.45 (the host carries its own over)
+            rookparcel_frontend::seeding::migrate(&mut options);
+        }
         if let Some(Json::Arr(v)) = stored.get("recent_dirs") {
             // most recent first in the file; remember_dir puts each first, so go backwards
             for d in v.iter().rev().filter_map(Json::as_str) {
@@ -1417,16 +1421,11 @@ impl WebUi {
                         st.update(s.clone(), now);
                         // Queueing > Seeding Goal: stop or limit a queued seed past its goal
                         if s.is_finished && !hosted {
-                            let own = SeedGoal::load_override(&st.options, &s.info_hashes.key_hex());
-                            if let Some(action) = goal.check(s, own) {
-                                action.apply(&self.shared.handle.torrent(s.id));
-                                let what = match action {
-                                    GoalAction::Stop => tr!(SeedingGoalStopped).to_owned(),
-                                    GoalAction::LimitUpload(b) => {
-                                        tr!(SeedingGoalLimited, rate = fmt::speed_always(b))
-                                    }
-                                };
-                                st.push_log(Some(s.id), tr!(LogSeedingGoal, name = s.name, what), now);
+                            let t = self.shared.handle.torrent(s.id);
+                            if let Some(line) = goal.run(&mut st.options, s, &t) {
+                                st.push_log(Some(s.id), line, now);
+                                // the mark of the goal done
+                                self.shared.save(&mut st);
                             }
                         }
                     }
@@ -1458,8 +1457,7 @@ impl WebUi {
                         st.removals += 1;
                         let key = e.status.info_hashes.key_hex();
                         st.by_key.remove(&key);
-                        let had_goal = SeedGoal::load_override(&st.options, &key).is_some();
-                        SeedGoal::store_override(&mut st.options, &key, None);
+                        let had_goal = SeedGoal::forget(&mut st.options, &key);
                         let forget = st.torrent_categories.remove(&e.hash).is_some() | had_goal;
                         if hosted {
                             // the host drops its own keys too; removing an absent key is not

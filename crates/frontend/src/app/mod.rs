@@ -310,6 +310,8 @@ pub fn hms(unix: i64, offset: i32) -> String {
 /// its own port). Returns the options and whether the Setup Guide is to be shown first (D53),
 /// in which case the GUI shows it and calls this again afterwards.
 pub fn prepare_options(prefs: &mut Prefs, downloads: &str, remote: bool) -> (Options, bool) {
+    // a seeding goal stored before 1.2.45
+    crate::seeding::migrate(prefs);
     let mut opts = Options::load(prefs, downloads);
     // asked before `first_run_settings` writes the first keys
     let first_start = !remote && crate::setup_guide::should_show(prefs);

@@ -429,6 +429,13 @@ LogUpdateFailed=Update check failed: {error}
 LogSeedingGoal={name}: seeding goal reached, {what}
 SeedingGoalStopped=stopped
 SeedingGoalLimited=upload limited to {rate}
+
+# In brackets after the line above, what was reached: {ratio} and {goal} are share
+# ratios like 1.523.
+SeedingGoalRatio=ratio {ratio}, goal {goal}
+
+# The same for the seeding time: {time} and {goal} are durations like 2h 5m.
+SeedingGoalTime=seeded {time}, goal {goal}
 ErrEngineStart=Cannot start the BitTorrent engine:\n{error}
 AskAssociate=Rookparcel is not the program that opens .torrent files and magnet: links.\n\nAssociate them with Rookparcel?\n\n(Preferences > General > "Check association on startup" turns this question off.)
 
@@ -875,7 +882,9 @@ PrefRatio=Minimum ratio (%): [0: no ratio goal]
 PrefSeedTime=Minimum seeding time (minutes): [0: no time goal]
 PrefGoalReached=When a torrent reaches the seeding goal (forced torrents never do):
 PrefGoalLimit=Limit the upload rate to (kB/s): [0: stop]
-PrefGoalLimitInstead=Limit the upload rate instead of stopping the torrent
+
+# The Web UI's box for the line above; off, nothing happens at the goal.
+PrefGoalAct=Stop the torrent or limit its upload rate
 PrefAltUpRate=Alternative upload rate (kB/s): [0: unlimited]
 PrefAltDownRate=Alternative download rate (kB/s): [0: unlimited]
 PrefUseAltRates=Use the alternative rate limits now
@@ -1798,10 +1807,10 @@ help.PrefActive=The most queued torrents running at once, downloads and seeds to
 help.PrefActiveDownloads=The most queued torrents downloading at once; the next one in the queue starts when one finishes or stops. -1 means no limit.
 help.PrefActiveSeeds=The most finished queued torrents seeding at once; the others wait. -1 means no limit.
 help.PrefSlow=A torrent moving less than about 2 kB/s for a minute stops taking a download or seed slot, so another can start; it still counts toward the total. inactive_down_rate and inactive_up_rate on the Advanced page set the speeds.
-help.PrefRatio=A queued torrent's goal: upload this percentage of what it downloaded, so 150 means one and a half times. 0 means no ratio goal; with a time goal too, both must be reached. Properties can set a torrent's own goal.
-help.PrefSeedTime=A queued torrent's goal: seed for this many minutes. 0 means no time goal; with a ratio goal too, both must be reached.
-help.PrefGoalLimit=Instead of stopping a torrent that reached its seeding goal, caps its upload rate at this number, so it keeps seeding slowly. 0, or the box off, stops it.
-help.PrefGoalLimitInstead=A torrent that reached its seeding goal keeps seeding at the upload rate below instead of stopping. With a rate of 0 it stops anyway.
+help.PrefRatio=The default goal of queued torrents: upload this percentage of what they downloaded, so 150 means one and a half times. 0 means no ratio goal; with a time goal too, both must be reached. The default goal does nothing until the box below is ticked. Properties can set a torrent's own goal, which always applies.
+help.PrefSeedTime=The default goal of queued torrents: seed for this many minutes. 0 means no time goal; with a ratio goal too, both must be reached. The default goal does nothing until the box below is ticked.
+help.PrefGoalLimit=Puts the seeding goal above in force. Ticked, a torrent that reached the goal is stopped when this number is 0, or keeps seeding with its upload rate capped at this number. Off, as it is at first, torrents seed on past the goal. A torrent you start again after its goal seeds on.
+help.PrefGoalAct=Puts the seeding goal above in force: a torrent that reached it is stopped when the rate below is 0, or keeps seeding at that upload rate. Off, as it is at first, torrents seed on past the goal. A torrent you start again after its goal seeds on.
 help.PrefScheduler=Follows the weekly table below hour by hour, in local time. Off, Rookparcel always runs at full speed with the normal settings.
 help.PrefSchedTable=One cell per hour of the week; a click moves a cell on to the next of Full speed, Limited, Turn off and Seeding only, and dragging paints that mode over the cells passed. Limited uses the rates below, Turn off pauses every torrent, Seeding only uploads but downloads nothing.
 help.PrefSchedUp=The global upload limit during the table's Limited hours, in place of the normal one. 0 means unlimited.

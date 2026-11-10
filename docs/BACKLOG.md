@@ -159,6 +159,11 @@ mirror the bitmaps) and the tray menu on screen; the Web UI (`nox`) was not audi
 - Seeding goals lack an end-to-end app-loop check and a real Logger check of
   `seeding goal reached`. A goal's upload cap persists as the torrent's own limit
   after raising the goal; the upload-slot override has no separate stored flag.
+  D68 (1.2.45, the default goal off unless its box is ticked, once per torrent)
+  ran in tests only: an updated real profile, the three GUIs' Queueing pages and
+  the Web UI's new box label are unchecked; the 3 new strings are machine-made
+  in 34 tables. The Web UI's Statistics and qBittorrent's "Finished" filter were
+  not looked at for torrents a goal stopped and the user started again.
   Properties waits up to 2 s for trackers on the GUI thread and leaves a blank
   unedited tracker box alone on timeout. Shim `addTrackers` gives each URL a new tier.
 - Windows Integration: check actual HKCU registration, Explorer/browser opens,

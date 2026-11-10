@@ -19,7 +19,7 @@ for a in sonarr:8989 radarr:7878 prowlarr:9696; do n=${a%%:*}; p=${a##*:}
 done
 ```
 
-The containers reach nox as `rookparcel`, a host name, so its Host check refuses them until the name is allowed (`web_ui_domain_list` through `app/setPreferences`, or Preferences > Web UI > Server domains). For a time-only seeding goal, set nox's global ratio target to 0 (`queue.seed_ratio` in `/pa/prefs`).
+The containers reach nox as `rookparcel`, a host name, so its Host check refuses them until the name is allowed (`web_ui_domain_list` through `app/setPreferences`, or Preferences > Web UI > Server domains). For a time-only seeding goal, set nox's global ratio target to 0 (`queue.seed_ratio` in `/pa/prefs`). The global goal is in force only with `queue.seed_limit` on and `queue.seed_limit_kib` 0 (since 1.2.45); a limit an *arr sends with a grab is the torrent's own and always is.
 
 ## Steps
 
