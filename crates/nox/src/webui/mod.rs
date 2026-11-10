@@ -1681,6 +1681,8 @@ fn logged(a: &Alert) -> bool {
             | Alert::ScrapeReply { .. }
             | Alert::ScrapeFailed { .. }
             | Alert::TrackerError { .. }
+            | Alert::TrackerReply { .. }
+            | Alert::DhtReply { .. }
     )
 }
 

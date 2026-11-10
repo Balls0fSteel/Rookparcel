@@ -1857,6 +1857,8 @@ fn on_alerts() {
                 Alert::NetworkAdapters(_) => {}
                 // on the Trackers tab; the engine logs a private torrent left without a tracker
                 Alert::TrackerError { .. } | Alert::ScrapeFailed { .. } => {}
+                // "received N peers" after every announce: the Trackers tab has the numbers
+                Alert::TrackerReply { .. } | Alert::DhtReply { .. } => {}
                 other => {
                     let name = other.torrent().and_then(|id| a.list.get(id)).map(|st| st.name.clone());
                     a.detail.push_log(match name {

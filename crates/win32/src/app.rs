@@ -3146,6 +3146,9 @@ unsafe fn on_alerts(hwnd: HWND) {
                 // not answer are common, and the engine logs a line of its own when a private
                 // torrent has no tracker left (`Torrent::trackers_went_silent`).
                 Alert::TrackerError { .. } | Alert::ScrapeFailed { .. } => {}
+                // "received N peers" after every announce, for every torrent and tracker: the
+                // Trackers tab has the numbers
+                Alert::TrackerReply { .. } | Alert::DhtReply { .. } => {}
                 other => {
                     let name = other.torrent().and_then(|id| a.list.get(id)).map(|st| st.name.clone());
                     let line = match name {

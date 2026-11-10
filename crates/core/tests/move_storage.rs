@@ -324,6 +324,49 @@ fn a_seed_moves_while_seeding_and_while_stopped_and_keeps_its_path() {
     }
 }
 
+/// Our addition: a file that is gone when a seed starts (a virus scanner took it) costs the
+/// pieces in it. The other files are not hashed again, which libtorrent would do.
+#[test]
+fn a_file_removed_while_stopped_loses_only_its_own_pieces() {
+    let f = fixture();
+    let dir = temp_dir("gone");
+    let state = temp_dir("gone-state");
+    write_files(&f, &dir);
+    {
+        let s = start_with(Some(state.clone()), |_| {});
+        let mut w = Watch::new(s.handle());
+        listen_port(&mut w);
+        let id = add(&mut w, &f, &dir);
+        wait_state(&mut w, id, TorrentState::Seeding, 20);
+        s.shutdown();
+    }
+    // the last file: it shares piece 39 with beta.bin and has piece 40 to itself
+    std::fs::remove_file(dir.join("move-test/sub/gamma.txt")).unwrap();
+
+    let s = start_with(Some(state.clone()), |_| {});
+    let mut w = Watch::new(s.handle());
+    listen_port(&mut w);
+    let id = first_restored(&mut w).id;
+    s.handle().torrent(id).resume();
+    let mut logs = Vec::new();
+    wait(&mut w, 20, "checked", |a| match a {
+        Alert::Log { id: Some(i), message } if *i == id => {
+            logs.push(message.clone());
+            None
+        }
+        Alert::TorrentChecked { id: i } if *i == id => Some(()),
+        _ => None,
+    });
+    assert!(logs.iter().any(|m| m.contains("gamma.txt is missing: 2 pieces")), "{logs:?}");
+    assert!(!logs.iter().any(|m| m.contains("rechecked")), "{logs:?}");
+    let st = wait_state(&mut w, id, TorrentState::Downloading, 20);
+    assert_eq!((st.num_pieces, st.pieces_total), (39, 41));
+    s.shutdown();
+    for d in [dir, state] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
 #[test]
 fn a_skipped_files_part_file_follows_the_move() {
     let f = fixture();

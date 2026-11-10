@@ -2798,6 +2798,16 @@ impl Engine {
                         message: "resume data did not match the files; rechecked".into(),
                     });
                 }
+                if let Some(&first) = res.missing.first() {
+                    let t = self.torrent_ref(id).expect("exists");
+                    let name = t.ti.as_ref().map(|ti| ti.files().file_path(first, "")).unwrap_or_default();
+                    let lost = t.num_pieces - t.num_have();
+                    let message = match res.missing.len() {
+                        1 => format!("{name} is missing: {lost} pieces to download again"),
+                        n => format!("{n} files are missing ({name} first): {lost} pieces to download again"),
+                    };
+                    self.alert(Alert::Log { id: Some(id), message });
+                }
                 let state = self.torrent_ref(id).expect("exists").settled_state();
                 self.alert(Alert::TorrentChecked { id });
                 self.set_state(id, state);

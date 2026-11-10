@@ -292,6 +292,9 @@ pub(crate) struct CheckResult {
     /// A hybrid piece whose v1 and v2 hashes disagreed; the check stopped there (libtorrent
     /// `handle_inconsistent_hashes`).
     pub inconsistent: Option<u32>,
+    /// Files the resume data counted on that are gone, when that was all that was wrong with
+    /// it: `have` is the resume data's set without their pieces, and nothing was hashed.
+    pub missing: Vec<usize>,
 }
 
 /// How a piece compares with the metadata. v1 pieces are checked against their SHA-1, v2
@@ -1431,11 +1434,40 @@ fn check_files(
         }
     }
 
-    if let CheckMode::Resume(have) = mode {
-        if have.len() == num_pieces as usize && resume_matches_files(storage, &have) {
-            return Ok(CheckResult { have, resume_failed: false, inconsistent: None });
+    if let CheckMode::Resume(mut have) = mode {
+        let files = if have.len() == num_pieces as usize {
+            resume_files(storage, &have)
+        } else {
+            ResumeFiles::Mismatch
+        };
+        match files {
+            ResumeFiles::Match => {
+                return Ok(CheckResult {
+                    have,
+                    resume_failed: false,
+                    inconsistent: None,
+                    missing: Vec::new(),
+                });
+            }
+            // Our addition (libtorrent checks every file): a file that is gone took only its
+            // own pieces with it. The other files are as the resume data left them, so they
+            // are not hashed again because of it (a virus scanner that removes one small file
+            // of a large torrent after each download made every start hash all of it).
+            ResumeFiles::Missing(missing) => {
+                for piece in 0..num_pieces {
+                    if have.get(piece as usize)
+                        && fs
+                            .map_block(piece, 0, storage.info.piece_size(piece) as u64)
+                            .iter()
+                            .any(|s| missing.contains(&s.file_index))
+                    {
+                        have.set(piece as usize, false);
+                    }
+                }
+                return Ok(CheckResult { have, resume_failed: false, inconsistent: None, missing });
+            }
+            ResumeFiles::Mismatch => resume_failed = true,
         }
-        resume_failed = true;
     }
 
     let mut have = Bitfield::new(num_pieces as usize, false);
@@ -1445,7 +1477,7 @@ fn check_files(
             !aborted(storage) && fs.file_size(f) > 0 && !storage.skip_file(f) && storage.file_path(f).exists()
         });
     if !any_file || aborted(storage) {
-        return Ok(CheckResult { have, resume_failed, inconsistent: None });
+        return Ok(CheckResult { have, resume_failed, inconsistent: None, missing: Vec::new() });
     }
     let mut buf = vec![0u8; storage.info.piece_length() as usize];
     let report_every = (num_pieces / 100).max(16);
@@ -1505,7 +1537,7 @@ fn check_files(
     }
     // Checking may open hundreds of files; don't keep them all.
     ctx.pool.release(storage.id);
-    Ok(CheckResult { have, resume_failed, inconsistent })
+    Ok(CheckResult { have, resume_failed, inconsistent, missing: Vec::new() })
 }
 
 /// The torrent was stopped or removed ([`DiskIo::async_fence`]), at shutdown too: a check
@@ -1530,7 +1562,16 @@ fn pause(storage: &Storage, wait: Duration) {
 /// libtorrent `posix_storage::verify_resume_data`, reduced to what pread storage needs: every
 /// file that holds part of a piece we claim to have must exist and reach that far. Where
 /// libtorrent exempts skipped files, the part file must hold the piece.
-fn resume_matches_files(storage: &Storage, have: &Bitfield) -> bool {
+enum ResumeFiles {
+    Match,
+    /// These files are gone and nothing else is wrong: only their pieces are lost.
+    Missing(Vec<usize>),
+    /// A file is shorter than the pieces need, cannot be looked at, or the part file lacks a
+    /// piece: the data is not what the resume data says, so every piece is hashed.
+    Mismatch,
+}
+
+fn resume_files(storage: &Storage, have: &Bitfield) -> ResumeFiles {
     let fs = storage.info.files();
     let piece_len = storage.info.piece_length() as u64;
     let mut need = vec![0u64; fs.num_files()];
@@ -1541,18 +1582,28 @@ fn resume_matches_files(storage: &Storage, have: &Bitfield) -> bool {
                 continue;
             }
             match storage.part_file_for(s.file_index) {
-                Some(part) if !part.has_piece(piece as u32) => return false,
+                Some(part) if !part.has_piece(piece as u32) => return ResumeFiles::Mismatch,
                 Some(_) => {}
                 None => need[s.file_index] = need[s.file_index].max(s.offset + s.size),
             }
         }
         debug_assert!(piece as u64 * piece_len < fs.total_size());
     }
-    need.iter().enumerate().all(|(f, &n)| {
-        n == 0
-            || storage.skip_file(f)
-            || (!aborted(storage) && std::fs::metadata(storage.file_path(f)).is_ok_and(|m| m.len() >= n))
-    })
+    let mut missing = Vec::new();
+    for (f, &n) in need.iter().enumerate() {
+        if n == 0 || storage.skip_file(f) {
+            continue;
+        }
+        if aborted(storage) {
+            return ResumeFiles::Mismatch;
+        }
+        match std::fs::metadata(storage.file_path(f)) {
+            Ok(m) if m.len() >= n => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => missing.push(f),
+            _ => return ResumeFiles::Mismatch,
+        }
+    }
+    if missing.is_empty() { ResumeFiles::Match } else { ResumeFiles::Missing(missing) }
 }
 
 /// Deletes the torrent's files, then the directories that became empty (deepest first),
@@ -2318,6 +2369,22 @@ pub(crate) mod tests {
             c => panic!("unexpected {c:?}"),
         }
 
+        // A file that is gone takes only its own pieces: nothing is hashed, so piece 0, which
+        // the truncated file's check above would not vouch for again, is not looked at either.
+        std::fs::remove_file(r.dir.join("test/a/b/three")).unwrap();
+        let mut resume = Bitfield::new(3, true);
+        resume.set(2, false);
+        r.disk.async_check(&storage2, CheckMode::Resume(resume.clone()));
+        match next(&r.rx) {
+            Completion::Checked { result: Ok(res), .. } => {
+                assert!(!res.resume_failed);
+                assert_eq!(res.missing.len(), 1);
+                let lost: Vec<usize> = (0..3).filter(|&p| resume.get(p) && !res.have.get(p)).collect();
+                assert!(!lost.is_empty() && res.have.get(0), "{lost:?}");
+            }
+            c => panic!("unexpected {c:?}"),
+        }
+
         r.disk.async_fence(&storage2, FenceAction::Delete);
         assert!(matches!(next(&r.rx), Completion::Fenced { action: FenceAction::Delete, error: None, .. }));
         assert!(!r.dir.join("test").exists(), "files and empty directories are gone");
@@ -2647,7 +2714,7 @@ pub(crate) mod tests {
 
         let stopped = fresh();
         stopped.abort.store(true, Ordering::Relaxed);
-        assert!(!resume_matches_files(&stopped, &all));
+        assert!(matches!(resume_files(&stopped, &all), ResumeFiles::Mismatch));
         let res = check_files(&stopped, &ctx, CheckMode::Resume(all.clone()), &mut || {}).unwrap();
         assert!(res.have.none_set());
         assert!(!r.dir.join("test/empty").exists(), "the empty file was not made");

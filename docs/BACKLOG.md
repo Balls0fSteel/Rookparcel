@@ -595,6 +595,17 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
 
 ## Disk and storage
 
+- Checks, from the owner's journal (2026-11-10_230554_1794348354, changelog 1.2.46): (a) the
+  same day, before 1.2.46 and on unknown versions (1.2.30-1.2.45), two seeds (Phonopolis, Lost
+  in Play) came out of a check with no pieces and downloaded everything again
+  (`total_downloaded` doubled), and others (Mixtape, The Midnight Walk, Repella Fella, Planet of
+  Lana II, Moncage, Mr. Sleepy Man) were saved with an empty set and with the full one 30 s
+  later. Cause not found: a check answers "nothing" when no file is found (`any_file`) or every
+  read fails; try to reproduce with seeds the queue stops and starts while another check runs.
+  (b) A torrent waiting for its turn on the drive shows "Checking 0.0 %" like one being hashed;
+  µTorrent says "Queued". (c) A file a virus scanner removes is downloaded again at every
+  start (cheap since 1.2.46); a line that names the loop, or not fetching a file that vanished
+  twice, would end it.
 - Memory: `rookparcel-nox`'s update check (1.1.17) leaves about 5.5 MB resident after its one
   HTTPS request on Linux (empty session 15.5 MB, 10.4 MB with `--no-update-check`; BENCHMARKS.md
   "Release check, 1.1.40"). Find what stays (OpenSSL's state, allocator arenas of the fetch
