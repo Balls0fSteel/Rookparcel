@@ -47,8 +47,8 @@ pub const OLD_UPGRADE: &str = "patorrent-remote";
 pub const VERSION_HEADER: &str = "X-Rookparcel-Remote";
 /// The protocol version: both ends must run the same one (messages are positional). 16 came
 /// with the rename to Rookparcel (D59), whose token and header names changed; 17 with
-/// `TorrentStatus::private`.
-pub const PROTOCOL: u32 = 17;
+/// `TorrentStatus::private`; 18 with the all-time totals in `SessionStats` (D65).
+pub const PROTOCOL: u32 = 18;
 /// The largest frame either side accepts (a status update of 100,000 torrents is about
 /// 60 MB).
 pub const MAX_FRAME: usize = 256 << 20;
@@ -180,7 +180,7 @@ pub enum Request {
     ApplySettings(Box<Settings>),
     /// A command refused by the server's path policy: the alert the engine would have sent
     /// for the failure, for this client alone.
-    Refused(Alert),
+    Refused(Box<Alert>),
 }
 
 /// Decodes a client's frame and passes the command to `handle`, or returns what the server
@@ -226,7 +226,7 @@ pub fn dispatch(
                     _ => (String::new(), None),
                 };
                 let name = p.name.clone().unwrap_or(parsed_name);
-                Request::Refused(Alert::AddTorrentFailed { name, info_hashes, error: refused(why) })
+                Request::Refused(Box::new(Alert::AddTorrentFailed { name, info_hashes, error: refused(why) }))
             }
         },
         Command::MoveStorage(id, target, flags) => match path(&target) {
@@ -234,12 +234,12 @@ pub fn dispatch(
                 handle.send(Command::MoveStorage(id, replaced.unwrap_or(target), flags));
                 Request::Forwarded
             }
-            Err(why) => Request::Refused(Alert::StorageMovedFailed {
+            Err(why) => Request::Refused(Box::new(Alert::StorageMovedFailed {
                 id,
                 error: refused(why),
                 file: target,
                 operation: crate::alert::FileOperation::Unknown,
-            }),
+            })),
         },
         cmd => {
             handle.send(cmd);

@@ -463,6 +463,23 @@ fn download_through_a_udp_tracker_then_resume_without_recheck() {
     assert!(!rechecked, "resumed without a full recheck");
     assert_eq!(st.total_done, st.total);
     assert!(st.all_time_download >= st.total, "all-time totals persist");
+    // The session's own all-time totals (D65) came back from `stats.dat`, with nothing moved
+    // in this session, and removing the torrent takes nothing away.
+    assert!(state.join("stats.dat").exists());
+    let session_totals = |w: &mut Watch| {
+        leech.handle().post_session_stats();
+        wait(w, 5, "session stats", |a| match a {
+            Alert::SessionStats(s) => Some(*s),
+            _ => None,
+        })
+    };
+    let s = session_totals(&mut w);
+    assert!(s.alltime_download >= st.total, "{s:?}");
+    assert_eq!(s.recv_payload_bytes, 0);
+    assert!(s.alltime_since > 0);
+    leech.handle().remove_torrent(id, rookparcel_core::RemoveFlags::empty());
+    wait(&mut w, 5, "removed", |a| matches!(a, Alert::TorrentRemoved { .. }).then_some(()));
+    assert_eq!(session_totals(&mut w).alltime_download, s.alltime_download);
     leech.shutdown();
     let _ = std::fs::remove_dir_all(dir);
     let _ = std::fs::remove_dir_all(state);

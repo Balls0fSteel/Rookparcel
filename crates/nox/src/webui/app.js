@@ -1056,6 +1056,7 @@
         { label: T("MenuPreferences"), run: () => $("tb-prefs").click() },
         { label: T("MenuRss"), run: () => openRss(0) },
         { label: T("SearchTitle"), run: openFind },
+        { label: T("MenuStatistics"), run: openStats },
         { label: T("MenuDonate"), run: openDonate },
         { label: T("WebLogOut"), run: () => $("logout").click() },
       ],
@@ -5214,6 +5215,60 @@
   });
   $("donate-close").addEventListener("click", closeDonate);
   $("tb-donate").addEventListener("click", openDonate);
+  // ---- Statistics: the all-time and session totals, as the GUIs' Help > Statistics ----------
+  // GET /pa/session/stats gives the rows as text in the server's language: {"h": heading} or
+  // {"l": label, "v": value}. Their number and order never change, so the list is built once
+  // and only the values change after that. Asked once a second while the dialog is open.
+  const statsDlg = $("stats");
+  let statsTimer = 0;
+  let statsBusy = false;
+  async function statsLoad() {
+    if (statsBusy || hidden) return;
+    statsBusy = true;
+    try {
+      const rows = (await pa("session/stats")).rows || [];
+      if (!statsDlg.open) return;
+      const box = $("stats-rows");
+      if (box.children.length !== rows.length) {
+        box.textContent = "";
+        for (const row of rows) {
+          const el = document.createElement(row.h === undefined ? "div" : "h3");
+          if (row.h === undefined) el.append(document.createElement("span"), document.createElement("b"));
+          box.append(el);
+        }
+      }
+      rows.forEach((row, i) => {
+        const el = box.children[i];
+        if (row.h !== undefined) setTextIf(el, row.h);
+        else {
+          setTextIf(el.firstChild, row.l);
+          setTextIf(el.lastChild, row.v);
+        }
+      });
+    } catch (e) {
+      // pa() said why in the status bar; a lost session shows the login
+      if ($("app").hidden) closeStats();
+    } finally {
+      statsBusy = false;
+    }
+  }
+  function openStats() {
+    if (statsDlg.open || $("app").hidden) return;
+    statsDlg.showModal();
+    layerOpened(closeStats);
+    statsLoad();
+    statsTimer = setInterval(statsLoad, 1000);
+  }
+  function closeStats() {
+    if (statsDlg.open) statsDlg.close();
+  }
+  statsDlg.addEventListener("close", () => {
+    clearInterval(statsTimer);
+    statsTimer = 0;
+    layerClosed(closeStats);
+  });
+  $("stats-close").addEventListener("click", closeStats);
+  $("tb-stats").addEventListener("click", openStats);
   $("logout").addEventListener("click", () => {
     api("auth/logout", {}).then(showLogin, showLogin);
   });

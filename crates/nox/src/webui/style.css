@@ -684,7 +684,7 @@ div.pg { border: 0; padding: 0 8px; }
 }
 
 /* the torrent search (query bar, status lines, results; Manage Sources and its edit dialog) */
-#find, #find-sources, #find-edit, #find-helper, #find-sites, #donate {
+#find, #find-sources, #find-edit, #find-helper, #find-sites, #donate, #stats {
   padding: 10px 12px;
   border: 1px solid var(--line);
   background: var(--bg);
@@ -698,9 +698,17 @@ div.pg { border: 0; padding: 0 8px; }
 /* Donate: a few lines and the button to the website's donation page */
 #donate { width: min(460px, calc(100vw - 32px)); }
 #donate-text { margin-bottom: 12px; }
+/* Statistics: headings and label / value lines, the values at the line's end */
+#stats { width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; }
+#stats-rows { margin-bottom: 12px; }
+#stats-rows h3 { font-size: inherit; font-weight: 600; margin: 10px 0 2px; padding-bottom: 2px; border-bottom: 1px solid var(--line); }
+#stats-rows h3:first-child { margin-top: 0; }
+#stats-rows div { display: flex; justify-content: space-between; gap: 12px; line-height: 20px; }
+#stats-rows span { color: var(--muted); }
+#stats-rows b { font-weight: inherit; text-align: end; overflow-wrap: anywhere; min-width: 0; font-variant-numeric: tabular-nums; }
 #find-sites { width: min(720px, calc(100vw - 32px)); height: min(560px, calc(100vh - 32px)); }
-#find::backdrop, #find-sources::backdrop, #find-edit::backdrop, #find-helper::backdrop, #find-sites::backdrop, #donate::backdrop { background: var(--scrim); }
-#find h2, #find-sources h2, #find-edit h2, #find-helper h2, #find-sites h2, #donate h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+#find::backdrop, #find-sources::backdrop, #find-edit::backdrop, #find-helper::backdrop, #find-sites::backdrop, #donate::backdrop, #stats::backdrop { background: var(--scrim); }
+#find h2, #find-sources h2, #find-edit h2, #find-helper h2, #find-sites h2, #donate h2, #stats h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
 #find-body, #find-sources-body { display: flex; flex-direction: column; gap: 8px; height: 100%; }
 #find select, #find input:not([type="checkbox"]) { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; min-width: 0; }
 .find-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

@@ -18,6 +18,7 @@ mod dht;
 mod disk_limit;
 mod external_ip;
 mod ip_filter;
+mod lifetime;
 mod listen;
 mod lsd;
 mod metadata;
@@ -430,6 +431,10 @@ pub(crate) struct Engine {
     last_unchoke: Instant,
     last_optimistic: Instant,
     last_save: Instant,
+    /// All-time totals (D65) and the bytes thrown away this session (failed hash checks and
+    /// blocks nobody asked for).
+    lifetime: lifetime::Lifetime,
+    wasted: u64,
     last_auto_manage: Instant,
     /// When peer turnover runs next (libtorrent `m_disconnect_time_scaler`).
     next_turnover: Instant,
@@ -626,6 +631,8 @@ impl Engine {
             last_unchoke: now,
             last_optimistic: now,
             last_save: now,
+            lifetime: lifetime::Lifetime::default(),
+            wasted: 0,
             last_auto_manage: now,
             // libtorrent's first turnover comes 90 s after the start; a shorter interval sooner
             next_turnover: now + Duration::from_secs(settings.peer_turnover_interval.clamp(1, 90) as u64),
@@ -671,6 +678,17 @@ impl Engine {
                     }
                     self.store = Some(store);
                     let mut records = records;
+                    let seed = records.iter().fold((0u64, 0u64), |(up, down), r| {
+                        (up.saturating_add(r.total_uploaded), down.saturating_add(r.total_downloaded))
+                    });
+                    let (totals, how) = lifetime::Lifetime::load(&dir, seed);
+                    self.lifetime = totals;
+                    if let lifetime::Loaded::Damaged(e) = how {
+                        self.out.push(Alert::Log {
+                            id: None,
+                            message: format!("the all-time statistics start again: {}: {e}", lifetime::FILE),
+                        });
+                    }
                     records.sort_by_key(|r| r.queue_position.unwrap_or(u32::MAX));
                     let count = u32::try_from(records.len()).unwrap_or(u32::MAX);
                     for r in records {
@@ -3915,6 +3933,10 @@ impl Engine {
     fn save_resume(&mut self, force: bool) {
         self.last_save = Instant::now();
         self.store_flush_due = None;
+        let (up, down) = (self.stat.upload_payload.total, self.stat.download_payload.total);
+        if let Err(e) = self.lifetime.save(up, down) {
+            self.out.push(Alert::Log { id: None, message: format!("cannot save the statistics: {e}") });
+        }
         let Some(store) = self.store.as_mut() else { return };
         let mut errors = Vec::new();
         for s in self.slots.iter_mut_untracked() {
@@ -3995,7 +4017,13 @@ impl Engine {
 
     fn post_session_stats(&mut self) {
         let disk = self.disk.counters();
+        let (alltime_upload, alltime_download) =
+            self.lifetime.totals(self.stat.upload_payload.total, self.stat.download_payload.total);
         let mut st = SessionStats {
+            alltime_upload,
+            alltime_download,
+            alltime_since: self.lifetime.since(),
+            wasted_bytes: self.wasted,
             num_peers_connected: self.peers.iter().filter(|(_, p)| p.state == PeerState::Active).count()
                 as u32,
             recv_bytes: self.stat.total_download(),

@@ -19,7 +19,7 @@ same fresh profile, or write `ui.theme=dark` into it for a dark run. Parameters:
 What it saves: `main.png` (row 0 selected, the General tab), `main-tab-1..6.png` (the other
 detail tabs), `dlg-*.png` (every dialog the main window opens by `WM_COMMAND`: Add's file picker,
 Add URL, Create, Properties, RSS, Connect to Remote, Notices, Search Sources, New Profile, Setup
-Guide, Donate), `prefs-01..12.png` (every Preferences page through the tree), `menu-file.png`, and
+Guide, Donate, Statistics), `prefs-01..12.png` (every Preferences page through the tree), `menu-file.png`, and
 `manifest.txt` (file, class, title, size, note) plus `capture-log.txt`.
 
 **Cut-off texts:** `-Audit` lists, in `audit.txt`, every visible label, check box, radio button,

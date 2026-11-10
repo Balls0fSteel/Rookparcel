@@ -198,7 +198,8 @@ impl Engine {
         if peers.is_empty() {
             return;
         }
-        t.failed_bytes += t.piece_size(piece);
+        let failed = t.piece_size(piece);
+        t.failed_bytes += failed;
         // did we receive this piece from a single peer? Then we know it sent bad data.
         let payload = t.picker.as_ref().map_or(downloaders.len(), |p| p.payload_blocks(piece));
         let known_bad_peer = lone_downloader(&downloaders, payload, peers.len());
@@ -210,6 +211,7 @@ impl Engine {
                 self.disk.async_read(&storage, piece, start, len, SMART_BAN_COOKIE);
             }
         }
+        self.wasted += failed;
         let mut banned = Vec::new();
         for addr in peers {
             let Some(t) = self.torrent(id) else { return };

@@ -323,6 +323,8 @@ mod cmd {
     pub const FILES_TREE: u16 = 155;
     /// Help > Donate.
     pub const DONATE: u16 = 156;
+    /// Help > Statistics (D65).
+    pub const STATISTICS: u16 = 157;
     /// File > Profiles' list, by `profile::menu` index (at most 256 entries).
     pub const PROFILE_BASE: u16 = 3700;
     pub const LABEL_BASE: u16 = 1000;
@@ -929,6 +931,11 @@ pub fn run(args: Args) -> i32 {
             if !results.is_null() && IsDialogMessageW(results, &msg) != 0 {
                 continue;
             }
+            // the same for the modeless Statistics window: Enter and Esc close it
+            let statistics = crate::statistics::window();
+            if !statistics.is_null() && IsDialogMessageW(statistics, &msg) != 0 {
+                continue;
+            }
             // typing in the search box or the Files filter: Delete and Ctrl+A edit its text,
             // not the list; Enter is the list's Properties key, every other control keeps its own Enter
             let (in_search, in_list) =
@@ -997,6 +1004,7 @@ unsafe fn main_menu() -> HMENU {
         if update::AVAILABLE {
             append(help, cmd::CHECK_UPDATES, tr!(MenuCheckUpdates));
         }
+        append(help, cmd::STATISTICS, tr!(MenuStatistics));
         append(help, cmd::DONATE, tr!(MenuDonate));
         separator(help);
         append(help, cmd::ABOUT, tr!(MenuAbout));
@@ -2988,6 +2996,8 @@ unsafe fn on_alerts(hwnd: HWND) {
                 }
                 Alert::SessionStats(s) => {
                     a.stats = s;
+                    // the open Statistics window's figures
+                    crate::statistics::update(&s);
                     a.detail.push_speed(s.download_rate, s.upload_rate);
                     repaint_page |= a.page == Page::Speed;
                 }
@@ -4147,6 +4157,11 @@ unsafe fn on_command(hwnd: HWND, id: u16) {
             cmd::NOTICES => crate::notices::show(hwnd),
             cmd::WEBSITE => open_url(hwnd, update::WEBSITE_URL),
             cmd::DONATE => crate::donate::show(hwnd),
+            cmd::STATISTICS => {
+                // modeless; it follows the session through `Alert::SessionStats`
+                let stats = with_app(|a| a.stats).unwrap_or_default();
+                crate::statistics::show(hwnd, &stats);
+            }
             cmd::CHECK_UPDATES => {
                 if with_app(|a| a.updates.start_manual()) == Some(true) {
                     start_update_check(hwnd);
@@ -5434,7 +5449,34 @@ mod search_tests {
             assert_eq!(cue(search), "Search torrent names");
             DestroyWindow(dlg);
             assert!(with_app(|a| a.search_window.is_null()).unwrap());
+
+            // Help > Statistics: one modeless window, which follows the session's figures and
+            // goes with the main window
+            use windows_sys::Win32::UI::WindowsAndMessaging::{GW_CHILD, GW_HWNDNEXT, GW_OWNER, GetWindow};
+            on_command(hwnd, cmd::STATISTICS);
+            let statistics = crate::statistics::window();
+            assert!(!statistics.is_null(), "Statistics opened");
+            assert_eq!(GetWindow(statistics, GW_OWNER), hwnd);
+            on_command(hwnd, cmd::STATISTICS);
+            assert_eq!(crate::statistics::window(), statistics, "the open one again");
+            let shown = || {
+                let mut all = String::new();
+                let mut child = GetWindow(statistics, GW_CHILD);
+                while !child.is_null() {
+                    all.push_str(&crate::util::window_text(child));
+                    all.push('\n');
+                    child = GetWindow(child, GW_HWNDNEXT);
+                }
+                all
+            };
+            let peers = fmt::count(4321);
+            assert!(!shown().contains(&peers));
+            let stats = SessionStats { num_peers_connected: 4321, ..SessionStats::default() };
+            with_app(|a| a.alerts.push(Alert::SessionStats(stats)));
+            on_alerts(hwnd);
+            assert!(shown().contains(&peers), "{}", shown());
             DestroyWindow(hwnd);
+            assert!(crate::statistics::window().is_null());
         }
     }
 

@@ -538,6 +538,7 @@ fn startup(app: &gtk::Application) {
     if updates_here() {
         item(&web, tr!(MenuCheckUpdates), "win.check-updates");
     }
+    item(&web, tr!(MenuStatistics), "win.statistics");
     item(&web, tr!(MenuDonate), "win.donate");
     help.append_section(None, &web);
     let about = gio::Menu::new();
@@ -1756,6 +1757,7 @@ fn on_alerts() {
                 }
                 Alert::SessionStats(s) => {
                     a.stats = s;
+                    crate::statistics::update(&a.stats);
                     a.detail.push_speed(s.download_rate, s.upload_rate);
                 }
                 Alert::TorrentAdded { id, info_hashes, ref name } => {
@@ -2106,6 +2108,11 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     simple("about", about);
     simple("notices", third_party_notices);
     simple("website", || open_uri(update::WEBSITE_URL));
+    simple("statistics", || {
+        if let Some((window, stats)) = with_app(|a| (a.window.clone(), a.stats)) {
+            crate::statistics::show(&window, &stats);
+        }
+    });
     simple("donate", || {
         if let Some(window) = with_app(|a| a.window.clone()) {
             crate::donate::show(&window);

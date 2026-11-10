@@ -240,6 +240,15 @@ pub struct SessionStats {
     /// `external_address()`'s votes), per family; `None` until one is known.
     pub external_v4: Option<IpAddr>,
     pub external_v6: Option<IpAddr>,
+    /// Payload bytes of every session, this one included (D65). They are counted for the
+    /// session, not summed over the torrents, so removing a torrent takes nothing away.
+    pub alltime_upload: u64,
+    pub alltime_download: u64,
+    /// When the all-time count began, Unix seconds; 0 when the session keeps no state.
+    pub alltime_since: i64,
+    /// Bytes thrown away since session start: pieces that failed their hash check and blocks
+    /// nobody was waiting for.
+    pub wasted_bytes: u64,
 }
 
 /// "Use only this network" as it stands (D54, `Settings::network_rule`).

@@ -56,6 +56,8 @@ mod sidebar;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod snapshots;
 #[cfg(all(unix, not(target_os = "macos")))]
+mod statistics;
+#[cfg(all(unix, not(target_os = "macos")))]
 mod table;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod tray;

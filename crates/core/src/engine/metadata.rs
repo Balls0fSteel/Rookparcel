@@ -105,6 +105,7 @@ impl Engine {
                 }
                 let Some(fetch) = t.fetch.as_mut() else {
                     t.redundant_bytes += data.len() as u64;
+                    self.wasted += data.len() as u64;
                     return;
                 };
                 match fetch.received(p.id, piece, total_size, data, max_size, &t.info_hashes) {

@@ -684,6 +684,19 @@ fn torrent_lifecycle_and_maindata_diffs() {
     let rid = d.get("rid").and_then(Json::as_i64).unwrap();
     assert_eq!(d.get("torrents").map(|v| v.entries().len()), Some(0));
     assert!(d.get("server_state").and_then(|s| s.get("connection_status")).is_some());
+    // qBittorrent's all-time fields: numbers and two strings, in server_state only
+    let state = d.get("server_state").unwrap();
+    for name in ["alltime_dl", "alltime_ul", "total_wasted_session"] {
+        assert!(state.get(name).and_then(Json::as_i64).is_some(), "{name}: {state:?}");
+    }
+    // a new session has no ratio yet
+    assert_eq!(s(state.get("global_ratio")), "-");
+    assert_eq!(s(state.get("read_cache_hits")), "0");
+    let info = t.get(&sid, "/api/v2/transfer/info").json();
+    assert!(info.get("dl_info_data").is_some());
+    for name in ["alltime_dl", "alltime_ul", "global_ratio", "total_wasted_session", "read_cache_hits"] {
+        assert!(info.get(name).is_none(), "{name}: {info:?}");
+    }
     assert_eq!(d.get("tags"), Some(&Json::Arr(vec![])));
 
     assert_eq!(
@@ -2762,6 +2775,22 @@ fn native_commands_are_csrf_checked() {
     assert_eq!(r.status, 403);
     assert_eq!(s(r.json().get("error")), "forbidden");
     assert_eq!(t.req("GET", "/pa/session/limits", &[], Body::None).status, 403);
+    // the Statistics dialog's rows: a read, so the session alone does; refused without one
+    let r = t.req("GET", "/pa/session/stats", &[], Body::None);
+    assert_eq!(r.status, 403);
+    assert_eq!(s(r.json().get("error")), "forbidden");
+    let r = t.get(&sid, "/pa/session/stats");
+    assert_eq!(r.status, 200, "{}", r.text());
+    let stats = r.json();
+    let Some(Json::Arr(rows)) = stats.get("rows") else { panic!("{stats:?}") };
+    assert_eq!(rows.len(), 14);
+    assert_eq!(s(rows[0].get("h")), "All Time");
+    assert_eq!(s(rows[1].get("l")), "Uploaded:");
+    assert!(rows[1].get("v").and_then(Json::as_str).is_some_and(|v| !v.is_empty()), "{stats:?}");
+    assert_eq!(rows.iter().filter(|r| r.get("h").is_some()).count(), 3);
+    assert!(rows.iter().all(|r| r.get("h").is_some() != (r.get("l").is_some() && r.get("v").is_some())));
+    // it is a read only
+    assert_eq!(t.pa(&sid, "/pa/session/stats", "{}").status, 404);
     // the real thing passes, header case and all
     let r = t.req(
         "POST",

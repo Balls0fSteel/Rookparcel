@@ -140,6 +140,13 @@ toolbar's **Donate** button (the phone's More menu too) opens a small dialog wit
 Help > Donate text, whose button opens that address in a new tab. The page itself names no
 other site, so the address comes from the server.
 
+The toolbar's **Statistics** button (the phone's More menu too) opens the GUIs' Help >
+Statistics (D65): `GET /pa/session/stats` answers `{"rows":[{"h":"All Time"},{"l":"Uploaded:",
+"v":"967 GB"},...]}`, the lines of `frontend::statistics::rows` in the server's language, and
+the dialog asks again each second while it is open. The qBittorrent API's `sync/maindata`
+`server_state` carries `alltime_dl`, `alltime_ul`, `global_ratio`, `total_wasted_session` and
+`read_cache_hits`.
+
 When nox's update check (D43, [DAEMON.md](DAEMON.md#the-update-check)) found a newer Rookparcel,
 `hello` and every `tick` carry `"update":{"version":"1.2.0","url":"<its release page>"}`; the
 page shows it as a link in the status bar (the `UpdateNotice` text) and hides the link when a

@@ -912,6 +912,7 @@ impl Engine {
         let Some(pos) = pos else {
             // Unrequested or cancelled earlier: drop it.
             t.redundant_bytes += len;
+            self.wasted += len;
             self.stat.received(len, 0);
             return;
         };
@@ -928,6 +929,7 @@ impl Engine {
         let mut others = Vec::new();
         if !picker.mark_as_writing(piece, block, addr) {
             t.redundant_bytes += len;
+            self.wasted += len;
         } else if let Some(storage) = t.storage.clone() {
             t.downloaded_in_session = true;
             t.status_dirty = true;

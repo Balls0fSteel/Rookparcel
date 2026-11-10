@@ -1211,8 +1211,34 @@ fn transfer_fields(st: &State, sync: bool) -> Vec<(String, Json)> {
         v.push(("use_alt_speed_limits".into(), st.prefs.alt_enabled.into()));
         v.push(("refresh_interval".into(), 1500i64.into()));
         v.push(("total_peer_connections".into(), s.num_peers_connected.into()));
+        // the all-time totals and the session's waste (D65). As in qBittorrent these are in
+        // `sync/maindata`'s `server_state` only, not in `transfer/info`.
+        v.push(("alltime_dl".into(), s.alltime_download.into()));
+        v.push(("alltime_ul".into(), s.alltime_upload.into()));
+        v.push(("global_ratio".into(), global_ratio(s.alltime_upload, s.alltime_download).into()));
+        v.push(("total_wasted_session".into(), s.wasted_bytes.into()));
+        v.push(("read_cache_hits".into(), read_cache_hits(s).into()));
     }
     v
+}
+
+/// qBittorrent's `global_ratio`: a string with two decimals, and "-" until both all-time
+/// totals are above zero (so nothing downloaded, where the ratio is infinite, is "-" too:
+/// what qBittorrent sends, and what its clients parse).
+fn global_ratio(uploaded: u64, downloaded: u64) -> String {
+    if uploaded == 0 || downloaded == 0 {
+        return "-".to_owned();
+    }
+    format!("{:.2}", rookparcel_frontend::statistics::share_ratio(uploaded, downloaded))
+}
+
+/// qBittorrent's `read_cache_hits`: the percentage as a string with two decimals, "0" when
+/// there is none (nothing read yet, or no hit).
+fn read_cache_hits(s: &rookparcel_core::SessionStats) -> String {
+    match rookparcel_frontend::statistics::cache_hit_ppm(s) {
+        Some(ppm) if ppm > 0 => format!("{:.2}", f64::from(ppm) / 10_000.0),
+        _ => "0".to_owned(),
+    }
 }
 
 /// What one client was last sent by `sync/maindata`.
@@ -1916,6 +1942,39 @@ mod tests {
         assert_eq!(texts.get("MenuFile").and_then(Json::as_str), Some("File"));
         assert_eq!(texts.get("GenConnected").and_then(Json::as_str), Some("{count} of {total} connected"));
         assert!(static_file("/lang.js").is_some_and(|f| f.body == js.as_bytes()));
+    }
+
+    /// qBittorrent's all-time fields: in `sync/maindata`'s `server_state`, not `transfer/info`.
+    #[test]
+    fn the_all_time_fields_of_server_state() {
+        let mut st = State::for_tests();
+        let field = |st: &State, sync: bool, name: &str| {
+            transfer_fields(st, sync).into_iter().find(|(k, _)| k == name).map(|(_, v)| v)
+        };
+        // nothing counted yet
+        assert_eq!(field(&st, true, "alltime_dl"), Some(Json::from(0u64)));
+        assert_eq!(field(&st, true, "alltime_ul"), Some(Json::from(0u64)));
+        assert_eq!(field(&st, true, "global_ratio"), Some(Json::from("-")));
+        assert_eq!(field(&st, true, "total_wasted_session"), Some(Json::from(0u64)));
+        assert_eq!(field(&st, true, "read_cache_hits"), Some(Json::from("0")));
+        st.stats.alltime_upload = 3 << 30;
+        st.stats.alltime_download = 2 << 30;
+        st.stats.wasted_bytes = 16_384;
+        st.stats.disk_blocks_read = 8;
+        st.stats.disk_cache_hits = 1;
+        assert_eq!(field(&st, true, "alltime_dl"), Some(Json::from(2u64 << 30)));
+        assert_eq!(field(&st, true, "alltime_ul"), Some(Json::from(3u64 << 30)));
+        assert_eq!(field(&st, true, "global_ratio"), Some(Json::from("1.50")));
+        assert_eq!(field(&st, true, "total_wasted_session"), Some(Json::from(16_384u64)));
+        assert_eq!(field(&st, true, "read_cache_hits"), Some(Json::from("12.50")));
+        for name in ["alltime_dl", "alltime_ul", "global_ratio", "total_wasted_session", "read_cache_hits"] {
+            assert_eq!(field(&st, false, name), None, "{name}");
+        }
+        // only uploaded, or only downloaded: no ratio, as qBittorrent
+        assert_eq!(global_ratio(1, 0), "-");
+        assert_eq!(global_ratio(0, 1), "-");
+        assert_eq!(global_ratio(1, 3), "0.33");
+        assert_eq!(global_ratio(u64::MAX, 1), format!("{:.2}", u64::MAX as f64));
     }
 
     fn head_with(headers: &[(&str, &str)]) -> Head {

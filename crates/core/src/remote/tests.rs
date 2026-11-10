@@ -167,6 +167,10 @@ fn every_alert() -> Vec<Alert> {
             dht_nodes: 3,
             recv_bytes: 1 << 50,
             has_incoming_connections: true,
+            alltime_upload: u64::MAX,
+            alltime_download: 1 << 60,
+            alltime_since: 1_794_300_000,
+            wasted_bytes: 16_384,
             ..Default::default()
         }),
         Alert::ResumeDataSaved,

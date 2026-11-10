@@ -164,6 +164,7 @@ pub fn tree() -> Vec<Item> {
     ];
     let help = vec![
         c(Website, tr!(MenuWebsite), None),
+        c(Statistics, tr!(MenuStatistics), None),
         c(Donate, tr!(MenuDonate), None),
         Item::Sep,
         c(Notices, tr!(MenuNotices), None),

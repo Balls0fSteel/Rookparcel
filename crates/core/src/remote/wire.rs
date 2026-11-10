@@ -469,6 +469,10 @@ wire_struct!(SessionStats {
     network,
     external_v4,
     external_v6,
+    alltime_upload,
+    alltime_download,
+    alltime_since,
+    wasted_bytes,
 });
 wire_struct!(NetAdapter { id, name, vpn, addresses });
 wire_struct!(PeerInfo {

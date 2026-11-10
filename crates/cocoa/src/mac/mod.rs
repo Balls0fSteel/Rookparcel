@@ -11,6 +11,7 @@
 //!   ([`integration`], [`set_integration`]).
 //! - [`power`]: Options > Auto Shutdown's menu, countdown and power actions.
 //! - [`about`] and [`update`]: About, Third-Party Notices, the website, Check for Updates.
+//! - [`statistics`]: Help > Statistics, the totals window.
 //! - [`dock`]: the Dock menu's and Dock icon's part.
 //! - [`defaults`]: a portable copy leaves `~/Library/Preferences` as it found it.
 
@@ -24,6 +25,7 @@ pub mod login;
 pub mod notify;
 pub mod open;
 pub mod power;
+pub mod statistics;
 pub mod status_item;
 pub mod update;
 

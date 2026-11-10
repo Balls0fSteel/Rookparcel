@@ -31,7 +31,7 @@ The GTK version follows the XDG folders:
 | What | Folder |
 |---|---|
 | settings: `rookparcel.ini`, `rss.dat`, `remote.ini`, `remote/` | `$XDG_CONFIG_HOME/rookparcel/gtk`, else `~/.config/rookparcel/gtk` |
-| torrent list: `resume.db`, `metadata.pack`, `dht_state.dat` | `$XDG_DATA_HOME/rookparcel/gtk`, else `~/.local/share/rookparcel/gtk` |
+| torrent list: `resume.db`, `metadata.pack`, `dht_state.dat`, `stats.dat` (the all-time totals of Help > Statistics) | `$XDG_DATA_HOME/rookparcel/gtk`, else `~/.local/share/rookparcel/gtk` |
 
 `rookparcel-nox` uses `nox` in place of `gtk` in both paths. Under systemd its folders are the service's own; see [Running rookparcel-nox](Running-rookparcel-nox).
 

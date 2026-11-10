@@ -1123,6 +1123,22 @@ pub fn session_limits(st: &State) -> Json {
         .with("alt_up", st.prefs.alt_up_limit)
 }
 
+/// `GET /pa/session/stats`: the Statistics window's lines (D65) as the desktop clients show
+/// them, translated and formatted here: `{"rows": [{"h": heading} | {"l": label, "v": value}]}`.
+/// The number and order of the rows never change, so the page fills its list once and only
+/// changes the values after that.
+pub fn session_stats(st: &State) -> Json {
+    use rookparcel_frontend::statistics::{Row, rows};
+    let rows = rows(&st.stats)
+        .into_iter()
+        .map(|row| match row {
+            Row::Heading(text) => Json::obj().with("h", text),
+            Row::Value { label, value } => Json::obj().with("l", label).with("v", value),
+        })
+        .collect();
+    Json::obj().with("rows", Json::Arr(rows))
+}
+
 /// `POST /pa/session/limits`: `alt` switches the alternative limits on or off, `down` / `up`
 /// set the limits of the mode in force after that, `alt_down` / `alt_up` the alternative ones
 /// explicitly; each optional.
@@ -1281,6 +1297,7 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
     if read {
         return match endpoint {
             "session/limits" => Ok(Response::json(&session_limits(&shared.lock()))),
+            "session/stats" => Ok(Response::json(&session_stats(&shared.lock()))),
             "add" => {
                 let st = shared.lock();
                 let labels: Vec<Json> = st.categories.keys().map(|l| Json::Str(l.clone())).collect();
@@ -1628,6 +1645,40 @@ mod tests {
         let Some(Json::Arr(files)) = v.get("files") else { panic!() };
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].get("path"), Some(&Json::from("a.iso")));
+    }
+
+    #[test]
+    fn session_stats_are_the_statistics_rows() {
+        use rookparcel_frontend::statistics::{Row, rows};
+        let mut st = State::for_tests();
+        st.stats.alltime_upload = 3 << 30;
+        st.stats.alltime_download = 1 << 30;
+        st.stats.num_peers_connected = 1234;
+        let v = session_stats(&st);
+        let Some(Json::Arr(got)) = v.get("rows") else { panic!("{v:?}") };
+        let want = rows(&st.stats);
+        assert_eq!(got.len(), want.len());
+        for (g, w) in got.iter().zip(&want) {
+            match w {
+                Row::Heading(text) => {
+                    assert_eq!(g.get("h"), Some(&Json::from(text.as_str())));
+                    assert!(g.get("l").is_none() && g.get("v").is_none());
+                }
+                Row::Value { label, value } => {
+                    assert_eq!(g.get("l"), Some(&Json::from(label.as_str())));
+                    assert_eq!(g.get("v"), Some(&Json::from(value.as_str())));
+                    assert!(g.get("h").is_none());
+                }
+            }
+        }
+        assert_eq!(got[0].get("h"), Some(&Json::from("All Time")));
+        assert_eq!(got[3].get("v"), Some(&Json::from("3.000")));
+        assert_eq!(got[9].get("v"), Some(&Json::from("1,234")));
+        // the shape is the same before anything is counted
+        let Some(Json::Arr(empty)) = session_stats(&State::for_tests()).get("rows").cloned() else {
+            panic!()
+        };
+        assert_eq!(empty.len(), got.len());
     }
 
     #[test]

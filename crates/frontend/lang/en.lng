@@ -185,6 +185,10 @@ MenuWebsite=Rookparcel &Website
 # that window's title.
 MenuDonate=&Donate
 
+# Help menu: opens a small window with the totals below; without the & it is also that
+# window's title.
+MenuStatistics=&Statistics
+
 # The Ctrl key, as menus write shortcuts (Ctrl+O).
 KeyCtrl=Ctrl
 
@@ -531,6 +535,31 @@ DonateText=Rookparcel is free and shows no ads. If you like it, a donation helps
 
 # Help > Donate: the button that opens the donation page in the web browser.
 DonateOpen=&Open Donation Page
+
+# Help > Statistics, a group's title: the totals of every session since the date below.
+StatsAllTime=All Time
+
+# Help > Statistics, a group's title: the totals since Rookparcel was started.
+StatsSession=This Session
+
+# Help > Statistics, a group's title: the disk queue and the read cache.
+StatsDisk=Disk
+
+# Help > Statistics: the date and time the all-time totals began to be counted.
+StatsSince=Counted Since:
+
+# Help > Statistics: the number of peers connected now, over all torrents.
+StatsPeers=Connected Peers:
+
+# Help > Statistics: the size of the downloaded data that waits to be written to disk.
+StatsWriteQueue=Write Queue:
+
+# Help > Statistics: the memory the read cache holds now.
+StatsReadCache=Read Cache:
+
+# Help > Statistics: the share of the blocks sent to peers that came from the read cache
+# rather than the disk, as a percentage.
+StatsCacheHits=Read Cache Hits:
 BtnOk=OK
 BtnCancel=Cancel
 BtnApply=&Apply
@@ -1885,6 +1914,7 @@ help.MenuCheckUpdates=Asks the Rookparcel website whether a newer version is out
 help.MenuAbout=Shows Rookparcel's version, copyright and licence, and where its settings file is.
 help.MenuNotices=Shows the licence texts of the third-party code Rookparcel is built on.
 help.MenuDonate=Says how to support Rookparcel and offers to open its donation page in your web browser.
+help.MenuStatistics=Shows how much Rookparcel uploaded and downloaded in all its sessions and in this one, the share ratio, the data thrown away, and the disk queue and read cache. The all-time totals stay when torrents are removed.
 help.MenuOpenFolder=Opens the folder that holds the selected item in the file manager, with the item selected where the file manager can.
 help.MenuOpenFolderMany=Opens the first selected torrent's download folder in the file manager, with its data selected once it exists.
 help.MenuForceStart=Starts the selected torrents now, outside the queue: they run even when the queue's limits on active torrents are reached.

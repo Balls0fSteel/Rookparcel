@@ -344,6 +344,7 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
 /// the update check).
 pub fn tick() {
     apply(with_core(|c| c.tick(Instant::now())));
+    crate::mac::statistics::refresh();
 }
 
 /// The engine's alerts, drained into the list, the detail tabs and the Logger.
@@ -508,6 +509,7 @@ pub fn run(cmd: Command) {
         Website => crate::mac::about::website(),
         Notices => crate::mac::about::notices(),
         Donate => crate::mac::about::donate(),
+        Statistics => crate::mac::statistics::open(),
         Preferences => crate::prefs::open(),
         Pref(i) => crate::prefs::run(i),
         SetupGuide => crate::setup_guide::open(),

@@ -74,6 +74,7 @@ pub mod secret;
 pub mod seeding;
 pub mod settings;
 pub mod setup_guide;
+pub mod statistics;
 pub mod status;
 pub mod torrent_folders;
 pub mod typeahead;

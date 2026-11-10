@@ -1013,10 +1013,12 @@ impl Engine {
             t.picker.as_mut().filter(|_| start % BLOCK_SIZE == 0 && expected == Some(len as u32))
         else {
             t.redundant_bytes += len;
+            self.wasted += len;
             return;
         };
         if !picker.mark_as_writing(piece, block, addr) {
             t.redundant_bytes += len;
+            self.wasted += len;
             return;
         }
         let Some(storage) = t.storage.clone() else { return };
@@ -1299,6 +1301,7 @@ impl Engine {
         let restart = c.proto.take_restart();
         t.status_dirty = true;
         let mut url = c.proto.url().to_owned();
+        let mut lost = 0;
         if let Some(i) = t.web_seeds.index_of(c.seed) {
             let w = &mut t.web_seeds.list[i];
             url = w.url.clone();
@@ -1333,7 +1336,9 @@ impl Engine {
                 t.web_seeds.list.remove(i);
             }
             t.redundant_bytes += wasted;
+            lost = wasted;
         }
+        self.wasted += lost;
         let id = c.torrent;
         let shown = redact_url_credentials(&url);
         self.alert(Alert::Log { id: Some(id), message: format!("web seed {shown} [{}]: {reason}", c.addr) });

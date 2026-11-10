@@ -305,7 +305,7 @@ try {
     # dialogs by WM_COMMAND id
     $cmds = [ordered]@{
         100 = 'add'; 101 = 'add-url'; 102 = 'create'; 133 = 'properties'; 134 = 'rss';
-        141 = 'connect-remote'; 142 = 'notices'; 146 = 'search-sources'; 151 = 'new-profile'; 154 = 'setup-guide'; 156 = 'donate'
+        141 = 'connect-remote'; 142 = 'notices'; 146 = 'search-sources'; 151 = 'new-profile'; 154 = 'setup-guide'; 156 = 'donate'; 157 = 'statistics'
     }
     foreach ($e in $cmds.GetEnumerator()) {
         $id = [int]$e.Key; $name = $e.Value

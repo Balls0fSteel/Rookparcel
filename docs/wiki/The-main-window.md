@@ -21,7 +21,7 @@ Each part except the menus and the torrent list can be hidden from the **Options
 
 - **File:** **Add Torrent...**, **Add Torrent from URL...**, **Create New Torrent...**, **Import from qBittorrent...**, **Import from µTorrent...**, **Profiles**, **Connect to Remote...** and **Exit**.
 - **Options:** **Preferences**, **Setup Guide**, **RSS Downloader...**, the four **Show** items above, **Auto Shutdown**, **Close to Tray** and **Minimize to Tray**.
-- **Help:** **Rookparcel Website**, **Check for Updates**, **Donate**, **About Rookparcel** and **Third-Party Notices**. **Donate** (new in 1.2.34) shows a short note and a button that opens the website's donation page in your browser.
+- **Help:** **Rookparcel Website**, **Check for Updates**, **Statistics**, **Donate**, **About Rookparcel** and **Third-Party Notices**. **Statistics** (new in 1.2.39) shows what Rookparcel uploaded and downloaded in all its sessions and in this one, the share ratio, the data thrown away, the connected peers and the disk queue and read cache; the all-time totals stay when torrents are removed. **Donate** (new in 1.2.34) shows a short note and a button that opens the website's donation page in your browser.
 
 *File > Profiles is new in 1.1.48 and Options > Setup Guide in 1.1.62; neither is in a published release yet.*
 

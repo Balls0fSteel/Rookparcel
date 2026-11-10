@@ -39,6 +39,7 @@ pub fn command(cmd: Command) -> Option<&'static str> {
         Website => "globe",
         Notices => "doc.text",
         Donate => "heart",
+        Statistics => "chart.bar",
         CheckUpdates => "arrow.down.circle",
         ImportQbt | ImportUt => "square.and.arrow.down",
         ConnectRemote => "network",

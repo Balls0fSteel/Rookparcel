@@ -907,6 +907,11 @@ impl Mock {
         s.sent_payload_bytes += (up_sum as f64 * secs) as u64;
         s.recv_bytes = s.recv_payload_bytes + s.recv_payload_bytes / 30;
         s.sent_bytes = s.sent_payload_bytes + s.sent_payload_bytes / 30;
+        // a library that has been running for a while (the Statistics window, D65)
+        s.alltime_download = (412 << 30) + s.recv_payload_bytes;
+        s.alltime_upload = (967 << 30) + s.sent_payload_bytes;
+        s.alltime_since = 1_760_000_000;
+        s.wasted_bytes = s.recv_payload_bytes / 4000;
         s.dht_nodes = (s.dht_nodes + 1 + (self.ticks % 7) as u32).min(320);
         s.has_incoming_connections = self.ticks > 10;
         let (mut peers, mut dl, mut seeding) = (0, 0, 0);

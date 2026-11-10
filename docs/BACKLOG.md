@@ -1074,6 +1074,16 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   `min_announce_interval` only matters when a tracker asks for less than a minute. Decide whether
   to wire them or drop the rows.
 
+## Statistics, trackers and Run Program (D65-D67; 2026-11-10)
+
+- **Statistics (1.2.39), hand checks:** the GTK window on the Xubuntu VM and the Mac window on
+  the macOS VM (neither was run: layout, Escape in GTK, the refresh, sizing); the Win32 window
+  at 150/200 %, in a right-to-left language and through a live theme switch; a long translation
+  in each; the Web UI dialog in the nine themes and right-to-left; a real download and upload
+  with the window open; an upgrade of a real profile (the totals start from the torrents' sums).
+- **Statistics, ideas not built:** a reset; all-time waste; the read queue (`disk_read_queue`
+  is never filled); a Close button in the Mac window (it closes by the title bar or Cmd+W).
+
 ## Validation and development environment
 
 - The remaining 100k measurements are a low-end 2-core/4 GB/HDD machine on

@@ -196,6 +196,9 @@ strings! {
     /// Help menu: opens a small window that asks for a donation; without the & it is also
     /// that window's title.
     MenuDonate = "&Donate";
+    /// Help menu: opens a small window with the totals below; without the & it is also that
+    /// window's title.
+    MenuStatistics = "&Statistics";
     /// The Ctrl key, as menus write shortcuts (Ctrl+O).
     KeyCtrl = "Ctrl";
     /// The Shift key, as menus write shortcuts (Shift+Del).
@@ -496,6 +499,23 @@ strings! {
     DonateText = "Rookparcel is free and shows no ads. If you like it, a donation helps to keep the project going.\n\nPlease give only if you can comfortably afford it: your own financial well-being comes first.\n\nThe donation page on the Rookparcel website lists the ways to give.";
     /// Help > Donate: the button that opens the donation page in the web browser.
     DonateOpen = "&Open Donation Page";
+    /// Help > Statistics, a group's title: the totals of every session since the date below.
+    StatsAllTime = "All Time";
+    /// Help > Statistics, a group's title: the totals since Rookparcel was started.
+    StatsSession = "This Session";
+    /// Help > Statistics, a group's title: the disk queue and the read cache.
+    StatsDisk = "Disk";
+    /// Help > Statistics: the date and time the all-time totals began to be counted.
+    StatsSince = "Counted Since:";
+    /// Help > Statistics: the number of peers connected now, over all torrents.
+    StatsPeers = "Connected Peers:";
+    /// Help > Statistics: the size of the downloaded data that waits to be written to disk.
+    StatsWriteQueue = "Write Queue:";
+    /// Help > Statistics: the memory the read cache holds now.
+    StatsReadCache = "Read Cache:";
+    /// Help > Statistics: the share of the blocks sent to peers that came from the read cache
+    /// rather than the disk, as a percentage.
+    StatsCacheHits = "Read Cache Hits:";
 
     // ---- Small dialogs: Add Torrent from URL, New Label, folder pickers, file filters
 
