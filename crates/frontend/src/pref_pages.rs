@@ -143,6 +143,24 @@ pub fn run_command_error(line: &str) -> Option<String> {
     }
 }
 
+/// Why the text of a Trackers or Run Program field cannot be stored whatever its check box
+/// says: a list line that is no tracker address, a list address that is not `https://`, a
+/// command line [`run_command_error`] refuses. An empty field is fine here ([`check`] wants it
+/// filled only while its box is on). Instant apply (`live`) asks this, so a refused text is not
+/// stored the moment its box is switched off.
+pub fn text_error(key: &str, text: &str) -> Option<String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    match key {
+        TRACKERS_LIST => (crate::tracker_list::parse(text).invalid > 0).then(|| tr_owned(S::TrackersErrLine)),
+        TRACKERS_URL => (!crate::tracker_list::is_list_url(text)).then(|| tr_owned(S::TrackersErrHttps)),
+        RUN_ADDED | RUN_FINISHED => run_command_error(text),
+        _ => None,
+    }
+}
+
 /// The Scheduler page's "Enable Scheduler" box, which greys the table and the rates.
 pub const SCHED_ENABLE: &str = "sched.enable";
 

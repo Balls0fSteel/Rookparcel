@@ -13,7 +13,7 @@
 
 use std::collections::HashMap;
 
-use super::{Field, Page, TRACKERS_LIST, check, fields};
+use super::{Field, Page, check, fields, text_error};
 use crate::options::Options;
 
 /// The message for a typed tracker list (`trackers.list`) holding a line that is no tracker
@@ -88,10 +88,8 @@ impl Live {
                 continue;
             }
             let mut candidate = new.clone();
-            // (its box comes before it on the page: `new` has the box as it is now)
-            let refused = (f.key == TRACKERS_LIST)
-                .then(|| bad_tracker_lines(new.gui.trackers_append, &value))
-                .flatten();
+            // refused whether or not its box is on: a box switched off does not let it through
+            let refused = text_error(f.key, &value);
             match refused.map_or_else(|| f.apply(&mut candidate, &value), Err) {
                 Err(message) => {
                     errors.push((f.key, message));
@@ -261,6 +259,37 @@ mod tests {
         assert_eq!(c.options.expect("the list applies").gui.trackers_list, good);
         assert!(c.errors.is_empty() && live.pending().is_empty());
         assert_eq!(bad_tracker_lines(false, &typed), None);
+    }
+
+    #[test]
+    fn a_refused_text_is_not_stored_when_its_box_goes_off() {
+        use crate::pref_pages::{RUN_ADDED, TRACKERS_URL};
+        let pages = all();
+        let applied = Options::load(&Prefs::default(), "/dl");
+        let mut live = Live::default();
+        live.write(&pages, &applied);
+        assert!(!applied.gui.trackers_from_url && !applied.gui.run_added_on);
+        let url = live.shown(TRACKERS_URL).unwrap().to_owned();
+        let line = live.shown(RUN_ADDED).unwrap().to_owned();
+        // an http address and an open quote with their boxes off (the boxes on, the same texts
+        // are refused by `check`; switched off, they were stored): refused, not stored
+        let bad = [(TRACKERS_URL, "http://lists.example/t.txt"), (RUN_ADDED, "/bin/echo \"%N")];
+        let c = live.commit(&pages, &applied, TRACKERS_URL, controls(&live, &bad[..1]));
+        assert!(c.options.is_none());
+        let c = live.commit(&pages, &applied, RUN_ADDED, controls(&live, &bad));
+        assert!(c.options.is_none());
+        assert_eq!(c.errors.iter().map(|e| e.0).collect::<Vec<_>>(), [TRACKERS_URL, RUN_ADDED]);
+        assert_eq!(live.pending(), [TRACKERS_URL, RUN_ADDED]);
+        // another field still applies without them
+        let edits = [bad[0], bad[1], ("enable_lsd", "false")];
+        let c = live.commit(&pages, &applied, "enable_lsd", controls(&live, &edits));
+        let o = c.options.expect("LSD off applies");
+        assert_eq!((o.gui.trackers_url.as_str(), o.gui.run_added.as_str()), (url.as_str(), line.as_str()));
+        // the window closes: the stored texts go back
+        assert_eq!(live.revert(), [(TRACKERS_URL, url), (RUN_ADDED, line)]);
+        // with its box off, an empty line or a good one is stored
+        assert_eq!(text_error(RUN_ADDED, "  "), None);
+        assert_eq!(text_error(TRACKERS_URL, "https://lists.example/t.txt"), None);
     }
 
     #[test]
