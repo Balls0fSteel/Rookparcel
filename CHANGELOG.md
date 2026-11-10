@@ -4,6 +4,12 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-10_223619_1794346579: Release 1.2.45 published
+
+- **Asked by the owner** after the change below. `main` at `86b0ff66` (the notes `docs/releases/1.2.45.md`, the Flatpak metainfo entry) with CI, FreeBSD and Fuzz green; tag `v1.2.45`; the Release run built 13 files and `SHA256SUMS` and both container images; published as the latest release (2026-11-10 21:36 UTC). Then the site's news entry pushed to `main` and the changed `docs/wiki` pages copied to the wiki.
+- **Checked on the draft:** every file against `SHA256SUMS`; the zip's `rookparcel-nox.exe --version`; that program started on three scratch folders, read through the shim's `app/preferences` and its `webui.json` afterwards: a stored 150 % / 0 with the box off stays off (`max_ratio_enabled` false), a stored 200 % gets the box ticked with 0 (true), a new folder is off; each has `queue.seed_goal_rule=2`.
+- **Skipped of RELEASING.md step 5:** the setup and the zip on a clean Windows VM, the update through Help > Check for Updates, the tarballs, AppImages and Flatpaks on a Linux desktop, the dmg on the Mac VM, the container image pulled and run. No GUI of 1.2.45 was run by hand.
+
 ## 2026-11-10_220442_1794344682: Version 1.2.45: the default seeding goal is off until its box is ticked (D68)
 
 - **Reported by the owner:** of 41 seeds started together about half went back to paused at once. Cause: Preferences > Queueing's default goal (150 %) was always in force, and with "Limit the upload rate" off it stopped every queued seed past it, again after each Start. µTorrent 2.2.1 has the same 150 % with that box off and stops nothing.
