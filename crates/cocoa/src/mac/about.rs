@@ -10,7 +10,7 @@ use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2_app_kit::{
     NSAboutPanelOptionApplicationName, NSAboutPanelOptionApplicationVersion, NSAboutPanelOptionCredits,
-    NSApplication, NSFont, NSTextView, NSWindow, NSWindowStyleMask, NSWorkspace,
+    NSAlertFirstButtonReturn, NSApplication, NSFont, NSTextView, NSWindow, NSWindowStyleMask, NSWorkspace,
 };
 use objc2_foundation::{NSAttributedString, NSDictionary, NSSize, NSString, NSURL};
 use rookparcel_frontend::{lang, profile, tr};
@@ -79,6 +79,27 @@ pub fn notices() {
 /// Help > Rookparcel Website, in the default browser.
 pub fn website() {
     open_url(rookparcel_frontend::update::WEBSITE_URL);
+}
+
+/// Help > Donate: an alert with a few lines on supporting the project; its first button opens
+/// the website's donation page, Close (Escape too) only closes it.
+pub fn donate() {
+    let Some(mtm) = MainThreadMarker::new() else { return };
+    let alert = ui::make_alert(
+        ui::Style::Info,
+        &lang::plain(tr!(MenuDonate)),
+        tr!(DonateText),
+        &[tr!(DonateOpen), tr!(BtnClose)],
+        mtm,
+    );
+    // only a button called Cancel gets Escape by itself
+    if let Some(close) = alert.buttons().iter().nth(1) {
+        close.setKeyEquivalent(&ui::ns("\u{1b}"));
+    }
+    super::lifecycle::activate(mtm);
+    if alert.runModal() == NSAlertFirstButtonReturn {
+        open_url(rookparcel_frontend::update::DONATE_URL);
+    }
 }
 
 /// Opens `url` in the program the system has for it.

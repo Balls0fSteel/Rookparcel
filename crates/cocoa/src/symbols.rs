@@ -38,6 +38,7 @@ pub fn command(cmd: Command) -> Option<&'static str> {
         Find => "magnifyingglass",
         Website => "globe",
         Notices => "doc.text",
+        Donate => "heart",
         CheckUpdates => "arrow.down.circle",
         ImportQbt | ImportUt => "square.and.arrow.down",
         ConnectRemote => "network",

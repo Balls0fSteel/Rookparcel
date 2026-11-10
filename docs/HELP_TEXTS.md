@@ -324,6 +324,7 @@ Every engine setting, in the table's order. A row a Preferences page edits under
 | `MenuCheckUpdates` | Asks the Rookparcel website whether a newer version is out and tells you the answer. | win32 app.rs cmd::CHECK_UPDATES -> updates.start_manual, start_update_check |
 | `MenuAbout` | Shows Rookparcel's version, copyright and licence, and where its settings file is. | win32 app.rs cmd::ABOUT -> dialogs::about(AboutText) |
 | `MenuNotices` | Shows the licence texts of the third-party code Rookparcel is built on. | win32 app.rs cmd::NOTICES -> notices::show |
+| `MenuDonate` | Says how to support Rookparcel and offers to open its donation page in your web browser. | win32 app.rs cmd::DONATE -> donate::show -> open_url(update::DONATE_URL) |
 | `MenuOpenFolder` | Opens the folder that holds the selected item in the file manager, with the item selected where the file manager can. | win32 app.rs cmd::OPEN_FOLDER -> torrent_action -> open_folder_target, show_in_explorer (also the Files tab's FILE_OPEN_FOLDER -> open_file) |
 | `MenuOpenFolderMany` | Opens the first selected torrent's download folder in the file manager, with its data selected once it exists. | win32 app.rs cmd::OPEN_FOLDER -> torrent_action -> open_folder_target, show_in_explorer |
 | `MenuForceStart` | Starts the selected torrents now, outside the queue: they run even when the queue's limits on active torrents are reached. | win32 app.rs cmd::FORCE_START -> torrent_action -> actions::force_start |

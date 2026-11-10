@@ -1056,6 +1056,7 @@
         { label: T("MenuPreferences"), run: () => $("tb-prefs").click() },
         { label: T("MenuRss"), run: () => openRss(0) },
         { label: T("SearchTitle"), run: openFind },
+        { label: T("MenuDonate"), run: openDonate },
         { label: T("WebLogOut"), run: () => $("logout").click() },
       ],
       RTL ? r.right : r.left,
@@ -5195,6 +5196,24 @@
       showApp();
     } else $("login-error").textContent = r.status === 403 ? text : T("WebWrongLogin");
   });
+  // ---- Donate: a few lines and the website's donation page, as the GUIs' Help > Donate ------
+  const donateDlg = $("donate");
+  function openDonate() {
+    if (donateDlg.open || $("app").hidden) return;
+    setText("donate-text", T("DonateText"));
+    donateDlg.showModal();
+    layerOpened(closeDonate);
+  }
+  function closeDonate() {
+    if (donateDlg.open) donateDlg.close();
+  }
+  donateDlg.addEventListener("close", () => layerClosed(closeDonate));
+  $("donate-open").addEventListener("click", () => {
+    if (hello && hello.donate_url) window.open(hello.donate_url, "_blank", "noopener,noreferrer");
+    closeDonate();
+  });
+  $("donate-close").addEventListener("click", closeDonate);
+  $("tb-donate").addEventListener("click", openDonate);
   $("logout").addEventListener("click", () => {
     api("auth/logout", {}).then(showLogin, showLogin);
   });

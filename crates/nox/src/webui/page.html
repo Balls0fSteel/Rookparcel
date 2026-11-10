@@ -43,6 +43,7 @@
     <button type="button" id="tb-more" class="only-phone" title="More" aria-label="More" data-t-title="WebMore" data-t-aria="WebMore">&#8943;</button>
     <input id="search" type="search" placeholder="Search" data-t-ph="WebSearch" autocomplete="off" aria-label="Search torrents" data-t-aria="WebSearchTorrents">
     <button type="button" id="tb-find" class="only-desk" title="Search Torrents" data-t-title="SearchTitle" data-t="SearchFind">Find</button>
+    <button type="button" id="tb-donate" class="only-desk" title="Donate" data-t-title="MenuDonate" data-t="MenuDonate">Donate</button>
     <button type="button" id="logout" class="only-desk" title="Log out" data-t-title="WebLogOut" data-t="WebLogOut">Log out</button>
     <input id="file" type="file" accept=".torrent,application/x-bittorrent" multiple hidden>
   </div>
@@ -348,6 +349,12 @@
       <div class="rss-ok"><span id="find-e-msg" role="status"></span><button type="submit" data-t="BtnOk">OK</button><button type="button" id="find-e-cancel" data-t="BtnCancel">Cancel</button></div>
     </form>
   </dialog>
+</dialog>
+<!-- Donate (the GUIs' Help > Donate): the ways to give are on the website's page, whose address the server's hello carries (donate_url) -->
+<dialog id="donate" aria-labelledby="donate-title">
+  <h2 id="donate-title" data-t="MenuDonate">Donate</h2>
+  <p id="donate-text" class="find-pre"></p>
+  <div class="rss-ok"><button type="button" id="donate-open" data-t="DonateOpen">Open Donation Page</button><button type="button" id="donate-close" data-t="BtnClose">Close</button></div>
 </dialog>
 <script src="lang.js"></script>
 <script src="app.js"></script>

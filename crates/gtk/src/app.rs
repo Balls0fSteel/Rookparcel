@@ -529,6 +529,7 @@ fn startup(app: &gtk::Application) {
     if updates_here() {
         item(&web, tr!(MenuCheckUpdates), "win.check-updates");
     }
+    item(&web, tr!(MenuDonate), "win.donate");
     help.append_section(None, &web);
     let about = gio::Menu::new();
     item(&about, tr!(MenuAbout), "win.about");
@@ -2094,6 +2095,11 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     simple("about", about);
     simple("notices", third_party_notices);
     simple("website", || open_uri(update::WEBSITE_URL));
+    simple("donate", || {
+        if let Some(window) = with_app(|a| a.window.clone()) {
+            crate::donate::show(&window);
+        }
+    });
     simple("check-updates", || {
         if with_app(|a| a.updates.start_manual()) == Some(true) {
             start_update_check();

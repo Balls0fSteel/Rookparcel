@@ -135,6 +135,11 @@ torrent search's results, status lines or sources changed (the page asks `GET /p
 `GET /pa/search` again) and `"adds": n` when a magnet's Add dialog can open; each is sent
 when it moved since the client's last tick.
 
+`hello` carries `"donate_url"`, the website's donation page (`frontend::update::DONATE_URL`): the
+toolbar's **Donate** button (the phone's More menu too) opens a small dialog with the GUIs'
+Help > Donate text, whose button opens that address in a new tab. The page itself names no
+other site, so the address comes from the server.
+
 When nox's update check (D43, [DAEMON.md](DAEMON.md#the-update-check)) found a newer Rookparcel,
 `hello` and every `tick` carry `"update":{"version":"1.2.0","url":"<its release page>"}`; the
 page shows it as a link in the status bar (the `UpdateNotice` text) and hides the link when a

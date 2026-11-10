@@ -507,6 +507,7 @@ pub fn run(cmd: Command) {
         CheckUpdates => crate::mac::update::check(),
         Website => crate::mac::about::website(),
         Notices => crate::mac::about::notices(),
+        Donate => crate::mac::about::donate(),
         Preferences => crate::prefs::open(),
         Pref(i) => crate::prefs::run(i),
         SetupGuide => crate::setup_guide::open(),

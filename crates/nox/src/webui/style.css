@@ -684,7 +684,7 @@ div.pg { border: 0; padding: 0 8px; }
 }
 
 /* the torrent search (query bar, status lines, results; Manage Sources and its edit dialog) */
-#find, #find-sources, #find-edit, #find-helper, #find-sites {
+#find, #find-sources, #find-edit, #find-helper, #find-sites, #donate {
   padding: 10px 12px;
   border: 1px solid var(--line);
   background: var(--bg);
@@ -695,9 +695,12 @@ div.pg { border: 0; padding: 0 8px; }
 #find-sources { width: min(560px, calc(100vw - 32px)); height: min(420px, calc(100vh - 32px)); }
 #find-edit { width: min(520px, calc(100vw - 32px)); }
 #find-helper { width: min(520px, calc(100vw - 32px)); }
+/* Donate: a few lines and the button to the website's donation page */
+#donate { width: min(460px, calc(100vw - 32px)); }
+#donate-text { margin-bottom: 12px; }
 #find-sites { width: min(720px, calc(100vw - 32px)); height: min(560px, calc(100vh - 32px)); }
-#find::backdrop, #find-sources::backdrop, #find-edit::backdrop, #find-helper::backdrop, #find-sites::backdrop { background: var(--scrim); }
-#find h2, #find-sources h2, #find-edit h2, #find-helper h2, #find-sites h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+#find::backdrop, #find-sources::backdrop, #find-edit::backdrop, #find-helper::backdrop, #find-sites::backdrop, #donate::backdrop { background: var(--scrim); }
+#find h2, #find-sources h2, #find-edit h2, #find-helper h2, #find-sites h2, #donate h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
 #find-body, #find-sources-body { display: flex; flex-direction: column; gap: 8px; height: 100%; }
 #find select, #find input:not([type="checkbox"]) { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; min-width: 0; }
 .find-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

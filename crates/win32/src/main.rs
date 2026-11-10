@@ -25,6 +25,8 @@ mod details;
 #[cfg(windows)]
 mod dialogs;
 #[cfg(windows)]
+mod donate;
+#[cfg(windows)]
 mod fit;
 #[cfg(windows)]
 mod help;

@@ -321,6 +321,8 @@ mod cmd {
     pub const SETUP_GUIDE: u16 = 154;
     /// The Files tab's menu: Tree View, as its box beside the filter (D62).
     pub const FILES_TREE: u16 = 155;
+    /// Help > Donate.
+    pub const DONATE: u16 = 156;
     /// File > Profiles' list, by `profile::menu` index (at most 256 entries).
     pub const PROFILE_BASE: u16 = 3700;
     pub const LABEL_BASE: u16 = 1000;
@@ -995,6 +997,7 @@ unsafe fn main_menu() -> HMENU {
         if update::AVAILABLE {
             append(help, cmd::CHECK_UPDATES, tr!(MenuCheckUpdates));
         }
+        append(help, cmd::DONATE, tr!(MenuDonate));
         separator(help);
         append(help, cmd::ABOUT, tr!(MenuAbout));
         append(help, cmd::NOTICES, tr!(MenuNotices));
@@ -4139,6 +4142,7 @@ unsafe fn on_command(hwnd: HWND, id: u16) {
             ),
             cmd::NOTICES => crate::notices::show(hwnd),
             cmd::WEBSITE => open_url(hwnd, update::WEBSITE_URL),
+            cmd::DONATE => crate::donate::show(hwnd),
             cmd::CHECK_UPDATES => {
                 if with_app(|a| a.updates.start_manual()) == Some(true) {
                     start_update_check(hwnd);

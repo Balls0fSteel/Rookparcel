@@ -22,6 +22,8 @@ mod create;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod detail;
 #[cfg(all(unix, not(target_os = "macos")))]
+mod donate;
+#[cfg(all(unix, not(target_os = "macos")))]
 mod icons;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod integration;

@@ -120,7 +120,7 @@ Ctrl becomes ⌘; Mac conventions win where they clash.
 - Torrent: Open Containing Folder | Force Start, Start ⌘S, Pause ⇧⌘P, Stop ⌘T | Queue Up, Down, Top, Bottom | Remove ⌘⌫ (⌫ in the list), Remove And Delete .torrent + Data ⌥⌘⌫ | Force Re-check, Update Tracker | Advanced ▸, Bandwidth ▸, Label ▸ | Properties ⌘I (Return in the list). The list's context menu is the same menu.
 - Options: RSS Downloader | Auto Shutdown ▸.
 - Window: Minimize ⌘M, Zoom | Bring All to Front.
-- Help: Rookparcel Website | Third-Party Notices.
+- Help: Rookparcel Website, Donate | Third-Party Notices.
 - Dock menu and status-item menu: Show/Hide | Add Torrent, Add Torrent from URL | Start All, Stop All | Quit.
 - Strings: the Mac-only menu texts (Edit, View, Window and the app menu, about 25) are added once by slice B to `en.rs` and machine-translated into all 34 tables. Every other slice reuses existing keys.
 

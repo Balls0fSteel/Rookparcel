@@ -193,6 +193,9 @@ strings! {
     MenuCheckUpdates = "Check for &Updates";
     /// Help menu: opens the project website in the browser.
     MenuWebsite = "Rookparcel &Website";
+    /// Help menu: opens a small window that asks for a donation; without the & it is also
+    /// that window's title.
+    MenuDonate = "&Donate";
     /// The Ctrl key, as menus write shortcuts (Ctrl+O).
     KeyCtrl = "Ctrl";
     /// The Shift key, as menus write shortcuts (Shift+Del).
@@ -489,6 +492,10 @@ strings! {
     UpdateInstallNow = "Rookparcel {version} is downloaded. To install it, Rookparcel closes now and starts again when Setup is done.\n\nClose and install now?";
     /// {version} is like 1.0.0, {path} the settings file. Keep the names and licences as they are.
     AboutText = "Rookparcel {version}\n\nA re-creation of µTorrent 2.2.1, built on a Rust port of libtorrent-rasterbar 2.0.11.\n\nCopyright 2026 DukeCorp1996. Free for noncommercial use under the PolyForm Noncommercial License 1.0.0.\n\nPorted libtorrent code: Copyright (c) 2003-2020, Arvid Norberg and contributors, BSD-3-Clause. License texts: LICENSE.md, THIRD-PARTY-NOTICES.md, or run rookparcel-nox --license.\n\nNot affiliated with libtorrent, qBittorrent, µTorrent or BitTorrent, Inc.\n\nSettings: {path}";
+    /// Help > Donate: the window's text, above the button below and Close.
+    DonateText = "Rookparcel is free and shows no ads. If you like it, a donation helps to keep the project going.\n\nPlease give only if you can comfortably afford it: your own financial well-being comes first.\n\nThe donation page on the Rookparcel website lists the ways to give.";
+    /// Help > Donate: the button that opens the donation page in the web browser.
+    DonateOpen = "&Open Donation Page";
 
     // ---- Small dialogs: Add Torrent from URL, New Label, folder pickers, file filters
 

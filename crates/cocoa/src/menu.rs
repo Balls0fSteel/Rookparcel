@@ -162,7 +162,12 @@ pub fn tree() -> Vec<Item> {
         Item::Sep,
         sys(c"arrangeInFront:", tr!(MacBringAllToFront), None),
     ];
-    let help = vec![c(Website, tr!(MenuWebsite), None), c(Notices, tr!(MenuNotices), None)];
+    let help = vec![
+        c(Website, tr!(MenuWebsite), None),
+        c(Donate, tr!(MenuDonate), None),
+        Item::Sep,
+        c(Notices, tr!(MenuNotices), None),
+    ];
     vec![
         sub("Rookparcel", app, Role::App),
         sub(tr!(MenuFile), file, Role::Plain),

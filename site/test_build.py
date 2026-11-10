@@ -395,7 +395,7 @@ class WholeBuild(unittest.TestCase):
                 Manifest.HEAD + "stable=1.0.0\nprerelease=1.1.0-rc.10\n").encode("utf-8"))
             self.assertTrue((out / ".nojekyll").is_file())
             for page in ("index.html", "download.html", "faq.html", "docs.html", "404.html",
-                         "news.html", "benchmarks.html"):
+                         "news.html", "benchmarks.html", "donate.html"):
                 text = (out / page).read_text(encoding="utf-8")
                 self.assertNotIn("<!-- build:", text, page)
                 nav = text.split("</nav>")[0]

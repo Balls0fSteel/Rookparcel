@@ -249,6 +249,8 @@ impl Client {
             // the server's theme and the list to pick from (D63)
             .with("theme", st.prefs.theme.as_str())
             .with("themes", Json::Arr(themes))
+            // the page the Donate dialog opens (the page itself names no other site)
+            .with("donate_url", rookparcel_frontend::update::DONATE_URL)
             // a desktop client hosts the Web UI (docs/WEBUI.md)
             .with("hosted", st.hosted);
         // a newer Rookparcel nox's update check found (never hosted)
@@ -1017,6 +1019,8 @@ mod tests {
         let Some(Json::Arr(themes)) = hello.get("themes") else { panic!("{hello:?}") };
         assert_eq!(themes.len(), super::super::theme::BUILT_IN.len());
         assert_eq!(themes[0], Json::Arr(vec!["system".into(), "System (light or dark)".into()]));
+        // the Donate dialog's button opens the page the GUIs' Help > Donate opens
+        assert_eq!(hello.get("donate_url"), Some(&Json::from(rookparcel_frontend::update::DONATE_URL)));
     }
 
     #[test]

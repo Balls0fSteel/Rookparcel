@@ -68,6 +68,7 @@ pub enum Command {
     // ---- Help
     Website,
     Notices,
+    Donate,
     // ---- the Dock menu and the status item
     ToggleWindow,
     StartAll,
@@ -146,7 +147,7 @@ pub const FILES: [Command; 7] = [
 ];
 
 /// Every command: those without a value, then those with one (at index 0).
-pub const ALL: [Command; 64] = [
+pub const ALL: [Command; 65] = [
     Command::About,
     Command::CheckUpdates,
     Command::Preferences,
@@ -186,6 +187,7 @@ pub const ALL: [Command; 64] = [
     Command::Rss,
     Command::Website,
     Command::Notices,
+    Command::Donate,
     Command::ToggleWindow,
     Command::StartAll,
     Command::StopAll,
@@ -285,6 +287,8 @@ impl Command {
             // slice C (kinds from 100, apart from the other slices' additions)
             UpdateNotice => (100, 0),
             NetworkStatus => (101, 0),
+            // Help > Donate (kind 66: 65 and 102 are the tests' unknown kinds, 70-79 slice H's)
+            Donate => (66, 0),
             // slice F (kind 59: 53-58 are slice D's)
             Dialog(i) => (59, i),
             // slice E (kind 60: 100-101 are slice C's)
@@ -371,6 +375,7 @@ impl Command {
             // slice C
             100 => plain(UpdateNotice),
             101 => plain(NetworkStatus),
+            66 => plain(Donate),
             // slice F
             59 => Some(Dialog(v)),
             // slice E

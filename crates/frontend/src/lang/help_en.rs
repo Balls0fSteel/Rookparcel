@@ -616,6 +616,8 @@ helps! {
     MenuAbout = "Shows Rookparcel's version, copyright and licence, and where its settings file is.";
     /// win32 app.rs cmd::NOTICES -> notices::show
     MenuNotices = "Shows the licence texts of the third-party code Rookparcel is built on.";
+    /// win32 app.rs cmd::DONATE -> donate::show -> open_url(update::DONATE_URL)
+    MenuDonate = "Says how to support Rookparcel and offers to open its donation page in your web browser.";
 
     // ---- Menu: torrent list
     /// win32 app.rs cmd::OPEN_FOLDER -> torrent_action -> open_folder_target, show_in_explorer (also the Files tab's FILE_OPEN_FOLDER -> open_file)

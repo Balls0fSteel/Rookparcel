@@ -42,6 +42,8 @@ use rookparcel_core::fetch::{FetchOptions, FetchProxy, http_get, http_get_to};
 pub const MANIFEST_URL: &str = "https://balls0fsteel.github.io/Rookparcel/update.txt";
 /// The project website, for Help > Rookparcel Website.
 pub const WEBSITE_URL: &str = "https://balls0fsteel.github.io/Rookparcel/";
+/// The website's donation page, for Help > Donate (`site/donate.html`).
+pub const DONATE_URL: &str = "https://balls0fsteel.github.io/Rookparcel/donate.html";
 const RELEASES_URL: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/releases");
 
 /// Whether this build checks for updates at all.
