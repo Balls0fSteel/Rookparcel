@@ -74,8 +74,9 @@ define_class!(
 
     unsafe impl NSTextDelegate for RPTarget {}
 
-    // Preferences' multi-line box: Tab and Shift-Tab leave it, as they leave a text field
-    // (a text view would insert a tab, and the box commits when the focus leaves it).
+    // The multi-line boxes (`dialogs::properties::text_box`: Preferences, Create Torrent,
+    // Properties): Tab and Shift-Tab leave them, as they leave a text field (a text view would
+    // insert a tab; Preferences' box commits when the focus leaves it).
     unsafe impl NSTextViewDelegate for RPTarget {
         #[unsafe(method(textView:doCommandBySelector:))]
         fn text_view_do_command(&self, view: &NSTextView, command: Sel) -> bool {

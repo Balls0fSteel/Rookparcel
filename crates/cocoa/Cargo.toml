@@ -46,6 +46,7 @@ objc2-app-kit = { workspace = true, features = [
     "NSCell",
     "NSClipView",
     "NSColor",
+    "NSColorList",
     "NSColorSpace",
     "NSComboBox",
     "NSComboBoxCell",

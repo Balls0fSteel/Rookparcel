@@ -105,7 +105,8 @@ pub fn command(cmd: Command, description: &str, mtm: MainThreadMarker) -> Option
         .or_else(|| toolbar_icon(cmd).map(|i| toolbar(i, app_is_dark(mtm))))
 }
 
-fn dark_of(a: &NSAppearance) -> bool {
+/// Whether `a` is a dark appearance.
+pub fn dark_of(a: &NSAppearance) -> bool {
     // SAFETY: the two names are AppKit's constants.
     let names = unsafe { [NSAppearanceNameAqua, NSAppearanceNameDarkAqua] };
     let best = a.bestMatchFromAppearancesWithNames(&NSArray::from_slice(&names));

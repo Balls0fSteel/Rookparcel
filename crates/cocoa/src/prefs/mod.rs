@@ -529,12 +529,8 @@ fn update_greying(st: &State) {
         for c in &f.grey {
             c.setEnabled(enabled);
         }
-        if let Ctl::Lines(t, _) = &f.ctl {
-            // a text view is no control: read-only and grey, as a disabled field looks
-            t.setEditable(enabled);
-            t.setSelectable(enabled);
-            let color = if enabled { NSColor::textColor() } else { NSColor::disabledControlTextColor() };
-            t.setTextColor(Some(&color));
+        if let Ctl::Lines(t, scroll) = &f.ctl {
+            crate::dialogs::properties::enable_text_box(scroll, t, enabled);
         }
     }
     if let Some(c) = &st.sched {
