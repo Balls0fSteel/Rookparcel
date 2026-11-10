@@ -44,6 +44,19 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.30" data-date="2026-11-10" aria-labelledby="v1.2.30-h">
+      <h2 id="v1.2.30-h"><a href="#v1.2.30"><time datetime="2026-11-10">Tue 10 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.30</span></a></h2>
+      <p class="news-lede">Less CPU use while idle. A benchmark run of 1.2.29 showed it busier at rest than 1.0.1 was; both causes are fixed. Nothing new to see.</p>
+      <ul class="changes">
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span><code>rookparcel-nox</code> and windows with the Web UI on no longer read every torrent's stored metadata again after each start. With 10,000 torrents that kept a core about 1% busy for over a minute.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>Local peer discovery no longer looks at every stopped torrent several times a second. With 100,000 torrents the Windows program idles at 0.4% of a core instead of 0.8 to 1.0%.</span></li>
+        <li><span class="tag tag-area">Engine</span><span class="vh">:</span> <span>Whether a torrent is private is kept with its saved state, so a stopped torrent says it without its metadata loaded.</span></li>
+        <li><span class="tag tag-area">Web UI</span><span class="vh">:</span> <span>The first start after the update still reads the metadata once, for torrents saved by an older version; later starts do not.</span></li>
+        <li><span class="tag tag-area">Remote</span><span class="vh">:</span> <span>A GUI and the <code>rookparcel-nox</code> it controls must both be 1.2.30 (remote protocol 17).</span></li>
+      </ul>
+      <p class="news-note">In our test with 10,000 torrents, idle CPU is 0.12% of one core again (1.2.29: 0.33%, 1.0.1: 0.10%). The benchmark page will follow with a full run of this version.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.30">Download 1.2.30 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.30.md">Full release notes</a></p>
+    </article>
     <article class="news-entry" id="v1.2.29" data-date="2026-11-09" aria-labelledby="v1.2.29-h">
       <h2 id="v1.2.29-h"><a href="#v1.2.29"><time datetime="2026-11-09">Mon 9 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.29</span></a></h2>
       <p class="news-lede">Dark mode on Windows, following Windows' own setting or fixed in Preferences, and themes for the Web UI: nine built in, a choice per server and per browser, and your own CSS files.</p>
