@@ -1063,12 +1063,24 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   their settings/file verification and WSL wildcard binding. Debug uTP+RC4 has
   unexplained 0.4–0.8 s stalls (11–80 s vs 0.27 s release); benchmark release.
   Add rTorrent/2.2.1 and three-client PEX cases to the ongoing matrix.
-- Benchmarks against other clients (`tools/bench`, docs/BENCHMARKS.md): the 2026-10-27 run is
+- **Idle CPU regression in 1.2.x (found 2026-11-10, BENCHMARKS.md):** `rookparcel-nox` with
+  10,000 started torrents idles at 0.33% of a core on Linux (1.0.1: 0.07%, 1.1.40: 0.10%, same
+  session); the Win32 program with 100,000 stopped torrents at 0.8-1.0% for the process (1.0.1:
+  0.1-0.4%), the GUI thread unchanged. Not in the engine alone (`lt-swarm load --idle`: 0.00%)
+  and not at 1,000 torrents. Find the periodic work that grew with the torrent count between
+  1.1.40 and 1.2.29 (per-thread CPU: `bench.py many --keep`, then `top -H`), fix it, and rerun
+  with `--control`. Also from that run: the Win32 list is 0.1 s later (1.37 s) and 15 MB larger
+  at 100,000; its working set jumps to 360-640 MB while it closes; the engine's 100,000 restore
+  measured 1,318 ms against 1,199 ms (one run each); Deluge's transfer failed three times in the
+  night run for no found reason; a 256 MiB download once cost 1.2.29 2.8 CPU s in its disk
+  threads against 0.4 s for 1.1.40 (one smoke run, not seen at 2 GiB).
+- Benchmarks against other clients (`tools/bench`, docs/BENCHMARKS.md): the 2026-11-09 run is
   on the Xubuntu VM, where host load inflates CPU time; rerun on bare metal when possible, and
-  before releases. Not covered yet: 100,000 torrents (the corpus is ~3 GB of metadata, too big
+  before releases, with the last release as `--control`. Not covered yet: 100,000 torrents (the corpus is ~3 GB of metadata, too big
   for the 8 GB VM's libtorrent clients), multi-peer swarms, uTP, seeding CPU, a current rTorrent
   (Ubuntu ships 0.9.8) and the GUIs (Win32 vs µTorrent 2.2.1 and qBittorrent on Windows). The
-  VM keeps `~/bench` (harness, Rookparcel 1.0.1, venv with deluge-client); the two tmpfs mounts
+  VM keeps `~/bench` (harness, Rookparcel 1.0.1, 1.1.40 and 1.2.29 under `pa/`, venv with
+  deluge-client, `run-night.sh`); the full run takes 4.3 hours; the two tmpfs mounts
   (`/mnt/benchram`, Transmission's downloads) do not survive a reboot.
 - Preserve parser review before each release and ongoing fuzzing. UDP tracker,
   resume-data and remote-wire targets already exist; do not list them as missing.

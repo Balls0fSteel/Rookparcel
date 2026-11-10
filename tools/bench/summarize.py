@@ -2,6 +2,7 @@
 """summarize.py: medians of bench.py's JSON lines, as Markdown (docs) or HTML (site).
 
     summarize.py results.jsonl [--html | --bars]
+    summarize.py results.jsonl --versions [--html]            # Rookparcel's versions side by side
     summarize.py results.jsonl --fill site/benchmarks.html   # the charts and tables in place
 """
 
@@ -16,7 +17,29 @@ NAMES = {"rookparcel": "Rookparcel", "qbittorrent": "qBittorrent", "transmission
 
 def load(path):
     with open(path) as f:
-        return [json.loads(line) for line in f if line.strip()]
+        rows = [json.loads(line) for line in f if line.strip()]
+    for r in rows:
+        # Rookparcel was PaTorrent until 1.2.2: the runs of October 2026 say so
+        r["client"] = r["client"].replace("patorrent", "rookparcel")
+    return rows
+
+
+def many_ok(rows, client, count):
+    return [r for r in rows if r["scenario"] == "many" and r["client"] == client
+            and r["count"] == count and "error" not in r]
+
+
+def transfer_ok(rows, client):
+    return [r for r in rows if r["scenario"] == "transfer" and r["client"] == client
+            and "error" not in r and r.get("verified")]
+
+
+def runs_note(counts):
+    """`median of N, ` when every client has the same N > 1 runs."""
+    counts = {n for n in counts if n}
+    if len(counts) == 1 and max(counts) > 1:
+        return f"median of {max(counts)}, "
+    return "median, " if counts and max(counts) > 1 else ""
 
 
 def med(rows, key):
@@ -63,12 +86,51 @@ def many_table(rows, count):
         rs = [r for r in rows if r["scenario"] == "many" and r["client"] == c and r["count"] == count]
         if not rs:
             continue
-        r = rs[-1]
-        if "error" in r:
-            out.append([NAMES[c], r["error"][:60], "", "", "", "", ""])
+        ok = many_ok(rows, c, count)
+        if not ok:
+            out.append([NAMES[c], rs[-1]["error"][:60], "", "", "", "", ""])
             continue
-        out.append([NAMES[c], fmt(r["add_s"]), fmt(r["restart_s"], 2), fmt(r["restarted_rss_mb"]),
-                    fmt(r["restarted_pss_mb"]), fmt(r["restarted_idle_cpu_pct"], 2), fmt(r["empty_rss_mb"])])
+        out.append([NAMES[c], fmt(med(ok, "add_s")), fmt(med(ok, "restart_s"), 2),
+                    fmt(med(ok, "restarted_rss_mb")), fmt(med(ok, "restarted_pss_mb")),
+                    fmt(med(ok, "restarted_idle_cpu_pct"), 2), fmt(med(ok, "empty_rss_mb"))])
+    return out
+
+
+def versions_table(rows):
+    """Rookparcel's versions measured in one session (`bench.py --control`), one column each."""
+    clients = []
+    for r in rows:
+        if r["client"].split("@")[0] == "rookparcel" and r["client"] not in clients:
+            clients.append(r["client"])
+    clients.sort(key=lambda c: (c == "rookparcel", [int(p) if p.isdigit() else 0
+                                                     for p in c.partition("@")[2].split(".")]))
+
+    def label(c):
+        version = next((r["version"] for r in rows if r["client"] == c and "version" in r), c)
+        return version.split()[-1]
+
+    def cell(rs, key, digits=1):
+        lo, hi = spread(rs, key)
+        if lo is None:
+            return "–"
+        return f"{fmt(med(rs, key), digits)} ({fmt(lo, digits)}–{fmt(hi, digits)})"
+    out = [["Measure"] + [label(c) for c in clients]]
+    t = {c: transfer_ok(rows, c) for c in clients}
+    if any(t.values()):
+        out.append([f"Download, MiB/s ({runs_note(map(len, t.values()))}range)"]
+                   + [cell(t[c], "mib_per_s") for c in clients])
+        out.append(["Download, CPU s per GiB"] + [cell(t[c], "cpu_s_per_gib", 2) for c in clients])
+    for count in sorted({r["count"] for r in rows if r["scenario"] == "many"}):
+        m = {c: many_ok(rows, c, count) for c in clients}
+        if not any(m.values()):
+            continue
+        for key, name, digits in (("add_s", "add (s)", 2), ("restart_s", "start with all listed (s)", 2),
+                                  ("restarted_rss_mb", "memory after a restart (MB)", 1),
+                                  ("added_rss_mb", "memory right after adding (MB)", 1),
+                                  ("restarted_idle_cpu_pct", "idle CPU (%)", 2)):
+            out.append([f"{count:,} torrents: {name}"] + [cell(m[c], key, digits) for c in clients])
+        if count == max(r["count"] for r in rows if r["scenario"] == "many"):
+            out.append(["Empty session, memory (MB)"] + [cell(m[c], "empty_rss_mb") for c in clients])
     return out
 
 
@@ -94,7 +156,8 @@ def html(table):
 def bars(caption, note, values, unit, digits=0):
     """A bar chart in plain HTML: one bar per client, Rookparcel's in the accent colour."""
     import html as h
-    top = max(v for _, v in values if v is not None)
+    values = [(c, v) for c, v in values if v is not None]
+    top = max(v for _, v in values)
     items = []
     for c, v in values:
         width = max(100 * v / top, 0.6)
@@ -113,6 +176,8 @@ def fill(page, rows):
     import re
     blocks = {f"chart-{i}": c for i, c in enumerate(charts(rows).split("\n\n"))}
     blocks["table-transfer"] = html(transfer_table(rows))
+    if any(r["client"].startswith("rookparcel@") for r in rows):
+        blocks["table-versions"] = html(versions_table(rows))
     for count in {r["count"] for r in rows if r["scenario"] == "many"}:
         blocks[f"table-{count}"] = html(many_table(rows, count))
     with open(page, encoding="utf-8") as f:
@@ -127,20 +192,22 @@ def fill(page, rows):
 
 
 def charts(rows):
-    t = [r for r in rows if r["scenario"] == "transfer" and "error" not in r and r.get("verified")]
-    m = {r["client"]: r for r in rows if r["scenario"] == "many" and r["count"] == 10000 and "error" not in r}
+    t = {c: transfer_ok(rows, c) for c in ORDER}
+    m = {c: many_ok(rows, c, 10000) for c in ORDER}
+    tn, mn = runs_note(map(len, t.values())), runs_note(map(len, m.values()))
 
     def tm(key):
-        return [(c, med([r for r in t if r["client"] == c], key)) for c in ORDER]
+        return [(c, med(t[c], key)) for c in ORDER]
 
     def mm(key):
-        return [(c, m[c][key]) for c in ORDER if c in m]
+        return [(c, med(m[c], key)) for c in ORDER]
     return "\n\n".join([
-        bars("Memory with 10,000 torrents, after a restart", "RSS, lower is better", mm("restarted_rss_mb"), "MB"),
-        bars("Memory right after adding 10,000 torrents", "RSS, lower is better", mm("added_rss_mb"), "MB"),
-        bars("Start until all 10,000 are listed", "seconds, lower is better", mm("restart_s"), "s", 2),
-        bars("Download speed from one peer", "MiB/s, median of 5, higher is better", tm("mib_per_s"), "MiB/s"),
-        bars("CPU time per GiB downloaded", "seconds, median of 5, lower is better", tm("cpu_s_per_gib"), "s", 2),
+        bars("Memory with 10,000 torrents, after a restart", f"RSS, {mn}lower is better",
+             mm("restarted_rss_mb"), "MB"),
+        bars("Memory right after adding 10,000 torrents", f"RSS, {mn}lower is better", mm("added_rss_mb"), "MB"),
+        bars("Start until all 10,000 are listed", f"seconds, {mn}lower is better", mm("restart_s"), "s", 2),
+        bars("Download speed from one peer", f"MiB/s, {tn}higher is better", tm("mib_per_s"), "MiB/s"),
+        bars("CPU time per GiB downloaded", f"seconds, {tn}lower is better", tm("cpu_s_per_gib"), "s", 2),
     ])
 
 
@@ -153,6 +220,9 @@ def main():
         print(charts(rows))
         return
     render = html if "--html" in sys.argv else markdown
+    if "--versions" in sys.argv:
+        print(render(versions_table(rows)))
+        return
     print("## Transfer\n")
     print(render(transfer_table(rows)))
     for count in sorted({r["count"] for r in rows if r["scenario"] == "many"}):

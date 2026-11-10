@@ -503,7 +503,7 @@ WebUI\\HostHeaderValidation=false
 
 class Rookparcel(QbtApi):
     name = "rookparcel"
-    binary = os.path.join(HOME, "bench/pa/rookparcel-1.0.1-linux-x86_64/rookparcel-nox")
+    binary = os.path.join(HOME, "bench/pa/rookparcel-nox")  # --rookparcel names another
 
     def command(self):
         return [self.binary, "run", "--state-dir", os.path.join(self.work, "state"), "--save", self.save,
@@ -806,11 +806,15 @@ def many(a):
     torrents = corpus(a.count, "http://127.0.0.1:9/announce")
     meta_mb = sum(map(len, torrents)) / 2**20
     print(f"corpus: {a.count} torrents, {meta_mb:.0f} MiB of metadata", flush=True)
-    for name in a.clients:
+    # a different client goes first each run, as in `transfer`
+    turns = [(run, name) for run in range(a.runs)
+             for name in a.clients[run % len(a.clients):] + a.clients[:run % len(a.clients)]]
+    for run, name in turns:
         work = os.path.join(a.work, f"many-{a.count}")
         save = os.path.join(work, "data", name)
         c = None
-        row = {"scenario": "many", "client": name, "count": a.count, "metadata_mib": round(meta_mb, 1)}
+        row = {"scenario": "many", "client": name, "count": a.count, "run": run + 1,
+               "metadata_mib": round(meta_mb, 1)}
         try:
             c = launch(CLIENTS[name], work, save)
             row["version"] = c.version()
@@ -879,11 +883,11 @@ def transfer(a):
                     c.add([torrent])
                     # Samples of (time, CPU, bytes received from the seed). The kernel's byte
                     # counts are exact and the same for every client (their APIs lag by up to a
-                    # second); the steady-state figures are taken between 10% and 90% of the
+                    # second); the steady-state figures are taken between 10% and 80% of the
                     # payload, leaving out the announce, the connect and the endgame.
                     # Completion is the client's own word: every piece verified.
                     size = a.mib << 20
-                    samples, next_poll, own_port, seen = [], t0, None, {}
+                    samples, next_poll, own_port, seen, done_at = [], t0, None, {}, None
                     while True:
                         now = time.monotonic()
                         if now - t0 > a.timeout:
@@ -891,11 +895,20 @@ def transfer(a):
                                                f"{c.diagnose(ih)}")
                         if own_port is None:
                             own_port = next(iter(set(swarm) - before), None)
-                        got_bytes = received(seed_port, own_port, seen) if own_port else 0
+                        # without its port yet, a downloader that dials the seed is still counted
+                        got_bytes = received(seed_port, own_port, seen)
                         samples.append((now - t0, cpu_seconds(c.pid) - cpu0, got_bytes))
                         if now >= next_poll:
-                            if samples[-1][2] > 0 and c.complete(ih):
-                                break
+                            if c.complete(ih):
+                                if got_bytes > 0:
+                                    break
+                                # done by the client's word, yet no connection was counted:
+                                # say so now instead of waiting for the timeout
+                                done_at = done_at or now
+                                if now - done_at > 5:
+                                    raise RuntimeError(
+                                        f"complete, but no bytes counted (own port {own_port}, "
+                                        f"seed port {seed_port}, announced {sorted(swarm)})")
                             next_poll += 0.25
                         time.sleep(0.05)
 
@@ -935,7 +948,11 @@ def main():
     p.add_argument("--clients", default=",".join(ALL))
     p.add_argument("--count", type=int, default=1000)
     p.add_argument("--mib", type=int, default=2048)
-    p.add_argument("--runs", type=int, default=3)
+    p.add_argument("--runs", type=int, help="default: 3 for transfer, 1 for many")
+    p.add_argument("--rookparcel", metavar="PATH", help="the rookparcel-nox to measure")
+    p.add_argument("--control", metavar="LABEL=PATH", action="append", default=[],
+                   help="another rookparcel-nox (an older release), measured in the same rounds "
+                        "as client rookparcel@LABEL; may be given several times")
     p.add_argument("--settle", type=float, default=60, help="seconds before an idle measurement")
     p.add_argument("--window", type=float, default=60, help="seconds of idle measurement")
     p.add_argument("--timeout", type=float, default=1800)
@@ -945,9 +962,25 @@ def main():
     p.add_argument("--keep", action="store_true")
     a = p.parse_args()
     a.clients = [c for c in a.clients.split(",") if c]
+    if a.runs is None:
+        a.runs = 3 if a.scenario == "transfer" else 1
+    if a.rookparcel:
+        Rookparcel.binary = os.path.abspath(os.path.expanduser(a.rookparcel))
+    for spec in a.control:
+        label, _, path = spec.partition("=")
+        if not label or not path:
+            p.error(f"--control wants LABEL=PATH, not {spec}")
+        name = f"rookparcel@{label}"
+        CLIENTS[name] = type("RookparcelControl", (Rookparcel,),
+                             {"name": name, "binary": os.path.abspath(os.path.expanduser(path))})
+        if name not in a.clients:
+            at = a.clients.index("rookparcel") + 1 if "rookparcel" in a.clients else len(a.clients)
+            a.clients.insert(at, name)
     for c in a.clients:
         if c not in CLIENTS:
             p.error(f"unknown client {c}")
+        if issubclass(CLIENTS[c], Rookparcel) and not os.path.isfile(CLIENTS[c].binary):
+            p.error(f"{c}: no file {CLIENTS[c].binary} (see --rookparcel and --control)")
     os.makedirs(a.work, exist_ok=True)
     {"many": many, "transfer": transfer}[a.scenario](a)
 
