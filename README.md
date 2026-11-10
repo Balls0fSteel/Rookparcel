@@ -26,6 +26,8 @@ They heavily helped out, yes. Several LLM models were used to ensure speed and s
 
 Please donate - if you can. Your support means the world to us, but only give if you are comfortably able to do so. Your own financial well-being always comes first. Tokens are expensive. I have other projects too (published and work in progress), your support will be put to good use I assure you.
 
+[Donate with PayPal](https://www.paypal.com/ncp/payment/2UDQNM8TGRUA4) (also on the website's [donation page](https://balls0fsteel.github.io/Rookparcel/donate.html), which Help > Donate opens).
+
 > [!NOTE]
 > **Rookparcel 1.1.40 is the latest stable release.** It has been used mostly by its author so far, and nothing is code-signed. Do not use it on private trackers yet: its client ID is not whitelisted anywhere.
 >

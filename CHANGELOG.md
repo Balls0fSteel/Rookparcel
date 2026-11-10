@@ -4,6 +4,11 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-10_093915_1794299955: The donation page has the PayPal link
+
+- The owner gave the link (`https://www.paypal.com/ncp/payment/2UDQNM8TGRUA4`): `site/donate.html` shows a **Donate with PayPal** button in place of the "being set up" note, and the README's Donation section links it and the page. Site and documents only, no version bump; the programs open the page, not PayPal, so nothing in them changes.
+- The site's 33 tests pass. **Not done:** the page is not on `main`, so not on the site yet; the link itself was not opened.
+
 ## 2026-11-10_093026_1794299426: Version 1.2.34: Help > Donate
 
 - **Asked by the owner:** a donate dialog in the client's Help menu; answers to two questions: one donation page on the website (not links or addresses in the program), and all three GUIs plus the Web UI.

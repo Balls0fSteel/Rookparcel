@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-10_093026_1794299426
+Last updated: 2026-11-10_093915_1794299955
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D60](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -39,7 +39,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 **1.2.33, not released (2026-11-10):** an engine fix for every platform, worth a release soon: closing (or pausing) while a torrent's resume check was still queued saved "pieces unknown", and the next start hashed every file; behind one long check that was every torrent on the drive (the owner's report). Open: a try with the installed client once it is 1.2.33 (start, force a recheck of a big torrent, exit, start: only that torrent is hashed).
 
-**1.2.34, not released (2026-11-10): Help > Donate** in the three GUIs and a Donate button in the Web UI: a short text and a button that opens `site/donate.html` (`update::DONATE_URL`). **Open, the owner's:** the page only says the ways to give are being set up; put the real ones there (no release needed, but the page must be on the site before 1.2.34 is). Also open: the 33 translations are machine-made, Escape on the Mac alert was not tried, and `docs/wiki` (The main window) wants copying to the wiki repository at the release.
+**1.2.34, not released (2026-11-10): Help > Donate** in the three GUIs and a Donate button in the Web UI: a short text and a button that opens `site/donate.html` (`update::DONATE_URL`). The page has the owner's PayPal link (2026-11-10); it must be on the site (`main`) before 1.2.34 is released. Also open: the 33 translations are machine-made, Escape on the Mac alert was not tried, and `docs/wiki` (The main window) wants copying to the wiki repository at the release.
 
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 
