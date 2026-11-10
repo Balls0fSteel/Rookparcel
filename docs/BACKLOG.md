@@ -1074,6 +1074,10 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   256 MiB download once cost 1.2.29 2.8 CPU s in its disk threads against 0.4 s for 1.1.40 (one
   smoke run, not seen at 2 GiB). Other walks over every slot remain where they run on an event,
   not a tick (`torrent_ids` in the DHT, IP filter, listen and network-rule code).
+- Flaky on CI's Windows runner (2026-11-10, once): `crates/core/tests/proxy.rs`
+  `http_proxy_requests_trackers_and_web_seeds_by_url` timed out "waiting for finished" although
+  "finished downloading" is in its alert list: an earlier `wait` may consume the alert. Make the
+  waits keep what they skip.
 - Benchmarks against other clients (`tools/bench`, docs/BENCHMARKS.md): the 2026-11-09 run is
   on the Xubuntu VM, where host load inflates CPU time; rerun on bare metal when possible, and
   before releases, with the last release as `--control`. Not covered yet: 100,000 torrents (the corpus is ~3 GB of metadata, too big

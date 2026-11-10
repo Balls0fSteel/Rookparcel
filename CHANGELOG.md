@@ -4,6 +4,12 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-10_072902_1794292142: Release 1.2.30 published
+
+- Published as GitHub's Latest on the owner's instruction ("Release and we will do benchmarks again tomorrow"): `main` fast-forwarded to the release commit, FreeBSD and Fuzz green, CI green after one rerun of the Windows test job (`http_proxy_requests_trackers_and_web_seeds_by_url` timed out waiting for a "finished" alert its own log shows: a race in the test, BACKLOG "Validation and development environment"), tag `v1.2.30`, the Release run green on every job. The draft had the 13 files plus `SHA256SUMS`, which names each; the Windows zip and setup verified against it; the zip's `rookparcel-nox.exe --version` says `1.2.30`.
+- Skipped, as for 1.2.21 and 1.2.29: the by-hand tries of RELEASING step 5. The fix itself was measured on builds from the same source (VM and this PC), not on the release files.
+- Afterwards: the site news entry pushed to `main` (Pages run green; `update.txt` says `stable=1.2.30`, `news.html` has the entry). The benchmark page of the 1.2.29 run is not on `main`: it waits on the branch `site-benchmarks-1.2.29` for a full run of 1.2.30. The wiki needed no change.
+
 ## 2026-11-10_063403_1794288843: Version 1.2.30: the idle CPU regression of the 1.2.29 benchmarks found and fixed
 
 - **Cause 1, the daemon's 0.33% with 10,000 torrents:** since 1.1.78 the Web UI asked the engine for every restored torrent's metadata after each start (128 per status tick) to learn its private flag; each answer read and parsed the info dictionary from the pack, about 1.2% of a core for 78 s, and the benchmark's idle window caught its end. Narrowed by running six releases side by side (1.1.40 0.10%, 1.2.0 0.32%), then per-thread CPU and `strace` on the VM. **Fix:** the engine keeps the flag: `Torrent::private`, `TorrentStatus::private` (`Option<bool>`), `lt-private` in resume data; **remote protocol 17**. The Web UI takes the list's `private` from the status and queues only torrents whose status does not say (records older than 1.2.30); `GetMetadata` stores the answer for those, so the pass runs once after an upgrade and never again (checked on 1.2.29's records: first start with the pass, second without).
