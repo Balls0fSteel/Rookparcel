@@ -139,6 +139,7 @@ pub fn run_command_error(line: &str) -> Option<String> {
         Ok(_) => None,
         Err(CommandError::OpenQuote) => Some(tr_owned(S::RunErrQuote)),
         Err(CommandError::ProgramPlaceholder) => Some(tr_owned(S::RunErrProgram)),
+        Err(CommandError::ShellPlaceholder) => Some(tr_owned(S::RunErrShell)),
         Err(CommandError::Malformed) => Some(tr_owned(S::RunErrLong)),
     }
 }

@@ -647,6 +647,7 @@ PrefRunSafetyNote=Wie deze regels kan wijzigen, kan programma's uitvoeren onder 
 RunErrEmpty=Voer het uit te voeren programma in of schakel het selectievakje uit.
 RunErrQuote=De opdrachtregel bevat een dubbel aanhalingsteken dat nooit wordt gesloten.
 RunErrProgram=Het pad van het programma mag geen code zoals %N bevatten: alleen de argumenten mogen dat.
+RunErrShell=Een opdrachtshell (cmd, PowerShell zonder -File, sh -c) zou de naam van een torrent als opdrachten uitvoeren: geef in plaats daarvan het script zelf op.
 RunErrLong=De opdrachtregel is te lang of bevat een regeleinde.
 RunErrRemote=Programma uitvoeren kan alleen worden gewijzigd op de computer waarop Rookparcel draait.
 TrackersLogRejected=De trackerlijst van het web is niet gebruikt: {error}.

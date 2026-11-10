@@ -647,6 +647,7 @@ PrefRunSafetyNote=Aki ezeket a sorokat módosíthatja, az Ön fiókjával futtat
 RunErrEmpty=Adja meg a futtatandó programot, vagy törölje a jelölőnégyzet jelölését.
 RunErrQuote=A parancssorban olyan idézőjel van, amely nincs lezárva.
 RunErrProgram=A program útvonala nem tartalmazhat olyan kódot, mint az %N: csak az argumentumok tartalmazhatnak.
+RunErrShell=Egy parancsértelmező (cmd, PowerShell -File nélkül, sh -c) parancsként futtatná a torrent nevét: adja meg helyette magát a szkriptet.
 RunErrLong=A parancssor túl hosszú, vagy sortörés van benne.
 RunErrRemote=A Program futtatása beállításai csak azon a számítógépen módosíthatók, amelyen a Rookparcel fut.
 TrackersLogRejected=A program nem használta fel a webes trackerlistát: {error}.

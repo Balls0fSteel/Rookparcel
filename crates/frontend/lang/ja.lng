@@ -647,6 +647,7 @@ PrefRunSafetyNote=これらの行を変更できる人は、あなたのアカ�
 RunErrEmpty=実行するプログラムを入力するか、チェック ボックスをオフにしてください。
 RunErrQuote=コマンド ラインに、閉じられていない二重引用符があります。
 RunErrProgram=プログラムのパスに %N などのコードを含めることはできません: 使えるのは引数だけです。
+RunErrShell=コマンドシェル（cmd、-File なしの PowerShell、sh -c）はトレントの名前をコマンドとして実行してしまいます。代わりにスクリプト自体を指定してください。
 RunErrLong=コマンド ラインが長すぎるか、改行が含まれています。
 RunErrRemote=「プログラムの実行」は、Rookparcel を実行しているコンピューター上でのみ変更できます。
 TrackersLogRejected=ウェブ上のトラッカー リストは使用されませんでした: {error}。

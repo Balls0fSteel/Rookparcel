@@ -647,6 +647,7 @@ PrefRunSafetyNote=Tko može promijeniti ove retke, može pokretati programe pod 
 RunErrEmpty=Unesite program koji treba pokrenuti ili poništite potvrdni okvir.
 RunErrQuote=Naredbeni redak sadrži dvostruki navodnik koji nije zatvoren.
 RunErrProgram=Putanja programa ne smije sadržavati kôd kao što je %N: smiju ga sadržavati samo argumenti.
+RunErrShell=Naredbena ljuska (cmd, PowerShell bez -File, sh -c) izvršila bi naziv torrenta kao naredbe: umjesto toga navedite sam skript.
 RunErrLong=Naredbeni redak je predug ili sadrži prijelom retka.
 RunErrRemote=„Pokretanje programa” može se promijeniti samo na računalu na kojem radi Rookparcel.
 TrackersLogRejected=Popis trackera s weba nije upotrijebljen: {error}.

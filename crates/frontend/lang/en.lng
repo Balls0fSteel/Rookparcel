@@ -1050,6 +1050,10 @@ RunErrQuote=The command line has a double quote that is never closed.
 # Error. Keep %N as it is.
 RunErrProgram=The program's path must not contain a code such as %N: only the arguments may.
 
+# Error: the program is a command shell told to run a string (cmd, PowerShell -Command,
+# sh -c) and a code is in its arguments. Keep "cmd", "PowerShell", "-File" and "sh -c".
+RunErrShell=A command shell (cmd, PowerShell without -File, sh -c) would run a torrent's name as commands: name the script itself instead.
+
 # Error: the command line is too long or has a line break in it.
 RunErrLong=The command line is too long or has a line break in it.
 

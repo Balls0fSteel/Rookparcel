@@ -647,6 +647,7 @@ PrefRunSafetyNote=Siapa pun yang dapat mengubah baris-baris ini dapat menjalanka
 RunErrEmpty=Masukkan program yang akan dijalankan, atau hapus centang kotaknya.
 RunErrQuote=Baris perintah memiliki tanda kutip ganda yang tidak ditutup.
 RunErrProgram=Jalur program tidak boleh berisi kode seperti %N: hanya argumen yang boleh.
+RunErrShell=Shell perintah (cmd, PowerShell tanpa -File, sh -c) akan menjalankan nama torrent sebagai perintah: sebutkan skripnya secara langsung.
 RunErrLong=Baris perintah terlalu panjang atau mengandung ganti baris.
 RunErrRemote=Jalankan Program hanya dapat diubah di komputer yang menjalankan Rookparcel.
 TrackersLogRejected=Daftar tracker dari web tidak dipakai: {error}.

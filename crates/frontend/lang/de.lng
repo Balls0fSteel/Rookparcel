@@ -647,6 +647,7 @@ PrefRunSafetyNote=Wer diese Zeilen ändern kann, kann Programme unter Ihrem Kont
 RunErrEmpty=Geben Sie das auszuführende Programm ein oder deaktivieren Sie das Kontrollkästchen.
 RunErrQuote=Die Befehlszeile enthält ein doppeltes Anführungszeichen, das nie geschlossen wird.
 RunErrProgram=Der Pfad des Programms darf keinen Code wie %N enthalten: nur die Argumente dürfen das.
+RunErrShell=Eine Befehlsshell (cmd, PowerShell ohne -File, sh -c) würde den Namen eines Torrents als Befehle ausführen: Geben Sie stattdessen das Skript selbst an.
 RunErrLong=Die Befehlszeile ist zu lang oder enthält einen Zeilenumbruch.
 RunErrRemote=„Programm ausführen“ lässt sich nur an dem Computer ändern, auf dem Rookparcel läuft.
 TrackersLogRejected=Die Tracker-Liste aus dem Web wurde nicht verwendet: {error}.

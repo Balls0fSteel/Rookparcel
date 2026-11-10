@@ -647,6 +647,7 @@ PrefRunSafetyNote=Quem puder alterar estas linhas pode executar programas com a 
 RunErrEmpty=Informe o programa a executar ou desmarque a caixa de seleção.
 RunErrQuote=A linha de comando tem aspas duplas que nunca são fechadas.
 RunErrProgram=O caminho do programa não pode conter um código como %N: somente os argumentos podem.
+RunErrShell=Um interpretador de comandos (cmd, PowerShell sem -File, sh -c) executaria o nome do torrent como comandos: indique o próprio script.
 RunErrLong=A linha de comando é longa demais ou contém uma quebra de linha.
 RunErrRemote="Executar programa" só pode ser alterado no computador que executa o Rookparcel.
 TrackersLogRejected=A lista de trackers da web não foi usada: {error}.

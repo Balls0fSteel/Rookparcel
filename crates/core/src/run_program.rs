@@ -13,6 +13,9 @@
 //!   or a redirection.
 //! - **The program itself has no placeholders**: the first argument is taken as written, so a
 //!   torrent cannot choose what runs.
+//! - **No shell told to run a string with a placeholder in it** (`cmd /c ... %N`,
+//!   `powershell -Command`, `sh -c`): such a shell re-reads the name as commands, so the line
+//!   is refused ([`shell_reads_codes`]); the script is named itself instead.
 //! - At most [`MAX_RUNNING`] programs run at once and [`MAX_QUEUED`] wait, so a thousand
 //!   torrents finishing together cannot start a thousand processes.
 //!
@@ -61,6 +64,10 @@ pub enum CommandError {
     Malformed,
     /// The program (the first argument) holds a placeholder.
     ProgramPlaceholder,
+    /// The program is a command shell told to run a string as commands (`cmd /c`,
+    /// `powershell -Command`, `sh -c`) and a placeholder is in its arguments: the shell would
+    /// read a torrent's name as commands ([`shell_reads_codes`]).
+    ShellPlaceholder,
 }
 
 /// Splits a command line into the program and its arguments. Blanks separate arguments; double
@@ -108,7 +115,67 @@ pub fn split_command(line: &str) -> Result<Vec<String>, CommandError> {
     if args.first().is_some_and(|p| has_placeholder(p)) {
         return Err(CommandError::ProgramPlaceholder);
     }
+    if shell_reads_codes(&args) {
+        return Err(CommandError::ShellPlaceholder);
+    }
     Ok(args)
+}
+
+/// Whether `args` start a command shell that would read a filled-in code as commands. Every
+/// argument reaches the program whole, but a shell told to run a string re-reads it, so a name
+/// such as `a&calc` would start a second program:
+///
+/// - `cmd` with a code anywhere (`cmd /c log.bat %N`: cmd parses the whole line again);
+/// - PowerShell (`powershell`, `pwsh`) with a code and no `-File` before it (Windows
+///   PowerShell's default is `-Command`);
+/// - a Unix shell (`sh`, `bash`, `dash`, `zsh`, `ksh`, `mksh`, `ash`, `fish`, `csh`, `tcsh`)
+///   with a code and `-c` (or `--command`) among its options.
+///
+/// Naming the script itself (`"C:\x\done.bat" "%N"`, `powershell -File x.ps1 "%N"`,
+/// `sh x.sh "%N"`) passes the name as an argument and is fine. `%%` is no code here.
+pub fn shell_reads_codes(args: &[String]) -> bool {
+    let Some((program, rest)) = args.split_first() else {
+        return false;
+    };
+    let Some(first_code) = rest.iter().position(|a| has_code(a)) else {
+        return false;
+    };
+    let name = program.rsplit(['/', '\\']).next().unwrap_or(program);
+    let name = name.trim_end_matches(['.', ' ']).to_ascii_lowercase();
+    let name = name.strip_suffix(".exe").unwrap_or(&name);
+    match name {
+        "cmd" => true,
+        "powershell" | "pwsh" => {
+            // `-File` (or a prefix of it, `-f`, `/file`) before the first code: a script, whose
+            // arguments stay arguments
+            let file = |a: &String| {
+                let o = a.strip_prefix(['-', '/']).unwrap_or("").to_ascii_lowercase();
+                !o.is_empty() && "file".starts_with(&o)
+            };
+            !rest[..first_code].iter().any(file)
+        }
+        "sh" | "bash" | "dash" | "zsh" | "ksh" | "mksh" | "ash" | "fish" | "csh" | "tcsh" => {
+            // the options before the first operand (the script, or -c's string)
+            rest.iter()
+                .take_while(|a| a.starts_with(['-', '+']) && a.len() > 1)
+                .any(|a| a == "--command" || (!a.starts_with("--") && a[1..].contains('c')))
+        }
+        _ => false,
+    }
+}
+
+/// A placeholder that stands for a torrent's value (`%%` is only a percent sign).
+fn has_code(arg: &str) -> bool {
+    let mut chars = arg.chars();
+    while let Some(c) = chars.next() {
+        // `%%` is consumed whole, so `%%N` is a percent sign and an N
+        if c == '%'
+            && chars.next().is_some_and(|n| PLACEHOLDERS.iter().any(|(p, _)| *p != "%%" && p.ends_with(n)))
+        {
+            return true;
+        }
+    }
+    false
 }
 
 fn has_placeholder(arg: &str) -> bool {
@@ -389,6 +456,45 @@ mod tests {
         assert_eq!(split_command("%F"), Err(CommandError::ProgramPlaceholder));
         assert_eq!(split_command(r#""C:\tools\%N.exe" x"#), Err(CommandError::ProgramPlaceholder));
         assert_eq!(split("100%done %x"), ["100%done", "%x"]);
+    }
+
+    /// A shell told to run a string would read a torrent's name as commands (`a&calc`); the
+    /// script named itself gets the name as an argument.
+    #[test]
+    fn a_shell_that_runs_a_string_gets_no_codes() {
+        let shell = Err(CommandError::ShellPlaceholder);
+        for line in [
+            r#"cmd /c "C:\x\log.bat" %N"#,
+            r#"C:\Windows\System32\CMD.EXE /c echo "%F""#,
+            "cmd.exe /k type %D",
+            r#"powershell -Command "Write-Host '%N'""#,
+            r#"powershell.exe -NoProfile "& C:\x\a.ps1 %N""#,
+            r#"pwsh -c "echo %N""#,
+            r#"sh -c "echo %N""#,
+            r#"/bin/bash -lc "notify-send %N""#,
+            r#"/usr/bin/zsh --command "echo %I""#,
+            r#"fish -c "echo %Z""#,
+        ] {
+            assert_eq!(split_command(line), shell, "{line}");
+        }
+        for line in [
+            r#""C:\x\log.bat" %N "%F""#,
+            r#"powershell -NoProfile -ExecutionPolicy Bypass -File C:\x\log.ps1 "%N""#,
+            r#"pwsh -f /x/log.ps1 "%N""#,
+            r#"powershell.exe /File C:\x\log.ps1 %N"#,
+            "/bin/sh /x/args.sh added %N",
+            "bash -e /x/args.sh %N -c",
+            "bash --norc /x/args.sh %N",
+            // no code, or only a percent sign: nothing of a torrent's reaches the shell
+            "cmd /c echo done",
+            "cmd /c echo 100%%",
+            r#"sh -c "echo finished""#,
+            // not a shell
+            "/usr/bin/notify-send %N",
+            "cmdline-tool %N",
+        ] {
+            assert!(split_command(line).is_ok(), "{line}");
+        }
     }
 
     fn values() -> Values {

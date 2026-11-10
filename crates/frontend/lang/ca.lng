@@ -647,6 +647,7 @@ PrefRunSafetyNote=Qui pot canviar aquestes línies pot executar programes amb el
 RunErrEmpty=Introduïu el programa que cal executar o desmarqueu la casella.
 RunErrQuote=La línia d'ordres té una cometa doble que no es tanca.
 RunErrProgram=El camí del programa no pot contenir un codi com ara %N: només els arguments en poden tenir.
+RunErrShell=Un intèrpret d'ordres (cmd, PowerShell sense -File, sh -c) executaria el nom del torrent com a ordres: indiqueu directament l'script.
 RunErrLong=La línia d'ordres és massa llarga o conté un salt de línia.
 RunErrRemote=«Executa un programa» només es pot canviar a l'ordinador on s'executa el Rookparcel.
 TrackersLogRejected=La llista de rastrejadors del web no s'ha fet servir: {error}.

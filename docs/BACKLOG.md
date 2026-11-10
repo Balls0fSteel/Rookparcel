@@ -1076,49 +1076,45 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
 
 ## Statistics, trackers and Run Program (D65-D67; 2026-11-10)
 
-- **Run on the VMs 2026-11-10 (1.2.42):** the GTK client under Xvfb on Xubuntu and the Mac
-  app on the Intel macOS VM, all three features with real transfers; see the changelog. Left
-  from those runs:
-  - `pref_pages::live` (the Mac's instant apply) writes a refused text to the ini while its
-    check box is off (`trackers.url=http://...` with `trackers.from_url=0`, a `run.added` line
-    with an open quote with its box off). Nothing uses it and ticking the box is refused, but
-    "refused" should mean "not stored".
-  - GTK: after the web list is switched off and OK pressed, the Trackers status line still
-    showed the old "20 trackers, downloaded ..." until the next start (seen once; the cause was
-    not found: `TrackerList::status` answers nothing when the list is off).
-  - Mac: the tracker box uses NSTextView's default font, smaller than the 13 pt fields; a
-    disabled empty box stays white in light mode; red messages start 20 pt left of indented
-    fields; Tab still types a tab in Create Torrent's and Properties' boxes.
-  - Not run: a real window manager on Linux, pasting into the GTK box, `run.added` in GTK,
-    Cmd+W on the Mac's Statistics window, Retina, arm64.
-- **Statistics (1.2.39), hand checks still open:** the Win32 window at 150/200 %, in a
-  right-to-left language and through a live theme switch; a long translation in each client;
-  the Web UI dialog in the nine themes and right-to-left; an upgrade of a real profile (the
-  totals start from the torrents' sums).
+- **Release checks 2026-11-10 (1.2.42, 1.2.43):** every client ran the three features with
+  real transfers (GTK under Xvfb and xfwm4 on Xubuntu, the Mac app on the Intel VM, Win32 on
+  this PC and at 150/200 % on the Windows VM, nox from a second machine); see the changelog.
+  Still open from those runs:
+  - Retina and arm64 on a Mac; IPv6 from a second machine; the remote GUI protocol's refusal.
+  - The Trackers status line with text at 150/200 % (Win32); whether the Win32, Mac and Web UI
+    status lines still describe the applied list while the page's box is off and not applied
+    (GTK's case, fixed with `TrackerList::status_for`; the others still read `status()`).
+  - Win32 dark: the disabled multi-line tracker box keeps `DarkMode_Explorer`'s bright frame
+    while the single-line field beside it is dimmed.
+  - Mac: the box's bezel is a little darker than a disabled field's border; Create Torrent's
+    boxes are only made read-only while it creates a torrent, not greyed.
+  - GTK under xfwm4 (stock GTK): the menu bar item stays highlighted while the window it opened
+    has the focus; the About dialog has no title and shows its name selected.
+- **Statistics (1.2.39), hand checks still open:** right-to-left in each client; a long
+  translation in each client; the Web UI dialog in the nine themes and right-to-left; an
+  upgrade of a real profile (the totals start from the torrents' sums).
 - **Web UI dates are UTC** (seen 2026-11-10 in the end-to-end run): nox never calls
   `fmt::set_utc_offset`, so every date text the server formats (Added On, Completed On, RSS
   times, the tracker list's status, Statistics' Counted Since) is UTC, not the server's or the
   browser's time. Older than these features; decide whose clock the page should show.
 - **`tools/nox-e2e/e2e.py`** reruns the three features end to end (two daemons on loopback);
   run it before a release that touches them. Windows only as written.
-- **Run Program (1.2.41), hand checks:** a real program on a real finished download from
-  each client (Win32, GTK, Mac, nox), with a torrent whose name has quotes, `&` and a leading
-  dash; a `.bat` and a PowerShell script on Windows, a shell script on Linux and the Mac; the
-  Web UI from a second machine (read-only page, the refusal and its Logger line), then with
-  `--webui-remote-run-program`; nox in Docker with the flag; under the systemd unit and the
-  Windows service (the program inherits that account and sandbox); the start-up warning on a
-  non-loopback bind; the GTK and Mac pages (never run); the Win32 page at 150/200 %.
+- **Run Program (1.2.41), hand checks:** a real program from the Mac and nox with a `.cmd`
+  through a GUI; nox in Docker with `--webui-remote-run-program`; under the systemd unit and
+  the Windows service (the program inherits that account and sandbox).
 - **Run Program, not built:** %C, %R and %G; a state-change line (µTorrent's second field);
   a remote window's page says nothing about its lines doing nothing there; refused requests
   are not rate-limited in the `--log` file; no working-directory or environment options; nox
-  without `--webui` has no Run Program.
-- **Trackers for new downloads (1.2.40), hand checks:** a real https list (for example a
-  public tracker list on GitHub) through each client: Update Now, the status line, the Logger
-  line, the trackers on the next public torrent, none on a private one; the same list replaced
-  by a web page (refused, the old list stays); the GTK and Mac pages (never run; on the Mac the
-  box applies when the focus leaves it, and a click on a check box does not take the focus);
-  the Win32 page at 150/200 % and Enter in the box; nox restarted (the cache is read, nothing
-  fetched for a day); a Web UI hosted by a GUI (no page).
+  without `--webui` has no Run Program. The safety note still says "only on this computer"
+  when nox runs with `--webui-remote-run-program`. A magnet's "added" run gets the info hash
+  as %N (the name comes with the metadata). `shell_reads_codes` (1.2.43) knows cmd,
+  PowerShell and the Unix shells only: `python -c`, `perl -e`, `wsl`, `env sh -c` and the like
+  stay the user's own risk. A remote session that sends exactly the stored line gets "no
+  change", which confirms a fully guessed line (it never reveals one).
+- **Trackers for new downloads (1.2.40), hand checks:** a real https list through the Mac and
+  the Web UI with a private torrent beside it (none added to it); the same list replaced by a
+  web page (refused, the old list stays); nox restarted (the cache is read, nothing fetched
+  for a day); a Web UI hosted by a GUI (no page).
 - **Trackers, not built:** the fetched list is not shown on the page (only its count and
   time); a magnet gets the trackers only after its metadata, so they do not help to find it;
   nox without `--webui` has no list; a remote GUI's page stores local values that do nothing

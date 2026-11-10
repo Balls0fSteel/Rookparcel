@@ -647,6 +647,7 @@ PrefRunSafetyNote=이 줄을 바꿀 수 있는 사람은 내 계정으로 프로
 RunErrEmpty=실행할 프로그램을 입력하거나 확인란 선택을 해제하십시오.
 RunErrQuote=명령줄에 닫히지 않은 큰따옴표가 있습니다.
 RunErrProgram=프로그램 경로에는 %N 같은 코드를 쓸 수 없습니다: 인수에만 쓸 수 있습니다.
+RunErrShell=명령 셸(cmd, -File 없는 PowerShell, sh -c)은 토렌트 이름을 명령으로 실행합니다. 대신 스크립트 자체를 지정하세요.
 RunErrLong=명령줄이 너무 길거나 줄 바꿈이 들어 있습니다.
 RunErrRemote=프로그램 실행은 Rookparcel이 실행 중인 컴퓨터에서만 바꿀 수 있습니다.
 TrackersLogRejected=웹의 트래커 목록을 사용하지 않았습니다: {error}.

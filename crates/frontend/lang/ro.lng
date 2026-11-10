@@ -647,6 +647,7 @@ PrefRunSafetyNote=Cine poate schimba aceste rânduri poate rula programe sub con
 RunErrEmpty=Introduceți programul de rulat sau debifați caseta.
 RunErrQuote=Linia de comandă are o ghilimea dublă care nu este închisă.
 RunErrProgram=Calea programului nu poate conține un cod precum %N: numai argumentele pot.
+RunErrShell=Un interpretor de comenzi (cmd, PowerShell fără -File, sh -c) ar executa numele torrentului drept comenzi: indicați în schimb scriptul însuși.
 RunErrLong=Linia de comandă este prea lungă sau conține un sfârșit de rând.
 RunErrRemote=„Rulare program” poate fi schimbat numai pe calculatorul pe care rulează Rookparcel.
 TrackersLogRejected=Lista de trackere de pe web nu a fost folosită: {error}.

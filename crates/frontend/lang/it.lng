@@ -647,6 +647,7 @@ PrefRunSafetyNote=Chi può modificare queste righe può eseguire programmi con i
 RunErrEmpty=Inserisci il programma da eseguire oppure deseleziona la casella.
 RunErrQuote=La riga di comando contiene una virgoletta doppia che non viene mai chiusa.
 RunErrProgram=Il percorso del programma non può contenere un codice come %N: solo gli argomenti possono.
+RunErrShell=Un interprete dei comandi (cmd, PowerShell senza -File, sh -c) eseguirebbe il nome del torrent come comandi: indica invece direttamente lo script.
 RunErrLong=La riga di comando è troppo lunga o contiene un ritorno a capo.
 RunErrRemote=«Esegui programma» si può modificare solo sul computer su cui è in esecuzione Rookparcel.
 TrackersLogRejected=L'elenco dei tracker dal web non è stato usato: {error}.

@@ -647,6 +647,7 @@ PrefRunSafetyNote=Kdo může tyto řádky změnit, může spouštět programy po
 RunErrEmpty=Zadejte program, který se má spustit, nebo zrušte zaškrtnutí políčka.
 RunErrQuote=Příkazový řádek obsahuje uvozovku, která není uzavřena.
 RunErrProgram=Cesta k programu nesmí obsahovat kód, jako je %N: ten smějí obsahovat jen argumenty.
+RunErrShell=Příkazový interpret (cmd, PowerShell bez -File, sh -c) by spustil název torrentu jako příkazy: uveďte místo toho přímo skript.
 RunErrLong=Příkazový řádek je příliš dlouhý nebo obsahuje zalomení řádku.
 RunErrRemote=„Spuštění programu“ lze změnit jen na počítači, na kterém Rookparcel běží.
 TrackersLogRejected=Seznam trackerů z webu nebyl použit: {error}.

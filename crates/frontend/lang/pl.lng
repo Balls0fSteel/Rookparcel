@@ -647,6 +647,7 @@ PrefRunSafetyNote=Kto może zmienić te wiersze, może uruchamiać programy na T
 RunErrEmpty=Podaj program do uruchomienia albo usuń zaznaczenie pola wyboru.
 RunErrQuote=Wiersz polecenia zawiera cudzysłów, który nie został zamknięty.
 RunErrProgram=Ścieżka programu nie może zawierać kodu takiego jak %N: mogą go zawierać tylko argumenty.
+RunErrShell=Powłoka poleceń (cmd, PowerShell bez -File, sh -c) wykonałaby nazwę torrenta jako polecenia: zamiast tego podaj sam skrypt.
 RunErrLong=Wiersz polecenia jest za długi albo zawiera znak nowego wiersza.
 RunErrRemote=„Uruchamianie programu” można zmienić tylko na komputerze, na którym działa Rookparcel.
 TrackersLogRejected=Lista trackerów z sieci nie została użyta: {error}.

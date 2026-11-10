@@ -647,6 +647,7 @@ PrefRunSafetyNote=能變更這些行的人就能以您的帳戶執行程式。�
 RunErrEmpty=請輸入要執行的程式，或取消勾選該核取方塊。
 RunErrQuote=命令列中有一個未關閉的雙引號。
 RunErrProgram=程式的路徑不能包含 %N 這樣的代碼：只有引數可以。
+RunErrShell=命令殼層（cmd、不帶 -File 的 PowerShell、sh -c）會把種子的名稱當作命令執行：請改為直接指定指令碼本身。
 RunErrLong=命令列過長或含有換行符號。
 RunErrRemote=「執行程式」只能在執行 Rookparcel 的電腦上變更。
 TrackersLogRejected=未使用網路上的 Tracker 清單：{error}。

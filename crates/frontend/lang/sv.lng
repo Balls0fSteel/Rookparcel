@@ -647,6 +647,7 @@ PrefRunSafetyNote=Den som kan ändra de här raderna kan köra program under dit
 RunErrEmpty=Ange programmet som ska köras eller avmarkera kryssrutan.
 RunErrQuote=Kommandoraden har ett dubbelt citattecken som aldrig stängs.
 RunErrProgram=Programmets sökväg får inte innehålla en kod som %N: det får bara argumenten.
+RunErrShell=Ett kommandoskal (cmd, PowerShell utan -File, sh -c) skulle köra torrentens namn som kommandon: ange själva skriptet i stället.
 RunErrLong=Kommandoraden är för lång eller innehåller en radbrytning.
 RunErrRemote=Kör program kan bara ändras på datorn som kör Rookparcel.
 TrackersLogRejected=Trackerlistan från webben användes inte: {error}.

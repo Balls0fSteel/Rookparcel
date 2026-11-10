@@ -647,6 +647,7 @@ PrefRunSafetyNote=Se, joka voi muuttaa näitä rivejä, voi suorittaa ohjelmia k
 RunErrEmpty=Anna suoritettava ohjelma tai poista valintaruudun valinta.
 RunErrQuote=Komentorivillä on lainausmerkki, jota ei suljeta.
 RunErrProgram=Ohjelman polussa ei saa olla koodia, kuten %N: vain argumenteissa saa olla.
+RunErrShell=Komentotulkki (cmd, PowerShell ilman -File-valitsinta, sh -c) suorittaisi torrentin nimen komentoina: anna sen sijaan itse skripti.
 RunErrLong=Komentorivi on liian pitkä tai siinä on rivinvaihto.
 RunErrRemote=Suorita ohjelma -asetuksia voi muuttaa vain tietokoneella, jossa Rookparcel on käynnissä.
 TrackersLogRejected=Verkosta haettua seurantapalvelinluetteloa ei käytetty: {error}.
