@@ -824,6 +824,7 @@ pub(crate) fn encode_command(c: &Command, e: &mut Enc) -> bool {
         Command::ReopenNetworkSockets => message!(e, "reopen_network_sockets"),
         Command::SetIpFilter(_)
         | Command::SetPortFilter(_)
+        | Command::SetExtraTrackers(_)
         | Command::PeerClass(_)
         | Command::GetMetadata(..)
         | Command::Shutdown => {

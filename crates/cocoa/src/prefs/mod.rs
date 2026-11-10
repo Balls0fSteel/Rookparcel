@@ -4,8 +4,9 @@
 //! page's items (`controls`). The window's title follows the page.
 //!
 //! There is no OK, Cancel or Apply (D61). A control commits on its own: a check box or a pop-up
-//! when clicked, a text field on Return, when it loses the focus and when the window closes, a
-//! folder or file field after its panel. A commit goes through `pref_pages::live::Live`, which
+//! when clicked, a text field on Return, when it loses the focus and when the window closes (a
+//! multi-line box the same, but for Return, which starts a line), a folder or file field after
+//! its panel. A commit goes through `pref_pages::live::Live`, which
 //! applies what can be stored (`Core::apply_options`, and the desktop integration through
 //! `mac::set_integration`) and keeps a value that cannot be stored in its control, with the
 //! message in red under it; closing the window puts such a field's applied text back.
@@ -36,8 +37,8 @@ use objc2::{MainThreadMarker, MainThreadOnly, Message};
 use objc2_app_kit::{
     NSBackingStoreType, NSBezelStyle, NSBox, NSBoxType, NSButton, NSColor, NSControl, NSGridRow,
     NSOutlineView, NSPopUpButton, NSScrollView, NSSplitViewController, NSSplitViewItem, NSTabView,
-    NSTabViewItem, NSTabViewType, NSTextField, NSView, NSViewController, NSWindow, NSWindowStyleMask,
-    NSWindowWillCloseNotification, NSWorkspace,
+    NSTabViewItem, NSTabViewType, NSTextField, NSTextView, NSView, NSViewController, NSWindow,
+    NSWindowStyleMask, NSWindowWillCloseNotification, NSWorkspace,
 };
 use objc2_foundation::{
     NSNotification, NSNotificationCenter, NSPoint, NSRect, NSRunLoop, NSRunLoopCommonModes, NSSize, NSString,
@@ -48,7 +49,8 @@ use rookparcel_frontend::lang::{self, H};
 use rookparcel_frontend::options::{self, Options};
 use rookparcel_frontend::pref_pages::live::Live;
 use rookparcel_frontend::pref_pages::{
-    self, Action, Control, Features, Field, Item, Page, SCHED_ENABLE, TextKind, is_on,
+    self, Action, Control, Features, Field, Item, Page, SCHED_ENABLE, TRACKERS_APPEND, TRACKERS_FROM_URL,
+    TRACKERS_LIST, TRACKERS_URL, TextKind, is_on,
 };
 use rookparcel_frontend::scheduler::{CELLS, Mode};
 use rookparcel_frontend::tr;
@@ -82,6 +84,8 @@ pub(crate) enum Ctl {
     Check(Retained<NSButton>),
     /// Numbers, texts, passwords, folders and files.
     Text(Retained<NSTextField>),
+    /// A multi-line box (`TextKind::Lines`): the text view and the scroll view around it.
+    Lines(Retained<NSTextView>, Retained<NSScrollView>),
     /// A pop-up and its choices' values.
     Choice(Retained<NSPopUpButton>, Vec<String>),
 }
@@ -92,6 +96,7 @@ impl Ctl {
         match self {
             Ctl::Check(b) => ui::checked(b).to_string(),
             Ctl::Text(t) => ui::value(t),
+            Ctl::Lines(t, _) => t.string().to_string(),
             Ctl::Choice(p, values) => ui::chosen(p).and_then(|i| values.get(i)).cloned().unwrap_or_default(),
         }
     }
@@ -100,17 +105,28 @@ impl Ctl {
         match self {
             Ctl::Check(b) => ui::set_checked(b, value == "true"),
             Ctl::Text(t) => t.setStringValue(&NSString::from_str(value)),
+            Ctl::Lines(t, _) => t.setString(&NSString::from_str(value)),
             Ctl::Choice(p, values) => {
                 p.selectItemAtIndex(values.iter().position(|v| v == value).unwrap_or(0) as isize)
             }
         }
     }
 
+    /// The view that takes the focus.
     pub(crate) fn view(&self) -> &NSView {
         match self {
             Ctl::Check(b) => b,
             Ctl::Text(t) => t,
+            Ctl::Lines(t, _) => t,
             Ctl::Choice(p, _) => p,
+        }
+    }
+
+    /// The view a page lays out: [`Ctl::view`], or a multi-line box's scroll view.
+    pub(crate) fn outer(&self) -> &NSView {
+        match self {
+            Ctl::Lines(_, scroll) => scroll,
+            other => other.view(),
         }
     }
 }
@@ -145,6 +161,8 @@ pub(crate) struct State {
     help_button: Retained<NSButton>,
     help_shown: Cell<Option<H>>,
     ip_status: Option<Retained<NSTextField>>,
+    /// Advanced > Trackers' status line for the list from the web.
+    tracker_status: Option<Retained<NSTextField>>,
     pub(crate) advanced: Option<advanced::Advanced>,
     sched: Option<Retained<RPCanvas>>,
     live: RefCell<Live>,
@@ -154,6 +172,8 @@ pub(crate) struct State {
     timer: RefCell<Option<Retained<NSTimer>>>,
     /// The window's close notification.
     _observer: Retained<ProtocolObject<dyn NSObjectProtocol>>,
+    /// The multi-line boxes' end-of-editing notifications.
+    _editing: Vec<Retained<ProtocolObject<dyn NSObjectProtocol>>>,
 }
 
 thread_local! {
@@ -344,7 +364,9 @@ fn build(mtm: MainThreadMarker) -> State {
         )
     };
 
-    let controls::Builder { acts, fields, helps, ip_status, advanced, sched, .. } = b;
+    let controls::Builder {
+        acts, fields, helps, ip_status, tracker_status, advanced, sched, observers, ..
+    } = b;
     State {
         window,
         _split: split,
@@ -361,12 +383,14 @@ fn build(mtm: MainThreadMarker) -> State {
         help_button,
         help_shown: Cell::new(None),
         ip_status,
+        tracker_status,
         advanced,
         sched,
         live: RefCell::new(Live::default()),
         applied: RefCell::new(applied),
         timer: RefCell::new(None),
         _observer: observer,
+        _editing: observers,
     }
 }
 
@@ -458,6 +482,12 @@ fn refresh(st: &State) {
     write_values(st, &values);
     show_errors(st, &[]);
     update_ip_status(st, None);
+    update_tracker_status(st);
+}
+
+/// Whether `view` has the window's focus (a multi-line box being typed in).
+fn has_focus(st: &State, view: &NSView) -> bool {
+    st.window.firstResponder().is_some_and(|r| std::ptr::addr_eq(Retained::as_ptr(&r), view))
 }
 
 /// Writes values into their controls and redoes what follows from them.
@@ -465,7 +495,13 @@ fn write_values(st: &State, values: &[(&'static str, String)]) {
     for (key, value) in values {
         let Some(f) = st.fields.get(key) else { continue };
         // a field being typed in keeps its text: it commits when its editing ends
-        if matches!(&f.ctl, Ctl::Text(t) if t.currentEditor().is_some()) {
+        let typing = match &f.ctl {
+            Ctl::Text(t) => t.currentEditor().is_some(),
+            Ctl::Lines(t, _) => has_focus(st, t),
+            _ => false,
+        };
+        // (a multi-line box is only written when it changes: its selection and scroll stay)
+        if typing || (matches!(f.ctl, Ctl::Lines(..)) && f.ctl.value() == *value) {
             continue;
         }
         f.ctl.set(value);
@@ -492,6 +528,13 @@ fn update_greying(st: &State) {
         let enabled = !f.field.fixed && f.field.enabled(on);
         for c in &f.grey {
             c.setEnabled(enabled);
+        }
+        if let Ctl::Lines(t, _) = &f.ctl {
+            // a text view is no control: read-only and grey, as a disabled field looks
+            t.setEditable(enabled);
+            t.setSelectable(enabled);
+            let color = if enabled { NSColor::textColor() } else { NSColor::disabledControlTextColor() };
+            t.setTextColor(Some(&color));
         }
     }
     if let Some(c) = &st.sched {
@@ -543,6 +586,7 @@ pub fn run(i: u16) {
             }
         }
         Act::Button(Action::ReloadIpFilter) => reload_ip_filter(&st),
+        Act::Button(Action::UpdateTrackerList) => update_tracker_list(&st),
         Act::AdvFilter => advanced::filter_changed(&st),
         Act::AdvEditor => advanced::end_edit(&st),
         Act::AdvReset => advanced::reset(&st),
@@ -568,6 +612,17 @@ fn commit(st: &State, key: &'static str) {
         Some(o) => apply(st, o),
         None => update_greying(st),
     }
+    // a multi-line box that committed shows what was stored of it (the list tidied), though
+    // it may still have the focus (`write_values` leaves such a box alone)
+    if let Some(f) = st.fields.get(key).filter(|f| matches!(f.ctl, Ctl::Lines(..))) {
+        let stored = {
+            let live = st.live.borrow();
+            live.shown(key).filter(|_| !live.pending().contains(&key)).map(str::to_owned)
+        };
+        if let Some(stored) = stored.filter(|s| *s != f.ctl.value()) {
+            f.ctl.set(&stored);
+        }
+    }
 }
 
 /// Applies `o` (the desktop integration first, then `Core::apply_options`) and shows what is
@@ -591,6 +646,7 @@ pub(crate) fn apply(st: &State, o: Options) {
     if ip_changed {
         update_ip_status(st, None);
     }
+    update_tracker_status(st);
     crate::app::apply(ev);
     if language {
         // the windows are built in the language of the start
@@ -673,6 +729,36 @@ fn update_ip_status(st: &State, result: Option<Result<usize, String>>) {
         None => String::new(),
     };
     label.setStringValue(&NSString::from_str(&text));
+}
+
+/// Advanced > Trackers' Update Now: the page's fields commit (the address being typed too),
+/// then the list is fetched at the next tick; the status line and the Logger say how it went.
+fn update_tracker_list(st: &State) {
+    for key in [TRACKERS_APPEND, TRACKERS_LIST, TRACKERS_FROM_URL, TRACKERS_URL] {
+        if st.fields.contains_key(key) {
+            commit(st, key);
+        }
+    }
+    // a field that could not be stored has its message; the applied address is fetched
+    with_core(|c| c.update_tracker_list());
+    update_tracker_status(st);
+}
+
+/// The tracker list's status line (`Core::tracker_list_status`).
+fn update_tracker_status(st: &State) {
+    let Some(label) = &st.tracker_status else { return };
+    let Some(text) = peek(|c| c.tracker_list_status()) else { return };
+    if label.stringValue().to_string() != text {
+        label.setStringValue(&NSString::from_str(&text));
+    }
+}
+
+/// The application's 1 s timer: what the open window shows of the engine's doings (the
+/// tracker list's status).
+pub fn tick() {
+    if let Some(st) = state().filter(|st| st.window.isVisible()) {
+        update_tracker_status(&st);
+    }
 }
 
 /// The application quits with Preferences open: the field being edited commits as on closing

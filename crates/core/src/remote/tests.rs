@@ -346,7 +346,11 @@ fn commands_round_trip() {
         assert_eq!(format!("{back:?}"), format!("{c:?}"));
     }
     // these stay on the client
-    for c in [Command::Shutdown, Command::SetPortFilter(Default::default())] {
+    for c in [
+        Command::Shutdown,
+        Command::SetPortFilter(Default::default()),
+        Command::SetExtraTrackers(vec![vec!["udp://t/announce".into()]]),
+    ] {
         assert!(!wire::encode_command(&c, &mut wire::Enc::default()));
     }
 }

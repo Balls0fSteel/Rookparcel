@@ -38,6 +38,7 @@ use rookparcel_frontend::search::{Source as SearchSource, load_sources, store_so
 use rookparcel_frontend::seeding::{GoalAction, SeedGoal, SeedingGoal};
 use rookparcel_frontend::status::{self, status_icon};
 use rookparcel_frontend::torrent_folders::{self, TorrentFiles, TorrentFolders, Watcher};
+use rookparcel_frontend::tracker_list::{self, TrackerList};
 use rookparcel_frontend::update::{self, Checker, Kind, Manifest, Version};
 use rookparcel_frontend::{actions, add, create, fmt, help, profile, settings, setup_guide, tr};
 
@@ -110,6 +111,9 @@ struct App {
     listen: status::ListenProblem,
     /// "Show current speed in the title bar" (`ui.title_speed`).
     title_speed: bool,
+    /// The trackers added to new downloads (D66, Preferences > Advanced > Trackers); `None` in
+    /// a remote window, whose server keeps its own list.
+    trackers: Option<TrackerList>,
 }
 
 /// The widgets that draw from [`App`].
@@ -1375,11 +1379,17 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
             update_beta: opts.gui.update_beta,
             listen: status::ListenProblem::new(settings::listen_port(&opts.settings)),
             title_speed: opts.gui.title_speed,
+            trackers: remote.is_none().then(|| {
+                let cache = paths::settings_dir().join(tracker_list::CACHE_FILE);
+                TrackerList::new(Some(cache), tracker_list::Config::of(&opts.gui))
+            }),
         })
     });
     with_app(|a| {
         let sort = a.prefs.sort();
         a.list.set_sort(sort);
+        // before anything is added: the first download gets the list too
+        send_extra_trackers(a);
         // a server applies its own block list
         if opts.gui.ip_filter && remote.is_none() {
             load_ip_filter(a, &opts.gui);
@@ -1406,6 +1416,7 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
             run_scheduler(a, None);
             autoload(a);
             rss_timer(a);
+            tracker_list_timer(a);
             let list = &a.list;
             let now = std::time::Instant::now();
             let step = a.auto_shutdown.check(list.ids().filter_map(|id| list.get(id)), now);
@@ -3165,6 +3176,23 @@ fn preferences_at(page: Option<&str>) {
             })
             .unwrap_or_else(|| Err(tr!(ErrNotRunning).to_owned()))
         }),
+        update_tracker_list: Box::new(|gui| {
+            with_app(|a| {
+                // the page's tracker settings alone, over what is stored
+                let mut o = Options::load(&a.prefs, &a.save_path);
+                o.gui.trackers_append = gui.trackers_append;
+                o.gui.trackers_list.clone_from(&gui.trackers_list);
+                o.gui.trackers_from_url = gui.trackers_from_url;
+                o.gui.trackers_url.clone_from(&gui.trackers_url);
+                apply_options(a, &o);
+                if let Some(l) = &mut a.trackers {
+                    l.refresh_now();
+                }
+            });
+        }),
+        tracker_status: Box::new(|| {
+            with_app(|a| a.trackers.as_ref().map(TrackerList::status)).flatten().unwrap_or_default()
+        }),
         settings_dir: paths::settings_dir(),
         tray: tray_shown(),
     };
@@ -3195,6 +3223,11 @@ fn apply_options(a: &mut App, o: &Options) {
     o.gui.update_move_completed(&mut a.move_completed);
     a.seeding_goal = o.gui.seeding_goal();
     a.torrent_folders = o.gui.torrent_folders.clone();
+    // (a remote window has none: its server keeps its own list)
+    if let Some(l) = &mut a.trackers {
+        l.configure(tracker_list::Config::of(&o.gui));
+    }
+    send_extra_trackers(a);
     a.updates.set_automatic(o.gui.check_updates && updates_here(), std::time::Instant::now());
     a.update_beta = o.gui.update_beta;
     // the title gains or loses the speeds now, not at the next second
@@ -3240,6 +3273,27 @@ fn log_ip_filter(a: &mut App, path: &std::path::Path, r: &Result<usize, String>)
         Err(e) => format!("{} {}", now_hms(), tr!(LogIpFilterError, path = path.display(), error = e)),
     };
     a.detail.push_log(line);
+}
+
+// ---- trackers added to new downloads (D66) ----------------------------------------------------
+
+/// Hands the engine the tracker list when it is not the one it has.
+fn send_extra_trackers(a: &mut App) {
+    if let Some(tiers) = a.trackers.as_mut().and_then(TrackerList::take_tiers) {
+        a.handle.set_extra_trackers(tiers);
+    }
+}
+
+/// Once a second: takes a fetched list, starts a fetch that is due (on a thread of its own,
+/// through the proxy the feeds use), and sends the engine a list that changed.
+fn tracker_list_timer(a: &mut App) {
+    let Some(mut list) = a.trackers.take() else { return };
+    let lines = list.tick(|| rss_proxy(a));
+    a.trackers = Some(list);
+    for line in lines {
+        a.detail.push_log(format!("{} {line}", now_hms()));
+    }
+    send_extra_trackers(a);
 }
 
 // ---- RSS ------------------------------------------------------------------------------------

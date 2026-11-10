@@ -68,8 +68,9 @@ struct Dialog {
     pex: Retained<NSButton>,
 }
 
-/// A multi-line plain text box in a scroll view.
-pub(super) fn text_box(
+/// A multi-line plain text box in a scroll view: no rich text, nothing substituted or detected
+/// in what is typed or pasted (Preferences' tracker list is one too).
+pub(crate) fn text_box(
     text: &str,
     height: f64,
     mtm: MainThreadMarker,

@@ -94,6 +94,14 @@ pub struct GuiOptions {
     /// [`crate::update`].
     pub check_updates: bool,
     pub update_beta: bool,
+    /// Preferences > Advanced > Trackers (D66, [`crate::tracker_list`]): add the typed list
+    /// to new downloads (`trackers.append`, `trackers.list`; the list as the page shows it, a
+    /// tracker per line and a blank line between tiers) and the list at an `https://` address
+    /// (`trackers.from_url`, `trackers.url`). Both off by default.
+    pub trackers_append: bool,
+    pub trackers_list: String,
+    pub trackers_from_url: bool,
+    pub trackers_url: String,
 }
 
 impl GuiOptions {
@@ -137,6 +145,10 @@ impl GuiOptions {
             theme: prefs.get("ui.theme").unwrap_or_default().trim().to_owned(),
             check_updates: prefs.get_bool("update.check", true),
             update_beta: prefs.get_bool("update.beta", false),
+            trackers_append: prefs.get_bool("trackers.append", false),
+            trackers_list: crate::tracker_list::from_stored(prefs.get("trackers.list").unwrap_or_default()),
+            trackers_from_url: prefs.get_bool("trackers.from_url", false),
+            trackers_url: prefs.get("trackers.url").unwrap_or_default().trim().to_owned(),
         }
     }
 
@@ -187,6 +199,18 @@ impl GuiOptions {
         }
         prefs.set_bool("update.check", self.check_updates);
         prefs.set_bool("update.beta", self.update_beta);
+        prefs.set_bool("trackers.append", self.trackers_append);
+        prefs.set_bool("trackers.from_url", self.trackers_from_url);
+        for (key, value) in [
+            ("trackers.list", crate::tracker_list::to_stored(&self.trackers_list)),
+            ("trackers.url", self.trackers_url.trim().to_owned()),
+        ] {
+            if value.is_empty() {
+                prefs.remove(key);
+            } else {
+                prefs.set(key, value);
+            }
+        }
     }
 
     /// The block list to load: the configured path, or `ipfilter.dat` in `settings_dir`.
@@ -352,6 +376,12 @@ mod tests {
             theme: "dark".into(),
             check_updates: false,
             update_beta: true,
+            trackers_append: true,
+            trackers_list:
+                "udp://a.example:6969/announce\nhttp://b.example/announce\n\nhttps://c.example/announce"
+                    .into(),
+            trackers_from_url: true,
+            trackers_url: "https://lists.example/trackers.txt".into(),
         };
         changed.store(&mut prefs);
         let text = prefs.to_text();

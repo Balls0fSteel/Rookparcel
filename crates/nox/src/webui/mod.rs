@@ -48,6 +48,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, Weak};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use rookparcel_core::fetch::FetchProxy;
 use rookparcel_core::util::private_file;
 use rookparcel_core::util::time::local_utc_offset;
 use rookparcel_core::{
@@ -59,6 +60,7 @@ use rookparcel_frontend::scheduler::{Mode, Schedule, Scheduler};
 use rookparcel_frontend::scrape::Scrapes;
 use rookparcel_frontend::seeding::{GoalAction, SeedGoal, SeedingGoal};
 use rookparcel_frontend::torrent_folders::{self, Poller, TorrentFiles, TorrentFolders};
+use rookparcel_frontend::tracker_list::{self, TrackerList};
 use rookparcel_frontend::{fmt, tr};
 
 use auth::{BanList, PasswordHash};
@@ -260,6 +262,13 @@ pub(crate) struct Prefs {
     pub update_beta: bool,
     /// Preferences > General's language (`GuiOptions::language`): the Web UI's, the server's.
     pub language: String,
+    /// Preferences > Advanced > Trackers (D66, `GuiOptions::trackers_*`): the typed list added
+    /// to every new public download, and the `https://` address a list is fetched from. Changed
+    /// only with the current password (`prefs::SECURITY_FIELDS`); hosted, the host's own.
+    pub trackers_append: bool,
+    pub trackers_list: String,
+    pub trackers_from_url: bool,
+    pub trackers_url: String,
     pub bypass_local_auth: bool,
     /// `Authorization: Bearer <key>` is accepted (with a key stored: `State::api_key`).
     pub api_key_enabled: bool,
@@ -309,6 +318,10 @@ impl Prefs {
             check_updates: true,
             update_beta: false,
             language: String::new(),
+            trackers_append: false,
+            trackers_list: String::new(),
+            trackers_from_url: false,
+            trackers_url: String::new(),
             bypass_local_auth: false,
             api_key_enabled: false,
             auth_subnets: String::new(),
@@ -359,11 +372,16 @@ impl Prefs {
             language: self.language.clone(),
             check_updates: self.check_updates,
             update_beta: self.update_beta,
+            trackers_append: self.trackers_append,
+            trackers_list: self.trackers_list.clone(),
+            trackers_from_url: self.trackers_from_url,
+            trackers_url: self.trackers_url.clone(),
         }
     }
 
     /// Writes these preferences into `g`, leaving the desktop-only options (tray, balloons,
-    /// window activation and title, updates) as they are: a host's options with the Web UI's changes on them.
+    /// window activation and title, updates, the trackers added to new downloads) as they are:
+    /// a host's options with the Web UI's changes on them.
     pub fn apply_to(&self, g: &mut GuiOptions) {
         let mine = self.gui();
         *g = GuiOptions {
@@ -377,6 +395,11 @@ impl Prefs {
             activate_on_add: g.activate_on_add,
             check_updates: g.check_updates,
             update_beta: g.update_beta,
+            // the host's own list (D66): a browser never changes it
+            trackers_append: g.trackers_append,
+            trackers_list: g.trackers_list.clone(),
+            trackers_from_url: g.trackers_from_url,
+            trackers_url: g.trackers_url.clone(),
             ..mine
         };
     }
@@ -402,6 +425,10 @@ impl Prefs {
         self.check_updates = g.check_updates;
         self.update_beta = g.update_beta;
         self.language = g.language.clone();
+        self.trackers_append = g.trackers_append;
+        self.trackers_list = g.trackers_list.clone();
+        self.trackers_from_url = g.trackers_from_url;
+        self.trackers_url = g.trackers_url.clone();
     }
 }
 
@@ -593,6 +620,11 @@ pub(crate) struct Shared {
     pub(crate) helper: Mutex<helper::Tasks>,
     /// This, for the threads a request starts (the helper's download).
     pub(crate) this: Weak<Shared>,
+    /// The trackers added to every new download (D66): the one list of the daemon, configured
+    /// from `Prefs::trackers_*`, ticked once a second and sent to the engine when it changes
+    /// ([`Shared::trackers_tick`]). `None` hosted: the host owns its own list. Its lock is taken
+    /// alone or after the State lock, never before it.
+    pub(crate) trackers: Option<Mutex<TrackerList>>,
 }
 
 /// Hosted, a category is the host's `webui.category.<name>` key (its save folder as the value),
@@ -746,6 +778,35 @@ impl Shared {
         // Write then rename, so a crash never leaves half a file; owner-only on Unix (the
         // password hash, and the proxy password, which is plain there).
         let _ = private_file::write(path, doc.to_json().as_bytes());
+    }
+
+    pub(crate) fn trackers(&self) -> Option<MutexGuard<'_, TrackerList>> {
+        self.trackers.as_ref().map(|t| t.lock().unwrap_or_else(|e| e.into_inner()))
+    }
+
+    /// The tracker list (D66) follows the preferences: after a commit and at start. Hosted:
+    /// nothing (the host's list).
+    pub(crate) fn configure_trackers(&self, st: &State) {
+        if let Some(mut t) = self.trackers() {
+            t.configure(tracker_list::Config::of(&st.prefs.gui()));
+        }
+    }
+
+    /// Once a second, and right after the preferences changed: a finished fetch of the list is
+    /// taken and a due one started (through the session's proxy), its lines go to the Logger,
+    /// and a list that is not the one the engine has is sent to it.
+    pub(crate) fn trackers_tick(&self, st: &mut State) {
+        let Some(mut t) = self.trackers() else { return };
+        let log = t.tick(|| FetchProxy::from_settings(&st.settings));
+        let tiers = t.take_tiers();
+        drop(t);
+        let now = unix_now();
+        for line in log {
+            st.push_log(None, line, now);
+        }
+        if let Some(tiers) = tiers {
+            self.handle.set_extra_trackers(tiers);
+        }
     }
 
     /// Applies the global limits for the current alternative-speed mode, through the
@@ -1004,6 +1065,15 @@ impl WebUi {
             helper_dir: config.helper_dir.clone(),
             helper: Mutex::default(),
             this: this.clone(),
+            // trackers-url.txt beside webui.json; none without a config directory (--no-state);
+            // hosted, the host's own list
+            trackers: match hosted {
+                Some(_) => None,
+                None => Some(Mutex::new(TrackerList::new(
+                    config.state_dir.as_ref().map(|d| d.join(tracker_list::CACHE_FILE)),
+                    tracker_list::Config::default(),
+                ))),
+            },
         });
         // the helper's source is routed to the running helper from the first search on
         helper::configure(&shared);
@@ -1025,6 +1095,10 @@ impl WebUi {
                 // `preferences` object of state files written before slice 6 holds the shim's
                 // keys
                 prefs::restore(&shared, &mut st, config.ip_filter.as_deref());
+                // the trackers added to new downloads (D66): the engine has the typed list (and
+                // the cached one) before anything is added; a due fetch starts here too
+                shared.configure_trackers(&st);
+                shared.trackers_tick(&mut st);
                 // the Web UI's language (Preferences > General); ROOKPARCEL_LANG over it
                 for p in rookparcel_frontend::lang::init(&st.prefs.language) {
                     st.push_log(None, p, unix_now());
@@ -1363,6 +1437,8 @@ impl WebUi {
                 let s = &mut *st;
                 s.scrapes.run(s.torrents.values().map(|e| &e.status), Instant::now(), &self.shared.handle);
             }
+            // the tracker list (D66) before this tick's adds (the auto-load folder, RSS)
+            self.shared.trackers_tick(&mut st);
             found = autoload(&mut st, &self.shared.path_policy, now);
         }
         let meta_wanted: Vec<TorrentId> = if ticked {
@@ -1711,6 +1787,7 @@ impl State {
             helper_dir: None,
             helper: Mutex::default(),
             this: Weak::new(),
+            trackers: Some(Mutex::new(TrackerList::new(None, tracker_list::Config::default()))),
         }
     }
 

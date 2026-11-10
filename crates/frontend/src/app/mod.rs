@@ -57,6 +57,7 @@ use crate::scheduler::{Schedule, Scheduler};
 use crate::seeding::SeedingGoal;
 use crate::status::ListenProblem;
 use crate::torrent_folders::{TorrentFiles, TorrentFolders, Watcher};
+use crate::tracker_list::{self, TrackerList};
 use crate::update::{Checker, Manifest, Version};
 use crate::{fmt, profile, settings, tr};
 
@@ -113,6 +114,9 @@ pub struct Start {
     /// This GUI checks for updates at all ([`crate::update::AVAILABLE`] and not a packaged
     /// build that a store updates).
     pub updates: bool,
+    /// The session is the simulated engine (a `--demo`): nothing is fetched from the web for
+    /// it (the tracker list's address, D66).
+    pub demo: bool,
 }
 
 /// The OS action Auto Shutdown asks for (Quit is the app's own exit).
@@ -267,6 +271,13 @@ pub struct Core {
     feed_rows: Vec<ItemRow>,
     updates: Checker,
     update_beta: bool,
+    /// [`Start::demo`].
+    demo: bool,
+    /// The trackers added to new downloads (D66); `None` in a remote window, whose server
+    /// keeps its own list.
+    trackers: Option<TrackerList>,
+    /// What the engine was last given of them.
+    extra_trackers: Vec<Vec<String>>,
     /// The update check's answer, from its thread.
     update_result: Arc<Mutex<Option<Result<Manifest, String>>>>,
     /// Finished `.torrent` downloads: (URL, the file or why not).
@@ -318,6 +329,12 @@ pub fn prepare_options(prefs: &mut Prefs, downloads: &str, remote: bool) -> (Opt
     (opts, false)
 }
 
+/// The tracker list's preferences (D66). A demo's list is never fetched from the web.
+fn tracker_config(gui: &GuiOptions, demo: bool) -> tracker_list::Config {
+    let c = tracker_list::Config::of(gui);
+    tracker_list::Config { from_url: c.from_url && !demo, ..c }
+}
+
 /// A remote window's preferences: the server's engine settings and default folder are the
 /// window's; the language is the local client's (`base`, its `rookparcel.ini`).
 pub fn adopt_server(prefs: &mut Prefs, hello: &rookparcel_core::remote::Hello, base: &Prefs) {
@@ -335,12 +352,15 @@ impl Core {
     /// [`Start::wake`]) and a first drain of the alerts the engine queued while it started
     /// (their [`Events`] come with the first call that returns some).
     pub fn start(s: Start) -> Core {
-        let Start { session, remote, prefs, options: opts, dirs, wake, clock, updates } = s;
+        let Start { session, remote, prefs, options: opts, dirs, wake, clock, updates, demo } = s;
         let handle = session.handle();
         let awaiting = AwaitingMetadata::load(&prefs);
         let update_seen = prefs.get("update.seen").and_then(Version::parse);
         let tab = prefs.get("ui.tab").and_then(Tab::from_key).unwrap_or(Tab::General);
         let rss = RssDownloader::load(&dirs.settings.join(crate::rss::store::FILE_NAME));
+        // a demo keeps no list from the web, and so no cache of one
+        let cache = (!demo).then(|| dirs.settings.join(tracker_list::CACHE_FILE));
+        let trackers = remote.is_none().then(|| TrackerList::new(cache, tracker_config(&opts.gui, demo)));
         let w = wake.clone();
         let mut core = Core {
             session: Some(session),
@@ -380,6 +400,9 @@ impl Core {
             feed_rows: Vec::new(),
             updates: Checker::new(opts.gui.check_updates && updates, Instant::now(), update_seen),
             update_beta: opts.gui.update_beta,
+            demo,
+            trackers,
+            extra_trackers: Vec::new(),
             update_result: Arc::new(Mutex::new(None)),
             fetched: Arc::new(Mutex::new(Vec::new())),
             listen: ListenProblem::new(settings::listen_port(&opts.settings)),
@@ -391,6 +414,8 @@ impl Core {
         };
         let sort = core.prefs.sort();
         core.list.set_sort(sort);
+        // before anything is added: the first download gets the list too
+        core.send_extra_trackers();
         // a server applies its own block list
         if opts.gui.ip_filter && core.remote.is_none() {
             core.load_ip_filter(&opts.gui);
@@ -531,6 +556,57 @@ impl Core {
     /// engine's, when it carries HTTP tracker connections.
     pub fn proxy(&self) -> Option<FetchProxy> {
         FetchProxy::from_settings(&self.options().settings)
+    }
+
+    // ---- trackers added to new downloads (D66) ------------------------------------------------
+
+    /// The preferences' tracker lists as they are in `gui`, from now on.
+    pub(super) fn configure_trackers(&mut self, gui: &GuiOptions) {
+        let demo = self.demo;
+        if let Some(l) = &mut self.trackers {
+            l.configure(tracker_config(gui, demo));
+        }
+        self.send_extra_trackers();
+    }
+
+    /// Hands the engine the list when it is not the one it has.
+    fn send_extra_trackers(&mut self) {
+        if let Some(tiers) = self.trackers.as_mut().and_then(TrackerList::take_tiers) {
+            self.extra_trackers.clone_from(&tiers);
+            self.handle.set_extra_trackers(tiers);
+        }
+    }
+
+    /// The timer's part: takes a fetched list, starts a fetch that is due (on a thread of its
+    /// own, through the proxy the feeds use), and sends the engine a list that changed.
+    pub(super) fn tracker_list_timer(&mut self) {
+        let Some(mut list) = self.trackers.take() else { return };
+        let lines = list.tick(|| self.proxy());
+        self.trackers = Some(list);
+        for line in lines {
+            self.log(line);
+        }
+        self.send_extra_trackers();
+    }
+
+    /// The trackers the engine adds to new public downloads now (none in a remote window: its
+    /// server's own list applies).
+    pub fn extra_trackers(&self) -> &[Vec<String>] {
+        &self.extra_trackers
+    }
+
+    /// Preferences > Advanced > Trackers' status line for the list from the web
+    /// ([`TrackerList::status`]); empty when there is none to show.
+    pub fn tracker_list_status(&self) -> String {
+        self.trackers.as_ref().map(TrackerList::status).unwrap_or_default()
+    }
+
+    /// The page's Update Now, after [`Core::apply_options`] with the page's fields: the list is
+    /// fetched at the next [`Core::tick`].
+    pub fn update_tracker_list(&mut self) {
+        if let Some(l) = &mut self.trackers {
+            l.refresh_now();
+        }
     }
 
     /// A line in the Logger, with the time.

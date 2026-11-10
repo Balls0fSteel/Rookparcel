@@ -31,13 +31,14 @@ struct Setup {
     options: Options,
     mock: MockConfig,
     remote: Option<Remote>,
+    demo: bool,
 }
 
 impl Setup {
     fn new() -> Setup {
         let prefs = Prefs::default();
         let options = Options::load(&prefs, "/dl");
-        Setup { prefs, options, mock: MockConfig::default(), remote: None }
+        Setup { prefs, options, mock: MockConfig::default(), remote: None, demo: false }
     }
 
     fn start(self, name: &str) -> Core {
@@ -53,6 +54,7 @@ impl Setup {
             wake: Arc::new(|_| {}),
             clock: Arc::new(|| Some((NOON, 0))),
             updates: false,
+            demo: self.demo,
         })
     }
 }
@@ -333,6 +335,64 @@ fn applied_options_reach_every_torrent_the_ip_filter_and_the_scheduler() {
     let lines = core.detail().log.len();
     core.apply_options(&o);
     assert_eq!(core.detail().log.len(), lines);
+}
+
+#[test]
+fn the_typed_tracker_list_reaches_the_engine_but_not_a_server() {
+    let (a, b) = ("udp://a.example:6969/announce", "https://b.example/announce");
+    // set before the start: the engine has the list before anything is added
+    let mut s = Setup::new();
+    s.options.gui.trackers_append = true;
+    s.options.gui.trackers_list = a.to_owned();
+    let mut core = s.start("trackers");
+    assert_eq!(core.extra_trackers(), [vec![a.to_owned()]]);
+    assert_eq!(core.tracker_list_status(), "");
+    // applied: at once, not at the next second; a repeated line is left out
+    let mut o = core.options();
+    o.gui.trackers_append = true;
+    o.gui.trackers_list = format!("{a}\n\n{b}\n{a}");
+    core.apply_options(&o);
+    assert_eq!(core.extra_trackers(), [vec![a.to_owned()], vec![b.to_owned()]]);
+    assert_eq!(core.options().gui.trackers_list, format!("{a}\n\n{b}"));
+    // an address that is not https is never fetched, and the page says why
+    o.gui.trackers_from_url = true;
+    o.gui.trackers_url = "http://lists.example/t.txt".into();
+    core.apply_options(&o);
+    core.update_tracker_list();
+    core.tick(Instant::now());
+    assert_eq!(core.tracker_list_status(), tr!(TrackersStatusFailed, error = tr!(TrackersErrHttps)));
+    assert_eq!(core.extra_trackers().len(), 2);
+    // switched off: new downloads get nothing
+    o.gui.trackers_append = false;
+    core.apply_options(&o);
+    assert!(core.extra_trackers().is_empty());
+
+    // a demo fetches nothing: its list from the web is off, whatever the preferences say
+    let mut s = Setup::new();
+    s.demo = true;
+    s.options.gui.trackers_append = true;
+    s.options.gui.trackers_list = a.to_owned();
+    s.options.gui.trackers_from_url = true;
+    s.options.gui.trackers_url = "https://lists.example/t.txt".into();
+    let mut core = s.start("trackers-demo");
+    core.update_tracker_list();
+    core.tick(Instant::now());
+    assert_eq!(core.tracker_list_status(), "");
+    assert_eq!(core.extra_trackers(), [vec![a.to_owned()]]);
+    assert!(!core.dirs().settings.join(tracker_list::CACHE_FILE).exists());
+
+    // a remote window: the server's own list applies, nothing is kept or sent here
+    let mut s = Setup::new();
+    s.remote = Some(Remote { label: "nas:8080".into() });
+    s.options.gui.trackers_append = true;
+    s.options.gui.trackers_list = a.to_owned();
+    let mut core = s.start("trackers-remote");
+    let o = core.options();
+    core.apply_options(&o);
+    core.update_tracker_list();
+    core.tick(Instant::now());
+    assert!(core.extra_trackers().is_empty() && core.trackers.is_none());
+    assert_eq!(core.tracker_list_status(), "");
 }
 
 #[test]

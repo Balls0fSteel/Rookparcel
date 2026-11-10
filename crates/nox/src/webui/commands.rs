@@ -1322,6 +1322,10 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
                 let st = shared.lock();
                 Ok(Response::json(&prefs::model(shared, &st)))
             }
+            // the fetched tracker list's status line (D66), for the page after Update Now
+            "prefs/trackers" => {
+                Ok(Response::json(&Json::obj().with("status", prefs::trackers_status(shared))))
+            }
             "torrents/properties" => {
                 let sel = query_selection(&parse_urlencoded(req.head.query.as_bytes()))?;
                 Ok(Response::json(&properties_reply(shared, &sel)?))
@@ -1390,6 +1394,12 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
             prefs::commit_request(shared, &changes, key, |f| rookparcel_core::IpFilter::load(f))
                 .map_err(|(field, why)| err(400, format!("{field}: {why}")))?;
             Ok(no_content())
+        }
+        // Update Now (D66): the stored address, fetched again; the body is not read, so
+        // nothing in the request can name another address
+        "prefs/trackers/update" => {
+            let status = prefs::update_trackers(shared).map_err(|why| err(409, why))?;
+            Ok(Response::json(&Json::obj().with("status", status)))
         }
         _ => {
             let Some(cmd) = endpoint.strip_prefix("torrents/") else {

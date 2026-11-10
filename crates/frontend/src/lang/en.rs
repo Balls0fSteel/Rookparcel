@@ -901,6 +901,39 @@ strings! {
     PageDiskIo = "Disk I/O";
     /// Group title: checking a torrent's files against their hashes (Force Re-Check).
     PrefChecking = "Checking";
+    /// Preferences > Advanced > Trackers (a Rookparcel page): trackers that every new download
+    /// gets besides its own.
+    PageTrackers = "Trackers";
+    /// Group title on that page.
+    PrefTrackersGroup = "Trackers for New Downloads";
+    /// Check box above a box of tracker addresses, one per line.
+    PrefTrackersAppend = "Add these trackers to new downloads:";
+    /// Check box above a field for a web address (https://...) of a text file that lists
+    /// tracker addresses.
+    PrefTrackersFromUrl = "Add the trackers of this list on the web (https):";
+    /// Button: fetches the list from the web address now.
+    PrefTrackersUpdate = "Update Now";
+    /// Keep https:// as it is. "Private torrents" are torrents of private trackers.
+    PrefTrackersNote = "One tracker per line; a blank line starts a new tier. The trackers are added after the torrent's own, never to private torrents, and not to torrents already in the list. The list on the web is read again once a day; whoever runs that address chooses its trackers, which then see your address and your public downloads.";
+    /// The list's status line: nothing fetched yet.
+    TrackersStatusNone = "The list has not been downloaded yet.";
+    /// The list's status line. {count} is a number, {time} a date and time.
+    TrackersStatusOk = "{count} trackers, downloaded {time}.";
+    /// The list's status line; {error} says why. Shown before TrackersStatusOk's text when an
+    /// older list is still in use.
+    TrackersStatusFailed = "The last download failed: {error}.";
+    /// Error: the list's address is not an https:// address. Keep https:// as it is.
+    TrackersErrHttps = "The list's address must start with https://";
+    /// Error: what the address returned is not a list of tracker addresses (a web page, say).
+    TrackersErrNotList = "the file is not a list of tracker addresses";
+    /// Error: the file at the address holds no tracker address.
+    TrackersErrEmpty = "the file holds no tracker address";
+    /// Error in the typed list. Keep http://, https:// and udp:// as they are.
+    TrackersErrLine = "Every line of the tracker list must be a tracker address that starts with http://, https:// or udp://";
+    /// Logger line. {count} and {old} are numbers of trackers.
+    TrackersLogChanged = "The tracker list from the web changed: {count} trackers (before: {old}).";
+    /// Logger line; {error} says why. The list in use stays as it was.
+    TrackersLogRejected = "The tracker list from the web was not used: {error}.";
     /// Checks run at the system's background disk priority and wait while other programs use
     /// the disk.
     PrefCheckGently = "Check torrents gently (low priority, give way to other programs)";

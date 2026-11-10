@@ -45,6 +45,9 @@ pub(crate) struct ResumeData {
     pub disable_dht: bool,
     pub disable_lsd: bool,
     pub disable_pex: bool,
+    /// A magnet that still waits for its metadata to get the session's extra trackers (D66,
+    /// `rp-extra-trackers`; written only when set).
+    pub extra_trackers_pending: bool,
     pub file_priority: Vec<u8>,
     /// The pieces a downloaded file touches (`lt-wanted-pieces`, packed as `pieces`); `None`
     /// when every piece is wanted. Lets a stopped torrent count only its selected files without
@@ -128,6 +131,9 @@ impl ResumeData {
         *e.key("disable_dht") = int(self.disable_dht as i64);
         *e.key("disable_lsd") = int(self.disable_lsd as i64);
         *e.key("disable_pex") = int(self.disable_pex as i64);
+        if self.extra_trackers_pending {
+            *e.key("rp-extra-trackers") = int(1);
+        }
         if !self.file_priority.is_empty() {
             *e.key("file_priority") =
                 Entry::List(self.file_priority.iter().map(|&p| int(p as i64)).collect());
@@ -257,6 +263,7 @@ impl ResumeData {
             disable_dht: int("disable_dht") != 0,
             disable_lsd: int("disable_lsd") != 0,
             disable_pex: int("disable_pex") != 0,
+            extra_trackers_pending: int("rp-extra-trackers") != 0,
             upload_rate_limit: opt("upload_rate_limit").unwrap_or(0),
             download_rate_limit: opt("download_rate_limit").unwrap_or(0),
             max_connections: opt("max_connections"),

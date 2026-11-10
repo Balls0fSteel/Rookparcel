@@ -502,3 +502,138 @@ fn metadata_summary_survives_a_restart() {
         let _ = std::fs::remove_dir_all(d);
     }
 }
+
+fn info_hash_of(torrent: &[u8]) -> [u8; 20] {
+    let doc = rookparcel_core::bencode::bdecode(torrent).unwrap();
+    let info = doc.root().unwrap().dict_find("info").unwrap();
+    Sha1::digest(info.data_section()).0
+}
+
+fn hex(b: &[u8]) -> String {
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+/// The session's extra trackers (D66, `SessionHandle::set_extra_trackers`) go to a new public
+/// download as tiers after its own, never to a private torrent or one added with
+/// `NO_EXTRA_TRACKERS`; a magnet gets them when its metadata shows it is public; a restored
+/// torrent keeps what it has whatever the list is by then.
+#[test]
+fn extra_trackers_go_to_new_public_downloads_only() {
+    let (a, b, own) = ("udp://127.0.0.1:9/a", "http://127.0.0.1:9/b", "http://127.0.0.1:9/own");
+    // an invalid line, an empty tier and a repeat are dropped without leaving a hole
+    let extra = vec![vec![a.to_owned(), "not a url".to_owned()], vec![], vec![b.to_owned(), a.to_owned()]];
+    let state = temp_dir("xstate");
+    let dir = temp_dir("xdl");
+    let (s, mut w) = start(settings(), Some(state.clone()));
+    w.h.set_extra_trackers(extra.clone());
+    let add_file = |w: &mut Watch, name: &str, private: bool, flags: TorrentFlags, tracker: Option<&str>| {
+        let mut p = AddTorrentParams::new(
+            TorrentSource::TorrentFile(private_torrent(name, private)),
+            dir.to_string_lossy(),
+        );
+        p.flags = TorrentFlags::PAUSED | flags;
+        p.trackers = tracker.iter().map(|t| t.to_string()).collect();
+        w.h.add_torrent(p);
+        wait(w, 5, "add", |a| match a {
+            Alert::TorrentAdded { id, .. } => Some(*id),
+            Alert::AddTorrentFailed { error, .. } => panic!("add failed: {error}"),
+            _ => None,
+        })
+    };
+    let public = add_file(&mut w, "x-public", false, TorrentFlags::empty(), None);
+    assert_eq!(trackers(&mut w, public), vec![(a.to_owned(), 0), (b.to_owned(), 1)]);
+    // the torrent's own trackers come first; one it has already is not repeated
+    let with_own = add_file(&mut w, "x-own", false, TorrentFlags::empty(), Some(own));
+    assert_eq!(trackers(&mut w, with_own), vec![(own.to_owned(), 0), (a.to_owned(), 1), (b.to_owned(), 2)]);
+    let has_b = add_file(&mut w, "x-has-b", false, TorrentFlags::empty(), Some(b));
+    assert_eq!(trackers(&mut w, has_b), vec![(b.to_owned(), 0), (a.to_owned(), 1)]);
+    let private = add_file(&mut w, "x-private", true, TorrentFlags::empty(), Some(own));
+    assert_eq!(trackers(&mut w, private), vec![(own.to_owned(), 0)]);
+    let opted_out = add_file(&mut w, "x-out", false, TorrentFlags::NO_EXTRA_TRACKERS, None);
+    assert!(trackers(&mut w, opted_out).is_empty());
+    w.h.torrent(opted_out).set_flags(TorrentFlags::SEQUENTIAL_DOWNLOAD);
+    let st = status(&mut w, opted_out, "the flags", |s| s.flags.contains(TorrentFlags::SEQUENTIAL_DOWNLOAD));
+    assert!(!st.flags.contains(TorrentFlags::NO_EXTRA_TRACKERS), "{:?}", st.flags);
+    // adding one again changes nothing
+    let again = add_file(&mut w, "x-public", false, TorrentFlags::empty(), None);
+    assert_eq!(again, public);
+    assert_eq!(trackers(&mut w, public).len(), 2);
+    s.shutdown();
+
+    // restored: nothing is added, whatever the list is now
+    let (s, mut w) = start(settings(), Some(state.clone()));
+    w.h.set_extra_trackers(vec![vec!["udp://127.0.0.1:9/later".to_owned()]]);
+    let mut seen: Vec<(TorrentId, String)> = Vec::new();
+    while seen.len() < 5 {
+        let more = wait(&mut w, 5, "the restored torrents", |a| match a {
+            Alert::StateUpdate(v) if !v.is_empty() => Some(v.clone()),
+            _ => None,
+        });
+        for st in more {
+            if !seen.iter().any(|(id, _)| *id == st.id) {
+                seen.push((st.id, st.name.clone()));
+            }
+        }
+    }
+    for (id, name) in seen {
+        let n = match name.as_str() {
+            "x-public" | "x-has-b" => 2,
+            "x-own" => 3,
+            "x-private" => 1,
+            _ => 0,
+        };
+        let list = trackers(&mut w, id);
+        assert_eq!(list.len(), n, "{name}: {list:?}");
+        assert!(list.iter().all(|(u, _)| !u.ends_with("/later")), "{name}: {list:?}");
+    }
+    s.shutdown();
+    for d in [state, dir] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+#[test]
+fn a_magnet_gets_the_extra_trackers_once_it_is_known_to_be_public() {
+    let extra = vec![vec!["udp://127.0.0.1:9/a".to_owned()], vec!["http://127.0.0.1:9/b".to_owned()]];
+    let seed_dir = temp_dir("xmseed");
+    std::fs::write(seed_dir.join("xm-public"), vec![7u8; 1000]).unwrap();
+    let (seed, mut sw) = start(settings(), None);
+    let port = listen_port(&mut sw);
+    let torrent = private_torrent("xm-public", false);
+    let hash = info_hash_of(&torrent);
+    let mut p = AddTorrentParams::new(TorrentSource::TorrentFile(torrent), seed_dir.to_string_lossy());
+    p.flags = TorrentFlags::empty();
+    sw.h.add_torrent(p);
+    let id = wait(&mut sw, 5, "add", |a| match a {
+        Alert::TorrentAdded { id, .. } => Some(*id),
+        _ => None,
+    });
+    status(&mut sw, id, "seeding", |s| s.state == TorrentState::Seeding);
+
+    // (no private case: a seed of this engine does not serve a private torrent's metadata)
+    let dir = temp_dir("xmleech");
+    let (leech, mut w) = start(settings(), None);
+    w.h.set_extra_trackers(extra.clone());
+    let uri = format!("magnet:?xt=urn:btih:{}&x.pe=127.0.0.1:{port}", hex(&hash));
+    let mut p = AddTorrentParams::new(TorrentSource::Magnet(uri), dir.to_string_lossy());
+    p.flags = TorrentFlags::empty();
+    w.h.add_torrent(p);
+    let id = wait(&mut w, 5, "add magnet", |a| match a {
+        Alert::TorrentAdded { id, .. } => Some(*id),
+        Alert::AddTorrentFailed { error, .. } => panic!("add failed: {error}"),
+        _ => None,
+    });
+    wait(&mut w, 30, "the metadata", |a| {
+        matches!(a, Alert::MetadataReceived { id: i } if *i == id).then_some(())
+    });
+    let want = vec![("udp://127.0.0.1:9/a".to_owned(), 0), ("http://127.0.0.1:9/b".to_owned(), 1)];
+    assert_eq!(trackers(&mut w, id), want);
+    w.h.torrent(id).set_flags(TorrentFlags::SEQUENTIAL_DOWNLOAD);
+    let st = status(&mut w, id, "the flags", |s| s.flags.contains(TorrentFlags::SEQUENTIAL_DOWNLOAD));
+    assert!(!st.flags.contains(TorrentFlags::EXTRA_TRACKERS_PENDING), "{:?}", st.flags);
+    leech.shutdown();
+    seed.shutdown();
+    for d in [dir, seed_dir] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}

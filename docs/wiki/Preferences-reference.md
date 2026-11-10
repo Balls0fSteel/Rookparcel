@@ -4,7 +4,7 @@ This page lists every page of the Preferences window and what each setting on it
 
 ## Opening Preferences
 
-Open **Options > Preferences**, press <kbd>Ctrl</kbd>+<kbd>P</kbd>, or click **Preferences** on the toolbar. The pages are listed on the left; **Disk Cache** and **Disk I/O** sit under **Advanced**. **OK** saves and closes, **Apply** saves and keeps the window open, **Cancel** forgets the changes.
+Open **Options > Preferences**, press <kbd>Ctrl</kbd>+<kbd>P</kbd>, or click **Preferences** on the toolbar. The pages are listed on the left; **Disk Cache**, **Disk I/O** and **Trackers** sit under **Advanced**. **OK** saves and closes, **Apply** saves and keeps the window open, **Cancel** forgets the changes.
 
 Help is built in:
 
@@ -243,6 +243,24 @@ More: [Disk and storage](Disk-and-storage).
 | **Slow uploads down (disk reads)** | The same for uploads while a drive answers reads slowly. |
 
 More: [Disk and storage](Disk-and-storage).
+
+## Trackers
+
+*New in 1.2.40.* Trackers that every torrent you add from now on gets besides its own. Both boxes are off at first.
+
+| Setting | What it does |
+|---|---|
+| **Add these trackers to new downloads:** | Adds the trackers in the box, one address per line (`http://`, `https://` or `udp://`); a blank line starts a new tier. They come after the torrent's own trackers. |
+| **Add the trackers of this list on the web (https):** | Reads a text file of tracker addresses from the `https://` address below, at the start and then once a day, and adds its trackers after the box's. |
+| **Update Now** | Reads the list from the address now. The line below the button says how many trackers the list has and when it was read, or why the last try failed. |
+
+Good to know:
+
+- **Private torrents never get these trackers**, and neither do torrents already in the list, torrents you create, or ones imported from another client. A magnet link gets them once its details have arrived and show that it is not private.
+- **The list on the web is only ever read as a list.** The address must start with `https://`. Only lines that are tracker addresses are used, at most 200 of them, and a file that is something else (an error page, a program) is ignored: the last good list stays in use. Nothing in the file is ever run.
+- **Whoever runs that address chooses its trackers**, and those trackers then see your address and your public downloads. Use a list you trust.
+- In the Web UI the page's settings change only with the current password, and the qBittorrent-compatible API cannot change them.
+- `rookparcel-nox` keeps these settings with the Web UI's, so it needs `--webui` to use them.
 
 ## Differences in the GTK version
 

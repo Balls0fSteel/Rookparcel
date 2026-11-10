@@ -24,6 +24,7 @@ use rookparcel_frontend::pref_pages::{self, Features, PROXY_TYPES, proxy_from_ui
 use rookparcel_frontend::scheduler::{self, Mode};
 use rookparcel_frontend::settings::{self, Entry, Kind, Value};
 use rookparcel_frontend::tr;
+use rookparcel_frontend::tracker_list;
 use rookparcel_nox::webui::auth;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -43,10 +44,11 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{EnableWindow, GetFocus, Se
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     BM_GETCHECK, BM_SETCHECK, BN_CLICKED, BS_AUTOCHECKBOX, BS_AUTORADIOBUTTON, BS_DEFPUSHBUTTON, BS_GROUPBOX,
     BS_PUSHBUTTON, CB_ADDSTRING, CB_GETCURSEL, CB_RESETCONTENT, CB_SETCURSEL, CBN_SELCHANGE,
-    CBS_DROPDOWNLIST, DLGTEMPLATE, DialogBoxIndirectParamW, EN_CHANGE, ES_AUTOHSCROLL, ES_NUMBER,
-    ES_PASSWORD, EndDialog, GetDlgItem, GetWindowLongPtrW, IDCANCEL, IDOK, MapDialogRect, SW_HIDE, SW_SHOW,
-    SetTimer, SetWindowLongPtrW, SetWindowTextW, ShowWindow, WM_APP, WM_COMMAND, WM_DESTROY, WM_HELP,
-    WM_INITDIALOG, WM_NOTIFY, WM_TIMER, WS_BORDER, WS_CHILD, WS_GROUP, WS_TABSTOP, WS_VSCROLL,
+    CBS_DROPDOWNLIST, DLGTEMPLATE, DialogBoxIndirectParamW, EN_CHANGE, ES_AUTOHSCROLL, ES_AUTOVSCROLL,
+    ES_MULTILINE, ES_NUMBER, ES_PASSWORD, ES_WANTRETURN, EndDialog, GetDlgItem, GetWindowLongPtrW, IDCANCEL,
+    IDOK, MapDialogRect, SW_HIDE, SW_SHOW, SetTimer, SetWindowLongPtrW, SetWindowTextW, ShowWindow, WM_APP,
+    WM_COMMAND, WM_DESTROY, WM_HELP, WM_INITDIALOG, WM_NOTIFY, WM_TIMER, WS_BORDER, WS_CHILD, WS_GROUP,
+    WS_TABSTOP, WS_VSCROLL,
 };
 
 use crate::controls;
@@ -56,8 +58,9 @@ use crate::sched_grid;
 use crate::util::{hiword, loword, scale, send, wide, window_text};
 use crate::webui_host::{Edit, Setup as WebSetup, Status as WebStatus, View as WebView};
 
-/// The tree, in µTorrent 2.2.1's order; Disk Cache and Rookparcel's Disk I/O sit under Advanced.
-pub const PAGES: [S; 12] = [
+/// The tree, in µTorrent 2.2.1's order; Disk Cache and Rookparcel's Disk I/O and Trackers sit
+/// under Advanced.
+pub const PAGES: [S; 13] = [
     S::PageGeneral,
     S::PageUi,
     S::PageDirectories,
@@ -70,6 +73,7 @@ pub const PAGES: [S; 12] = [
     S::PageAdvanced,
     S::PageDiskCache,
     S::PageDiskIo,
+    S::PageTrackers,
 ];
 /// Connection: where a listen failure in the status bar leads.
 pub const PAGE_CONNECTION: usize = 3;
@@ -77,6 +81,7 @@ const PAGE_WEBUI: usize = 8;
 const PAGE_ADVANCED: usize = 9;
 const PAGE_DISK_CACHE: usize = 10;
 const PAGE_DISK_IO: usize = 11;
+const PAGE_TRACKERS: usize = 12;
 
 const fn id(page: u16, n: u16) -> u16 {
     1000 + page * 100 + n
@@ -95,6 +100,9 @@ const ID_HELP_HINT: u16 = 904;
 /// Checks what the pointer is over and what has the focus, for the help pane.
 const HELP_TIMER: usize = 1;
 const HELP_TIMER_MS: u32 = 100;
+/// Reads the Trackers page's status line again while that page is shown (D66).
+const TRACKERS_TIMER: usize = 2;
+const TRACKERS_TIMER_MS: u32 = 1000;
 
 // General
 const ID_LANG: u16 = id(0, 1);
@@ -235,6 +243,14 @@ const ID_ACTIVE_CHECKING: u16 = id(11, 4);
 const ID_TUNE_FOR_DRIVE: u16 = id(11, 5);
 const ID_DISK_SLOW_DL: u16 = id(11, 6);
 const ID_DISK_SLOW_UL: u16 = id(11, 7);
+// Trackers (D66)
+const ID_TRK_APPEND: u16 = id(12, 1);
+const ID_TRK_LIST: u16 = id(12, 2);
+const ID_TRK_FROM_URL: u16 = id(12, 3);
+const ID_TRK_URL: u16 = id(12, 4);
+const ID_TRK_UPDATE: u16 = id(12, 5);
+const ID_TRK_STATUS: u16 = id(12, 6);
+const ID_TRK_NOTE: u16 = id(12, 7);
 
 /// "Outgoing" encryption, in the combo's order.
 const ENC_OUT: [(S, EncPolicy); 3] = [
@@ -352,6 +368,10 @@ const FIELD_KEYS: &[(u16, &str)] = &[
     (ID_TUNE_FOR_DRIVE, "tune_for_drive"),
     (ID_DISK_SLOW_DL, "disk_slow_downloads"),
     (ID_DISK_SLOW_UL, "disk_slow_uploads"),
+    (ID_TRK_APPEND, pref_pages::TRACKERS_APPEND),
+    (ID_TRK_LIST, pref_pages::TRACKERS_LIST),
+    (ID_TRK_FROM_URL, pref_pages::TRACKERS_FROM_URL),
+    (ID_TRK_URL, pref_pages::TRACKERS_URL),
 ];
 
 /// The help of the controls that are not `pref_pages` fields: the Win32-only buttons, the
@@ -360,6 +380,7 @@ const EXTRA_HELP: &[(u16, H)] = &[
     (ID_DEFAULT_APPS, H::PrefDefaultApps),
     (ID_RANDOM_PORT, H::PrefRandomPort),
     (ID_IPF_RELOAD, H::PrefReload),
+    (ID_TRK_UPDATE, H::PrefTrackersUpdate),
     (ID_SCHED_GRID, H::PrefSchedTable),
     (ID_WEBUI, H::PrefWebUi),
     (ID_WEBUI_USER, H::PrefWebUiUsername),
@@ -807,7 +828,34 @@ static FIELDS: &[Field] = &[
         get: |o| o.settings.disk_slow_uploads,
         set: |o, v| o.settings.disk_slow_uploads = v,
     },
+    Field::Check { id: ID_TRK_APPEND, get: |o| o.gui.trackers_append, set: |o, v| o.gui.trackers_append = v },
+    // as typed (`read_controls` refuses a line that is no tracker, then tidies the list)
+    Field::Text {
+        id: ID_TRK_LIST,
+        get: |o| to_box(&o.gui.trackers_list),
+        set: |o, v| o.gui.trackers_list = from_box(&v),
+    },
+    Field::Check {
+        id: ID_TRK_FROM_URL,
+        get: |o| o.gui.trackers_from_url,
+        set: |o, v| o.gui.trackers_from_url = v,
+    },
+    Field::Text {
+        id: ID_TRK_URL,
+        get: |o| o.gui.trackers_url.clone(),
+        set: |o, v| o.gui.trackers_url = v.trim().to_owned(),
+    },
 ];
+
+/// A value of several lines (line feeds between them) as a multi-line edit control holds it.
+fn to_box(text: &str) -> String {
+    from_box(text).replace('\n', "\r\n")
+}
+
+/// A multi-line edit control's text with line feeds alone between its lines.
+fn from_box(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\r', "\n")
+}
 
 /// Loads a block list: the number of rules or an error.
 pub type ReloadIpFilter<'a> = Box<dyn FnMut(&Path) -> Result<usize, String> + 'a>;
@@ -820,6 +868,11 @@ pub type Integrate<'a> = Box<dyn FnMut(Option<(&Integration, &Integration)>) -> 
 /// stores the setup and restarts the server; either way what the page shows afterwards.
 pub type WebUiHook<'a> = Box<dyn FnMut(Option<&Edit>) -> WebView + 'a>;
 
+/// The Trackers page's list from the web (D66): `None` reads its status line
+/// (`TrackerList::status`), `Some(fields)` takes the page's tracker fields and fetches the list
+/// now ("Update Now"); either way the status line afterwards.
+pub type TrackerListHook<'a> = Box<dyn FnMut(Option<&tracker_list::Config>) -> String + 'a>;
+
 /// What the dialog asks of its owner.
 pub struct Hooks<'a> {
     /// OK and Apply: store the options and hand them to the engine.
@@ -830,6 +883,8 @@ pub struct Hooks<'a> {
     pub integration: Integrate<'a>,
     /// The Web UI page: the server this window runs.
     pub webui: WebUiHook<'a>,
+    /// The Trackers page's status line and its "Update Now".
+    pub tracker_list: TrackerListHook<'a>,
 }
 
 struct State<'a> {
@@ -850,6 +905,8 @@ struct State<'a> {
     integration: Status,
     /// The Web UI page as last read.
     webui: WebView,
+    /// The Trackers page's status line as shown (`None`: not yet).
+    tracker_status: Option<String>,
     /// The General page's language list: `(ui.language value, text)`.
     languages: Vec<(String, String)>,
     /// The UI Settings page's Theme list: `(ui.theme value, text)` (D64).
@@ -904,6 +961,7 @@ impl<'a> State<'a> {
             applied: false,
             integration: Status::default(),
             webui: WebView::default(),
+            tracker_status: None,
             languages: Vec::new(),
             themes: Vec::new(),
             networks: Vec::new(),
@@ -1211,6 +1269,22 @@ fn build() -> (Vec<u16>, Vec<(u16, u16)>) {
     b.ctl(BUTTON, ID_DISK_SLOW_UL, CHECK, [8, 137, 290, 10], tr!(PrefDiskSlowUploads));
     b.label([0, 162, W, 27], tr!(PrefDiskIoNote));
 
+    // trackers for new downloads (D66): the typed list, then the list from the web with its
+    // status line, which takes the lines its text needs (`fit_tracker_notes`), as the note does
+    b.page(PAGE_TRACKERS);
+    b.group([0, 0, W, 164], tr!(PrefTrackersGroup));
+    b.ctl(BUTTON, ID_TRK_APPEND, CHECK, [8, 13, 290, 10], tr!(PrefTrackersAppend));
+    // Enter starts a new line here instead of pressing OK
+    let lines = TAB | WS_BORDER | WS_VSCROLL | (ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN) as u32;
+    b.ctl(EDIT, ID_TRK_LIST, lines, [8, 26, 294, 64], "");
+    b.ctl(BUTTON, ID_TRK_FROM_URL, CHECK, [8, 97, 290, 10], tr!(PrefTrackersFromUrl));
+    b.ctl(EDIT, ID_TRK_URL, LINE, [8, 110, 294, 13], "");
+    b.ctl(BUTTON, ID_TRK_UPDATE, PUSH, [8, 128, 70, 14], tr!(PrefTrackersUpdate));
+    // an error can hold an address: wraps inside it too
+    let status = C | SS_NOPREFIX | crate::fit::SS_EDITCONTROL;
+    b.ctl(STATIC, ID_TRK_STATUS, status, [8, 147, 294, 9], "");
+    b.ctl(STATIC, ID_TRK_NOTE, C | SS_NOPREFIX, [0, 170, W, 36], tr!(PrefTrackersNote));
+
     let labels = b.labels;
     let mut t = b.t;
     let vis = windows_sys::Win32::UI::WindowsAndMessaging::WS_VISIBLE;
@@ -1276,6 +1350,7 @@ unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
             crate::fit::fit_texts(dlg, |id| page_of(id).map(|p| p as i32));
             // at the width `fit` left it
             fit_integration_note(dlg);
+            fit_tracker_notes(dlg);
             // the greyed controls' tooltips where `fit` left the controls
             let st = &mut *(lp as *mut State<'_>);
             place_tips(dlg, st);
@@ -1289,6 +1364,13 @@ unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
         match msg {
             WM_TIMER if wp == HELP_TIMER => {
                 update_help_pane(dlg, st);
+                1
+            }
+            // a fetch started by Update Now (or the daily one) ends while the page is open
+            WM_TIMER if wp == TRACKERS_TIMER => {
+                if st.page == PAGE_TRACKERS {
+                    update_tracker_status(dlg, st);
+                }
                 1
             }
             WM_HELP => {
@@ -1330,7 +1412,8 @@ unsafe fn init(dlg: HWND, st: &mut State<'_>) {
         send(tree, TVM_SETIMAGELIST, TVSIL_NORMAL as usize, st.images);
         let mut parent = TVI_ROOT;
         for (i, title) in PAGES.iter().enumerate() {
-            let under = if i == PAGE_DISK_CACHE || i == PAGE_DISK_IO { parent } else { TVI_ROOT };
+            let nested = matches!(i, PAGE_DISK_CACHE | PAGE_DISK_IO | PAGE_TRACKERS);
+            let under = if nested { parent } else { TVI_ROOT };
             let h = insert_tree(tree, under, lang::text(*title), i, page_icon(*title));
             if i == PAGE_ADVANCED {
                 parent = h;
@@ -1398,6 +1481,7 @@ unsafe fn init(dlg: HWND, st: &mut State<'_>) {
         }
         st.tips = Some(tips);
         SetTimer(dlg, HELP_TIMER, HELP_TIMER_MS, None);
+        SetTimer(dlg, TRACKERS_TIMER, TRACKERS_TIMER_MS, None);
         let page = st.page;
         send(tree, TVM_SELECTITEM, TVGN_CARET as usize, st.tree_items[page]);
         show_page(dlg, st, page);
@@ -1532,6 +1616,9 @@ unsafe fn show_page(dlg: HWND, st: &mut State<'_>, page: usize) {
         if page == PAGE_ADVANCED {
             show_value_controls(dlg, st);
         }
+        if page == PAGE_TRACKERS {
+            update_tracker_status(dlg, st);
+        }
         place_tips(dlg, st);
     }
 }
@@ -1597,6 +1684,7 @@ unsafe fn write_controls(dlg: HWND, st: &mut State<'_>) {
         send(item(dlg, ID_SCHED_GRID), sched_grid::SET, 0, &table as *const _ as LPARAM);
         st.shown.push((ID_SCHED_GRID, st.opts.gui.schedule.table_text()));
         update_ip_filter_status(dlg, st, None);
+        update_tracker_status(dlg, st);
         write_integration(dlg, st);
         write_webui(dlg, st);
         update_move_controls(dlg);
@@ -1604,6 +1692,7 @@ unsafe fn write_controls(dlg: HWND, st: &mut State<'_>) {
         update_sched_controls(dlg);
         update_cache_controls(dlg);
         update_check_rate_controls(dlg);
+        update_tracker_controls(dlg);
         update_proxy_controls(dlg);
     }
 }
@@ -2039,6 +2128,17 @@ unsafe fn read_controls(dlg: HWND, st: &mut State<'_>) -> Result<(), (u16, Strin
         if tf.autoload && tf.autoload_dir.is_empty() {
             return Err((ID_AUTOLOAD_DIR, tr!(PrefNoAutoloadDir).to_owned()));
         }
+        // as `pref_pages::check`: a typed line that is no tracker address would be dropped
+        // silently otherwise, and the list on the web is read over https only (D66)
+        let typed = tracker_list::parse(&o.gui.trackers_list);
+        if o.gui.trackers_append && typed.invalid > 0 {
+            return Err((ID_TRK_LIST, tr!(TrackersErrLine).to_owned()));
+        }
+        if o.gui.trackers_from_url && !tracker_list::is_list_url(&o.gui.trackers_url) {
+            return Err((ID_TRK_URL, tr!(TrackersErrHttps).to_owned()));
+        }
+        // the list as the page shows it from now on: no repeats, one blank line between tiers
+        o.gui.trackers_list = tracker_list::to_text(&typed.tiers);
         st.opts = o;
         Ok(())
     }
@@ -2109,6 +2209,8 @@ unsafe fn command(dlg: HWND, st: &mut State<'_>, id: u16, code: u32) -> bool {
                 update_cache_controls(dlg)
             }
             ID_CHECK_RATE_LIMIT if code == BN_CLICKED => update_check_rate_controls(dlg),
+            ID_TRK_APPEND | ID_TRK_FROM_URL if code == BN_CLICKED => update_tracker_controls(dlg),
+            ID_TRK_UPDATE if code == BN_CLICKED => update_tracker_list(dlg, st),
             ID_STORE | ID_MOVE_TORRENTS | ID_AUTOLOAD if code == BN_CLICKED => {
                 update_torrent_folder_controls(dlg)
             }
@@ -2317,6 +2419,70 @@ unsafe fn reload_ip_filter(dlg: HWND, st: &mut State<'_>) {
     }
 }
 
+/// The typed list follows "Add these trackers", the address and Update Now "Add the trackers
+/// of this list on the web" (`pref_pages`' `needs` for the two fields).
+unsafe fn update_tracker_controls(dlg: HWND) {
+    unsafe {
+        EnableWindow(item(dlg, ID_TRK_LIST), checked(dlg, ID_TRK_APPEND) as i32);
+        let from_url = checked(dlg, ID_TRK_FROM_URL) as i32;
+        EnableWindow(item(dlg, ID_TRK_URL), from_url);
+        EnableWindow(item(dlg, ID_TRK_UPDATE), from_url);
+    }
+}
+
+/// The Trackers page's fields as they stand, applied or not.
+unsafe fn tracker_controls(dlg: HWND) -> tracker_list::Config {
+    unsafe {
+        tracker_list::Config {
+            append: checked(dlg, ID_TRK_APPEND),
+            typed: from_box(&window_text(item(dlg, ID_TRK_LIST))),
+            from_url: checked(dlg, ID_TRK_FROM_URL),
+            url: window_text(item(dlg, ID_TRK_URL)).trim().to_owned(),
+        }
+    }
+}
+
+/// The status line of the list from the web, as the owner has it now.
+unsafe fn update_tracker_status(dlg: HWND, st: &mut State<'_>) {
+    let text = (st.hooks.tracker_list)(None);
+    unsafe { show_tracker_status(dlg, st, text) };
+}
+
+/// "Update Now": the list is fetched from the address in the field now, with the page's tracker
+/// fields as they stand (whether or not the rest is applied); the status line says how it
+/// went once the fetch ends (`TRACKERS_TIMER`).
+unsafe fn update_tracker_list(dlg: HWND, st: &mut State<'_>) {
+    unsafe {
+        let fields = tracker_controls(dlg);
+        let text = (st.hooks.tracker_list)(Some(&fields));
+        show_tracker_status(dlg, st, text);
+    }
+}
+
+unsafe fn show_tracker_status(dlg: HWND, st: &mut State<'_>, text: String) {
+    if st.tracker_status.as_deref() == Some(text.as_str()) {
+        return;
+    }
+    unsafe {
+        set_text(item(dlg, ID_TRK_STATUS), &text);
+        st.tracker_status = Some(text);
+        fit_tracker_notes(dlg);
+    }
+}
+
+/// The Trackers page's status line and the note under its box take the lines their texts need
+/// (a failed download's reason, a long language), at least one each; the box and the note
+/// follow the status line.
+unsafe fn fit_tracker_notes(dlg: HWND) {
+    unsafe {
+        let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 9 };
+        MapDialogRect(dlg, &mut rc);
+        for id in [ID_TRK_STATUS, ID_TRK_NOTE] {
+            crate::fit::fit_note_height(dlg, id, rc.bottom, |id| page_of(id).map(|p| p as i32));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! The dialog built from its template, hidden and modeless, driven through its messages.
@@ -2351,6 +2517,9 @@ mod tests {
         /// The fake Web UI: what its page reads as, and the edits asked for.
         web: Rc<RefCell<WebView>>,
         web_edits: Rc<RefCell<Vec<Edit>>>,
+        /// The fake tracker list: its status line, and the fields each Update Now came with.
+        tracker_status: Rc<RefCell<String>>,
+        tracker_updates: Rc<RefCell<Vec<tracker_list::Config>>>,
     }
 
     impl Fixture {
@@ -2375,6 +2544,9 @@ mod tests {
             let web: Rc<RefCell<WebView>> = Rc::default();
             let web_edits: Rc<RefCell<Vec<Edit>>> = Rc::default();
             let (w, edits) = (web.clone(), web_edits.clone());
+            let tracker_status: Rc<RefCell<String>> = Rc::default();
+            let tracker_updates: Rc<RefCell<Vec<tracker_list::Config>>> = Rc::default();
+            let (status, updates) = (tracker_status.clone(), tracker_updates.clone());
             let hooks = Hooks {
                 integration: Box::new(move |change| {
                     if let Some((old, new)) = change {
@@ -2404,6 +2576,14 @@ mod tests {
                     r.borrow_mut().push(p.to_path_buf());
                     if p.ends_with("missing.dat") { Err("not found".into()) } else { Ok(42) }
                 }),
+                // the fake list: Update Now starts a fetch of the address it was given
+                tracker_list: Box::new(move |fields| {
+                    if let Some(c) = fields {
+                        updates.borrow_mut().push(c.clone());
+                        *status.borrow_mut() = format!("Fetching {}", c.url);
+                    }
+                    status.borrow().clone()
+                }),
             };
             let mut st = Box::new(State::new(opts, Path::new(r"C:\settings"), hooks));
             let template = template();
@@ -2417,7 +2597,18 @@ mod tests {
                 )
             };
             assert!(!dlg.is_null(), "the template does not load");
-            Fixture { dlg, st, applied, reloads, registry, integrations, web, web_edits }
+            Fixture {
+                dlg,
+                st,
+                applied,
+                reloads,
+                registry,
+                integrations,
+                web,
+                web_edits,
+                tracker_status,
+                tracker_updates,
+            }
         }
 
         fn click(&self, id: u16) {
@@ -3327,6 +3518,246 @@ mod tests {
         let g = Fixture::new(o);
         g.click(ID_APPLY);
         assert_eq!(g.last_applied().settings.active_checking, -1);
+    }
+
+    const TRACKER_A: &str = "udp://tracker.example:6969/announce";
+    const TRACKER_B: &str = "https://b.example/announce";
+    const TRACKER_C: &str = "http://c.example:80/announce";
+
+    /// Advanced > Trackers (D66): the page hangs under Advanced, its two fields grey with their
+    /// boxes, the typed list is a box of several lines.
+    #[test]
+    fn trackers_controls_under_advanced() {
+        use windows_sys::Win32::UI::Controls::{TVGN_PARENT, TVM_GETNEXTITEM};
+        let mut f = Fixture::new(defaults());
+        f.page(PAGE_TRACKERS);
+        let enabled = |f: &Fixture, id| unsafe { IsWindowEnabled(item(f.dlg, id)) != 0 };
+        let all = [
+            ID_TRK_APPEND,
+            ID_TRK_LIST,
+            ID_TRK_FROM_URL,
+            ID_TRK_URL,
+            ID_TRK_UPDATE,
+            ID_TRK_STATUS,
+            ID_TRK_NOTE,
+        ];
+        unsafe {
+            for id in all {
+                assert!(!item(f.dlg, id).is_null() && shown(item(f.dlg, id)), "control {id}");
+            }
+            // in the tree: the third page under Advanced, with the Trackers tab's symbol
+            let tree = item(f.dlg, ID_TREE);
+            let parent = send(tree, TVM_GETNEXTITEM, TVGN_PARENT as usize, f.st.tree_items[PAGE_TRACKERS]);
+            assert_eq!(parent, f.st.tree_items[PAGE_ADVANCED]);
+            assert_eq!(page_icon(PAGES[PAGE_TRACKERS]), Some(UiIcon::Trackers));
+            // Enter adds a line to the list instead of pressing OK
+            let style = GetWindowLongW(item(f.dlg, ID_TRK_LIST), GWL_STYLE) as u32;
+            let lines = (ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN) as u32 | WS_VSCROLL;
+            assert_eq!(style & lines, lines);
+            // both off at first
+            assert!(!checked(f.dlg, ID_TRK_APPEND) && !checked(f.dlg, ID_TRK_FROM_URL));
+        }
+        assert_eq!((f.text(ID_TRK_LIST), f.text(ID_TRK_URL)), (String::new(), String::new()));
+        assert_eq!(f.text(ID_TRK_NOTE), tr!(PrefTrackersNote));
+        assert!(enabled(&f, ID_TRK_APPEND) && enabled(&f, ID_TRK_FROM_URL));
+        assert!(!enabled(&f, ID_TRK_LIST) && !enabled(&f, ID_TRK_URL) && !enabled(&f, ID_TRK_UPDATE));
+
+        // each field follows its own box
+        f.check(ID_TRK_APPEND, true);
+        f.click(ID_TRK_APPEND);
+        assert!(enabled(&f, ID_TRK_LIST) && !enabled(&f, ID_TRK_URL) && !enabled(&f, ID_TRK_UPDATE));
+        f.check(ID_TRK_FROM_URL, true);
+        f.click(ID_TRK_FROM_URL);
+        assert!(enabled(&f, ID_TRK_LIST) && enabled(&f, ID_TRK_URL) && enabled(&f, ID_TRK_UPDATE));
+        f.check(ID_TRK_APPEND, false);
+        f.click(ID_TRK_APPEND);
+        assert!(!enabled(&f, ID_TRK_LIST) && enabled(&f, ID_TRK_URL) && enabled(&f, ID_TRK_UPDATE));
+        f.check(ID_TRK_FROM_URL, false);
+        f.click(ID_TRK_FROM_URL);
+        assert!(!enabled(&f, ID_TRK_LIST) && !enabled(&f, ID_TRK_URL) && !enabled(&f, ID_TRK_UPDATE));
+
+        // options that have them on open with the fields live
+        let mut o = defaults();
+        o.gui.trackers_append = true;
+        o.gui.trackers_from_url = true;
+        let g = Fixture::new(o);
+        assert!(enabled(&g, ID_TRK_LIST) && enabled(&g, ID_TRK_URL) && enabled(&g, ID_TRK_UPDATE));
+    }
+
+    /// The typed list goes through the box with the control's line ends and comes back with
+    /// the model's, tiers and all; what is stored loads as the same options.
+    #[test]
+    fn the_tracker_list_round_trips_through_its_box() {
+        let two_tiers = format!("{TRACKER_A}\n{TRACKER_B}\n\n{TRACKER_C}");
+        let mut o = defaults();
+        o.gui.trackers_append = true;
+        o.gui.trackers_list = two_tiers.clone();
+        o.gui.trackers_from_url = true;
+        o.gui.trackers_url = "https://lists.example/trackers.txt".into();
+        let mut f = Fixture::new(o.clone());
+        f.page(PAGE_TRACKERS);
+        unsafe { assert!(checked(f.dlg, ID_TRK_APPEND) && checked(f.dlg, ID_TRK_FROM_URL)) };
+        assert_eq!(f.text(ID_TRK_LIST), format!("{TRACKER_A}\r\n{TRACKER_B}\r\n\r\n{TRACKER_C}"));
+        assert_eq!(f.text(ID_TRK_URL), "https://lists.example/trackers.txt");
+        // Apply without changes hands back exactly what came in
+        f.click(ID_APPLY);
+        assert_eq!(f.last_applied(), o);
+
+        // typed anew: the tiers the other way round, a repeat, blank lines and spaces to tidy
+        f.set(
+            ID_TRK_LIST,
+            &format!("\r\n {TRACKER_C} \r\n\r\n\r\n{TRACKER_A}\r\n{TRACKER_B}\r\n{TRACKER_A}\r\n"),
+        );
+        f.set(ID_TRK_URL, "  https://other.example/list  ");
+        f.click(ID_APPLY);
+        assert!(dialogs::take_told().is_empty());
+        let applied = f.last_applied();
+        assert_eq!(applied.gui.trackers_list, format!("{TRACKER_C}\n\n{TRACKER_A}\n{TRACKER_B}"));
+        assert_eq!(applied.gui.trackers_url, "https://other.example/list");
+        assert!(applied.gui.trackers_append && applied.gui.trackers_from_url);
+        assert_eq!(
+            tracker_list::parse(&applied.gui.trackers_list).tiers,
+            vec![vec![TRACKER_C.to_owned()], vec![TRACKER_A.to_owned(), TRACKER_B.to_owned()]]
+        );
+        // the box shows the tidied list
+        assert_eq!(f.text(ID_TRK_LIST), format!("{TRACKER_C}\r\n\r\n{TRACKER_A}\r\n{TRACKER_B}"));
+        let mut prefs = Prefs::default();
+        applied.store(&mut prefs);
+        assert_eq!(Options::load(&prefs, "unused"), applied);
+
+        // the boxes off: the texts are kept for the day they are switched on again
+        f.check(ID_TRK_APPEND, false);
+        f.check(ID_TRK_FROM_URL, false);
+        f.click(ID_APPLY);
+        let off = f.last_applied();
+        assert!(!off.gui.trackers_append && !off.gui.trackers_from_url);
+        assert_eq!(off.gui.trackers_list, applied.gui.trackers_list);
+        assert_eq!(off.gui.trackers_url, applied.gui.trackers_url);
+    }
+
+    /// OK and Apply refuse a list address that is not https and a typed line that is no
+    /// tracker, on the Trackers page with the focus on the field; nothing is applied.
+    #[test]
+    fn a_tracker_list_address_must_be_https() {
+        let mut f = Fixture::new(defaults());
+        f.check(ID_TRK_FROM_URL, true);
+        f.click(ID_TRK_FROM_URL);
+        for bad in ["http://lists.example/trackers.txt", "", "lists.example/trackers.txt", "file:///c:/t.txt"]
+        {
+            f.page(0);
+            f.set(ID_TRK_URL, bad);
+            let err = unsafe { read_controls(f.dlg, &mut f.st) }.unwrap_err();
+            assert_eq!((err.0, page_of(err.0)), (ID_TRK_URL, Some(PAGE_TRACKERS)), "{bad:?}");
+            assert_eq!(err.1, tr!(TrackersErrHttps));
+            // Apply says so, shows the page and puts the focus on the address
+            f.click(ID_APPLY);
+            assert_eq!(dialogs::take_told(), [tr!(TrackersErrHttps).to_owned()], "{bad:?}");
+            assert_eq!(f.st.page, PAGE_TRACKERS);
+            assert_eq!(unsafe { GetFocus() }, unsafe { item(f.dlg, ID_TRK_URL) }, "{bad:?}");
+            // and so does OK, which then leaves the dialog open
+            f.click(IDOK as u16);
+            assert_eq!(dialogs::take_told(), [tr!(TrackersErrHttps).to_owned()]);
+            assert!(unsafe { windows_sys::Win32::UI::WindowsAndMessaging::IsWindow(f.dlg) } != 0);
+        }
+        assert!(f.applied.borrow().is_empty());
+        assert_eq!(f.st.opts, defaults(), "nothing half-applied");
+
+        // a line that is no tracker address is refused on the list
+        f.set(ID_TRK_URL, "https://lists.example/trackers.txt");
+        f.check(ID_TRK_APPEND, true);
+        f.click(ID_TRK_APPEND);
+        f.set(ID_TRK_LIST, &format!("{TRACKER_A}\r\nnot a tracker\r\n"));
+        f.page(0);
+        f.click(ID_APPLY);
+        assert_eq!(dialogs::take_told(), [tr!(TrackersErrLine).to_owned()]);
+        assert_eq!(f.st.page, PAGE_TRACKERS);
+        assert_eq!(unsafe { GetFocus() }, unsafe { item(f.dlg, ID_TRK_LIST) });
+        assert!(f.applied.borrow().is_empty());
+
+        // put right, both are taken; with its box off a bad address is not asked about
+        f.set(ID_TRK_LIST, &format!("{TRACKER_A}\r\n"));
+        f.click(ID_APPLY);
+        assert!(dialogs::take_told().is_empty());
+        let o = f.last_applied();
+        assert_eq!(o.gui.trackers_list, TRACKER_A);
+        assert_eq!(o.gui.trackers_url, "https://lists.example/trackers.txt");
+        f.check(ID_TRK_FROM_URL, false);
+        f.set(ID_TRK_URL, "http://lists.example/trackers.txt");
+        f.click(ID_APPLY);
+        assert!(dialogs::take_told().is_empty());
+        assert!(!f.last_applied().gui.trackers_from_url);
+    }
+
+    /// Update Now hands over the page's tracker fields as they stand, without applying the
+    /// rest, and the status line follows the list: at once and by the page's timer.
+    #[test]
+    fn update_now_fetches_with_the_page_fields() {
+        let mut f = Fixture::new(defaults());
+        *f.tracker_status.borrow_mut() = "The list has not been downloaded yet.".into();
+        f.page(PAGE_TRACKERS);
+        assert_eq!(f.text(ID_TRK_STATUS), "The list has not been downloaded yet.");
+        f.check(ID_TRK_APPEND, true);
+        f.set(ID_TRK_LIST, &format!("{TRACKER_A}\r\n\r\n{TRACKER_B}"));
+        f.check(ID_TRK_FROM_URL, true);
+        f.set(ID_TRK_URL, " https://lists.example/trackers.txt ");
+        f.click(ID_TRK_UPDATE);
+        let want = tracker_list::Config {
+            append: true,
+            typed: format!("{TRACKER_A}\n\n{TRACKER_B}"),
+            from_url: true,
+            url: "https://lists.example/trackers.txt".into(),
+        };
+        assert_eq!(f.tracker_updates.borrow().as_slice(), [want]);
+        assert_eq!(f.text(ID_TRK_STATUS), "Fetching https://lists.example/trackers.txt");
+        assert!(f.applied.borrow().is_empty(), "Update Now does not apply the rest");
+
+        // the fetch ends while the page is open: the timer shows it, on this page only
+        let done = "The last download failed: the file is not a list of tracker addresses. \
+                    12 trackers, downloaded 2026-11-10 09:00:00.";
+        *f.tracker_status.borrow_mut() = done.into();
+        unsafe { SendMessageW(f.dlg, WM_TIMER, TRACKERS_TIMER, 0) };
+        assert_eq!(f.text(ID_TRK_STATUS), done);
+        // the line takes the height its text needs and the note moves down with it
+        let rect = |id: u16| unsafe {
+            let mut r: RECT = std::mem::zeroed();
+            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect(item(f.dlg, id), &mut r);
+            r
+        };
+        let (status, note) = (rect(ID_TRK_STATUS), rect(ID_TRK_NOTE));
+        assert!(note.top >= status.bottom, "{} {}", note.top, status.bottom);
+        f.page(0);
+        *f.tracker_status.borrow_mut() = "later".into();
+        unsafe { SendMessageW(f.dlg, WM_TIMER, TRACKERS_TIMER, 0) };
+        assert_eq!(f.text(ID_TRK_STATUS), done);
+        f.page(PAGE_TRACKERS);
+        assert_eq!(f.text(ID_TRK_STATUS), "later");
+        assert_eq!(f.tracker_updates.borrow().len(), 1);
+    }
+
+    /// The note under the Trackers box is as tall as its text, whatever the language's length.
+    #[test]
+    fn the_trackers_note_is_as_tall_as_its_text() {
+        let mut f = Fixture::new(defaults());
+        f.page(PAGE_TRACKERS);
+        let height = |f: &Fixture| unsafe {
+            let mut r: RECT = std::mem::zeroed();
+            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect(item(f.dlg, ID_TRK_NOTE), &mut r);
+            r.bottom - r.top
+        };
+        let english = height(&f);
+        let mut line = RECT { left: 0, top: 0, right: 0, bottom: 9 };
+        unsafe { MapDialogRect(f.dlg, &mut line) };
+        assert!(english >= 2 * line.bottom, "{english}");
+        // twice the text: about twice the lines, and still above the help pane
+        f.set(ID_TRK_NOTE, &format!("{0} {0}", tr!(PrefTrackersNote)));
+        unsafe { fit_tracker_notes(f.dlg) };
+        assert!(height(&f) >= english * 2 - line.bottom, "{} {english}", height(&f));
+        let bottom = |id: u16, top: bool| unsafe {
+            let mut r: RECT = std::mem::zeroed();
+            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect(item(f.dlg, id), &mut r);
+            if top { r.top } else { r.bottom }
+        };
+        assert!(bottom(ID_TRK_NOTE, false) <= bottom(ID_HELP_FRAME, true));
     }
 
     #[test]

@@ -290,6 +290,8 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
         clock: fapp::system_clock(),
         // a demo (screenshots, scale runs) never asks the update server
         updates: rookparcel_frontend::update::AVAILABLE && args.demo.is_none(),
+        // nor the address of a tracker list (D66)
+        demo: args.demo.is_some(),
     });
     // the Files tab's folder tree or plain list (D62), before the tab is built
     core.set_files_tree(layout.files_tree);
@@ -340,10 +342,11 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
     ));
 }
 
-/// The 1 s timer (`Core::tick`: status requests, scheduler, auto-load, RSS, Auto Shutdown,
-/// the update check).
+/// The 1 s timer (`Core::tick`: status requests, scheduler, auto-load, RSS, the tracker list,
+/// Auto Shutdown, the update check).
 pub fn tick() {
     apply(with_core(|c| c.tick(Instant::now())));
+    crate::prefs::tick();
     crate::mac::statistics::refresh();
 }
 

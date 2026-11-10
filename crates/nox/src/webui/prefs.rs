@@ -36,6 +36,7 @@ use rookparcel_frontend::pref_pages;
 use rookparcel_frontend::scheduler;
 use rookparcel_frontend::settings::{self, Entry, Kind as SettingKind, TABLE, Value};
 use rookparcel_frontend::tr;
+use rookparcel_frontend::tracker_list;
 
 use super::auth::{self, PasswordHash};
 use super::json::Json;
@@ -51,6 +52,8 @@ pub enum Kind {
         max: i64,
     },
     Text,
+    /// Several lines of text (the typed tracker list, D66): a `<textarea>` on the page.
+    Lines,
     Folder,
     /// A choice among labels; the value is the index.
     Enum(&'static [S]),
@@ -75,6 +78,7 @@ impl Kind {
             Kind::Bool => "bool",
             Kind::Int { .. } => "int",
             Kind::Text => "text",
+            Kind::Lines => "lines",
             Kind::Folder => "folder",
             Kind::Enum(_) => "enum",
             Kind::Password => "password",
@@ -669,6 +673,36 @@ pub(crate) static FIELDS: &[Field] = &[
         .prefs
         .theme =
         string(v).trim().to_owned()),
+    // Advanced > Trackers (D66): security fields, see `SECURITY_FIELDS`
+    field!(
+        pref_pages::TRACKERS_APPEND,
+        Some(S::PrefTrackersAppend),
+        Kind::Bool,
+        |w| Value::Bool(w.prefs.trackers_append),
+        |w, v| w.prefs.trackers_append = boolean(&v)
+    ),
+    // as typed until the commit, which checks every line and then keeps the list's own form
+    field!(
+        pref_pages::TRACKERS_LIST,
+        None,
+        Kind::Lines,
+        |w| Value::Str(w.prefs.trackers_list.clone()),
+        |w, v| w.prefs.trackers_list = string(v)
+    ),
+    field!(
+        pref_pages::TRACKERS_FROM_URL,
+        Some(S::PrefTrackersFromUrl),
+        Kind::Bool,
+        |w| Value::Bool(w.prefs.trackers_from_url),
+        |w, v| w.prefs.trackers_from_url = boolean(&v)
+    ),
+    field!(
+        pref_pages::TRACKERS_URL,
+        None,
+        Kind::Text,
+        |w| Value::Str(w.prefs.trackers_url.clone()),
+        |w, v| w.prefs.trackers_url = string(v).trim().to_owned()
+    ),
 ];
 
 /// The 2.2.1 wording of the engine settings the pages show (the Advanced table shows the
@@ -732,6 +766,8 @@ const HELP: &[(&str, H)] = &[
     ("proxy_password", H::PrefProxyPassword),
     ("webui.username", H::PrefWebUiUsername),
     ("webui.password", H::PrefWebUiPassword),
+    (pref_pages::TRACKERS_LIST, H::PrefTrackersAppend),
+    (pref_pages::TRACKERS_URL, H::PrefTrackersFromUrl),
 ];
 
 /// One editable thing: an engine setting row or one of [`FIELDS`].
@@ -843,6 +879,7 @@ impl Def {
                     }),
             },
             Kind::Text | Kind::Folder | Kind::Password | Kind::Network => Ok(Value::Str(text.to_owned())),
+            Kind::Lines => Ok(Value::Str(text.replace("\r\n", "\n").replace('\r', "\n"))),
             Kind::Theme if theme::valid_id(t) => Ok(Value::Str(t.to_owned())),
             Kind::Theme => Err(tr!(PrefBadTheme).to_owned()),
             Kind::Schedule => match scheduler::parse_table(t) {
@@ -937,8 +974,9 @@ fn page(id: &str, title: &str, groups: Vec<Json>) -> Json {
     Json::obj().with("id", id).with("title", title).with("groups", Json::Arr(groups))
 }
 
-/// The tree, in µTorrent 2.2.1's order; Disk Cache and Rookparcel's Disk I/O sit under
-/// Advanced. `hosted`: without the alternative speed limits (the host has none).
+/// The tree, in µTorrent 2.2.1's order; Disk Cache and Rookparcel's Disk I/O and Trackers sit
+/// under Advanced. `hosted`: without the alternative speed limits (the host has none), the
+/// update check and the Trackers page (the host's own).
 fn pages(settings_dir: &Path, hosted: bool) -> Vec<Json> {
     let ipf_default = settings_dir.join("ipfilter.dat");
     let mut bandwidth = vec![
@@ -986,7 +1024,7 @@ fn pages(settings_dir: &Path, hosted: bool) -> Vec<Json> {
         // nox's update check (D43); hosted, the host's Preferences have its own
         general.push(group(Some(tr!(PrefPrivacy)), vec![f("update.check"), f("update.beta")]));
     }
-    vec![
+    let mut pages = vec![
         page("general", tr!(PageGeneral), general),
         page(
             "ui",
@@ -1226,15 +1264,49 @@ fn pages(settings_dir: &Path, hosted: bool) -> Vec<Json> {
             ],
         )
         .with("under", "advanced"),
-    ]
+    ];
+    if !hosted {
+        // the trackers added to new downloads (D66); hosted, the host's Preferences have its own
+        // list, which a browser neither sees nor changes
+        pages.push(
+            page(
+                "trackers",
+                tr!(PageTrackers),
+                vec![
+                    group(
+                        Some(tr!(PrefTrackersGroup)),
+                        vec![
+                            f(pref_pages::TRACKERS_APPEND),
+                            enabled_by(f(pref_pages::TRACKERS_LIST), pref_pages::TRACKERS_APPEND),
+                            f(pref_pages::TRACKERS_FROM_URL),
+                            enabled_by(f(pref_pages::TRACKERS_URL), pref_pages::TRACKERS_FROM_URL),
+                            enabled_by(
+                                Json::obj()
+                                    .with("button", tr!(PrefTrackersUpdate))
+                                    .with("action", "update_trackers")
+                                    .with("help", lang::help(H::PrefTrackersUpdate)),
+                                pref_pages::TRACKERS_FROM_URL,
+                            ),
+                            Json::obj().with("status", "trackers"),
+                        ],
+                    ),
+                    group(None, vec![note(tr!(PrefTrackersNote))]),
+                ],
+            )
+            .with("under", "advanced"),
+        );
+    }
+    pages
 }
 
 /// `GET /pa/prefs`: `pages` (the tree in order, each with its groups of items: `{"f": id}`
 /// with optional `kb`, `min`, `max`, `enabled_by` (space-separated ids), `secret`;
-/// `{"row": [items]}`; `{"stub": label}`; `{"note": text}`; `{"button": label, "action": name}`), `fields` (id to
+/// `{"row": [items]}`; `{"stub": label}`; `{"note": text}`; `{"button": label, "action": name}`;
+/// `{"status": "trackers"}`, the line that shows `trackers_status`), `fields` (id to
 /// `label`, `type`, `value`, `default`, `min` / `max` for ints, `options` for enums,
 /// `readonly`, `help`: the current language's help text, `wiki`: its wiki page once there is
-/// one) and `advanced` (every engine setting's id, the table's order).
+/// one), `advanced` (every engine setting's id, the table's order) and `trackers_status` (the
+/// fetched tracker list's status line, D66; `GET /pa/prefs/trackers` gives it alone).
 pub(crate) fn model(shared: &Shared, st: &State) -> Json {
     let w = Working::from_state(st);
     let d = Working::defaults(st);
@@ -1287,6 +1359,28 @@ pub(crate) fn model(shared: &Shared, st: &State) -> Json {
         .with("pages", Json::Arr(pages(&shared.settings_dir, st.hosted)))
         .with("fields", fields)
         .with("advanced", Json::Arr(advanced))
+        .with("trackers_status", trackers_status(shared))
+}
+
+/// The status line of the tracker list fetched from the web (`TrackerList::status`): empty
+/// while that is switched off, and hosted (the host's own list).
+pub(crate) fn trackers_status(shared: &Shared) -> String {
+    shared.trackers().map_or(String::new(), |t| t.status())
+}
+
+/// `POST /pa/prefs/trackers/update`, the page's Update Now: fetches the list again from the
+/// address stored in the preferences. It takes nothing from the request, so it needs no
+/// password: the address is changed only through [`commit`], with the current one. Hosted,
+/// refused (the host's own list). Returns the status line.
+pub(crate) fn update_trackers(shared: &Shared) -> Result<String, &'static str> {
+    let mut st = shared.lock();
+    match shared.trackers() {
+        Some(mut t) => t.refresh_now(),
+        None => return Err(HOSTED_NO_TRACKERS),
+    }
+    // starts the fetch now rather than at the next status tick
+    shared.trackers_tick(&mut st);
+    Ok(trackers_status(shared))
 }
 
 // ---- applying a POST -----------------------------------------------------------------------
@@ -1303,8 +1397,24 @@ pub(crate) type Change = (Def, Value);
 pub(crate) const HOSTED_NO_ALT: &str =
     "alternative speed limits are not available: a desktop client hosts the Web UI";
 
-/// The fields that guard the Web UI: changed only with the current password (SEC-03).
-const SECURITY_FIELDS: [&str; 10] = [
+/// Why the trackers added to new downloads (D66) are refused while a desktop client hosts the
+/// Web UI: the list is the host's own, set in its Preferences; `POST /pa/prefs` answers 400
+/// with it, `POST /pa/prefs/trackers/update` 409.
+pub(crate) const HOSTED_NO_TRACKERS: &str =
+    "the trackers for new downloads are set in the desktop client that hosts the Web UI";
+
+/// The four tracker preferences (D66), in the page's order.
+const TRACKER_FIELDS: [&str; 4] = [
+    pref_pages::TRACKERS_APPEND,
+    pref_pages::TRACKERS_LIST,
+    pref_pages::TRACKERS_FROM_URL,
+    pref_pages::TRACKERS_URL,
+];
+
+/// The fields that guard the Web UI: changed only with the current password (SEC-03). The
+/// trackers added to new downloads (D66) are among them: they make the daemon fetch a file
+/// from the net and announce every public download to the addresses named.
+const SECURITY_FIELDS: [&str; 14] = [
     "webui.username",
     "webui.bypass_local_auth",
     "webui.api_key_enabled",
@@ -1315,6 +1425,10 @@ const SECURITY_FIELDS: [&str; 10] = [
     "webui.max_auth_fail_count",
     "webui.ban_duration",
     "webui.session_timeout",
+    pref_pages::TRACKERS_APPEND,
+    pref_pages::TRACKERS_LIST,
+    pref_pages::TRACKERS_FROM_URL,
+    pref_pages::TRACKERS_URL,
 ];
 
 /// Whether `w` changes the password, the API key or a [`SECURITY_FIELDS`] value.
@@ -1386,6 +1500,14 @@ pub(crate) fn validate(w: &Working) -> Result<(), Refusal> {
     }
     if let Err(entry) = auth::parse_subnets(&w.prefs.auth_subnets) {
         return refuse("webui.bypass_auth_subnets", &tr!(PrefBadSubnet, entry = entry));
+    }
+    // `frontend::pref_pages::check`'s rules (D66): a typed line that is no tracker address
+    // would be dropped silently otherwise, and a list is fetched over https only
+    if w.prefs.trackers_append && tracker_list::parse(&w.prefs.trackers_list).invalid > 0 {
+        return refuse(pref_pages::TRACKERS_LIST, tr!(TrackersErrLine));
+    }
+    if w.prefs.trackers_from_url && !tracker_list::is_list_url(&w.prefs.trackers_url) {
+        return refuse(pref_pages::TRACKERS_URL, tr!(TrackersErrHttps));
     }
     Ok(())
 }
@@ -1499,7 +1621,17 @@ fn commit_read(
     if st.hosted && w.prefs.alt_enabled {
         return Err(("alt_enabled".to_owned(), HOSTED_NO_ALT.to_owned()));
     }
+    // the typed tracker list in its own form (as the preferences file gives it back), so the
+    // same list sent again is no change
+    w.prefs.trackers_list = tracker_list::to_text(&tracker_list::parse(&w.prefs.trackers_list).tiers);
     let old = Working::from_state(st);
+    if st.hosted {
+        // the host's own list (D66): never changed from a browser
+        let changed = TRACKER_FIELDS.iter().find(|id| find(id).is_some_and(|d| d.get(&w) != d.get(&old)));
+        if let Some(id) = changed {
+            return Err(((*id).to_owned(), HOSTED_NO_TRACKERS.to_owned()));
+        }
+    }
     if let Some(session) = from.filter(|_| security_changed(&w, &old)) {
         let given = w.current_password.as_deref();
         if !given.is_some_and(|p| st.password.verify(p)) {
@@ -1596,6 +1728,10 @@ fn commit_read(
         TABLE.iter().filter(|e| e.get(&w.settings) != e.get(&old.settings)).map(|e| e.name).collect();
     store(st, &changed);
     shared.save(st);
+    // the trackers added to new downloads (D66) follow at once: the engine has the new list
+    // before the next torrent is added, and a new address is fetched (hosted: the host's list)
+    shared.configure_trackers(st);
+    shared.trackers_tick(st);
     // the server's texts switch now; the page reloads for its own (`lang.js`); hosted, the
     // host's language is the process's and the host switches it
     if !st.hosted && w.prefs.language != old.prefs.language {
@@ -1879,15 +2015,18 @@ mod tests {
                 "webui",
                 "advanced",
                 "diskcache",
-                "diskio"
+                "diskio",
+                "trackers"
             ]
         );
         let titles: Vec<&str> =
             pages_json.iter().map(|p| p.get("title").and_then(Json::as_str).unwrap()).collect();
         assert_eq!(titles[1], "UI Settings");
         assert_eq!(titles[11], "Disk I/O");
+        assert_eq!(titles[12], "Trackers");
         assert_eq!(pages_json[10].get("under").and_then(Json::as_str), Some("advanced"));
         assert_eq!(pages_json[11].get("under").and_then(Json::as_str), Some("advanced"));
+        assert_eq!(pages_json[12].get("under").and_then(Json::as_str), Some("advanced"));
         assert_eq!(pages_json[9].get("advanced"), Some(&Json::Bool(true)));
         let mut placed = Vec::new();
         fn walk(items: &[Json], placed: &mut Vec<String>) {
@@ -2051,6 +2190,105 @@ mod tests {
         assert_eq!(st.options.get("lt.check_rate_mb"), Some("250"));
         assert_eq!(st.options.get("lt.disk_slow_uploads"), Some("true"));
         assert_eq!(st.options.get("lt.check_gently"), Some("false"));
+    }
+
+    /// Preferences > Advanced > Trackers (D66): the four fields are security fields, checked by
+    /// `frontend::pref_pages::check`'s rules and stored as the frontend's keys; hosted, the page
+    /// is not there and nothing of it is taken (the host's own list).
+    #[test]
+    fn the_trackers_page_is_guarded_and_the_hosts_own_when_hosted() {
+        const A: &str = "udp://a.example:6969/announce";
+        const B: &str = "https://b.example/announce";
+        let has = |hosted: bool| {
+            pages(Path::new("S"), hosted)
+                .iter()
+                .any(|p| p.get("id").and_then(Json::as_str) == Some("trackers"))
+        };
+        assert!(has(false) && !has(true));
+        for id in TRACKER_FIELDS {
+            assert!(SECURITY_FIELDS.contains(&id), "{id}");
+            assert!(matches!(find(id), Some(Def::Own(_))), "{id}");
+        }
+        assert_eq!(find("trackers.list").unwrap().kind().name(), "lines");
+        assert_eq!(find("trackers.list").unwrap().help_key(), Some(H::PrefTrackersAppend));
+        assert_eq!(find("trackers.url").unwrap().help_key(), Some(H::PrefTrackersFromUrl));
+
+        let st = state();
+        let w = Working::from_state(&st);
+        assert!(!w.prefs.trackers_append && !w.prefs.trackers_from_url, "off by default");
+        let bad = |body: &str| edited(&st, body).err().unwrap();
+        let junk =
+            Json::obj().with("trackers.append", true).with("trackers.list", format!("{A}\nws://x.example/"));
+        assert_eq!(bad(&junk.to_json()), ("trackers.list".to_owned(), tr!(TrackersErrLine).to_owned()));
+        for url in ["http://lists.example/t.txt", "lists.example/t.txt", "", "https://"] {
+            let body = Json::obj().with("trackers.from_url", true).with("trackers.url", url).to_json();
+            assert_eq!(bad(&body), ("trackers.url".to_owned(), tr!(TrackersErrHttps).to_owned()), "{url}");
+        }
+        // an address that is not switched on is not checked (nothing fetches it)
+        assert!(edited(&st, r#"{"trackers.url":"http://lists.example/t.txt"}"#).is_ok());
+
+        let dir = std::env::temp_dir().join(format!("nox-prefs-trackers-{}", std::process::id()));
+        let session = rookparcel_core::Session::start_mock(Settings::default(), Default::default());
+        let shared = State::shared_for_tests(session.handle(), dir);
+        *shared.lock() = state();
+        let typed = format!("# a comment\r\n{A}\r\n\r\n\r\n{B}\r\n{A}\r\n");
+        let body = |password: Option<&str>| {
+            let mut j = Json::obj().with("trackers.append", true).with("trackers.list", typed.as_str());
+            if let Some(p) = password {
+                j.set("webui.current_password", p);
+            }
+            parse(&j).unwrap()
+        };
+        let mut st = shared.lock();
+        st.sessions.insert(
+            "s".to_owned(),
+            super::super::ClientSession { last_used: std::time::Instant::now(), maindata: None, peers: None },
+        );
+        // a request: only with the current password (the test state's is "x")
+        let refused = commit(&shared, &mut st, &body(None), Some("s")).unwrap_err();
+        assert_eq!(refused.0, "webui.current_password");
+        assert!(!st.prefs.trackers_append && st.sessions.contains_key("s"));
+        let refused = commit(&shared, &mut st, &body(Some("guess")), Some("s")).unwrap_err();
+        assert_eq!(refused.0, "webui.current_password");
+        assert!(
+            !st.prefs.trackers_append && !st.sessions.contains_key("s"),
+            "a wrong guess ends the session"
+        );
+        commit(&shared, &mut st, &body(Some("x")), Some("s")).unwrap();
+        assert!(st.prefs.trackers_append);
+        assert_eq!(st.prefs.trackers_list, format!("{A}\n\n{B}"), "the list's own form");
+        assert_eq!(st.options.get("trackers.list"), Some(format!("{A} - {B}").as_str()));
+        assert_eq!(st.options.get("trackers.append"), Some("1"));
+        // the same list again, typed differently, is no change: no password is asked
+        let same = parse(&Json::obj().with("trackers.list", format!("{A}\n\n{B}\n"))).unwrap();
+        commit(&shared, &mut st, &same, Some("s")).unwrap();
+        // the daemon's list follows the commit
+        assert_eq!(
+            shared.trackers().unwrap().tiers(),
+            vec![vec![A.to_owned()], vec![B.to_owned()]],
+            "configured at the commit"
+        );
+        // read back at the next start
+        st.prefs = Prefs::defaults("/dl", &Settings::default());
+        read_back(&mut st);
+        assert!(st.prefs.trackers_append);
+        assert_eq!(st.prefs.trackers_list, format!("{A}\n\n{B}"));
+        drop(st);
+        assert_eq!(update_trackers(&shared), Ok(String::new()), "nothing to fetch: no status");
+
+        // hosted: refused whatever the password, and the host's values stay in its options
+        let mut st = shared.lock();
+        st.hosted = true;
+        let off =
+            parse(&Json::obj().with("trackers.append", false).with("webui.current_password", "x")).unwrap();
+        let refused = commit(&shared, &mut st, &off, Some("s")).unwrap_err();
+        assert_eq!(refused, ("trackers.append".to_owned(), HOSTED_NO_TRACKERS.to_owned()));
+        assert!(st.prefs.trackers_append);
+        let mut g = GuiOptions::load(&rookparcel_frontend::prefs::Prefs::default(), "/dl");
+        g.trackers_url = "https://host.example/list".to_owned();
+        st.prefs.apply_to(&mut g);
+        assert!(!g.trackers_append && g.trackers_list.is_empty(), "a host's list is never overwritten");
+        assert_eq!(g.trackers_url, "https://host.example/list");
     }
 
     #[test]

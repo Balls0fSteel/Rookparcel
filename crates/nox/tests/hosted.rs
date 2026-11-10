@@ -780,6 +780,21 @@ fn alternative_limits_are_off_and_shutdown_tells_the_host() {
     let general = pages.iter().find(|p| s(p.get("id")) == "general").unwrap().to_json();
     assert!(!general.contains("update.check") && general.contains("ui.language"), "{general}");
     assert!(!t.web.update_options().0);
+    // the trackers added to new downloads (D66) are the host's own list: no page, no change
+    // even with the password, and no second list to update
+    assert!(!pages.iter().any(|p| s(p.get("id")) == "trackers"));
+    let r = t.pa(
+        &sid,
+        "/pa/prefs",
+        &format!(
+            r#"{{"trackers.append":true,"trackers.list":"udp://127.0.0.1:9/a","webui.current_password":"{PASS}"}}"#
+        ),
+    );
+    assert_eq!(r.status, 400, "{}", r.text());
+    assert!(s(r.json().get("error")).starts_with("trackers.append: "), "{}", r.text());
+    assert_eq!(t.pa(&sid, "/pa/prefs/trackers/update", "{}").status, 409);
+    assert_eq!(s(t.get(&sid, "/pa/prefs/trackers").json().get("status")), "");
+    assert_eq!(s(m.get("trackers_status")), "");
     t.web.set_update(rookparcel_frontend::update::Version::parse("99.0.0").as_ref());
     let (_ws, hello) = Ws::connect(&t, &sid);
     assert!(hello.get("update").is_none(), "{}", hello.to_json());

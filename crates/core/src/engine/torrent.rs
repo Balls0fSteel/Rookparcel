@@ -433,6 +433,23 @@ impl Torrent {
         self.trackers.insert(pos, TrackerEntry::new(urls.intern(url), tier));
     }
 
+    /// Appends the session's extra trackers (D66): each of `tiers` becomes one tier after the
+    /// torrent's last, so the torrent's own trackers are asked first. Repeats of a tracker the
+    /// torrent has and invalid URLs are dropped ([`Torrent::add_tracker`]), and a tier they
+    /// empty takes no number. Never call it for a private torrent.
+    pub fn append_trackers(&mut self, tiers: &[Vec<String>], urls: &mut StrPool) {
+        let mut tier = self.trackers.iter().map(|t| t.tier).max().map_or(0, |last| last.saturating_add(1));
+        for group in tiers {
+            let before = self.trackers.len();
+            for url in group {
+                self.add_tracker(url, tier, urls);
+            }
+            if self.trackers.len() != before {
+                tier = tier.saturating_add(1);
+            }
+        }
+    }
+
     /// After the announce to tracker `index` failed: whether that left a private torrent with
     /// no tracker that answers, which is when the Logger gets a line. A private torrent has no
     /// other source of peers; a public one finds them through the DHT, PEX and local
@@ -863,6 +880,7 @@ impl Torrent {
             disable_dht: self.flags.contains(TorrentFlags::DISABLE_DHT),
             disable_lsd: self.flags.contains(TorrentFlags::DISABLE_LSD),
             disable_pex: self.flags.contains(TorrentFlags::DISABLE_PEX),
+            extra_trackers_pending: self.flags.contains(TorrentFlags::EXTRA_TRACKERS_PENDING),
             file_priority: self.file_priority.clone(),
             wanted_pieces: match &self.ti {
                 Some(ti) => wanted_mask(ti, &self.file_priority),

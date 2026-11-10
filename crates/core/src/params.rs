@@ -29,6 +29,13 @@ bit_flags! {
         const NO_VERIFY_FILES = 22;
         /// New files default to "don't download" (for add-dialog style selection).
         const DEFAULT_DONT_DOWNLOAD = 23;
+        /// Not libtorrent's. On an add: leave out the session's extra trackers
+        /// (`SessionHandle::set_extra_trackers`, D66), for a torrent that is not a new download
+        /// (an import from another client, a torrent just created). Never kept on the torrent.
+        const NO_EXTRA_TRACKERS = 28;
+        /// Not libtorrent's. A magnet whose metadata is not in yet: the session's extra
+        /// trackers are added when it is, unless the torrent turns out to be private.
+        const EXTRA_TRACKERS_PENDING = 29;
     }
 }
 

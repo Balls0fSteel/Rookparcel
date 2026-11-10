@@ -13,8 +13,16 @@
 
 use std::collections::HashMap;
 
-use super::{Field, Page, check, fields};
+use super::{Field, Page, TRACKERS_LIST, check, fields};
 use crate::options::Options;
+
+/// The message for a typed tracker list (`trackers.list`) holding a line that is no tracker
+/// address, while its box (`append`) is on. `Field::apply` tidies the list, which drops such a
+/// line before [`check`] could see it: a toolkit that moves the box's text through
+/// `Field::apply` asks this first, so the line is not lost without a word.
+pub fn bad_tracker_lines(append: bool, text: &str) -> Option<String> {
+    (append && crate::tracker_list::parse(text).invalid > 0).then(|| crate::tr!(TrackersErrLine).to_owned())
+}
 
 /// What one commit asks of the window.
 #[derive(Debug, Default)]
@@ -80,7 +88,11 @@ impl Live {
                 continue;
             }
             let mut candidate = new.clone();
-            match f.apply(&mut candidate, &value) {
+            // (its box comes before it on the page: `new` has the box as it is now)
+            let refused = (f.key == TRACKERS_LIST)
+                .then(|| bad_tracker_lines(new.gui.trackers_append, &value))
+                .flatten();
+            match refused.map_or_else(|| f.apply(&mut candidate, &value), Err) {
                 Err(message) => {
                     errors.push((f.key, message));
                     bad.push(f.key);
@@ -222,6 +234,33 @@ mod tests {
         assert_eq!(o.settings.proxy_type, rookparcel_core::ProxyType::Socks5);
         assert_eq!(o.settings.proxy_hostname, "proxy.lan");
         assert!(c.errors.is_empty() && live.pending().is_empty());
+    }
+
+    #[test]
+    fn a_typed_tracker_list_with_a_bad_line_waits() {
+        use crate::pref_pages::{TRACKERS_APPEND, TRACKERS_LIST};
+        let pages = all();
+        let applied = Options::load(&Prefs::default(), "/dl");
+        let mut live = Live::default();
+        live.write(&pages, &applied);
+        let good = "udp://a.example:6969/announce";
+        let typed = format!("{good}\nnot a tracker\n");
+        // the box on and a line that is no tracker: the box applies, the list waits
+        let edits = [(TRACKERS_APPEND, "true"), (TRACKERS_LIST, typed.as_str())];
+        let c = live.commit(&pages, &applied, TRACKERS_APPEND, controls(&live, &edits[..1]));
+        let applied = c.options.expect("the box applies");
+        live.write(&pages, &applied);
+        let c = live.commit(&pages, &applied, TRACKERS_LIST, controls(&live, &edits));
+        assert!(c.options.is_none());
+        assert_eq!(c.errors, [(TRACKERS_LIST, crate::tr!(TrackersErrLine).to_owned())]);
+        assert_eq!(live.pending(), [TRACKERS_LIST]);
+        // the line fixed: the list applies, tidied
+        let fixed = format!("{good}\n\n{good}\n");
+        let edits = [(TRACKERS_APPEND, "true"), (TRACKERS_LIST, fixed.as_str())];
+        let c = live.commit(&pages, &applied, TRACKERS_LIST, controls(&live, &edits));
+        assert_eq!(c.options.expect("the list applies").gui.trackers_list, good);
+        assert!(c.errors.is_empty() && live.pending().is_empty());
+        assert_eq!(bad_tracker_lines(false, &typed), None);
     }
 
     #[test]

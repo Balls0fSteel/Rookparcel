@@ -1091,6 +1091,10 @@ fn preferences(st: &State, shared: &Shared) -> Json {
                 .collect::<Vec<_>>()
                 .join("\n"),
         )
+        // the trackers added to new downloads (D66), read-only: setPreferences takes none of
+        // them, the list is changed on the native page with the current password only
+        .with("add_trackers_enabled", p.trackers_append)
+        .with("add_trackers", p.trackers_list.as_str())
         .with("web_ui_csrf_protection_enabled", p.csrf_protection)
         .with("web_ui_host_header_validation_enabled", p.host_header_validation)
         .with("web_ui_domain_list", p.domain_list.as_str())
@@ -1168,6 +1172,8 @@ pub(crate) fn apply_preferences(shared: &Shared, st: &mut State, v: &Json, keep:
             "web_ui_max_auth_fail_count" => one("webui.max_auth_fail_count", clamp(val, 0, 1000)),
             "web_ui_ban_duration" => one("webui.ban_duration", clamp(val, 1, 86_400 * 365)),
             "web_ui_session_timeout" => one("webui.session_timeout", clamp(val, 1, 86_400 * 365)),
+            // never here: `add_trackers`, `add_trackers_enabled` and anything else of the
+            // trackers added to new downloads (D66) are read-only in the shim
             _ => Vec::new(),
         };
         for (id, j) in mapped {

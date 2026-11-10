@@ -22,10 +22,10 @@ use gtk::{gio, glib};
 use rookparcel_frontend::help;
 use rookparcel_frontend::icons::page_icon;
 use rookparcel_frontend::lang::{self, H, S, gtk_mnemonic};
-use rookparcel_frontend::options::{self, Options};
+use rookparcel_frontend::options::{self, GuiOptions, Options};
 use rookparcel_frontend::pref_pages::{
-    self, Action, Control, Features, Field, Form, Item, Page, SCHED_ENABLE, TextKind, advanced_name,
-    advanced_rows,
+    self, Action, Control, Features, Field, Form, Item, Page, SCHED_ENABLE, TRACKERS_APPEND,
+    TRACKERS_FROM_URL, TRACKERS_LIST, TRACKERS_URL, TextKind, advanced_name, advanced_rows,
 };
 use rookparcel_frontend::scheduler::{CELLS, Mode};
 use rookparcel_frontend::settings::{Entry, Kind, Value};
@@ -43,6 +43,11 @@ pub struct Hooks {
     pub apply: Box<dyn Fn(&Options)>,
     /// "Reload" on the BitTorrent page: load this block list; the number of rules or an error.
     pub reload_ip_filter: ReloadIpFilter,
+    /// "Update Now" on the Trackers page: store these options' tracker settings (the four
+    /// `trackers_*` values, nothing else of them), put them into effect and fetch the list.
+    pub update_tracker_list: Box<dyn Fn(&GuiOptions)>,
+    /// The Trackers page's status line for the list from the web (`TrackerList::status`).
+    pub tracker_status: Box<dyn Fn() -> String>,
     /// Where `ipfilter.dat` is looked for when no path is set.
     pub settings_dir: PathBuf,
     /// A tray is on screen: UI Settings shows the tray and notification boxes.
@@ -53,6 +58,8 @@ pub struct Hooks {
 pub(crate) enum Ctl {
     Check(gtk::CheckButton),
     Entry(gtk::Entry),
+    /// A multi-line box (`TextKind::Lines`) and the scrolled window around it.
+    Lines(gtk::TextView, gtk::ScrolledWindow),
     /// The drop-down and its choices' values.
     Choice(gtk::DropDown, Vec<String>),
 }
@@ -62,6 +69,10 @@ impl Ctl {
         match self {
             Ctl::Check(c) => c.is_active().to_string(),
             Ctl::Entry(e) => e.text().to_string(),
+            Ctl::Lines(t, _) => {
+                let b = t.buffer();
+                b.text(&b.start_iter(), &b.end_iter(), false).to_string()
+            }
             Ctl::Choice(d, values) => values.get(d.selected() as usize).cloned().unwrap_or_default(),
         }
     }
@@ -70,17 +81,33 @@ impl Ctl {
         match self {
             Ctl::Check(c) => c.set_active(value == "true"),
             Ctl::Entry(e) => e.set_text(value),
+            // (written only when it differs: the cursor and the scroll position stay)
+            Ctl::Lines(t, _) => {
+                if self.value() != value {
+                    t.buffer().set_text(value);
+                }
+            }
             Ctl::Choice(d, values) => {
                 d.set_selected(values.iter().position(|v| v == value).unwrap_or(0) as u32)
             }
         }
     }
 
+    /// The widget a page lays out (a multi-line box's scrolled window).
     pub(crate) fn widget(&self) -> gtk::Widget {
         match self {
             Ctl::Check(c) => c.clone().upcast(),
             Ctl::Entry(e) => e.clone().upcast(),
+            Ctl::Lines(_, s) => s.clone().upcast(),
             Ctl::Choice(d, _) => d.clone().upcast(),
+        }
+    }
+
+    /// The widget that takes the focus.
+    pub(crate) fn focus_widget(&self) -> gtk::Widget {
+        match self {
+            Ctl::Lines(t, _) => t.clone().upcast(),
+            other => other.widget(),
         }
     }
 }
@@ -110,6 +137,8 @@ struct Dialog {
     /// The page on screen, to go back to when the pages cannot be read.
     page: RefCell<String>,
     ip_status: Option<gtk::Label>,
+    /// The Trackers page's status line for the list from the web.
+    tracker_status: Option<gtk::Label>,
     advanced: Option<Advanced>,
     /// The Scheduler page's table and what it showed when written, so an untouched table keeps
     /// the stored one.
@@ -264,7 +293,9 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
     ));
     window.add_controller(keys);
 
-    let Builder { controls, needs, ip_status, advanced, sched, browse, actions, helps, .. } = b;
+    let Builder {
+        controls, needs, ip_status, tracker_status, advanced, sched, browse, actions, helps, ..
+    } = b;
     let d = Rc::new(Dialog {
         page: RefCell::new(pages.first().map(|p| p.key.to_owned()).unwrap_or_default()),
         pages,
@@ -274,6 +305,7 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
         needs,
         stack: stack.clone(),
         ip_status,
+        tracker_status,
         advanced,
         sched,
         sched_shown: RefCell::new([Mode::Full; CELLS]),
@@ -357,7 +389,7 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
             Ctl::Choice(dd, _) => {
                 dd.connect_selected_notify(move |_| update());
             }
-            Ctl::Entry(_) => {}
+            Ctl::Entry(_) | Ctl::Lines(..) => {}
         }
     }
     // "..." beside folders and files
@@ -462,6 +494,19 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
 
     d.write_controls();
     d.update_ip_status(None);
+    d.update_tracker_status();
+    if d.tracker_status.is_some() {
+        // the list is fetched on its own time: the line follows while its page is on screen,
+        // until the dialog is gone
+        let w = Rc::downgrade(&d);
+        glib::timeout_add_seconds_local(1, move || {
+            let Some(d) = w.upgrade() else { return glib::ControlFlow::Break };
+            if d.tracker_status.as_ref().is_some_and(|l| l.is_mapped()) {
+                d.update_tracker_status();
+            }
+            glib::ControlFlow::Continue
+        });
+    }
     window.present();
 }
 
@@ -554,13 +599,41 @@ impl Dialog {
         }
     }
 
+    /// The value the control of the field `key` holds now.
+    fn value(&self, key: &str) -> String {
+        self.controls.get(key).map(Ctl::value).unwrap_or_default()
+    }
+
+    /// The typed tracker list's message when a line of it is no tracker address: reading the
+    /// box tidies the list, which would drop such a line without a word.
+    fn bad_tracker_lines(&self) -> Option<(&'static str, String)> {
+        let append = self.value(TRACKERS_APPEND) == "true";
+        pref_pages::live::bad_tracker_lines(append, &self.value(TRACKERS_LIST)).map(|m| (TRACKERS_LIST, m))
+    }
+
+    /// Shows the page of the field `key`, says what is wrong with it and focuses its control.
+    fn complain(&self, key: &str, message: String) {
+        if let Some(page) = pref_pages::page_of(&self.pages, key) {
+            *self.page.borrow_mut() = page.key.to_owned();
+            self.stack.set_visible_child_name(page.key);
+        }
+        let parent = self.stack.root().and_downcast::<gtk::Window>();
+        gtk::AlertDialog::builder().message(message).modal(true).build().show(parent.as_ref());
+        if let Some(c) = self.controls.get(key) {
+            c.focus_widget().grab_focus();
+        }
+    }
+
     /// Reads the changed controls into the working options; on a bad value shows its page,
     /// says what is wrong and focuses the control.
     fn read_or_complain(&self) -> bool {
-        let read = {
-            let form = self.form.borrow();
-            let opts = self.opts.borrow();
-            form.read(&self.pages, &opts, |k| self.controls.get(k).map(Ctl::value).unwrap_or_default())
+        let read = match self.bad_tracker_lines() {
+            Some(bad) => Err(bad),
+            None => {
+                let form = self.form.borrow();
+                let opts = self.opts.borrow();
+                form.read(&self.pages, &opts, |k| self.value(k))
+            }
         };
         match read {
             Ok(mut o) => {
@@ -574,15 +647,7 @@ impl Dialog {
                 true
             }
             Err((key, message)) => {
-                if let Some(page) = pref_pages::page_of(&self.pages, key) {
-                    *self.page.borrow_mut() = page.key.to_owned();
-                    self.stack.set_visible_child_name(page.key);
-                }
-                let parent = self.stack.root().and_downcast::<gtk::Window>();
-                gtk::AlertDialog::builder().message(message).modal(true).build().show(parent.as_ref());
-                if let Some(c) = self.controls.get(key) {
-                    c.widget().grab_focus();
-                }
+                self.complain(key, message);
                 false
             }
         }
@@ -605,6 +670,7 @@ impl Dialog {
         }
         self.write_controls();
         self.fill_advanced(self.selected_row());
+        self.update_tracker_status();
         true
     }
 
@@ -629,6 +695,57 @@ impl Dialog {
                     (self.hooks.reload_ip_filter)(&file).map_err(|e| format!("{}: {e}", file.display()));
                 self.update_ip_status(Some(result));
             }
+            Action::UpdateTrackerList => self.update_tracker_list(),
+        }
+    }
+
+    /// Trackers > Update Now: the page's four values are stored and put into effect (as Apply
+    /// does, for them alone: a list is fetched from the address the page shows, not from the
+    /// one stored before), then the list is fetched. The status line and the Logger say how
+    /// it went.
+    fn update_tracker_list(&self) {
+        if let Some((key, message)) = self.bad_tracker_lines() {
+            self.complain(key, message);
+            return;
+        }
+        const KEYS: [&str; 4] = [TRACKERS_APPEND, TRACKERS_LIST, TRACKERS_FROM_URL, TRACKERS_URL];
+        let mut o = self.opts.borrow().clone();
+        for f in pref_pages::fields(&self.pages).filter(|f| KEYS.contains(&f.key)) {
+            if let Err(message) = f.apply(&mut o, &self.value(f.key)) {
+                self.complain(f.key, message);
+                return;
+            }
+        }
+        // what `pref_pages::check` asks of them (the other pages may be half filled in)
+        if o.gui.trackers_from_url && !rookparcel_frontend::tracker_list::is_list_url(&o.gui.trackers_url) {
+            self.complain(TRACKERS_URL, tr!(TrackersErrHttps).to_owned());
+            return;
+        }
+        (self.hooks.update_tracker_list)(&o.gui);
+        // they are stored now: the working copy and the controls have them as applied
+        {
+            let mut opts = self.opts.borrow_mut();
+            opts.gui.trackers_append = o.gui.trackers_append;
+            opts.gui.trackers_list = o.gui.trackers_list;
+            opts.gui.trackers_from_url = o.gui.trackers_from_url;
+            opts.gui.trackers_url = o.gui.trackers_url;
+        }
+        // (the other controls keep what was typed into them: they still differ from the
+        // working copy, so Apply reads them)
+        let values = self.form.borrow_mut().write(&self.pages, &self.opts.borrow());
+        for (key, value) in values.iter().filter(|(k, _)| KEYS.contains(k)) {
+            if let Some(c) = self.controls.get(key) {
+                c.set(value);
+            }
+        }
+        self.update_tracker_status();
+    }
+
+    fn update_tracker_status(&self) {
+        let Some(label) = &self.tracker_status else { return };
+        let text = (self.hooks.tracker_status)();
+        if label.text() != text {
+            label.set_text(&text);
         }
     }
 
@@ -769,6 +886,7 @@ pub(crate) struct Builder {
     pub(crate) controls: HashMap<&'static str, Ctl>,
     pub(crate) needs: Vec<(gtk::Widget, &'static [&'static str])>,
     ip_status: Option<gtk::Label>,
+    tracker_status: Option<gtk::Label>,
     advanced: Option<Advanced>,
     sched: Option<SchedGrid>,
     /// "..." buttons: the button, its field and the picker.
@@ -832,6 +950,13 @@ impl Builder {
                     target.append(&l);
                     self.ip_status = Some(l);
                 }
+                Item::TrackerListStatus => {
+                    let l = gtk::Label::new(None);
+                    l.set_xalign(0.0);
+                    l.set_wrap(true);
+                    target.append(&l);
+                    self.tracker_status = Some(l);
+                }
                 Item::AdvancedTable => {
                     let (widget, advanced) = advanced_page();
                     // the table's own help is its selected row's (Dialog::help_for)
@@ -877,6 +1002,22 @@ impl Builder {
                 let c = gtk::CheckButton::with_mnemonic(&gtk_mnemonic(f.label.map_or("", lang::text)));
                 c.set_hexpand(true);
                 (Ctl::Check(c.clone()), c.upcast())
+            }
+            Control::Text { kind: TextKind::Lines, .. } => {
+                // a list to type or paste, as Properties' tracker box: about six lines
+                let t = gtk::TextView::new();
+                t.set_wrap_mode(gtk::WrapMode::None);
+                t.set_accepts_tab(false);
+                t.set_left_margin(4);
+                t.set_right_margin(4);
+                let line = t.create_pango_layout(Some("Ag")).pixel_size().1.max(1);
+                let scroll = gtk::ScrolledWindow::builder()
+                    .child(&t)
+                    .min_content_height(line * 6 + 8)
+                    .hexpand(true)
+                    .has_frame(true)
+                    .build();
+                (Ctl::Lines(t, scroll.clone()), scroll.upcast())
             }
             Control::Number { .. } | Control::Text { .. } => {
                 let e = gtk::Entry::new();

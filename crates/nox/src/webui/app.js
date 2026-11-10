@@ -4387,7 +4387,18 @@
       b.type = "button";
       b.textContent = it.button;
       b.dataset.action = it.action;
+      if (it.help) b.title = it.help;
+      if (it.enabled_by) b.dataset.enabledBy = it.enabled_by;
       return b;
+    }
+    if (it.status === "trackers") {
+      // the fetched tracker list's status line (D66), refreshed after Update Now
+      const p = document.createElement("p");
+      p.className = "pf-note";
+      p.dataset.status = it.status;
+      p.setAttribute("aria-live", "polite");
+      p.textContent = prefsModel.trackers_status || "";
+      return p;
     }
     if (it.local === "theme") {
       // the browser's own theme (D63): kept here, applied at once, never sent
@@ -4484,6 +4495,19 @@
         }
         if (f.readonly) inp.readOnly = true;
       }
+      if (f.type === "lines") {
+        // several lines (the typed tracker list): one address per line, never wrapped
+        inp = document.createElement("textarea");
+        inp.rows = 6;
+        inp.wrap = "off";
+        inp.spellcheck = false;
+        inp.autocomplete = "off";
+        inp.value = v;
+        l.classList.add("lines");
+        // named by the check box that switches it on
+        const by = it.enabled_by ? prefField(it.enabled_by.split(" ")[0]) : null;
+        if (!f.label) inp.setAttribute("aria-label", (by && by.label) || it.f);
+      }
       l.appendChild(inp);
     }
     inp.dataset.id = it.f;
@@ -4520,7 +4544,8 @@
   function updateEnabled(root) {
     for (const l of root.querySelectorAll("[data-enabled-by]")) {
       const on = l.dataset.enabledBy.split(" ").every((id) => !!prefValue(id));
-      for (const c of l.querySelectorAll("input,select,button")) c.disabled = !on;
+      for (const c of l.querySelectorAll("input,select,button,textarea")) c.disabled = !on;
+      if (l.tagName === "BUTTON") l.disabled = !on;
       l.classList.toggle("disabled", !on);
     }
   }
@@ -4692,8 +4717,43 @@
       if (!inp) return;
       inp.value = 10000 + Math.floor(Math.random() * 50001);
       inp.dispatchEvent(new Event("input", { bubbles: true }));
+    } else if (b.dataset.action === "update_trackers") {
+      updateTrackers();
     }
   });
+
+  // Advanced > Trackers (D66): Update Now applies the dialog first (the address is only ever the
+  // saved one: the command itself carries nothing), then the status line follows the fetch.
+  let trackersPoll = 0;
+  function showTrackersStatus(text) {
+    prefsModel.trackers_status = text;
+    const el = $("prefs-page").querySelector('[data-status="trackers"]');
+    if (el) el.textContent = text;
+  }
+  async function updateTrackers() {
+    if (!(await applyPrefs(false))) return; // the error shows at its field
+    let r;
+    try {
+      r = await pa("prefs/trackers/update", {});
+    } catch (e) {
+      setPrefsMsg(e.msg || T("WebPrefsNotApplied"), true);
+      return;
+    }
+    showTrackersStatus(r.status);
+    // the fetch runs on the server; its answer shows here within a few seconds
+    const poll = ++trackersPoll;
+    for (let i = 0; i < 10; i++) {
+      await new Promise((ok) => setTimeout(ok, i < 4 ? 1500 : 4000));
+      if (poll !== trackersPoll || !prefsDlg.open || !prefsModel) return;
+      try {
+        r = await pa("prefs/trackers");
+      } catch (e) {
+        return;
+      }
+      if (poll !== trackersPoll || !prefsDlg.open) return;
+      showTrackersStatus(r.status);
+    }
+  }
 
   // the Advanced page: the full settings table, a filter, a value editor, Set / Reset
   function renderAdvanced(el) {
@@ -4884,11 +4944,12 @@
     }
     return null;
   }
+  /// Sends the edits; resolves to whether everything is saved now (false: an error shows).
   async function applyPrefs(close) {
     const bad = validatePrefs();
     if (bad) {
       showPrefError(bad[0], bad[1]);
-      return;
+      return false;
     }
     if (prefsEdits.size) {
       try {
@@ -4898,19 +4959,19 @@
         const m = /^([^\s:]+): ([\s\S]*)$/.exec(e.msg || "");
         if (m && prefField(m[1])) showPrefError(m[1], e.msg);
         else setPrefsMsg(e.msg || T("WebPrefsNotApplied"), true);
-        return;
+        return false;
       }
       if (prefsEdits.has("ui.confirm_delete")) confirmDelete = !!prefsEdits.get("ui.confirm_delete");
       if (prefsEdits.has("webui.theme")) setServerTheme(prefsEdits.get("webui.theme"));
       // a new language: the server's texts follow at once, the page's with a reload (lang.js)
       if (prefsEdits.has("ui.language")) {
         location.reload();
-        return;
+        return false;
       }
       prefsEdits = new Map();
       if (close) {
         closePrefs();
-        return;
+        return true;
       }
       // the composites (the port in listen_interfaces, the proxy type) read back exactly
       try {
@@ -4920,9 +4981,10 @@
       }
       showPrefsPage(prefsPageId);
       setPrefsMsg(T("WebApplied"));
-      return;
+      return true;
     }
     if (close) closePrefs();
+    return true;
   }
   $("prefs-form").addEventListener("submit", (ev) => {
     ev.preventDefault();

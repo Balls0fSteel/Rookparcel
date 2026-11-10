@@ -1,5 +1,5 @@
 //! The 1 s timer (GTK `build`'s timer body): status requests, the scheduler, seeding goals,
-//! auto-load, RSS, Auto Shutdown and the update check.
+//! auto-load, RSS, the tracker list, Auto Shutdown and the update check.
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -26,6 +26,7 @@ impl Core {
         self.run_scheduler(None);
         self.autoload(now);
         self.rss_timer();
+        self.tracker_list_timer();
         let list = &self.list;
         let step = self.auto_shutdown.check(list.ids().filter_map(|id| list.get(id)), now);
         if self.updates.due(now) {

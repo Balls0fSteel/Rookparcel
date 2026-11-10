@@ -282,7 +282,8 @@ pub fn seed_save_path(source: &Path) -> std::io::Result<PathBuf> {
 /// download folder, queued and auto-managed. The engine checks the files and then seeds.
 pub fn seed_params(bytes: Vec<u8>, save_path: &Path) -> AddTorrentParams {
     let mut p = AddTorrentParams::new(TorrentSource::TorrentFile(bytes), save_path.to_string_lossy());
-    p.flags = TorrentFlags::DEFAULT;
+    // the creator chose its trackers: the session's extra ones are for downloads (D66)
+    p.flags = TorrentFlags::DEFAULT | TorrentFlags::NO_EXTRA_TRACKERS;
     p
 }
 

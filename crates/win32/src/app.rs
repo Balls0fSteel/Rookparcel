@@ -44,6 +44,7 @@ use rookparcel_frontend::seeding::{GoalAction, SeedGoal, SeedingGoal};
 use rookparcel_frontend::setup_guide;
 use rookparcel_frontend::status::{self, Category, status_icon};
 use rookparcel_frontend::torrent_folders::{self, TorrentFiles, TorrentFolders, Watcher};
+use rookparcel_frontend::tracker_list::{self, TrackerList};
 use rookparcel_frontend::update::{self, Checker, Kind, Manifest, Version};
 use rookparcel_frontend::{actions, add, create, fmt, profile, settings, tr};
 use rookparcel_nox::webui::{Rss, WebUi};
@@ -497,6 +498,10 @@ struct App {
     /// The periodic scrape that gives stopped and queued torrents their swarm counts (run from
     /// the timer).
     scrapes: Scrapes,
+    /// Preferences > Advanced > Trackers (D66): the trackers every new download gets, typed and
+    /// fetched from the web (run from the timer, which hands the engine each new list). `None`
+    /// in a remote window, whose server has its own, and in a demo, which fetches nothing.
+    trackers: Option<TrackerList>,
     /// The RSS Downloader (`rss.dat` beside `rookparcel.ini`) with its fetches and whether it
     /// changed since it was saved (`Rss::dirty`), shared with the Web UI this window serves
     /// (`Hosted::rss`: one model, edited from both sides; see [`rss_lock`]), and its dialog
@@ -875,6 +880,12 @@ pub fn run(args: Args) -> i32 {
             a.listen.set_configured(settings::listen_port(&opts.settings));
             // a demo has no store, a remote session restored long ago
             a.restoring_torrents = local;
+            if local {
+                // the engine has the list before the first torrent is added below (D66)
+                let cache = dir.join(tracker_list::CACHE_FILE);
+                a.trackers = Some(TrackerList::new(Some(cache), tracker_list::Config::of(&opts.gui)));
+                tracker_list_timer(a);
+            }
         });
         for p in lang_problems {
             log_line(&p);
@@ -1419,6 +1430,7 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
             autoload: Watcher::new(),
             seeding_goal,
             scrapes: Scrapes::default(),
+            trackers: None,
             rss,
             rss_dialog: null_mut(),
             feed_tree: Vec::new(),
@@ -2363,6 +2375,7 @@ fn on_timer() {
         }
         autoload(a);
         rss_timer(a);
+        tracker_list_timer(a);
         sync_web(a);
         let list = &a.list;
         let now = std::time::Instant::now();
@@ -4771,10 +4784,27 @@ unsafe fn show_preferences_at(hwnd: HWND, page: usize) {
             })
             .unwrap_or_default()
         }),
+        // Update Now fetches with the page's fields as they stand; the timer takes the answer
+        tracker_list: Box::new(|fields: Option<&tracker_list::Config>| {
+            with_app(|a| {
+                let Some(t) = a.trackers.as_mut() else { return String::new() };
+                if let Some(c) = fields {
+                    t.configure(c.clone());
+                    t.refresh_now();
+                }
+                t.status()
+            })
+            .unwrap_or_default()
+        }),
     };
     if crate::preferences::show_at(hwnd, opts, &dir, hooks, page) {
         unsafe { update_menu(hwnd) };
     }
+    // what Update Now tried without OK or Apply ends with the dialog: the stored fields again
+    with_app(|a| {
+        let gui = GuiOptions::load(&a.prefs, &a.save_path);
+        configure_tracker_list(a, &gui);
+    });
 }
 
 /// The Setup Guide's options (D53): as stored, with the associations and autostart as the
@@ -4892,6 +4922,7 @@ fn apply_options_from(a: &mut App, old: &Options, o: &Options) {
     }
     a.schedule = o.gui.schedule.clone();
     run_scheduler(a, Some(o));
+    configure_tracker_list(a, &o.gui);
     o.gui.update_move_completed(&mut a.move_completed);
     a.seeding_goal = o.gui.seeding_goal();
     a.torrent_folders = o.gui.torrent_folders.clone();
@@ -6090,6 +6121,30 @@ unsafe fn text_width(hwnd: HWND, text: &str) -> i32 {
 pub(crate) fn open_url(hwnd: HWND, url: &str) {
     let u = wide(url);
     unsafe { ShellExecuteW(hwnd, w!("open"), u.as_ptr(), null(), null(), SW_SHOWNORMAL) };
+}
+
+/// The trackers for new downloads follow the preferences (D66); the engine has the new list at
+/// once, a changed address is fetched by the timer.
+fn configure_tracker_list(a: &mut App, gui: &GuiOptions) {
+    if let Some(t) = a.trackers.as_mut() {
+        t.configure(tracker_list::Config::of(gui));
+        tracker_list_timer(a);
+    }
+}
+
+/// Once a second: takes a finished fetch of the tracker list and starts one that is due (on
+/// the list's own thread, through the proxy the feeds use), and hands the engine the list when
+/// it changed. Nothing in a remote window or a demo (`App::trackers`).
+fn tracker_list_timer(a: &mut App) {
+    let Some(t) = a.trackers.as_mut() else { return };
+    let (prefs, save_path) = (&a.prefs, &a.save_path);
+    let lines = t.tick(|| FetchProxy::from_settings(&Options::load(prefs, save_path).settings));
+    if let Some(tiers) = t.take_tiers() {
+        a.handle.set_extra_trackers(tiers);
+    }
+    for line in lines {
+        a.detail.push_log(format!("{} {line}", now_hms()));
+    }
 }
 
 /// Once a second: the refreshes that are due, and `rss.dat` when it changed.

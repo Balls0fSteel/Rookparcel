@@ -809,6 +809,26 @@ fn run(mut o: Opts, mode: Mode) -> ExitCode {
     let save =
         std::fs::canonicalize(&o.save).map(|p| p.to_string_lossy().into_owned()).unwrap_or(o.save.clone());
     let save = save.strip_prefix(r"\\?\").map(str::to_owned).unwrap_or(save);
+    // the Web UI before the command line's torrents: its stored preferences give the engine the
+    // trackers added to new downloads (D66) before anything is added
+    let move_dir = o
+        .move_on_complete
+        .as_ref()
+        .map(|d| std::path::absolute(d).map_or(d.clone(), |p| p.to_string_lossy().into_owned()));
+    let web = match o.webui.map(|addr| start_webui(&o, addr, &h, settings, &dirs, &save, &move_dir)) {
+        Some(Err(e)) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            let port = o.webui.map_or(0, |a| a.port());
+            eprintln!(
+                "error: cannot start the Web UI: port {port} is in use, perhaps by another Rookparcel profile"
+            );
+            return ExitCode::FAILURE;
+        }
+        Some(Err(e)) => {
+            eprintln!("error: cannot start the Web UI: {e}");
+            return ExitCode::FAILURE;
+        }
+        w => w.and_then(Result::ok),
+    };
     let mut pending = 0usize;
     for src in &o.sources {
         let source = if src.starts_with("magnet:") {
@@ -835,24 +855,6 @@ fn run(mut o: Opts, mode: Mode) -> ExitCode {
     if mode == Mode::Add && pending == 0 {
         return ExitCode::FAILURE;
     }
-    let move_dir = o
-        .move_on_complete
-        .as_ref()
-        .map(|d| std::path::absolute(d).map_or(d.clone(), |p| p.to_string_lossy().into_owned()));
-    let web = match o.webui.map(|addr| start_webui(&o, addr, &h, settings, &dirs, &save, &move_dir)) {
-        Some(Err(e)) if e.kind() == std::io::ErrorKind::AddrInUse => {
-            let port = o.webui.map_or(0, |a| a.port());
-            eprintln!(
-                "error: cannot start the Web UI: port {port} is in use, perhaps by another Rookparcel profile"
-            );
-            return ExitCode::FAILURE;
-        }
-        Some(Err(e)) => {
-            eprintln!("error: cannot start the Web UI: {e}");
-            return ExitCode::FAILURE;
-        }
-        w => w.and_then(Result::ok),
-    };
     if let Some(client) = o.import {
         if mode != Mode::Run {
             eprintln!("error: --import is an option of run");

@@ -477,6 +477,17 @@ protection, the ban settings and the session timeout change only with the curren
 wrong current password ends the session that sent it. A failed login is counted before the
 password is hashed, so parallel guesses stop at the ban limit.
 
+Trackers for new downloads (D66, Preferences > Advanced > Trackers): `trackers.append`,
+`trackers.list` (a `lines` field, a text area), `trackers.from_url` and `trackers.url` are
+security fields too, because they make the server fetch an address and announce to trackers
+of someone's choosing; the address must be `https://`, and what it returns is only ever parsed
+as tracker addresses (`frontend::tracker_list`). `POST /pa/prefs/trackers/update` fetches the
+saved address now (never one from the request), `GET /pa/prefs/trackers` answers
+`{"status"}`, the page's status line, which `GET /pa/prefs` carries as `trackers_status`. The
+shim's `app/preferences` shows `add_trackers_enabled` and `add_trackers`; `setPreferences`
+ignores them. A Web UI hosted by a desktop program leaves the page out: the program owns the
+list.
+
 Search sources (D41; owner may revisit): adding a source, or changing a source's URL or API
 key, needs the current password too (`password` in `/pa/search/source-add` and
 `source-edit`; a wrong one ends the session, as above). So does the search helper's download

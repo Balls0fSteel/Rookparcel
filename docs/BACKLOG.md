@@ -1081,6 +1081,19 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   at 150/200 %, in a right-to-left language and through a live theme switch; a long translation
   in each; the Web UI dialog in the nine themes and right-to-left; a real download and upload
   with the window open; an upgrade of a real profile (the totals start from the torrents' sums).
+- **Trackers for new downloads (1.2.40), hand checks:** a real https list (for example a
+  public tracker list on GitHub) through each client: Update Now, the status line, the Logger
+  line, the trackers on the next public torrent, none on a private one; the same list replaced
+  by a web page (refused, the old list stays); the GTK and Mac pages (never run; on the Mac the
+  box applies when the focus leaves it, and a click on a check box does not take the focus);
+  the Win32 page at 150/200 % and Enter in the box; nox restarted (the cache is read, nothing
+  fetched for a day); a Web UI hosted by a GUI (no page).
+- **Trackers, not built:** the fetched list is not shown on the page (only its count and
+  time); a magnet gets the trackers only after its metadata, so they do not help to find it;
+  nox without `--webui` has no list; a remote GUI's page stores local values that do nothing
+  and does not say so; no test covers a magnet that turns out private (this engine's seeds do
+  not serve a private torrent's metadata); qBittorrent's `add_trackers_from_url_enabled` /
+  `add_trackers_url` API names are not exposed (unconfirmed).
 - **Statistics, ideas not built:** a reset; all-time waste; the read queue (`disk_read_queue`
   is never filled); a Close button in the Mac window (it closes by the title bar or Cmd+W).
 

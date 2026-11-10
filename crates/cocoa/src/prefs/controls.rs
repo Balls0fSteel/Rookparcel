@@ -7,13 +7,17 @@
 
 use std::collections::HashMap;
 
+use std::ptr::NonNull;
+
+use block2::RcBlock;
 use objc2::rc::Retained;
+use objc2::runtime::{NSObjectProtocol, ProtocolObject};
 use objc2::{MainThreadMarker, Message};
 use objc2_app_kit::{
     NSCellImagePosition, NSControl, NSFont, NSGridCellPlacement, NSGridRowAlignment, NSLayoutConstraint,
-    NSScrollView, NSStackView, NSTextAlignment, NSTextField, NSView,
+    NSScrollView, NSStackView, NSTextAlignment, NSTextDidEndEditingNotification, NSTextField, NSView,
 };
-use objc2_foundation::{NSPoint, NSRange, NSRect, NSSize};
+use objc2_foundation::{NSNotification, NSNotificationCenter, NSPoint, NSRange, NSRect, NSSize};
 use rookparcel_frontend::lang::{self, H};
 use rookparcel_frontend::options::Options;
 use rookparcel_frontend::pref_pages::{self, Control, Field, Item, Page, TextKind};
@@ -27,6 +31,8 @@ use crate::ui::{self, layout};
 const INDENT: f64 = 20.0;
 /// The widest a note wraps at.
 const NOTE_WIDTH: f64 = 440.0;
+/// A multi-line box (`TextKind::Lines`): about six lines high.
+const LINES_HEIGHT: f64 = 104.0;
 
 /// One row of a page's grid.
 enum Row {
@@ -47,8 +53,11 @@ pub(crate) struct Builder {
     pub fields: HashMap<&'static str, FieldUi>,
     pub helps: Vec<(Retained<NSView>, H)>,
     pub ip_status: Option<Retained<NSTextField>>,
+    pub tracker_status: Option<Retained<NSTextField>>,
     pub advanced: Option<advanced::Advanced>,
     pub sched: Option<Retained<RPCanvas>>,
+    /// The multi-line boxes' end-of-editing observers, kept with the window.
+    pub observers: Vec<Retained<ProtocolObject<dyn NSObjectProtocol>>>,
     /// The widest page's grid (the window is made wide enough for it).
     pub widest: f64,
 }
@@ -61,8 +70,10 @@ impl Builder {
             fields: HashMap::new(),
             helps: Vec::new(),
             ip_status: None,
+            tracker_status: None,
             advanced: None,
             sched: None,
+            observers: Vec::new(),
             widest: 0.0,
         }
     }
@@ -122,6 +133,14 @@ impl Builder {
                     self.ip_status = Some(l);
                     last = None;
                 }
+                Item::TrackerListStatus => {
+                    let l = ui::wrapping_label("", mtm);
+                    l.setPreferredMaxLayoutWidth(NOTE_WIDTH);
+                    l.setSelectable(true);
+                    rows.push(Row::Pair(None, into_view(&l)));
+                    self.tracker_status = Some(l);
+                    last = None;
+                }
                 Item::AdvancedTable => {
                     let view = advanced::build(self);
                     rows.push(Row::Wide(view));
@@ -160,6 +179,27 @@ impl Builder {
                 layout::width(&t, 90.0);
                 Ctl::Text(t)
             }
+            Control::Text { kind: TextKind::Lines, .. } => {
+                let (scroll, view) = crate::dialogs::properties::text_box("", LINES_HEIGHT, mtm);
+                layout::min_width(&scroll, 360.0);
+                layout::stretch(&scroll);
+                // it commits when its editing ends (the focus leaves it, the window closes),
+                // not at every key: a text view has no action of its own
+                let block = RcBlock::new(move |_n: NonNull<NSNotification>| crate::app::run(cmd));
+                // SAFETY: the notification's name is AppKit's constant; the object is the text
+                // view, which the window keeps as long as the observer; the block runs on the
+                // posting (main) thread and captures a command only.
+                let observer = unsafe {
+                    NSNotificationCenter::defaultCenter().addObserverForName_object_queue_usingBlock(
+                        Some(NSTextDidEndEditingNotification),
+                        Some(&view),
+                        None,
+                        &block,
+                    )
+                };
+                self.observers.push(observer);
+                Ctl::Lines(view, scroll)
+            }
             Control::Text { kind, .. } => {
                 let t = if kind == TextKind::Password {
                     Retained::into_super(ui::secure_field("", mtm))
@@ -184,9 +224,10 @@ impl Builder {
                 cell.setSendsActionOnEndEditing(true);
             }
         }
-        let view = ctl.view().retain();
+        // (a multi-line box is laid out, and has its help, as its scroll view)
+        let view = ctl.outer().retain();
         self.help(&view, h);
-        grey.push(control_of(&ctl));
+        grey.extend(control_of(&ctl));
         let mut parts: Vec<Retained<NSView>> = vec![view];
         if let Control::Text { kind: TextKind::Folder(title) | TextKind::File(title), .. } = f.control {
             let browse_cmd = self.act(Act::Browse(f.key));
@@ -349,12 +390,13 @@ fn into_view(v: &NSView) -> Retained<NSView> {
     v.retain()
 }
 
-/// A control's `NSControl`.
-fn control_of(ctl: &Ctl) -> Retained<NSControl> {
+/// A control's `NSControl`; a multi-line box is none (`prefs::update_greying` greys it).
+fn control_of(ctl: &Ctl) -> Option<Retained<NSControl>> {
     match ctl {
-        Ctl::Check(b) => Retained::into_super(b.clone()),
-        Ctl::Text(t) => Retained::into_super(t.clone()),
-        Ctl::Choice(p, _) => Retained::into_super(Retained::into_super(p.clone())),
+        Ctl::Check(b) => Some(Retained::into_super(b.clone())),
+        Ctl::Text(t) => Some(Retained::into_super(t.clone())),
+        Ctl::Lines(..) => None,
+        Ctl::Choice(p, _) => Some(Retained::into_super(Retained::into_super(p.clone()))),
     }
 }
 

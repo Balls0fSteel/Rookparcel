@@ -23,6 +23,8 @@ pub mod live;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextKind {
     Plain,
+    /// Several lines (the value holds line feeds): a box a list can be pasted into.
+    Lines,
     Password,
     /// A folder, with a picker titled by the text.
     Folder(S),
@@ -87,6 +89,9 @@ pub enum Action {
     RandomPort,
     /// Loads the block list in the `ipfilter.path` field now.
     ReloadIpFilter,
+    /// Fetches the tracker list at the `trackers.url` address now
+    /// ([`crate::tracker_list::TrackerList::refresh_now`], after applying the page).
+    UpdateTrackerList,
 }
 
 #[derive(Clone, Copy)]
@@ -103,12 +108,21 @@ pub enum Item {
     },
     /// The IP filter's status line, filled by the toolkit.
     IpFilterStatus,
+    /// The fetched tracker list's status line, filled by the toolkit with
+    /// [`crate::tracker_list::TrackerList::status`].
+    TrackerListStatus,
     /// The Advanced page's table of every engine setting ([`advanced_rows`]).
     AdvancedTable,
     /// The Scheduler page's 7 × 24 table (`Options::gui.schedule.table`), which the toolkit
     /// draws and edits itself; greyed unless [`SCHED_ENABLE`] is on.
     SchedTable,
 }
+
+/// Advanced > Trackers (D66): the two check boxes, the typed list and the list's address.
+pub const TRACKERS_APPEND: &str = "trackers.append";
+pub const TRACKERS_LIST: &str = "trackers.list";
+pub const TRACKERS_FROM_URL: &str = "trackers.from_url";
+pub const TRACKERS_URL: &str = "trackers.url";
 
 /// The Scheduler page's "Enable Scheduler" box, which greys the table and the rates.
 pub const SCHED_ENABLE: &str = "sched.enable";
@@ -1161,6 +1175,58 @@ pub fn pages(features: Features) -> Vec<Page> {
                 Note(|| tr_owned(S::PrefDiskIoNote)),
             ],
         },
+        // trackers added to new downloads (D66, `tracker_list`)
+        Page {
+            key: "trackers",
+            title: S::PageTrackers,
+            parent: Some("advanced"),
+            items: vec![
+                Group(S::PrefTrackersGroup),
+                F(checkbox(
+                    TRACKERS_APPEND,
+                    S::PrefTrackersAppend,
+                    |o| o.gui.trackers_append,
+                    |o, v| o.gui.trackers_append = v,
+                )),
+                F(text(
+                    TRACKERS_LIST,
+                    None,
+                    TextKind::Lines,
+                    |o| o.gui.trackers_list.clone(),
+                    // tidied (repeats and spare blank lines go) unless a line is no tracker
+                    // address: then it is kept as typed, for `check` to refuse, where tidying
+                    // would drop the line without a word
+                    |o, v| {
+                        let p = crate::tracker_list::parse(&v);
+                        o.gui.trackers_list = if p.invalid == 0 {
+                            crate::tracker_list::to_text(&p.tiers)
+                        } else {
+                            v.replace('\r', "").trim().to_owned()
+                        };
+                    },
+                )
+                .help(H::PrefTrackersAppend)
+                .needs(&[TRACKERS_APPEND])),
+                F(checkbox(
+                    TRACKERS_FROM_URL,
+                    S::PrefTrackersFromUrl,
+                    |o| o.gui.trackers_from_url,
+                    |o, v| o.gui.trackers_from_url = v,
+                )),
+                F(text(
+                    TRACKERS_URL,
+                    None,
+                    TextKind::Plain,
+                    |o| o.gui.trackers_url.clone(),
+                    |o, v| o.gui.trackers_url = v.trim().to_owned(),
+                )
+                .help(H::PrefTrackersFromUrl)
+                .needs(&[TRACKERS_FROM_URL])),
+                Item::Button { action: Action::UpdateTrackerList, label: S::PrefTrackersUpdate },
+                Item::TrackerListStatus,
+                Note(|| crate::tr!(PrefTrackersNote).to_owned()),
+            ],
+        },
     ]
 }
 
@@ -1218,6 +1284,13 @@ pub fn check(o: &Options) -> Result<(), (&'static str, String)> {
     }
     if tf.autoload && tf.autoload_dir.is_empty() {
         return Err(("dir.autoload_dir", tr_owned(S::PrefNoAutoloadDir)));
+    }
+    // a typed line that is no tracker address would be dropped silently otherwise
+    if g.trackers_append && crate::tracker_list::parse(&g.trackers_list).invalid > 0 {
+        return Err((TRACKERS_LIST, tr_owned(S::TrackersErrLine)));
+    }
+    if g.trackers_from_url && !crate::tracker_list::is_list_url(&g.trackers_url) {
+        return Err((TRACKERS_URL, tr_owned(S::TrackersErrHttps)));
     }
     Ok(())
 }
@@ -1339,7 +1412,8 @@ mod tests {
         assert_eq!(page_of(&without, "cache.mb").map(|p| p.key), Some("disk_cache"));
         assert_eq!(without.iter().find(|p| p.key == "disk_cache").unwrap().parent, Some("advanced"));
         let order: Vec<&str> = without.iter().map(|p| p.key).collect();
-        assert_eq!(order[6..], ["queueing", "scheduler", "advanced", "disk_cache", "disk_io"]);
+        assert_eq!(order[6..], ["queueing", "scheduler", "advanced", "disk_cache", "disk_io", "trackers"]);
+        assert_eq!(without.iter().find(|p| p.key == "trackers").unwrap().parent, Some("advanced"));
         assert_eq!(page_of(&without, "check_gently").map(|p| p.key), Some("disk_io"));
         assert_eq!(without.iter().find(|p| p.key == "disk_io").unwrap().parent, Some("advanced"));
     }

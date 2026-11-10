@@ -980,6 +980,54 @@ PageDiskIo=Disk I/O
 # Group title: checking a torrent's files against their hashes (Force Re-Check).
 PrefChecking=Checking
 
+# Preferences > Advanced > Trackers (a Rookparcel page): trackers that every new download
+# gets besides its own.
+PageTrackers=Trackers
+
+# Group title on that page.
+PrefTrackersGroup=Trackers for New Downloads
+
+# Check box above a box of tracker addresses, one per line.
+PrefTrackersAppend=Add these trackers to new downloads:
+
+# Check box above a field for a web address (https://...) of a text file that lists
+# tracker addresses.
+PrefTrackersFromUrl=Add the trackers of this list on the web (https):
+
+# Button: fetches the list from the web address now.
+PrefTrackersUpdate=Update Now
+
+# Keep https:// as it is. "Private torrents" are torrents of private trackers.
+PrefTrackersNote=One tracker per line; a blank line starts a new tier. The trackers are added after the torrent's own, never to private torrents, and not to torrents already in the list. The list on the web is read again once a day; whoever runs that address chooses its trackers, which then see your address and your public downloads.
+
+# The list's status line: nothing fetched yet.
+TrackersStatusNone=The list has not been downloaded yet.
+
+# The list's status line. {count} is a number, {time} a date and time.
+TrackersStatusOk={count} trackers, downloaded {time}.
+
+# The list's status line; {error} says why. Shown before TrackersStatusOk's text when an
+# older list is still in use.
+TrackersStatusFailed=The last download failed: {error}.
+
+# Error: the list's address is not an https:// address. Keep https:// as it is.
+TrackersErrHttps=The list's address must start with https://
+
+# Error: what the address returned is not a list of tracker addresses (a web page, say).
+TrackersErrNotList=the file is not a list of tracker addresses
+
+# Error: the file at the address holds no tracker address.
+TrackersErrEmpty=the file holds no tracker address
+
+# Error in the typed list. Keep http://, https:// and udp:// as they are.
+TrackersErrLine=Every line of the tracker list must be a tracker address that starts with http://, https:// or udp://
+
+# Logger line. {count} and {old} are numbers of trackers.
+TrackersLogChanged=The tracker list from the web changed: {count} trackers (before: {old}).
+
+# Logger line; {error} says why. The list in use stays as it was.
+TrackersLogRejected=The tracker list from the web was not used: {error}.
+
 # Checks run at the system's background disk priority and wait while other programs use
 # the disk.
 PrefCheckGently=Check torrents gently (low priority, give way to other programs)
@@ -1756,6 +1804,9 @@ help.PrefDiskWriteQueue=How much downloaded data may wait to be written to disk;
 help.PrefOpenFiles=The most files Rookparcel keeps open at once; others are closed and opened again when needed. Raise it when many torrents or files are busy at the same time.
 help.PrefAioThreads=The threads that read and write torrent data; the read cache is shared among them. Read only when Rookparcel starts.
 help.PrefHashThreads=Kept for libtorrent compatibility; this version does not use it. Checks run one per drive, set by Drives checked at once on the Disk I/O page.
+help.PrefTrackersAppend=Adds the trackers in the box to every torrent you add from now on, after the torrent's own trackers. One address per line; a blank line starts a new tier. Private torrents never get them, and torrents already in the list are not changed.
+help.PrefTrackersFromUrl=Reads a list of trackers from the https address below, at the start and then once a day, and adds them to every torrent you add, after the box's trackers. Only lines that are tracker addresses are used, and a file that is not such a list is ignored: the last good list stays in use. Whoever runs the address decides which trackers you announce to, so use a list you trust.
+help.PrefTrackersUpdate=Applies the page and reads the list from the address now, without waiting for the daily update. The line below shows the result.
 help.PrefCheckGently=Checks torrents at the system's background disk priority, leaves other programs' cached files alone and pauses while reads are slower than usual, so the computer stays responsive. Checks take longer while the disk is busy.
 help.PrefCheckRateLimit=Caps each check's reading speed at the MB/s beside, for a disk that still lags during gentle checks. Off by default.
 help.PrefActiveChecking=How many drives are checked at the same time, one torrent per drive; torrents on the same drive wait their turn. At most eight; on the Advanced page, -1 also means eight.

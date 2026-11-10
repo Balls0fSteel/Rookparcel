@@ -227,6 +227,16 @@ impl Engine {
         }
         let given = t.file_priority.len();
         t.set_metadata(Arc::new(ti));
+        // the session's extra trackers waited for this: a private torrent gets none (D66)
+        let extra = t.flags.contains(TorrentFlags::EXTRA_TRACKERS_PENDING) && t.private != Some(true);
+        t.flags.remove(TorrentFlags::EXTRA_TRACKERS_PENDING);
+        if extra {
+            let Engine { slots, tracker_urls, extra_trackers, .. } = self;
+            if let Some(t) = slots.torrent_mut(id) {
+                t.append_trackers(extra_trackers, tracker_urls);
+            }
+        }
+        let Some(t) = self.torrent(id) else { return };
         if t.flags.contains(TorrentFlags::DEFAULT_DONT_DOWNLOAD) {
             for p in t.file_priority.iter_mut().skip(given) {
                 *p = 0;

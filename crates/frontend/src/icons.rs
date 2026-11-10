@@ -257,6 +257,7 @@ pub fn page_icon(title: S) -> Option<UiIcon> {
         S::PageAdvanced => UiIcon::Advanced,
         // both disk pages show the disk
         S::PageDiskCache | S::PageDiskIo => UiIcon::DiskCache,
+        S::PageTrackers => UiIcon::Trackers,
         _ => return None,
     })
 }

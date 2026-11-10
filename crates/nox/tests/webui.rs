@@ -2847,7 +2847,8 @@ fn native_prefs_model_and_partial_post() {
             "webui",
             "advanced",
             "diskcache",
-            "diskio"
+            "diskio",
+            "trackers"
         ]
     );
     let fields = m.get("fields").expect("fields");
@@ -3766,4 +3767,328 @@ fn themes_are_served_listed_and_chosen() {
     let m = t.get(&sid, "/pa/prefs").json();
     let pages = m.get("pages").unwrap().to_json();
     assert!(pages.contains(r#""f":"webui.theme""#) && pages.contains(r#""local":"theme""#), "{pages}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// The trackers added to every new download (D66): Preferences > Advanced > Trackers
+
+const EXTRA_A: &str = "udp://127.0.0.1:9/extra-a";
+const EXTRA_B: &str = "http://127.0.0.1:9/extra-b";
+const EXTRA_C: &str = "udp://127.0.0.1:9/extra-c";
+/// A list address nothing answers at: loopback, so no test leaves this machine.
+const LIST_URL: &str = "https://127.0.0.1:9/trackers.txt";
+
+/// The four tracker fields' values, in the page's order.
+fn tracker_prefs(t: &Harness, sid: &str) -> (Json, String, Json, String) {
+    let m = t.get(sid, "/pa/prefs").json();
+    let value = |id: &str| m.get("fields").unwrap().get(id).unwrap().get("value").cloned().unwrap();
+    (
+        value("trackers.append"),
+        s(Some(&value("trackers.list"))).to_owned(),
+        value("trackers.from_url"),
+        s(Some(&value("trackers.url"))).to_owned(),
+    )
+}
+
+/// The trackers a torrent has, as Torrent Properties shows them.
+fn trackers_of(t: &Harness, sid: &str, hash: &str) -> String {
+    let p = t.get(sid, &format!("/pa/torrents/properties?ids={hash}")).json();
+    s(p.get("fields").and_then(|f| f.get("trackers"))).to_owned()
+}
+
+fn add_stopped(t: &Harness, sid: &str, name: &str, private: bool) -> String {
+    let (bytes, hash) = torrent_built(name, Some("udp://127.0.0.1:9/own"), private);
+    let (body, boundary) = multipart(&[("paused", "true")], &bytes);
+    let r = t.req("POST", "/api/v2/torrents/add", &[("Cookie", sid)], Body::Multipart(&body, boundary));
+    assert_eq!(r.status, 200, "{}", r.text());
+    t.wait_for(sid, &hash, "the added torrent", |x| s(x.get("name")) == name);
+    hash
+}
+
+/// The Trackers page sits under Advanced with its four fields, the Update Now button and the
+/// status line; the four settings change only with the current password, the list's address
+/// must be https and every typed line a tracker address.
+#[test]
+fn the_tracker_list_changes_only_with_the_current_password() {
+    let t = Harness::start("trackers-password");
+    let sid = t.login();
+    let m = t.get(&sid, "/pa/prefs").json();
+    let Some(Json::Arr(pages)) = m.get("pages") else { panic!("{}", m.to_json()) };
+    let page = pages.iter().find(|p| s(p.get("id")) == "trackers").expect("the Trackers page");
+    assert_eq!((s(page.get("title")), s(page.get("under"))), ("Trackers", "advanced"));
+    let text = page.to_json();
+    for part in [
+        r#""f":"trackers.append""#,
+        r#""f":"trackers.list""#,
+        r#""f":"trackers.from_url""#,
+        r#""f":"trackers.url""#,
+        r#""action":"update_trackers""#,
+        r#""status":"trackers""#,
+        "One tracker per line",
+    ] {
+        assert!(text.contains(part), "{part}: {text}");
+    }
+    let field =
+        |id: &str| m.get("fields").unwrap().get(id).unwrap_or_else(|| panic!("no field {id}")).clone();
+    assert_eq!(s(field("trackers.append").get("type")), "bool");
+    assert_eq!(s(field("trackers.list").get("type")), "lines");
+    assert_eq!(s(field("trackers.from_url").get("type")), "bool");
+    assert_eq!(s(field("trackers.url").get("type")), "text");
+    for id in ["trackers.append", "trackers.list", "trackers.from_url", "trackers.url"] {
+        assert!(!s(field(id).get("help")).is_empty(), "{id} has no help text");
+    }
+    assert_eq!(s(m.get("trackers_status")), "");
+    let off = (Json::Bool(false), String::new(), Json::Bool(false), String::new());
+    assert_eq!(tracker_prefs(&t, &sid), off, "off by default");
+
+    // none of the four without the current password
+    for body in [
+        r#"{"trackers.append":true}"#.to_owned(),
+        format!(r#"{{"trackers.list":"{EXTRA_A}"}}"#),
+        format!(r#"{{"trackers.from_url":true,"trackers.url":"{LIST_URL}"}}"#),
+        format!(r#"{{"trackers.url":"{LIST_URL}"}}"#),
+    ] {
+        let r = t.pa(&sid, "/pa/prefs", &body);
+        assert_eq!(r.status, 400, "{body}");
+        assert!(r.text().contains("webui.current_password"), "{body}: {}", r.text());
+    }
+    assert_eq!(tracker_prefs(&t, &sid), off);
+
+    // with it: the checks first
+    let bad = |body: String| {
+        let r = t.pa(&sid, "/pa/prefs", &body);
+        assert_eq!(r.status, 400, "{body}: {}", r.text());
+        s(r.json().get("error")).to_owned()
+    };
+    for url in ["http://127.0.0.1:9/trackers.txt", "", "ftp://127.0.0.1/x", "file:///etc/passwd"] {
+        assert_eq!(
+            bad(format!(
+                r#"{{"trackers.from_url":true,"trackers.url":"{url}","webui.current_password":"{PASS}"}}"#
+            )),
+            "trackers.url: The list's address must start with https://",
+            "{url}"
+        );
+    }
+    let why = bad(format!(
+        r#"{{"trackers.append":true,"trackers.list":"{EXTRA_A}\nnot a tracker","webui.current_password":"{PASS}"}}"#
+    ));
+    assert!(why.starts_with("trackers.list: Every line of the tracker list"), "{why}");
+    assert_eq!(tracker_prefs(&t, &sid), off, "nothing of a refused body is kept");
+
+    // a two-tier list, typed with a comment, blank lines and Windows line ends
+    let body = format!(
+        r##"{{"trackers.append":true,"trackers.list":"# mine\r\n{EXTRA_A}\r\n{EXTRA_B}\r\n\r\n\r\n{EXTRA_C}\r\n","webui.current_password":"{PASS}"}}"##
+    );
+    let r = t.pa(&sid, "/pa/prefs", &body);
+    assert_eq!(r.status, 204, "{}", r.text());
+    let list = format!("{EXTRA_A}\n{EXTRA_B}\n\n{EXTRA_C}");
+    assert_eq!(tracker_prefs(&t, &sid), (Json::Bool(true), list.clone(), Json::Bool(false), String::new()));
+    // the same list again is no change: it needs no password
+    let r = t.pa(&sid, "/pa/prefs", &format!(r#"{{"trackers.list":"{EXTRA_A}\n{EXTRA_B}\n\n{EXTRA_C}\n"}}"#));
+    assert_eq!(r.status, 204, "{}", r.text());
+    // the address, stored but not switched on: nothing is fetched
+    let r = t.pa(
+        &sid,
+        "/pa/prefs",
+        &format!(r#"{{"trackers.url":" {LIST_URL} ","webui.current_password":"{PASS}"}}"#),
+    );
+    assert_eq!(r.status, 204, "{}", r.text());
+    let saved = (Json::Bool(true), list.clone(), Json::Bool(false), LIST_URL.to_owned());
+    assert_eq!(tracker_prefs(&t, &sid), saved);
+    assert_eq!(s(t.get(&sid, "/pa/prefs/trackers").json().get("status")), "", "switched off");
+    let file = std::fs::read_to_string(t.dir.join("state").join(STATE_FILE)).unwrap();
+    assert!(file.contains(&format!(r#""trackers.list":"{EXTRA_A} {EXTRA_B} - {EXTRA_C}""#)), "{file}");
+    assert!(
+        file.contains(r#""trackers.append":"1""#) && file.contains(r#""trackers.from_url":"0""#),
+        "{file}"
+    );
+    assert!(file.contains(&format!(r#""trackers.url":"{LIST_URL}""#)), "{file}");
+
+    // the shim shows the list and cannot change it, with the password or without
+    let p = t.get(&sid, "/api/v2/app/preferences").json();
+    assert_eq!(p.get("add_trackers_enabled"), Some(&Json::Bool(true)));
+    assert_eq!(s(p.get("add_trackers")), list);
+    for with_password in [false, true] {
+        let mut set = r#"{"add_trackers_enabled":false,"add_trackers":"udp://evil.example:1/announce","add_trackers_from_url_enabled":true,"add_trackers_url":"https://evil.example/list","trackers.append":false,"trackers.list":"","trackers.url":"https://evil.example/list","dl_limit":7"#.to_owned();
+        if with_password {
+            set.push_str(&format!(r#","web_ui_current_password":"{PASS}""#));
+        }
+        set.push('}');
+        assert_eq!(t.post(&sid, "/api/v2/app/setPreferences", &format!("json={}", enc(&set))).status, 200);
+        assert_eq!(t.get(&sid, "/api/v2/transfer/downloadLimit").text(), "7168", "the rest is taken");
+        assert_eq!(tracker_prefs(&t, &sid), saved, "password sent: {with_password}");
+    }
+    let p = t.get(&sid, "/api/v2/app/preferences").json();
+    assert_eq!((p.get("add_trackers_enabled"), s(p.get("add_trackers"))), (Some(&Json::Bool(true)), &*list));
+
+    // Update Now: CSRF-checked, and it never takes an address from the request
+    let r = t.req("POST", "/pa/prefs/trackers/update", &[("Cookie", &sid)], Body::Json("{}"));
+    assert_eq!(r.status, 403, "{}", r.text());
+    let r = t.pa(
+        &sid,
+        "/pa/prefs/trackers/update",
+        r#"{"url":"https://evil.example/list","trackers.url":"https://evil.example/list","trackers.from_url":true}"#,
+    );
+    assert_eq!(r.status, 200, "{}", r.text());
+    assert_eq!(s(r.json().get("status")), "", "the list from the web is off: nothing to fetch");
+    assert_eq!(tracker_prefs(&t, &sid), saved);
+    assert_eq!(t.req("GET", "/pa/prefs/trackers", &[], Body::None).status, 403, "not without a login");
+
+    // a wrong password ends the session, as for the other security settings
+    let r = t.pa(&sid, "/pa/prefs", r#"{"trackers.append":false,"webui.current_password":"guess"}"#);
+    assert_eq!(r.status, 400);
+    assert_eq!(t.get(&sid, "/api/v2/app/version").status, 403);
+    let sid = t.login();
+    assert_eq!(tracker_prefs(&t, &sid), saved);
+
+    // switched on: the address is tried (nothing answers there), the status line says so and
+    // the Logger has the line; the typed list stays in use
+    let r = t.pa(
+        &sid,
+        "/pa/prefs",
+        &format!(r#"{{"trackers.from_url":true,"webui.current_password":"{PASS}"}}"#),
+    );
+    assert_eq!(r.status, 204, "{}", r.text());
+    let status = || s(t.get(&sid, "/pa/prefs/trackers").json().get("status")).to_owned();
+    wait_until("the failed fetch in the status line", || status().starts_with("The last download failed"));
+    assert_eq!(s(t.get(&sid, "/pa/prefs").json().get("trackers_status")), status());
+    assert!(!t.dir.join("state").join("trackers-url.txt").exists(), "nothing was fetched, nothing is cached");
+    let r = t.pa(&sid, "/pa/prefs/trackers/update", "{}");
+    assert_eq!(r.status, 200, "{}", r.text());
+    let hash = add_stopped(&t, &sid, "trackers-after-a-failed-fetch", false);
+    assert_eq!(trackers_of(&t, &sid, &hash), format!("udp://127.0.0.1:9/own\n\n{list}"));
+}
+
+/// Sessions that gave no password (the loopback bypass, the subnet whitelist, the API key)
+/// cannot change the tracker list, natively or through the shim.
+#[test]
+fn passwordless_sessions_cannot_change_the_tracker_list() {
+    let t = Harness::start("trackers-bypass");
+    let sid = t.login();
+    let r = t.pa(
+        &sid,
+        "/pa/prefs",
+        &format!(
+            r#"{{"trackers.append":true,"trackers.list":"{EXTRA_A}","webui.bypass_local_auth":true,"webui.api_key":"{API_KEY}","webui.api_key_enabled":true,"webui.current_password":"{PASS}"}}"#
+        ),
+    );
+    assert_eq!(r.status, 204, "{}", r.text());
+    let saved = (Json::Bool(true), EXTRA_A.to_owned(), Json::Bool(false), String::new());
+    let origin = format!("http://{}", t.host());
+    let auth = format!("Bearer {API_KEY}");
+    let attempts = [
+        r#"{"trackers.append":false}"#.to_owned(),
+        r#"{"trackers.list":"udp://evil.example:1/announce"}"#.to_owned(),
+        format!(r#"{{"trackers.from_url":true,"trackers.url":"{LIST_URL}"}}"#),
+        format!(r#"{{"trackers.url":"{LIST_URL}"}}"#),
+    ];
+    let set = format!(
+        "json={}",
+        enc(
+            r#"{"add_trackers_enabled":false,"add_trackers":"udp://evil.example:1/announce","add_trackers_url":"https://evil.example/list"}"#
+        )
+    );
+    // the loopback bypass (no cookie at all), then the API key
+    for who in [None, Some(("Authorization", auth.as_str()))] {
+        let mut headers = vec![("Origin", origin.as_str()), ("X-Requested-With", "Rookparcel")];
+        headers.extend(who);
+        assert_eq!(t.req("GET", "/pa/prefs", &headers, Body::None).status, 200, "{who:?} is let in");
+        for body in &attempts {
+            let r = t.req("POST", "/pa/prefs", &headers, Body::Json(body));
+            assert_eq!(r.status, 400, "{who:?} {body}");
+            assert!(r.text().contains("webui.current_password"), "{who:?} {body}: {}", r.text());
+        }
+        // another preference is theirs to change
+        let r = t.req("POST", "/pa/prefs", &headers, Body::Json(r#"{"ui.add_stopped":true}"#));
+        assert_eq!(r.status, 204, "{who:?}: {}", r.text());
+        let mut headers: Vec<(&str, &str)> = Vec::new();
+        headers.extend(who);
+        let r = t.req("POST", "/api/v2/app/setPreferences", &headers, Body::Form(&set));
+        assert_eq!(r.status, 200, "{who:?}: {}", r.text());
+        assert_eq!(tracker_prefs(&t, &sid), saved, "{who:?}");
+    }
+    // the subnet whitelist in place of the loopback bypass
+    let r = t.pa(
+        &sid,
+        "/pa/prefs",
+        &format!(
+            r#"{{"webui.bypass_local_auth":false,"webui.bypass_auth_subnets":"127.0.0.0/8","webui.current_password":"{PASS}"}}"#
+        ),
+    );
+    assert_eq!(r.status, 204, "{}", r.text());
+    let headers = [("Origin", origin.as_str()), ("X-Requested-With", "Rookparcel")];
+    for body in &attempts {
+        let r = t.req("POST", "/pa/prefs", &headers, Body::Json(body));
+        assert_eq!(r.status, 400, "subnet {body}");
+        assert!(r.text().contains("webui.current_password"), "subnet {body}: {}", r.text());
+    }
+    assert_eq!(tracker_prefs(&t, &sid), saved);
+}
+
+/// With a typed list saved, a public torrent added through the API gets the trackers after its
+/// own, in their tiers; a private one, and one that was in the list before, do not. The list is
+/// in force again right after a restart.
+#[test]
+fn new_public_downloads_get_the_typed_trackers() {
+    let dir = temp_dir("trackers-added");
+    let own = "udp://127.0.0.1:9/own";
+    let list = format!("{EXTRA_A}\n{EXTRA_B}\n\n{EXTRA_C}");
+    let with_list = format!("{own}\n\n{list}");
+    {
+        let mut t = Harness::start_in(dir.clone(), Some(PASS));
+        let sid = t.login();
+        let before = add_stopped(&t, &sid, "trackers-before", false);
+        let r = t.pa(
+            &sid,
+            "/pa/prefs",
+            &format!(
+                r#"{{"trackers.append":true,"trackers.list":"{EXTRA_A}\n{EXTRA_B}\n\n{EXTRA_C}","webui.current_password":"{PASS}"}}"#
+            ),
+        );
+        assert_eq!(r.status, 204, "{}", r.text());
+        let public = add_stopped(&t, &sid, "trackers-public", false);
+        let private = add_stopped(&t, &sid, "trackers-private", true);
+        assert_eq!(trackers_of(&t, &sid, &public), with_list);
+        assert_eq!(trackers_of(&t, &sid, &private), own, "never a private torrent");
+        assert_eq!(trackers_of(&t, &sid, &before), own, "not a torrent already in the list");
+        // the shim's tracker list has them too, the private one's not
+        let urls = |hash: &str| {
+            let Json::Arr(v) = t.get(&sid, &format!("/api/v2/torrents/trackers?hash={hash}")).json() else {
+                panic!()
+            };
+            v.iter().map(|x| s(x.get("url")).to_owned()).collect::<Vec<_>>()
+        };
+        for extra in [EXTRA_A, EXTRA_B, EXTRA_C] {
+            assert!(urls(&public).iter().any(|u| u == extra), "{extra}: {:?}", urls(&public));
+            assert!(!urls(&private).iter().any(|u| u == extra), "{extra}: {:?}", urls(&private));
+        }
+        // through the native add as well
+        let (bytes, hash) = torrent_built("trackers-native", Some(own), false);
+        let r = t.pa_upload(&sid, "/pa/add", r#"{"start":false}"#, &bytes);
+        assert_eq!(r.status, 204, "{}", r.text());
+        t.wait_for(&sid, &hash, "the natively added torrent", |x| s(x.get("name")) == "trackers-native");
+        assert_eq!(trackers_of(&t, &sid, &hash), with_list);
+        // switched off: the next one gets none
+        let r = t.pa(
+            &sid,
+            "/pa/prefs",
+            &format!(r#"{{"trackers.append":false,"webui.current_password":"{PASS}"}}"#),
+        );
+        assert_eq!(r.status, 204, "{}", r.text());
+        let off = add_stopped(&t, &sid, "trackers-off", false);
+        assert_eq!(trackers_of(&t, &sid, &off), own);
+        let r = t.pa(
+            &sid,
+            "/pa/prefs",
+            &format!(r#"{{"trackers.append":true,"webui.current_password":"{PASS}"}}"#),
+        );
+        assert_eq!(r.status, 204, "{}", r.text());
+        // keep the directory for the second run: the harness removes this one instead
+        t.dir = temp_dir("trackers-added-scratch");
+    }
+    let t = Harness::start_in(dir, None);
+    let sid = t.login();
+    assert_eq!(tracker_prefs(&t, &sid), (Json::Bool(true), list, Json::Bool(false), String::new()));
+    let again = add_stopped(&t, &sid, "trackers-after-restart", false);
+    assert_eq!(trackers_of(&t, &sid, &again), with_list);
 }

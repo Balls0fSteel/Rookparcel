@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-10_133253_1794313973
+Last updated: 2026-11-10_140349_1794315829
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D60](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -49,7 +49,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 **1.2.38, not released (2026-11-10): the first-run guide** (the owner's request): `How to open Rookparcel.html` in the Mac disk image and `site/install.html`, a step-by-step install guide per system with drawn dialogs. The page must be on the site (`main`) before the release, as the dmg file links it. Open in BACKLOG "macOS" and "Website": the dmg step on a Release run, the steps on a real Mac of each version, real screenshots and translations of the guide.
 
-**1.2.39, not released (2026-11-10): Help > Statistics** (the owner's request, D65): all-time totals kept by the engine in `stats.dat`, session waste, the same window in the three GUIs and the Web UI; remote protocol 18. Open in BACKLOG "Statistics, trackers and Run Program". **Next, approved the same day:** 1.2.40 trackers appended to new downloads from a typed list and an HTTPS list URL (D66: never private torrents, the fetched text is only ever parsed as tracker addresses), then 1.2.41 Run Program on added and finished (D67: no shell, arguments substituted after splitting; changeable only locally unless nox was started with a flag, never through the qBittorrent API or a remote GUI).
+**1.2.39, not released (2026-11-10): Help > Statistics** (the owner's request, D65): all-time totals kept by the engine in `stats.dat`, session waste, the same window in the three GUIs and the Web UI; remote protocol 18. Open in BACKLOG "Statistics, trackers and Run Program". **1.2.40, not released:** Preferences > Advanced > Trackers (D66): trackers appended to new public downloads from a typed list and an https list that is only ever parsed as tracker addresses; the Web UI changes it only with the current password. **Next, approved the same day:** 1.2.41 Run Program on added and finished (D67: no shell, arguments substituted after splitting; changeable only locally unless nox was started with a flag, never through the qBittorrent API or a remote GUI).
 
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 
@@ -99,7 +99,7 @@ Q1-Q15 are resolved; their answers and the original Q10 interop setup are in the
 
 - UI artwork (D27-D30): the bold family passed its revision 6 review (131/131) and is integrated (gate 10); revisions 3-6 and their reviews are in the [changelog archive](docs/archive/README.md). Optional: hand-drawn 20 px globe and pylon, dedicated 48/64 px drawings, and a web-ui globe matching the network globe.
 - Compare Properties > Advanced and `rss.*` settings with the owner's real µTorrent 2.2.1 in `z_exclude_uTorrent/` (gitignored). Its Add dialog was inspected via scripted captures/control dumps; the remaining wording and behavior need comparison. The owner captured all 15 Preferences pages (General through Advanced > Run Program) as `z_exclude_uTorrent/screenshots/*.webp` on 2026-10-26: compare each page of our Preferences against them (Road to 1.0 item 9).
-- D46 and D50-D65 are settled; D66 and D67 are approved in outline (2026-11-10) and written down as they are built.
+- D46 and D50-D66 are settled; D67 (Run Program) is approved in outline (2026-11-10) and written down as it is built.
 - Decide the Flathub permission/submission approach (item 7); the recorded exception policy requires the owner's own text.
 
 

@@ -67,6 +67,8 @@ pub(crate) enum Command {
     ApplySettings(Box<Settings>),
     SetIpFilter(Arc<IpFilter>),
     SetPortFilter(PortFilter),
+    /// [`SessionHandle::set_extra_trackers`]: stays with the process that owns the engine.
+    SetExtraTrackers(Vec<Vec<String>>),
     PeerClass(PeerClassCommand),
     PauseSession,
     ResumeSession,
@@ -285,6 +287,18 @@ impl SessionHandle {
     /// blocked port are not added to any torrent.
     pub fn set_port_filter(&self, filter: PortFilter) {
         self.send(Command::SetPortFilter(filter));
+    }
+
+    /// The trackers every new public download gets besides its own (D66), in tiers: each inner
+    /// list becomes one tier after the torrent's last. They are added when a torrent is added
+    /// (for a magnet, once its metadata shows it is not private), never to a private torrent,
+    /// a restored one or one added with [`TorrentFlags::NO_EXTRA_TRACKERS`]; torrents already
+    /// in the session keep what they have. Not sent over a remote session: the list belongs
+    /// to the process that owns the engine.
+    ///
+    /// [`TorrentFlags::NO_EXTRA_TRACKERS`]: crate::TorrentFlags::NO_EXTRA_TRACKERS
+    pub fn set_extra_trackers(&self, tiers: Vec<Vec<String>>) {
+        self.send(Command::SetExtraTrackers(tiers));
     }
 
     /// Sends a call that the engine answers, and waits for the answer (libtorrent's

@@ -490,6 +490,10 @@ div.pg { border: 0; padding: 0 8px; }
 .pf.txt input { flex: 1 1 auto; min-width: 4em; }
 .pf input[type="text"], .pf input[type="password"], .pf input[type="search"], .pf input[type="number"] { background: var(--bg); }
 .pf input[readonly] { color: var(--muted); }
+.pf.lines { align-items: flex-start; }
+.pf.lines textarea { flex: 1 1 auto; min-width: 0; width: 100%; box-sizing: border-box; resize: vertical; white-space: pre; overflow: auto; font: inherit; line-height: 18px; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; }
+.pf.lines textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.pf.lines.disabled textarea { opacity: 0.6; }
 .pf-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .pf-row .pf { flex: 1 1 auto; }
 .pf-row .pf > span { flex: none; }
@@ -509,7 +513,7 @@ div.pg { border: 0; padding: 0 8px; }
 .sched-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .sched-legend i { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--line); margin-inline-end: 5px; vertical-align: -2px; }
 .sched-info { min-height: 1.4em; color: var(--muted); }
-#prefs input.bad, #prefs select.bad { border-color: var(--err); outline: 1px solid var(--err); }
+#prefs input.bad, #prefs select.bad, #prefs textarea.bad { border-color: var(--err); outline: 1px solid var(--err); }
 .adv-bar .pf > span { flex: none; }
 .adv-list { min-height: 120px; overflow: auto; border: 1px solid var(--line); background: var(--bg); user-select: none; }
 .adv { width: 100%; border-collapse: collapse; table-layout: fixed; }

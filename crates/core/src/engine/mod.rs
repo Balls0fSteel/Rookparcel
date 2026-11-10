@@ -383,6 +383,8 @@ pub(crate) struct Engine {
     save_paths: StrPool,
     /// The tracker URLs of the torrents, shared.
     tracker_urls: StrPool,
+    /// `SessionHandle::set_extra_trackers` (D66): tiers appended to new public downloads.
+    extra_trackers: Vec<Vec<String>>,
     by_hash: HashMap<Sha1Hash, TorrentId>,
     /// `SHA-1("req2", info-hash)` of every torrent, which incoming encrypted handshakes name
     /// (libtorrent `torrent_list::find_obfuscated`).
@@ -596,6 +598,7 @@ impl Engine {
             live: Vec::new(),
             save_paths: StrPool::default(),
             tracker_urls: StrPool::default(),
+            extra_trackers: Vec::new(),
             by_hash: HashMap::new(),
             by_obfuscated: HashMap::new(),
             queue: Vec::new(),
@@ -1751,6 +1754,7 @@ impl Engine {
             }
             Command::SetIpFilter(f) => self.set_ip_filter(f),
             Command::SetPortFilter(f) => self.set_port_filter(f),
+            Command::SetExtraTrackers(tiers) => self.extra_trackers = tiers,
             Command::PeerClass(c) => self.peer_class_command(c),
             Command::ReopenNetworkSockets => self.on_ip_change(Instant::now(), true),
             #[cfg(test)]
@@ -1935,7 +1939,7 @@ impl Engine {
             .filter(|s| !s.is_empty())
             .unwrap_or(p.save_path.clone());
         let mut flags = p.flags;
-        flags.remove(TorrentFlags::DUPLICATE_IS_ERROR);
+        flags.remove(TorrentFlags::DUPLICATE_IS_ERROR | TorrentFlags::NO_EXTRA_TRACKERS);
         let save_path = self.intern_save_path(&save_path);
         let mut t = Torrent::new(
             TorrentId::default(),
@@ -1961,6 +1965,10 @@ impl Engine {
         }
         for (url, tier) in trackers {
             t.add_tracker(&url, tier, &mut self.tracker_urls);
+        }
+        // the session's extra trackers (D66): a new download that is not private
+        if !p.flags.contains(TorrentFlags::NO_EXTRA_TRACKERS) && resume.is_none() && !ti.is_private() {
+            t.append_trackers(&self.extra_trackers, &mut self.tracker_urls);
         }
         for ws in ti.web_seeds() {
             t.web_seeds.add(&ws.url, ws.kind, &ws.auth, &ws.extra_headers, false, false);
@@ -2043,6 +2051,11 @@ impl Engine {
         }
         let mut flags = p.flags;
         flags.remove(TorrentFlags::DUPLICATE_IS_ERROR);
+        // the session's extra trackers wait for the metadata, which says whether the torrent
+        // is private (D66; this engine's seeds do not serve a private torrent's metadata, other
+        // clients may)
+        flags.set(TorrentFlags::EXTRA_TRACKERS_PENDING, !flags.contains(TorrentFlags::NO_EXTRA_TRACKERS));
+        flags.remove(TorrentFlags::NO_EXTRA_TRACKERS);
         if m.default_dont_download {
             flags.insert(TorrentFlags::DEFAULT_DONT_DOWNLOAD);
         }
@@ -4148,6 +4161,7 @@ fn apply_resume(t: &mut Torrent, r: &ResumeData) {
     flags.set(TorrentFlags::DISABLE_DHT, r.disable_dht);
     flags.set(TorrentFlags::DISABLE_LSD, r.disable_lsd);
     flags.set(TorrentFlags::DISABLE_PEX, r.disable_pex);
+    flags.set(TorrentFlags::EXTRA_TRACKERS_PENDING, r.extra_trackers_pending && t.ti.is_none());
     flags.insert(TorrentFlags::APPLY_IP_FILTER);
     t.flags = flags;
     if !r.file_priority.is_empty() {
