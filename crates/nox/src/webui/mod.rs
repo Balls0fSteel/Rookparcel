@@ -947,6 +947,18 @@ pub struct HttpsInfo {
     pub generated: bool,
 }
 
+/// The engine settings stored in `state_dir`'s `webui.json`, put over `s`; for nox to call
+/// before it starts the engine, so the engine never runs with defaults the owner switched off
+/// (UPnP and NAT-PMP mapping the router's ports, the DHT bootstrapping). [`WebUi::start`] applies
+/// the same entries again, with everything else it restores.
+pub fn stored_settings(state_dir: &std::path::Path, s: &mut Settings) {
+    let stored = std::fs::read_to_string(state_dir.join(STATE_FILE))
+        .ok()
+        .and_then(|t| json::parse(&t).ok())
+        .unwrap_or_else(Json::obj);
+    prefs::stored_engine_settings(&stored, s);
+}
+
 impl WebUi {
     /// Binds `config.addr` and starts serving.
     pub fn start(handle: SessionHandle, config: Config) -> std::io::Result<WebUi> {

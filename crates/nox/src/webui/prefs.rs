@@ -2029,6 +2029,21 @@ pub(crate) fn read_back(st: &mut State) -> bool {
 /// daemon was started with (so a stored value wins over the command line, a value never stored
 /// keeps the command line's), picks a random listen port when asked, and loads the IP filter
 /// unless the daemon loaded that same file already (`loaded_ip_filter`).
+/// The engine settings a state file's `options` hold (what the Web UI's Preferences changed),
+/// put over `s`: the same entries [`read_back`] takes, read before the engine starts, so a
+/// stored "off" (UPnP, NAT-PMP, DHT, LSD, a listen port) holds from its first moment instead of
+/// after the Web UI's start.
+pub(crate) fn stored_engine_settings(stored: &Json, s: &mut Settings) {
+    let Some(o) = stored.get("options") else {
+        return;
+    };
+    for e in TABLE.iter().filter(|e| !e.name.starts_with("bt.")) {
+        if let Some(v) = o.get(&format!("{}{}", settings::PREF_PREFIX, e.name)).and_then(Json::as_str) {
+            let _ = e.set(s, v);
+        }
+    }
+}
+
 pub(crate) fn restore(shared: &Shared, st: &mut State, loaded_ip_filter: Option<&Path>) {
     let mut changed = read_back(st);
     if st.prefs.random_port {
@@ -2058,6 +2073,24 @@ pub(crate) fn restore(shared: &Shared, st: &mut State, loaded_ip_filter: Option<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stored_engine_settings_come_before_the_engine() {
+        let stored = super::super::json::parse(
+            r#"{"options":{"lt.enable_upnp":"false","lt.enable_natpmp":"false","lt.enable_dht":"false","lt.enable_lsd":"false","lt.download_rate_limit":"junk","webui.alt_enabled":"true"}}"#,
+        )
+        .unwrap();
+        let mut s = Settings { download_rate_limit: 5000, ..Settings::default() };
+        assert!(s.enable_upnp && s.enable_natpmp && s.enable_dht && s.enable_lsd);
+        stored_engine_settings(&stored, &mut s);
+        assert!(!s.enable_upnp && !s.enable_natpmp && !s.enable_dht && !s.enable_lsd);
+        // a value that is not one keeps what was there (the command line's)
+        assert_eq!(s.download_rate_limit, 5000);
+        // no file, or one without options: nothing changes
+        let mut d = Settings::default();
+        stored_engine_settings(&Json::obj(), &mut d);
+        assert!(d.enable_upnp && d.enable_dht);
+    }
 
     fn state() -> State {
         let mut st = State::for_tests();

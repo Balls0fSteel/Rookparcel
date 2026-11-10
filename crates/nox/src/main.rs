@@ -732,6 +732,12 @@ fn run(mut o: Opts, mode: Mode) -> ExitCode {
         );
     }
     apply_proxy(&mut settings, &o);
+    // what the Web UI's Preferences stored, before the engine starts: a stored "off" for UPnP,
+    // NAT-PMP, DHT or LSD must hold from the first moment, not once the Web UI is up (the Web
+    // UI's start applies the same entries, stored over the command line's, as before)
+    if let (Some(_), Some(dir)) = (o.webui, dirs.config.as_deref()) {
+        webui::stored_settings(dir, &mut settings);
+    }
     if let Some(p) = &o.proxy {
         let scope = |on: bool, what: &str| if on { String::new() } else { format!(", {what} direct") };
         println!(
