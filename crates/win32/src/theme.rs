@@ -18,17 +18,18 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
 use rookparcel_frontend::lang::S;
 use rookparcel_frontend::palette::DrawPalette;
-use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM};
+use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::{DWMWA_USE_IMMERSIVE_DARK_MODE, DwmSetWindowAttribute};
 use windows_sys::Win32::Graphics::Gdi::{
-    BeginPaint, COLOR_BTNFACE, COLOR_BTNSHADOW, COLOR_BTNTEXT, COLOR_GRAYTEXT, COLOR_HIGHLIGHT,
-    COLOR_HIGHLIGHTTEXT, COLOR_WINDOW, COLOR_WINDOWTEXT, CreateFontIndirectW, CreateSolidBrush, DFC_BUTTON,
-    DFCS_BUTTONCHECK, DFCS_BUTTONRADIO, DFCS_CHECKED, DFCS_INACTIVE, DT_CALCRECT, DT_CENTER, DT_END_ELLIPSIS,
-    DT_HIDEPREFIX, DT_LEFT, DT_NOCLIP, DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE, DT_VCENTER, DT_WORDBREAK,
-    DeleteObject, DrawFocusRect, DrawFrameControl, DrawTextW, EndPaint, FillRect, FrameRect, GetSysColor,
-    GetSysColorBrush, GetWindowDC, HBRUSH, HDC, HFONT, HGDIOBJ, InvalidateRect, OPAQUE, PAINTSTRUCT,
-    RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE, RedrawWindow, ReleaseDC, SelectObject, SetBkColor,
-    SetBkMode, SetTextColor, TRANSPARENT,
+    BeginPaint, BitBlt, COLOR_BTNFACE, COLOR_BTNSHADOW, COLOR_BTNTEXT, COLOR_GRAYTEXT, COLOR_HIGHLIGHT,
+    COLOR_HIGHLIGHTTEXT, COLOR_WINDOW, COLOR_WINDOWTEXT, CreateCompatibleBitmap, CreateCompatibleDC,
+    CreateFontIndirectW, CreateSolidBrush, DFC_BUTTON, DFCS_BUTTONCHECK, DFCS_BUTTONRADIO, DFCS_CHECKED,
+    DFCS_INACTIVE, DT_CALCRECT, DT_CENTER, DT_END_ELLIPSIS, DT_HIDEPREFIX, DT_LEFT, DT_NOCLIP, DT_NOPREFIX,
+    DT_RIGHT, DT_SINGLELINE, DT_VCENTER, DT_WORDBREAK, DeleteDC, DeleteObject, DrawFocusRect,
+    DrawFrameControl, DrawTextW, EndPaint, ExcludeClipRect, FillRect, FrameRect, GetSysColor,
+    GetSysColorBrush, GetWindowDC, HBRUSH, HDC, HFONT, HGDIOBJ, InvalidateRect, MapWindowPoints, OPAQUE,
+    PAINTSTRUCT, RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE, RedrawWindow, ReleaseDC, SRCCOPY,
+    SelectObject, SetBkColor, SetBkMode, SetTextColor, StretchBlt, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::{
     GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
@@ -42,8 +43,9 @@ use windows_sys::Win32::UI::Controls::{
     CDIS_CHECKED, CDIS_DISABLED, CDIS_HOT, CDIS_SELECTED, CDRF_DODEFAULT, CDRF_NOTIFYITEMDRAW,
     CDRF_SKIPDEFAULT, CLR_DEFAULT, COMBOBOXINFO, CloseThemeData, DRAWITEMSTRUCT, DrawThemeBackground,
     GetComboBoxInfo, GetThemePartSize, HDF_CENTER, HDF_JUSTIFYMASK, HDF_RIGHT, HDF_SORTDOWN, HDF_SORTUP,
-    HDI_FORMAT, HDI_TEXT, HDITEMW, HDM_GETITEMW, HIMAGELIST, ILD_TRANSPARENT, ImageList_Draw,
-    ImageList_GetIconSize, LVM_GETHEADER, LVM_SETBKCOLOR, LVM_SETTEXTBKCOLOR, LVM_SETTEXTCOLOR,
+    HDI_FORMAT, HDI_TEXT, HDITEMW, HDM_GETITEMCOUNT, HDM_GETITEMRECT, HDM_GETITEMW, HIMAGELIST,
+    ILD_TRANSPARENT, ImageList_Draw, ImageList_GetIconSize, LVIR_BOUNDS, LVM_GETHEADER, LVM_GETITEMCOUNT,
+    LVM_GETITEMRECT, LVM_SETBKCOLOR, LVM_SETTEXTBKCOLOR, LVM_SETTEXTCOLOR, LVS_REPORT, LVS_TYPEMASK,
     NM_CUSTOMDRAW, NMCUSTOMDRAW, NMHDR, NMTBCUSTOMDRAW, ODS_DISABLED, ODS_GRAYED, ODS_HOTLIGHT, ODS_INACTIVE,
     ODS_NOACCEL, ODS_SELECTED, OpenThemeData, PBM_SETBARCOLOR, PBM_SETBKCOLOR, PBS_MARQUEE, SB_GETICON,
     SB_GETPARTS, SB_GETRECT, SB_GETTEXTLENGTHW, SB_GETTEXTW, SB_ISSIMPLE, SB_SIMPLEID, SBARS_SIZEGRIP,
@@ -59,11 +61,11 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     BS_MULTILINE, BS_RADIOBUTTON, BS_TYPEMASK, BST_PUSHED, DI_NORMAL, DrawIconEx, ES_MULTILINE,
     EnumChildWindows, EnumThreadWindows, GWL_STYLE, GetClassNameW, GetClientRect, GetMenuBarInfo,
     GetMenuItemInfoW, GetParent, GetWindowLongW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, HICON,
-    HMENU, MENUBARINFO, MENUITEMINFOW, MIIM_STRING, NONCLIENTMETRICSW, OBJID_MENU, PostMessageW, SM_CXSMICON,
-    SPI_GETHIGHCONTRAST, SPI_GETNONCLIENTMETRICS, SendMessageW, SystemParametersInfoW, UISF_HIDEACCEL,
-    UISF_HIDEFOCUS, WM_APP, WM_CTLCOLORBTN, WM_CTLCOLORDLG, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX,
-    WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_GETFONT, WM_INITDIALOG, WM_NCDESTROY, WM_NOTIFY, WM_PAINT,
-    WM_QUERYUISTATE, WM_THEMECHANGED,
+    HMENU, IsWindowVisible, MENUBARINFO, MENUITEMINFOW, MIIM_STRING, NONCLIENTMETRICSW, OBJID_MENU,
+    PostMessageW, SM_CXSMICON, SPI_GETHIGHCONTRAST, SPI_GETNONCLIENTMETRICS, SendMessageW,
+    SystemParametersInfoW, UISF_HIDEACCEL, UISF_HIDEFOCUS, WM_APP, WM_CTLCOLORBTN, WM_CTLCOLORDLG,
+    WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_GETFONT, WM_INITDIALOG,
+    WM_NCDESTROY, WM_NOTIFY, WM_PAINT, WM_QUERYUISTATE, WM_THEMECHANGED,
 };
 use windows_sys::core::w;
 
@@ -723,7 +725,8 @@ fn scaled(px: i32, dpi: u32) -> i32 {
 }
 
 /// The list view's subclass: in dark, its header's items are painted here (`DarkMode_ItemsView`
-/// gives the dark surface but black text).
+/// gives the dark surface but black text), and the column lines of `DarkMode_Explorer` are taken
+/// out of the area below the rows ([`paint_list`]).
 unsafe extern "system" fn list_proc(
     hwnd: HWND,
     msg: u32,
@@ -740,10 +743,101 @@ unsafe extern "system" fn list_proc(
                 return header_custom_draw(&*(lp as *const NMCUSTOMDRAW));
             }
         }
+        if msg == WM_PAINT && wp == 0 && is_dark() && paint_list(hwnd) {
+            return 0;
+        }
         if msg == WM_NCDESTROY {
             RemoveWindowSubclass(hwnd, Some(list_proc), SUBCLASS_ID);
         }
         DefSubclassProc(hwnd, msg, wp, lp)
+    }
+}
+
+/// A report list's paint in dark. `DarkMode_Explorer` draws a line down every column edge, from
+/// the last row to the bottom of the list (the rows cover it), which the light list does not
+/// have. The control paints into a bitmap here, each line is replaced by the pixels just beside
+/// it (so a selection rectangle dragged over the empty area stays whole) and the result goes to
+/// the screen. `false` when there is nothing to do: another view, or rows down to the bottom.
+unsafe fn paint_list(lv: HWND) -> bool {
+    // SAFETY: the subclassed list view and its header; a paint cycle with our own bitmap.
+    unsafe {
+        if GetWindowLongW(lv, GWL_STYLE) as u32 & LVS_TYPEMASK != LVS_REPORT {
+            return false;
+        }
+        let header = SendMessageW(lv, LVM_GETHEADER, 0, 0) as HWND;
+        if header.is_null() {
+            return false;
+        }
+        let mut client: RECT = std::mem::zeroed();
+        GetClientRect(lv, &mut client);
+        let count = SendMessageW(lv, LVM_GETITEMCOUNT, 0, 0);
+        let top = if count > 0 {
+            let mut last = RECT { left: LVIR_BOUNDS as i32, top: 0, right: 0, bottom: 0 };
+            if SendMessageW(lv, LVM_GETITEMRECT, (count - 1) as WPARAM, &mut last as *mut _ as LPARAM) == 0 {
+                return false;
+            }
+            last.bottom
+        } else {
+            let mut rc: RECT = std::mem::zeroed();
+            GetClientRect(header, &mut rc);
+            rc.bottom
+        }
+        .max(0);
+        let (width, height) = (client.right, client.bottom);
+        if top >= height || width <= 0 {
+            return false;
+        }
+        let mut ps: PAINTSTRUCT = std::mem::zeroed();
+        let hdc = BeginPaint(lv, &mut ps);
+        let mem = CreateCompatibleDC(hdc);
+        let bitmap = CreateCompatibleBitmap(hdc, width, height);
+        if mem.is_null() || bitmap.is_null() {
+            // out of GDI memory: the lines are the lesser evil
+            if !bitmap.is_null() {
+                DeleteObject(bitmap as HGDIOBJ);
+            }
+            if !mem.is_null() {
+                DeleteDC(mem);
+            }
+            DefSubclassProc(lv, WM_PAINT, hdc as WPARAM, 0);
+            EndPaint(lv, &ps);
+            return true;
+        }
+        let old = SelectObject(mem, bitmap as HGDIOBJ);
+        // a common control paints into the device context its WM_PAINT carries
+        DefSubclassProc(lv, WM_PAINT, mem as WPARAM, 0);
+        // the lines lie in the last pixels of each column; `before` covers them at any scale
+        let dpi = GetDpiForWindow(lv);
+        let (before, after) = (scaled(4, dpi), scaled(1, dpi));
+        let columns = SendMessageW(header, HDM_GETITEMCOUNT, 0, 0).max(0) as usize;
+        for i in 0..columns {
+            let mut rc: RECT = std::mem::zeroed();
+            if SendMessageW(header, HDM_GETITEMRECT, i, &mut rc as *mut _ as LPARAM) == 0 {
+                continue;
+            }
+            MapWindowPoints(header, lv, &mut rc as *mut RECT as *mut POINT, 2);
+            let left = rc.right - before;
+            if rc.right + after <= 0 || left >= width {
+                continue;
+            }
+            // the pixel column beside the line, on its left unless that is outside the list
+            let src = if left > 0 { left - 1 } else { rc.right + after };
+            StretchBlt(mem, left, top, before + after, height - top, mem, src, top, 1, height - top, SRCCOPY);
+        }
+        // the header is a child the list does not clip: it keeps its own pixels
+        if IsWindowVisible(header) != 0 {
+            let mut rc: RECT = std::mem::zeroed();
+            GetWindowRect(header, &mut rc);
+            MapWindowPoints(null_mut(), lv, &mut rc as *mut RECT as *mut POINT, 2);
+            ExcludeClipRect(hdc, rc.left, rc.top, rc.right, rc.bottom);
+        }
+        let p = ps.rcPaint;
+        BitBlt(hdc, p.left, p.top, p.right - p.left, p.bottom - p.top, mem, p.left, p.top, SRCCOPY);
+        SelectObject(mem, old);
+        DeleteObject(bitmap as HGDIOBJ);
+        DeleteDC(mem);
+        EndPaint(lv, &ps);
+        true
     }
 }
 

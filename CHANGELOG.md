@@ -4,6 +4,14 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-10_082302_1794295382: Version 1.2.31: Win32 dark lists without the column lines below the rows
+
+- **Reported by the owner (screenshots of 1.2.30):** in dark every report list showed a thin line down each column edge, from the last row to the bottom of the list; light has none. Not ours: `DarkMode_Explorer`'s list view draws them (2 px, `#404043` and `#1c2632`), and the rows cover them, so only the empty area showed them. Reproduced on the hidden desktop with `tools/win32-shots` (`-DemoCount 4`).
+- **Tried first, dropped:** `DarkMode_ItemsView` on the list view keeps the lines and turns the scroll bars light.
+- **Fix (`theme::paint_list`, called from `list_proc`):** in dark, a report list with room below its last row paints into a bitmap (`WM_PAINT` with the device context in `wParam`), each line is replaced by the pixel column beside it (not a plain fill, so a selection rectangle dragged over the empty area stays whole), and the bitmap goes to the screen with the header's rectangle excluded (the list does not clip its header; a first try blanked it). Lists with rows down to the bottom, other views and light take the control's own paint as before.
+- **Validation:** dark captures of the main window with 4 and 60 demo torrents, all detail tabs and the dialogs: no line left (pixel check at a column edge), header dividers, scroll bars, selection and progress bars as before; light captures before and after identical except the carets and the Logger's lines. Clippy `-D warnings` and fmt clean for the Win32 crate; its tests green on one thread. **Not checked:** a selection rectangle and a column resize by hand (no pointer input on the hidden desktop), and 150/200 % (the covered strip is 4 px left and 1 px right of the edge, scaled).
+- **Seen in the same screenshots, not looked into (BACKLOG "Themes"):** the dark window's status bar was empty, and the light list cut Size to "1.51 ...".
+
 ## 2026-11-10_072902_1794292142: Release 1.2.30 published
 
 - Published as GitHub's Latest on the owner's instruction ("Release and we will do benchmarks again tomorrow"): `main` fast-forwarded to the release commit, FreeBSD and Fuzz green, CI green after one rerun of the Windows test job (`http_proxy_requests_trackers_and_web_seeds_by_url` timed out waiting for a "finished" alert its own log shows: a race in the test, BACKLOG "Validation and development environment"), tag `v1.2.30`, the Release run green on every job. The draft had the 13 files plus `SHA256SUMS`, which names each; the Windows zip and setup verified against it; the zip's `rookparcel-nox.exe --version` says `1.2.30`.
