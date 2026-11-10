@@ -77,6 +77,7 @@ pub fn page(title: S) -> &'static str {
         S::PageAdvanced => "slider.horizontal.3",
         S::PageDiskCache | S::PageDiskIo => "internaldrive",
         S::PageTrackers => "antenna.radiowaves.left.and.right",
+        S::PageRunProgram => "terminal",
         _ => "gearshape.2",
     }
 }
@@ -92,7 +93,12 @@ mod tests {
             .iter()
             .filter_map(|&c| command(c))
             .chain(Tab::ALL.iter().map(|&t| tab(t)))
-            .chain([page(S::PageGeneral), page(S::PageAdvanced), page(S::PageTrackers)]);
+            .chain([
+                page(S::PageGeneral),
+                page(S::PageAdvanced),
+                page(S::PageTrackers),
+                page(S::PageRunProgram),
+            ]);
         for n in names {
             assert!(
                 !n.is_empty() && n.chars().all(|c| c.is_ascii_lowercase() || c == '.' || c.is_ascii_digit()),

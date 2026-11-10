@@ -32,6 +32,7 @@ mod params;
 mod proto;
 pub mod remote;
 mod resume;
+pub mod run_program;
 mod session;
 mod settings;
 mod status;

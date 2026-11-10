@@ -162,6 +162,14 @@ OPTIONS:
     --webui-cert FILE [--webui-key FILE]
                       Serve HTTPS with this certificate (PEM, the server's first, then its
                       chain) and private key (PEM, not encrypted; default: the certificate file)
+    --webui-remote-run-program
+                      Let the Run Program lines (Preferences > Advanced > Run Program: programs
+                      started when a torrent is added or finishes) be changed from other
+                      computers too. By default only a browser on this computer can change
+                      them, and never through a reverse proxy; the current password is needed
+                      either way. With this option anyone who has the Web UI password can run
+                      programs under the daemon's account. Only this option switches it on:
+                      it is not stored and no request can set it
 
 SERVICE OPTIONS (docs/DAEMON.md):
     --daemon          Detach into the background (Unix): returns once the daemon is up
@@ -238,6 +246,8 @@ struct Opts {
     webui_https: bool,
     webui_cert: Option<PathBuf>,
     webui_key: Option<PathBuf>,
+    /// `--webui-remote-run-program` (D67): only ever from the command line.
+    webui_remote_run_program: bool,
     torrents: usize,
     active: f64,
     /// `run --mock-library N` (undocumented): the simulated engine with N synthetic torrents
@@ -279,6 +289,7 @@ fn parse(args: &[String]) -> Result<Opts, String> {
         webui_https: false,
         webui_cert: None,
         webui_key: None,
+        webui_remote_run_program: false,
         torrents: 1000,
         active: 0.02,
         mock_library: 0,
@@ -337,6 +348,7 @@ fn parse(args: &[String]) -> Result<Opts, String> {
             "--webui-https" => o.webui_https = true,
             "--webui-cert" => o.webui_cert = Some(value("--webui-cert")?.into()),
             "--webui-key" => o.webui_key = Some(value("--webui-key")?.into()),
+            "--webui-remote-run-program" => o.webui_remote_run_program = true,
             "--torrents" => o.torrents = num("--torrents", value("--torrents")?)?,
             "--active" => o.active = num("--active", value("--active")?)?,
             "--mock-library" => o.mock_library = num("--mock-library", value("--mock-library")?)?,
@@ -1153,6 +1165,7 @@ fn start_webui(
     c.helper_dir = dirs.state.clone();
     c.move_completed_dir = move_dir.clone();
     c.ip_filter = o.ip_filter.clone();
+    c.remote_run_program = o.webui_remote_run_program;
     c.https = match (&o.webui_cert, o.webui_https) {
         (Some(cert), _) => Some(webui::https::Certificate::Files {
             cert: cert.clone(),
@@ -1180,7 +1193,27 @@ fn start_webui(
             "* Web UI: no password set; temporary password for this run: {p} (set one with --webui-pass)"
         );
     }
+    if let Some(line) = run_program_warning(w.run_program_enabled(), addr, o.webui_remote_run_program) {
+        println!("{line}");
+    }
     Ok(w)
+}
+
+/// The line printed at start when programs will run on torrent events (D67: a Run Program line
+/// is set and switched on) while the Web UI listens on more than this computer: who can change
+/// what is run. Nothing for a Web UI on a loopback address, or with no program set.
+fn run_program_warning(enabled: bool, addr: std::net::SocketAddr, remote: bool) -> Option<String> {
+    if !enabled || addr.ip().is_loopback() {
+        return None;
+    }
+    let who = if remote {
+        "--webui-remote-run-program is given: anyone who has the Web UI password can change them, from any computer"
+    } else {
+        "they can be changed only in a browser on this computer, with the current password"
+    };
+    Some(format!(
+        "* Web UI: warning: Run Program is on, so programs are started when torrents are added or finish, and the Web UI can be reached from other computers; {who}"
+    ))
 }
 
 fn demo(o: Opts) -> ExitCode {
@@ -1379,6 +1412,38 @@ mod tests {
         let e = parse(&args(&["--profile", "a b"])).err().unwrap();
         assert!(e.contains("profile name"), "{e}");
         assert_eq!(parse(&args(&["--profile"])).err().unwrap(), "--profile needs a value");
+    }
+
+    /// `--webui-remote-run-program` (D67) is off unless it is given, and the start-up warning
+    /// comes only when programs will run while the Web UI listens beyond this computer.
+    #[test]
+    fn remote_run_program_is_a_command_line_flag_only() {
+        assert!(!parse(&args(&["--webui", "8080"])).unwrap().webui_remote_run_program);
+        let o = parse(&args(&["--webui", "0.0.0.0:8080", "--webui-remote-run-program"])).unwrap();
+        assert!(o.webui_remote_run_program);
+        // a flag: it takes no value, so nothing after it is swallowed
+        let o = parse(&args(&["--webui-remote-run-program", "--webui", "8080"])).unwrap();
+        assert!(o.webui_remote_run_program && o.webui.is_some());
+        assert!(USAGE.contains("--webui-remote-run-program"));
+
+        let lan: std::net::SocketAddr = "0.0.0.0:8080".parse().unwrap();
+        let v6: std::net::SocketAddr = "[::]:8080".parse().unwrap();
+        let here: std::net::SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let here6: std::net::SocketAddr = "[::1]:8080".parse().unwrap();
+        // nothing set, or reachable from this computer only: no line
+        for remote in [false, true] {
+            assert_eq!(run_program_warning(false, lan, remote), None);
+            assert_eq!(run_program_warning(true, here, remote), None);
+            assert_eq!(run_program_warning(true, here6, remote), None);
+        }
+        for addr in [lan, v6] {
+            let line = run_program_warning(true, addr, false).unwrap();
+            assert!(line.starts_with("* Web UI: warning: Run Program is on"), "{line}");
+            assert!(line.contains("only in a browser on this computer, with the current password"), "{line}");
+            let line = run_program_warning(true, addr, true).unwrap();
+            assert!(line.contains("--webui-remote-run-program"), "{line}");
+            assert!(line.contains("anyone who has the Web UI password"), "{line}");
+        }
     }
 
     #[test]

@@ -396,3 +396,75 @@ fn a_remote_session_over_https() {
     });
     h.status_of(id, |_| true);
 }
+
+/// `POST /pa/prefs` from this computer as the page sends it, logged in with the password.
+fn pa_prefs(addr: SocketAddr, body: &str) -> String {
+    let req = |r: String| {
+        let mut s = TcpStream::connect(addr).unwrap();
+        s.write_all(r.as_bytes()).unwrap();
+        let mut out = String::new();
+        s.read_to_string(&mut out).unwrap();
+        out
+    };
+    let form = format!("username=admin&password={PASS}");
+    let login = req(format!(
+        "POST /api/v2/auth/login HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\
+         Content-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{form}",
+        form.len()
+    ));
+    let sid = login.split("SID=").nth(1).unwrap().split(';').next().unwrap().to_owned();
+    req(format!(
+        "POST /pa/prefs HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\nCookie: SID={sid}\r\n\
+         Origin: http://{addr}\r\nX-Requested-With: Rookparcel\r\nContent-Type: application/json\r\n\
+         Content-Length: {}\r\n\r\n{body}",
+        body.len()
+    ))
+}
+
+/// Rule E (D67): a remote GUI cannot change the Run Program lines. Its protocol carries engine
+/// commands and the engine's settings; the lines are neither, so `apply_settings` leaves them
+/// as they are, on or off.
+#[test]
+fn a_remote_session_cannot_change_run_program() {
+    // a program that does not exist: nothing could start
+    const LINE: &str = "/nonexistent/rookparcel-test/none %N";
+    // no engine setting is one of them, so `ApplySettings` has no field to carry them in
+    assert!(rookparcel_frontend::settings::TABLE.iter().all(|e| !e.name.contains("run")));
+    let n = nox("run-program", false);
+    let addr = n.web.local_addr();
+    let (client, hello) = remote::connect(&target(addr, None, PASS), TIMEOUT).unwrap();
+    let h = Client::new(client.handle());
+    let apply = |active: i32| {
+        let mut s = hello.settings.clone();
+        s.active_downloads = active;
+        h.apply_settings(s);
+        let deadline = Instant::now() + TIMEOUT;
+        loop {
+            let prefs = shim_get(addr, "/api/v2/app/preferences");
+            if prefs.contains(&format!("\"max_active_downloads\":{active}")) {
+                return prefs;
+            }
+            assert!(Instant::now() < deadline, "{prefs}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    // off: still off after a remote client's settings
+    let prefs = apply(6);
+    assert!(prefs.contains(r#""autorun_enabled":false"#), "{prefs}");
+    assert!(prefs.contains(r#""autorun_program":"""#), "{prefs}");
+    assert!(prefs.contains(r#""autorun_on_torrent_added_enabled":false"#), "{prefs}");
+    assert!(!n.web.run_program_enabled());
+    // set on this computer with the password: as it was after the next ones
+    let body = format!(
+        r#"{{"run.finished_enabled":true,"run.finished":"{LINE}","webui.current_password":"{PASS}"}}"#
+    );
+    let r = pa_prefs(addr, &body);
+    assert!(r.starts_with("HTTP/1.1 204"), "{r}");
+    let prefs = apply(5);
+    assert!(prefs.contains(r#""autorun_enabled":true"#), "{prefs}");
+    assert!(prefs.contains(&format!(r#""autorun_program":"{LINE}""#)), "{prefs}");
+    assert!(prefs.contains(r#""autorun_on_torrent_added_enabled":false"#), "{prefs}");
+    assert!(prefs.contains(r#""autorun_on_torrent_added_program":"""#), "{prefs}");
+    assert!(n.web.run_program_enabled());
+    client.shutdown();
+}

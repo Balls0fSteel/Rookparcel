@@ -396,6 +396,62 @@ fn the_typed_tracker_list_reaches_the_engine_but_not_a_server() {
 }
 
 #[test]
+fn run_program_is_this_engines_only_and_takes_the_lines_in_force() {
+    // (no program is started here: the line names none that exists, and no alert is pumped)
+    let line = "/nonexistent/rookparcel-test-program --name=%N";
+    let mut s = Setup::new();
+    s.options.gui.run_finished_on = true;
+    s.options.gui.run_finished = line.to_owned();
+    let mut core = s.start("run");
+    assert!(core.run.is_some() && core.run_enabled());
+    // a line whose box is off is not in force
+    let mut o = core.options();
+    o.gui.run_finished_on = false;
+    assert_eq!(crate::pref_pages::check(&o), Ok(()));
+    core.apply_options(&o);
+    assert!(core.run.is_some() && !core.run_enabled());
+    o.gui.run_added_on = true;
+    o.gui.run_added = line.to_owned();
+    assert_eq!(crate::pref_pages::check(&o), Ok(()));
+    core.apply_options(&o);
+    assert!(core.run_enabled());
+    assert_eq!(core.options().gui.run_commands(), (line, ""));
+    // a line that cannot be split is refused by the Preferences, with its field; one that got
+    // here anyway (a hand-edited settings file) is off
+    o.gui.run_added = "\"/nonexistent/open quote %N".to_owned();
+    let refused = crate::pref_pages::check(&o).unwrap_err();
+    assert_eq!(refused.0, crate::pref_pages::RUN_ADDED);
+    assert!(!refused.1.is_empty());
+    o.gui.run_added = "%N".to_owned();
+    assert_eq!(crate::pref_pages::check(&o).unwrap_err().0, crate::pref_pages::RUN_ADDED);
+    core.apply_options(&o);
+    assert!(!core.run_enabled());
+    // ... and is no complaint while its box is off
+    o.gui.run_added_on = false;
+    assert_eq!(crate::pref_pages::check(&o), Ok(()));
+
+    // a demo's torrents are simulated: nothing is ever started for them
+    let mut s = Setup::new();
+    s.demo = true;
+    s.options.gui.run_added_on = true;
+    s.options.gui.run_added = line.to_owned();
+    let mut core = s.start("run-demo");
+    let o = core.options();
+    core.apply_options(&o);
+    assert!(core.run.is_none() && !core.run_enabled());
+
+    // a remote window: the server starts its own programs
+    let mut s = Setup::new();
+    s.remote = Some(Remote { label: "nas:8080".into() });
+    s.options.gui.run_added_on = true;
+    s.options.gui.run_added = line.to_owned();
+    let mut core = s.start("run-remote");
+    let o = core.options();
+    core.apply_options(&o);
+    assert!(core.run.is_none() && !core.run_enabled());
+}
+
+#[test]
 fn status_bar_title_and_tray_texts() {
     let mut core = Setup::new().start("status");
     let stats = SessionStats {

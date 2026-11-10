@@ -703,6 +703,33 @@ pub(crate) static FIELDS: &[Field] = &[
         |w| Value::Str(w.prefs.trackers_url.clone()),
         |w, v| w.prefs.trackers_url = string(v).trim().to_owned()
     ),
+    // Advanced > Run Program (D67): changed only through `commit_request` with an open
+    // [`RunGate`] and the current password, see `RUN_FIELDS`
+    field!(
+        pref_pages::RUN_ADDED_ON,
+        Some(S::PrefRunAdded),
+        Kind::Bool,
+        |w| Value::Bool(w.prefs.run_added_on),
+        |w, v| w.prefs.run_added_on = boolean(&v)
+    ),
+    field!(pref_pages::RUN_ADDED, None, Kind::Text, |w| Value::Str(w.prefs.run_added.clone()), |w, v| w
+        .prefs
+        .run_added =
+        string(v).trim().to_owned()),
+    field!(
+        pref_pages::RUN_FINISHED_ON,
+        Some(S::PrefRunFinished),
+        Kind::Bool,
+        |w| Value::Bool(w.prefs.run_finished_on),
+        |w, v| w.prefs.run_finished_on = boolean(&v)
+    ),
+    field!(
+        pref_pages::RUN_FINISHED,
+        None,
+        Kind::Text,
+        |w| Value::Str(w.prefs.run_finished.clone()),
+        |w, v| w.prefs.run_finished = string(v).trim().to_owned()
+    ),
 ];
 
 /// The 2.2.1 wording of the engine settings the pages show (the Advanced table shows the
@@ -768,6 +795,10 @@ const HELP: &[(&str, H)] = &[
     ("webui.password", H::PrefWebUiPassword),
     (pref_pages::TRACKERS_LIST, H::PrefTrackersAppend),
     (pref_pages::TRACKERS_URL, H::PrefTrackersFromUrl),
+    (pref_pages::RUN_ADDED_ON, H::PrefRunAdded),
+    (pref_pages::RUN_ADDED, H::PrefRunAdded),
+    (pref_pages::RUN_FINISHED_ON, H::PrefRunFinished),
+    (pref_pages::RUN_FINISHED, H::PrefRunFinished),
 ];
 
 /// One editable thing: an engine setting row or one of [`FIELDS`].
@@ -977,7 +1008,7 @@ fn page(id: &str, title: &str, groups: Vec<Json>) -> Json {
 /// The tree, in µTorrent 2.2.1's order; Disk Cache and Rookparcel's Disk I/O and Trackers sit
 /// under Advanced. `hosted`: without the alternative speed limits (the host has none), the
 /// update check and the Trackers page (the host's own).
-fn pages(settings_dir: &Path, hosted: bool) -> Vec<Json> {
+fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
     let ipf_default = settings_dir.join("ipfilter.dat");
     let mut bandwidth = vec![
         group(Some(tr!(PrefUpLimiting)), vec![kb("upload_rate_limit")]),
@@ -1295,6 +1326,31 @@ fn pages(settings_dir: &Path, hosted: bool) -> Vec<Json> {
             )
             .with("under", "advanced"),
         );
+        // the programs started on torrent events (D67); hosted, the host's own. A session that
+        // may not change them (`RunGate`) sees them read-only (`model`), with the reason
+        let mut notes = vec![note(tr!(PrefRunNote)), note(tr!(PrefRunSafetyNote))];
+        if !run_open {
+            notes.push(note(tr!(RunErrRemote)));
+        }
+        pages.push(
+            page(
+                "run_program",
+                tr!(PageRunProgram),
+                vec![
+                    group(
+                        Some(tr!(PageRunProgram)),
+                        vec![
+                            f(pref_pages::RUN_ADDED_ON),
+                            enabled_by(f(pref_pages::RUN_ADDED), pref_pages::RUN_ADDED_ON),
+                            f(pref_pages::RUN_FINISHED_ON),
+                            enabled_by(f(pref_pages::RUN_FINISHED), pref_pages::RUN_FINISHED_ON),
+                        ],
+                    ),
+                    group(None, notes),
+                ],
+            )
+            .with("under", "advanced"),
+        );
     }
     pages
 }
@@ -1307,7 +1363,12 @@ fn pages(settings_dir: &Path, hosted: bool) -> Vec<Json> {
 /// `readonly`, `help`: the current language's help text, `wiki`: its wiki page once there is
 /// one), `advanced` (every engine setting's id, the table's order) and `trackers_status` (the
 /// fetched tracker list's status line, D66; `GET /pa/prefs/trackers` gives it alone).
-pub(crate) fn model(shared: &Shared, st: &State) -> Json {
+///
+/// `run`: whether the asking session may change the Run Program lines (D67, [`RunGate`]). When
+/// not, the four fields are `readonly` in this answer and their page carries the reason; the
+/// gate itself is [`commit_request`]'s, whatever a page shows.
+pub(crate) fn model(shared: &Shared, st: &State, run: RunGate) -> Json {
+    let run_open = run == RunGate::Open;
     let w = Working::from_state(st);
     let d = Working::defaults(st);
     let mut fields = Json::obj();
@@ -1343,7 +1404,7 @@ pub(crate) fn model(shared: &Shared, st: &State) -> Json {
             }
             _ => {}
         }
-        if def.readonly() {
+        if def.readonly() || (!run_open && RUN_FIELDS.contains(&def.id())) {
             j.set("readonly", true);
         }
         if let Some(h) = def.help_key() {
@@ -1356,7 +1417,7 @@ pub(crate) fn model(shared: &Shared, st: &State) -> Json {
     }
     let advanced: Vec<Json> = TABLE.iter().map(|e| Json::from(e.name)).collect();
     Json::obj()
-        .with("pages", Json::Arr(pages(&shared.settings_dir, st.hosted)))
+        .with("pages", Json::Arr(pages(&shared.settings_dir, st.hosted, run_open)))
         .with("fields", fields)
         .with("advanced", Json::Arr(advanced))
         .with("trackers_status", trackers_status(shared))
@@ -1411,10 +1472,49 @@ const TRACKER_FIELDS: [&str; 4] = [
     pref_pages::TRACKERS_URL,
 ];
 
+/// Why the Run Program lines (D67) are refused while a desktop client hosts the Web UI: the
+/// host starts the programs and owns the setting; `POST /pa/prefs` answers 400 with it.
+pub(crate) const HOSTED_NO_RUN: &str =
+    "the programs to run are set in the desktop client that hosts the Web UI";
+
+/// The four Run Program preferences (D67), in the page's order. Whoever changes them runs
+/// programs under the daemon's account, so a request changes them only when its [`RunGate`] is
+/// open and it carries the current password ([`SECURITY_FIELDS`]); nothing else does at all:
+/// not the qBittorrent shim, not a remote GUI, not nox itself.
+pub(crate) const RUN_FIELDS: [&str; 4] =
+    [pref_pages::RUN_ADDED_ON, pref_pages::RUN_ADDED, pref_pages::RUN_FINISHED_ON, pref_pages::RUN_FINISHED];
+
+/// Whether a request may change the Run Program lines (D67). qBittorrent's CVE-2023-30801 was
+/// a Web UI login turned into code execution through "Run external program"; here a login from
+/// elsewhere changes nothing of it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RunGate {
+    /// A browser on this computer (`api::is_local`: a loopback peer, not passed on by a
+    /// proxy), or the daemon was started with `--webui-remote-run-program`. The current
+    /// password is still needed.
+    Open,
+    /// Anything else: refused before the password is looked at, so the answer says nothing
+    /// about it and the session stays. The client's address, for the Logger line; `None` for
+    /// a change that came from no page request (the shim, nox's own).
+    Closed(Option<std::net::IpAddr>),
+}
+
+impl RunGate {
+    /// The gate of a `/pa/` request.
+    pub(crate) fn of(shared: &Shared, head: &super::http::Head, peer: std::net::IpAddr) -> RunGate {
+        if shared.remote_run_program || super::api::is_local(head, peer) {
+            RunGate::Open
+        } else {
+            RunGate::Closed(Some(super::api::client_ip(head, peer)))
+        }
+    }
+}
+
 /// The fields that guard the Web UI: changed only with the current password (SEC-03). The
 /// trackers added to new downloads (D66) are among them: they make the daemon fetch a file
-/// from the net and announce every public download to the addresses named.
-const SECURITY_FIELDS: [&str; 14] = [
+/// from the net and announce every public download to the addresses named. So are the Run
+/// Program lines (D67, [`RUN_FIELDS`]), behind their [`RunGate`] as well.
+const SECURITY_FIELDS: [&str; 18] = [
     "webui.username",
     "webui.bypass_local_auth",
     "webui.api_key_enabled",
@@ -1429,6 +1529,10 @@ const SECURITY_FIELDS: [&str; 14] = [
     pref_pages::TRACKERS_LIST,
     pref_pages::TRACKERS_FROM_URL,
     pref_pages::TRACKERS_URL,
+    pref_pages::RUN_ADDED_ON,
+    pref_pages::RUN_ADDED,
+    pref_pages::RUN_FINISHED_ON,
+    pref_pages::RUN_FINISHED,
 ];
 
 /// Whether `w` changes the password, the API key or a [`SECURITY_FIELDS`] value.
@@ -1509,6 +1613,15 @@ pub(crate) fn validate(w: &Working) -> Result<(), Refusal> {
     if w.prefs.trackers_from_url && !tracker_list::is_list_url(&w.prefs.trackers_url) {
         return refuse(pref_pages::TRACKERS_URL, tr!(TrackersErrHttps));
     }
+    // a Run Program line that is switched on must be one that can be started (D67)
+    for (on, line, id) in [
+        (w.prefs.run_added_on, &w.prefs.run_added, pref_pages::RUN_ADDED),
+        (w.prefs.run_finished_on, &w.prefs.run_finished, pref_pages::RUN_FINISHED),
+    ] {
+        if let Some(why) = pref_pages::run_command_error(line).filter(|_| on) {
+            return refuse(id, &why);
+        }
+    }
     Ok(())
 }
 
@@ -1561,10 +1674,13 @@ fn ip_filter_to_read(shared: &Shared, st: &State, changes: &[Change]) -> Option<
 /// which every request and the alert loop wait for (SEC-05: a big list takes a while), with
 /// `read`; then the changes are committed under the lock. When the preferences changed in the
 /// meantime so that another file is wanted, that one is read the same way.
+///
+/// `run` is the request's [`RunGate`]: the only way the Run Program lines (D67) change.
 pub(crate) fn commit_request(
     shared: &Shared,
     changes: &[Change],
     from: &str,
+    run: RunGate,
     read: impl Fn(&Path) -> io::Result<IpFilterLoad>,
 ) -> Result<(), Refusal> {
     let mut done: Read = None;
@@ -1572,7 +1688,7 @@ pub(crate) fn commit_request(
         let mut st = shared.lock();
         let wanted = ip_filter_to_read(shared, &st, changes);
         if wanted.as_ref() == done.as_ref().map(|(f, _)| f) {
-            return commit_read(shared, &mut st, changes, Some(from), done);
+            return commit_read(shared, &mut st, changes, Some(from), run, done);
         }
         drop(st);
         done = wanted.map(|f| {
@@ -1581,7 +1697,7 @@ pub(crate) fn commit_request(
         });
     }
     // still changing: the file is read under the lock
-    commit_read(shared, &mut shared.lock(), changes, Some(from), done)
+    commit_read(shared, &mut shared.lock(), changes, Some(from), run, done)
 }
 
 /// Applies parsed changes to a working copy of `st`, checks it, and commits: engine settings
@@ -1595,13 +1711,16 @@ pub(crate) fn commit_request(
 /// Web UI's security settings only with the current password, and a wrong one ends its session
 /// (SEC-03). A new password ends every other login: the other sessions, their WebSockets and
 /// the remote connections (SEC-24).
+///
+/// The Run Program lines (D67) never change here: the gate is closed for everything that is
+/// not a page's request ([`commit_request`]), whoever calls and with whatever password.
 pub(crate) fn commit(
     shared: &Shared,
     st: &mut State,
     changes: &[Change],
     from: Option<&str>,
 ) -> Result<(), Refusal> {
-    commit_read(shared, st, changes, from, None)
+    commit_read(shared, st, changes, from, RunGate::Closed(None), None)
 }
 
 /// [`commit`], with the block list `read` already when it is the file wanted.
@@ -1610,12 +1729,35 @@ fn commit_read(
     st: &mut State,
     changes: &[Change],
     from: Option<&str>,
+    run: RunGate,
     read: Read,
 ) -> Result<(), Refusal> {
     let keep = from;
     let mut w = Working::from_state(st);
     for (def, v) in changes {
         def.set(&mut w, v.clone());
+    }
+    // Run Program (D67) before anything else is looked at, the current password above all: a
+    // request from elsewhere learns nothing here, not even whether its password was right
+    let now = Working::from_state(st);
+    if let Some(id) = RUN_FIELDS.iter().find(|id| find(id).is_some_and(|d| d.get(&w) != d.get(&now))) {
+        if st.hosted {
+            // the host's own programs: never changed from a browser
+            return Err(((*id).to_owned(), HOSTED_NO_RUN.to_owned()));
+        }
+        if let RunGate::Closed(client) = run {
+            let line = match client {
+                Some(addr) => {
+                    format!("Run Program: a change from {addr} was refused (not this computer)")
+                }
+                None => {
+                    "Run Program: a change was refused (not a request of the Preferences page)".to_owned()
+                }
+            };
+            println!("* {line}");
+            st.push_log(None, line, unix_now());
+            return Err(((*id).to_owned(), tr!(RunErrRemote).to_owned()));
+        }
     }
     validate(&w)?;
     if st.hosted && w.prefs.alt_enabled {
@@ -1967,7 +2109,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("nox-prefs-help-{}", std::process::id()));
         let session = rookparcel_core::Session::start_mock(Settings::default(), Default::default());
         let shared = State::shared_for_tests(session.handle(), dir);
-        let m = model(&shared, &state());
+        let m = model(&shared, &state(), RunGate::Open);
         let fields = m.get("fields").unwrap();
         let mut missing = Vec::new();
         for def in all() {
@@ -1998,7 +2140,7 @@ mod tests {
         for def in all() {
             fields.set(def.id(), json_of(&def.get(&w)));
         }
-        let pages_json = pages(Path::new("S"), false);
+        let pages_json = pages(Path::new("S"), false, true);
         let ids: Vec<String> =
             pages_json.iter().map(|p| p.get("id").and_then(Json::as_str).unwrap().to_owned()).collect();
         assert_eq!(
@@ -2016,7 +2158,8 @@ mod tests {
                 "advanced",
                 "diskcache",
                 "diskio",
-                "trackers"
+                "trackers",
+                "run_program"
             ]
         );
         let titles: Vec<&str> =
@@ -2027,6 +2170,8 @@ mod tests {
         assert_eq!(pages_json[10].get("under").and_then(Json::as_str), Some("advanced"));
         assert_eq!(pages_json[11].get("under").and_then(Json::as_str), Some("advanced"));
         assert_eq!(pages_json[12].get("under").and_then(Json::as_str), Some("advanced"));
+        assert_eq!(titles[13], "Run Program");
+        assert_eq!(pages_json[13].get("under").and_then(Json::as_str), Some("advanced"));
         assert_eq!(pages_json[9].get("advanced"), Some(&Json::Bool(true)));
         let mut placed = Vec::new();
         fn walk(items: &[Json], placed: &mut Vec<String>) {
@@ -2200,7 +2345,7 @@ mod tests {
         const A: &str = "udp://a.example:6969/announce";
         const B: &str = "https://b.example/announce";
         let has = |hosted: bool| {
-            pages(Path::new("S"), hosted)
+            pages(Path::new("S"), hosted, true)
                 .iter()
                 .any(|p| p.get("id").and_then(Json::as_str) == Some("trackers"))
         };
@@ -2291,6 +2436,223 @@ mod tests {
         assert_eq!(g.trackers_url, "https://host.example/list");
     }
 
+    /// Preferences > Advanced > Run Program (D67). Whoever changes these lines runs programs
+    /// under the daemon's account (qBittorrent's CVE-2023-30801), so they change through one
+    /// door only: a page's request whose [`RunGate`] is open, with the current password.
+    #[test]
+    fn run_program_changes_only_through_an_open_gate_with_the_password() {
+        use std::net::{IpAddr, Ipv4Addr};
+        // a program that does not exist: nothing could start even if an event came
+        const LINE: &str = r#""/nonexistent/rookparcel-test/none" "%N" %I"#;
+        let page = |hosted: bool, open: bool| {
+            pages(Path::new("S"), hosted, open)
+                .into_iter()
+                .find(|p| p.get("id").and_then(Json::as_str) == Some("run_program"))
+        };
+        // F: no page hosted
+        assert!(page(false, true).is_some() && page(true, true).is_none() && page(true, false).is_none());
+        // C: a session that may not change them is told why on the page
+        let open = page(false, true).unwrap().to_json();
+        let closed = page(false, false).unwrap().to_json();
+        let reason = Json::from(tr!(RunErrRemote)).to_json();
+        assert!(!open.contains(&reason) && closed.contains(&reason), "{closed}");
+        for text in [tr!(PrefRunNote), tr!(PrefRunSafetyNote)] {
+            let note = Json::from(text).to_json();
+            assert!(open.contains(&note) && closed.contains(&note));
+        }
+        for id in RUN_FIELDS {
+            assert!(SECURITY_FIELDS.contains(&id), "{id}");
+            assert!(matches!(find(id), Some(Def::Own(_))), "{id}");
+            assert!(TABLE.iter().all(|e| e.name != id), "{id} is no engine setting");
+            assert!(find(id).unwrap().help_key().is_some(), "{id}");
+        }
+        assert_eq!(find("run.added_enabled").unwrap().kind().name(), "bool");
+        assert_eq!(find("run.finished").unwrap().kind().name(), "text");
+        assert_eq!(find("run.added").unwrap().help_key(), Some(H::PrefRunAdded));
+        assert_eq!(find("run.finished").unwrap().help_key(), Some(H::PrefRunFinished));
+
+        // I: a line that is switched on must be one that can be started
+        let st = state();
+        let w = Working::from_state(&st);
+        assert!(!w.prefs.run_added_on && !w.prefs.run_finished_on, "off by default");
+        assert_eq!(w.prefs.run_commands(), ("", ""));
+        let bad = |on: &str, id: &str, line: &str| {
+            edited(&st, &Json::obj().with(on, true).with(id, line).to_json()).err().unwrap()
+        };
+        let long = format!("prog {}", "x".repeat(5000));
+        for (line, why) in [
+            ("", tr!(RunErrEmpty)),
+            ("   ", tr!(RunErrEmpty)),
+            (r#""C:\Program Files\x.exe %N"#, tr!(RunErrQuote)),
+            ("%N.exe --now", tr!(RunErrProgram)),
+            (long.as_str(), tr!(RunErrLong)),
+        ] {
+            assert_eq!(
+                bad("run.added_enabled", "run.added", line),
+                ("run.added".to_owned(), why.to_owned()),
+                "{line}"
+            );
+            assert_eq!(
+                bad("run.finished_enabled", "run.finished", line),
+                ("run.finished".to_owned(), why.to_owned()),
+                "{line}"
+            );
+        }
+        // a line that is not switched on is not checked (nothing starts it)
+        assert!(edited(&st, r#"{"run.finished":"\"unclosed"}"#).is_ok());
+
+        let dir = std::env::temp_dir().join(format!("nox-prefs-run-{}", std::process::id()));
+        let session = rookparcel_core::Session::start_mock(Settings::default(), Default::default());
+        let mut shared = State::shared_for_tests(session.handle(), dir);
+        *shared.lock() = state();
+        let body = |password: Option<&str>| {
+            let mut j = Json::obj().with("run.finished_enabled", true).with("run.finished", LINE);
+            if let Some(p) = password {
+                j.set("webui.current_password", p);
+            }
+            parse(&j).unwrap()
+        };
+        let read = |_: &Path| -> io::Result<IpFilterLoad> { panic!("no block list here") };
+        let login = |shared: &Shared| {
+            shared.lock().sessions.insert(
+                "s".to_owned(),
+                super::super::ClientSession {
+                    last_used: std::time::Instant::now(),
+                    maindata: None,
+                    peers: None,
+                },
+            );
+        };
+        let unchanged = |shared: &Shared| {
+            let st = shared.lock();
+            !st.prefs.run_finished_on
+                && st.prefs.run_finished.is_empty()
+                && st.options.get("run.finished").is_none()
+                && st.options.get("run.finished_enabled").is_none()
+        };
+        let lines =
+            |shared: &Shared| shared.lock().log.iter().filter(|l| l.text.contains("Run Program")).count();
+        login(&shared);
+
+        // B: from another computer, refused whatever the password: the right one, a wrong one
+        // and none get the same answer, the session stays, and each try leaves a Logger line
+        let there = RunGate::Closed(Some(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7))));
+        for (n, password) in [Some("x"), Some("guess"), None].into_iter().enumerate() {
+            let refused = commit_request(&shared, &body(password), "s", there, read).unwrap_err();
+            assert_eq!(refused, ("run.finished_enabled".to_owned(), tr!(RunErrRemote).to_owned()));
+            assert!(unchanged(&shared));
+            assert!(shared.lock().sessions.contains_key("s"), "the password was not looked at");
+            assert_eq!(lines(&shared), n + 1);
+        }
+        let logged = shared.lock().log.back().unwrap().text.clone();
+        assert_eq!(logged, "Run Program: a change from 203.0.113.7 was refused (not this computer)");
+        // the same request with something else in it changes nothing of that either
+        let mut mixed = body(Some("x"));
+        mixed.extend(parse(&Json::obj().with("ui.add_stopped", true)).unwrap());
+        assert!(commit_request(&shared, &mixed, "s", there, read).is_err());
+        assert!(!shared.lock().prefs.start_paused);
+
+        // D, E, H: `commit` (the shim's setPreferences, a remote GUI's settings, nox's own
+        // changes) never changes them: with the password, from a session or from nox itself
+        for from in [Some("s"), None] {
+            let refused = commit(&shared, &mut shared.lock(), &body(Some("x")), from).unwrap_err();
+            assert_eq!(refused.1, tr!(RunErrRemote));
+            assert!(unchanged(&shared));
+        }
+
+        // A: this computer, and only with the current password (the test state's is "x")
+        let refused = commit_request(&shared, &body(None), "s", RunGate::Open, read).unwrap_err();
+        assert_eq!(refused.0, "webui.current_password");
+        assert!(unchanged(&shared) && shared.lock().sessions.contains_key("s"));
+        let refused = commit_request(&shared, &body(Some("guess")), "s", RunGate::Open, read).unwrap_err();
+        assert_eq!(refused.0, "webui.current_password");
+        assert!(unchanged(&shared));
+        assert!(!shared.lock().sessions.contains_key("s"), "a wrong guess ends the session");
+        login(&shared);
+        // I, at the commit: refused with the field and the text, password or not
+        let quote = Json::obj()
+            .with("run.added_enabled", true)
+            .with("run.added", "\"unclosed")
+            .with("webui.current_password", "x");
+        let refused = commit_request(&shared, &parse(&quote).unwrap(), "s", RunGate::Open, read).unwrap_err();
+        assert_eq!(refused, ("run.added".to_owned(), tr!(RunErrQuote).to_owned()));
+        commit_request(&shared, &body(Some("x")), "s", RunGate::Open, read).unwrap();
+        {
+            let mut st = shared.lock();
+            assert!(st.prefs.run_finished_on && !st.prefs.run_added_on);
+            assert_eq!(st.prefs.run_finished, LINE);
+            assert_eq!(st.prefs.run_commands(), ("", LINE));
+            assert_eq!(st.options.get("run.finished"), Some(LINE));
+            assert_eq!(st.options.get("run.finished_enabled"), Some("1"));
+            // the same values again are no change: no password is asked, from anywhere
+            let same = parse(&Json::obj().with("run.finished", format!("  {LINE} "))).unwrap();
+            commit(&shared, &mut st, &same, Some("s")).unwrap();
+            // H: read back at the next start
+            st.prefs = Prefs::defaults("/dl", &Settings::default());
+            read_back(&mut st);
+            assert!(st.prefs.run_finished_on);
+            assert_eq!(st.prefs.run_finished, LINE);
+        }
+        // switching it off is a change like any other: not from elsewhere
+        let off = parse(&Json::obj().with("run.finished_enabled", false).with("webui.current_password", "x"))
+            .unwrap();
+        assert!(commit_request(&shared, &off, "s", there, read).is_err());
+        assert!(shared.lock().prefs.run_finished_on);
+
+        // C: the model says who may change them
+        let readonly = |m: &Json, id: &str| {
+            m.get("fields").and_then(|f| f.get(id)).and_then(|f| f.get("readonly")) == Some(&Json::Bool(true))
+        };
+        let (mine, theirs) = {
+            let st = shared.lock();
+            (model(&shared, &st, RunGate::Open), model(&shared, &st, there))
+        };
+        for id in RUN_FIELDS {
+            assert!(!readonly(&mine, id) && readonly(&theirs, id), "{id}");
+        }
+        assert!(!readonly(&theirs, "trackers.url"));
+
+        // C: the gate of a request. A loopback peer is this computer unless a proxy passed the
+        // request on; --webui-remote-run-program opens it for everyone
+        let head = |extra: &str| {
+            let text = format!("GET /pa/prefs HTTP/1.1\r\nHost: localhost\r\n{extra}\r\n");
+            super::super::http::parse_head(text.as_bytes(), &super::super::http::Limits::default())
+                .unwrap()
+                .unwrap()
+                .0
+        };
+        let loopback = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let lan = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 20));
+        assert_eq!(RunGate::of(&shared, &head(""), loopback), RunGate::Open);
+        assert_eq!(RunGate::of(&shared, &head(""), IpAddr::V6(std::net::Ipv6Addr::LOCALHOST)), RunGate::Open);
+        assert_eq!(RunGate::of(&shared, &head(""), lan), RunGate::Closed(Some(lan)));
+        let via = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 9));
+        assert_eq!(
+            RunGate::of(&shared, &head("X-Forwarded-For: 10.0.0.1, 198.51.100.9\r\n"), loopback),
+            RunGate::Closed(Some(via)),
+            "the address the ban list counts"
+        );
+        for h in ["Forwarded: for=198.51.100.9\r\n", "X-Real-IP: 198.51.100.9\r\n"] {
+            assert!(matches!(RunGate::of(&shared, &head(h), loopback), RunGate::Closed(_)), "{h}");
+        }
+        shared.remote_run_program = true;
+        assert_eq!(RunGate::of(&shared, &head(""), lan), RunGate::Open);
+        assert_eq!(RunGate::of(&shared, &head("X-Forwarded-For: 198.51.100.9\r\n"), loopback), RunGate::Open);
+        shared.remote_run_program = false;
+
+        // F: hosted, refused whatever the gate and the password, and the host's lines stay
+        let mut st = shared.lock();
+        st.hosted = true;
+        let refused = commit_read(&shared, &mut st, &off, Some("s"), RunGate::Open, None).unwrap_err();
+        assert_eq!(refused, ("run.finished_enabled".to_owned(), HOSTED_NO_RUN.to_owned()));
+        assert!(st.prefs.run_finished_on);
+        let mut g = GuiOptions::load(&rookparcel_frontend::prefs::Prefs::default(), "/dl");
+        g.run_added = "host-added".to_owned();
+        st.prefs.apply_to(&mut g);
+        assert!(!g.run_finished_on && g.run_finished.is_empty(), "a host's lines are never overwritten");
+        assert_eq!(g.run_added, "host-added");
+    }
+
     #[test]
     fn the_scheduler_fields_edit_the_schedule() {
         use rookparcel_frontend::scheduler::{CELLS, Mode};
@@ -2338,7 +2700,7 @@ mod tests {
         let (id, why) = edited(&st, r#"{"ui.language": "xx"}"#).err().unwrap();
         assert_eq!(id, "ui.language");
         assert!(why.contains("\"xx\" is not one of en"), "{why}");
-        let general = &pages(Path::new("S"), false)[0];
+        let general = &pages(Path::new("S"), false, true)[0];
         assert!(general.to_json().contains(r#"{"f":"ui.language"}"#), "{}", general.to_json());
         let mut w = Working::from_state(&st);
         w.prefs.language = "en".to_owned();
@@ -2367,21 +2729,21 @@ mod tests {
         let body =
             Json::obj().with("ipfilter.enable", true).with("ipfilter.path", list.to_string_lossy().as_ref());
         let changes = parse(&body).unwrap();
-        commit_request(&shared, &changes, "s", read).unwrap();
+        commit_request(&shared, &changes, "s", RunGate::Open, read).unwrap();
         assert_eq!(reads.get(), 1);
         assert!(shared.lock().prefs.ip_filter);
         assert!(shared.lock().log.iter().any(|l| l.text.contains("list.dat")));
         // the same again: nothing to read
-        commit_request(&shared, &changes, "s", read).unwrap();
+        commit_request(&shared, &changes, "s", RunGate::Open, read).unwrap();
         assert_eq!(reads.get(), 1);
         // a path the policy refuses is not read, and is refused
         let changes = parse(&Json::obj().with("ipfilter.path", "relative.dat")).unwrap();
-        assert!(commit_request(&shared, &changes, "s", read).is_err());
+        assert!(commit_request(&shared, &changes, "s", RunGate::Open, read).is_err());
         assert_eq!(reads.get(), 1);
         // a list that does not load refuses the change
         let missing = dir.join("missing.dat");
         let body = Json::obj().with("ipfilter.path", missing.to_string_lossy().as_ref());
-        let refused = commit_request(&shared, &parse(&body).unwrap(), "s", read).unwrap_err();
+        let refused = commit_request(&shared, &parse(&body).unwrap(), "s", RunGate::Open, read).unwrap_err();
         assert_eq!(refused.0, "ipfilter.path");
         assert_eq!(reads.get(), 2);
         assert_eq!(shared.lock().prefs.ip_filter_path, list.to_string_lossy());
@@ -2402,12 +2764,12 @@ mod tests {
             .with("dir.completed", done.to_string_lossy().as_ref())
             .with("dir.move_add_label", true);
         let read = |f: &Path| IpFilter::load(f);
-        commit_request(&shared, &parse(&body).unwrap(), "s", read).unwrap();
+        commit_request(&shared, &parse(&body).unwrap(), "s", RunGate::Open, read).unwrap();
         let seen = shared.lock().gui_version;
         let m = shared.lock().prefs.gui().move_completed().expect("a mover");
         assert!(m.append_label);
         let body = Json::obj().with("dir.move_add_label", false);
-        commit_request(&shared, &parse(&body).unwrap(), "s", read).unwrap();
+        commit_request(&shared, &parse(&body).unwrap(), "s", RunGate::Open, read).unwrap();
         assert!(shared.lock().gui_version > seen, "the mover is told");
         assert!(!shared.lock().prefs.move_add_label);
     }

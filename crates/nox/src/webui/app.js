@@ -4448,6 +4448,8 @@
       inp = document.createElement("input");
       inp.type = "checkbox";
       inp.checked = !!v;
+      // a box this session may not change (Run Program from another computer, D67)
+      if (f.readonly) inp.dataset.fixed = "1";
       l.appendChild(inp);
       l.appendChild(document.createTextNode(" " + f.label));
     } else {
@@ -4494,6 +4496,9 @@
           if (f.type === "password") inp.placeholder = T("WebUnchanged");
         }
         if (f.readonly) inp.readOnly = true;
+        // a line without a label of its own is named by the check box that switches it on
+        const by = !f.label && it.enabled_by ? prefField(it.enabled_by.split(" ")[0]) : null;
+        if (by && by.label) inp.setAttribute("aria-label", by.label);
       }
       if (f.type === "lines") {
         // several lines (the typed tracker list): one address per line, never wrapped
@@ -4511,6 +4516,10 @@
       l.appendChild(inp);
     }
     inp.dataset.id = it.f;
+    if (inp.dataset.fixed) {
+      inp.disabled = true;
+      l.classList.add("disabled");
+    }
     if (it.enabled_by) l.dataset.enabledBy = it.enabled_by;
     markHelp(l, it.f);
     if (f.help) inp.title = f.help;

@@ -1320,7 +1320,9 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
                 // the adapter list refreshes for the next time the page asks (D54)
                 shared.handle.post_network_adapters();
                 let st = shared.lock();
-                Ok(Response::json(&prefs::model(shared, &st)))
+                // whether this session may change Run Program (D67) decides how its page shows
+                let run = prefs::RunGate::of(shared, &req.head, req.peer);
+                Ok(Response::json(&prefs::model(shared, &st, run)))
             }
             // the fetched tracker list's status line (D66), for the page after Update Now
             "prefs/trackers" => {
@@ -1391,7 +1393,10 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
             // a partial object of ids to values; 400 names the first bad field
             let body = json_body(req)?;
             let changes = prefs::parse(&body).map_err(|(field, why)| err(400, format!("{field}: {why}")))?;
-            prefs::commit_request(shared, &changes, key, |f| rookparcel_core::IpFilter::load(f))
+            // Run Program (D67) changes only here, and only for a browser on this computer (or
+            // with --webui-remote-run-program): the gate is this request's own
+            let run = prefs::RunGate::of(shared, &req.head, req.peer);
+            prefs::commit_request(shared, &changes, key, run, |f| rookparcel_core::IpFilter::load(f))
                 .map_err(|(field, why)| err(400, format!("{field}: {why}")))?;
             Ok(no_content())
         }

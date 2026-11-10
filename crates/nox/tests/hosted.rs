@@ -1080,3 +1080,52 @@ fn search_sources_are_the_hosts_and_results_go_to_its_engine() {
     assert_eq!((r.status, r.text().as_str()), (200, "Ok."));
     t.wait_for(&sid, &torznab::torrent("fawlty").1, "the shim's added result", |_| true);
 }
+
+/// Rule F (D67): hosted, Run Program is the host's own. The host starts the programs, so the
+/// Web UI has no starter of its own; the page is left out; a POST of any of the four is
+/// refused even from this computer with the password; the shim's keys are ignored; and what a
+/// browser does change never touches the host's lines.
+#[test]
+fn run_program_is_the_hosts_own() {
+    // a program that does not exist: nothing could start even if this server tried
+    const LINE: &str = "/nonexistent/rookparcel-test/none %N";
+    let mut options = Prefs::default();
+    options.set_bool("run.added_enabled", true);
+    options.set("run.added", LINE);
+    let t = Harness::start("run-program", options, Some(PASS));
+    let sid = t.login();
+    let m = t.get(&sid, "/pa/prefs").json();
+    let Some(Json::Arr(pages)) = m.get("pages") else { panic!("{}", m.to_json()) };
+    assert!(!pages.iter().any(|p| s(p.get("id")) == "run_program"));
+    assert!(!m.get("pages").unwrap().to_json().contains("run."), "no page places the fields");
+    for body in [
+        format!(r#"{{"run.added_enabled":false,"webui.current_password":"{PASS}"}}"#),
+        format!(r#"{{"run.added":"/bin/evil","webui.current_password":"{PASS}"}}"#),
+        format!(
+            r#"{{"run.finished_enabled":true,"run.finished":"/bin/evil","webui.current_password":"{PASS}"}}"#
+        ),
+        format!(r#"{{"run.finished":"/bin/evil","webui.current_password":"{PASS}"}}"#),
+        r#"{"run.added_enabled":false}"#.to_owned(),
+    ] {
+        let r = t.pa(&sid, "/pa/prefs", &body);
+        assert_eq!(r.status, 400, "{body}: {}", r.text());
+        assert!(
+            s(r.json().get("error")).contains(": the programs to run are set in the desktop client"),
+            "{body}: {}",
+            r.text()
+        );
+    }
+    let set = "json=%7B%22autorun_enabled%22%3Atrue%2C%22autorun_program%22%3A%22%2Fbin%2Fevil%22%2C%22autorun_on_torrent_added_enabled%22%3Afalse%7D";
+    assert_eq!(t.post(&sid, "/api/v2/app/setPreferences", set).status, 200);
+    // another preference goes to the host. The journal is the host's options written again
+    // with that change on them: of Run Program it holds nothing but the host's own values (the
+    // box the host never stored, as off), and the command lines not at all
+    assert_eq!(t.pa(&sid, "/pa/prefs", r#"{"ui.add_stopped":true}"#).status, 204);
+    assert_eq!(t.host.value_of("ui.add_stopped"), Some(Some("1".to_owned())));
+    let journal = t.host.changes();
+    let run: Vec<_> = journal.iter().filter(|(k, _)| k.starts_with("run.")).cloned().collect();
+    assert_eq!(run, [("run.finished_enabled".to_owned(), Some("0".to_owned()))], "{journal:?}");
+    // no starter here: the mock's torrents come and go without this server running anything
+    std::thread::sleep(Duration::from_millis(400));
+    assert!(!t.web.run_program_enabled() && !t.web.run_program_armed());
+}

@@ -1081,6 +1081,17 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   at 150/200 %, in a right-to-left language and through a live theme switch; a long translation
   in each; the Web UI dialog in the nine themes and right-to-left; a real download and upload
   with the window open; an upgrade of a real profile (the totals start from the torrents' sums).
+- **Run Program (1.2.41), hand checks:** a real program on a real finished download from
+  each client (Win32, GTK, Mac, nox), with a torrent whose name has quotes, `&` and a leading
+  dash; a `.bat` and a PowerShell script on Windows, a shell script on Linux and the Mac; the
+  Web UI from a second machine (read-only page, the refusal and its Logger line), then with
+  `--webui-remote-run-program`; nox in Docker with the flag; under the systemd unit and the
+  Windows service (the program inherits that account and sandbox); the start-up warning on a
+  non-loopback bind; the GTK and Mac pages (never run); the Win32 page at 150/200 %.
+- **Run Program, not built:** %C, %R and %G; a state-change line (µTorrent's second field);
+  a remote window's page says nothing about its lines doing nothing there; refused requests
+  are not rate-limited in the `--log` file; no working-directory or environment options; nox
+  without `--webui` has no Run Program.
 - **Trackers for new downloads (1.2.40), hand checks:** a real https list (for example a
   public tracker list on GitHub) through each client: Update Now, the status line, the Logger
   line, the trackers on the next public torrent, none on a private one; the same list replaced

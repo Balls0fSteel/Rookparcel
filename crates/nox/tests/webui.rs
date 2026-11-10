@@ -181,12 +181,26 @@ impl Harness {
         save_roots: Vec<PathBuf>,
         iterations: u32,
     ) -> Harness {
+        Harness::with_config(dir, password, settings, session, save_roots, iterations, false)
+    }
+
+    /// `remote_run_program`: started with `--webui-remote-run-program` (D67).
+    fn with_config(
+        dir: PathBuf,
+        password: Option<&str>,
+        settings: Settings,
+        session: Session,
+        save_roots: Vec<PathBuf>,
+        iterations: u32,
+        remote_run_program: bool,
+    ) -> Harness {
         let h = session.handle();
         let mut c = Config::new("127.0.0.1:0".parse().unwrap(), settings, dir.join("dl").to_string_lossy());
         c.password = password.map(str::to_owned);
         c.save_roots = save_roots;
         c.state_dir = Some(dir.join("state"));
         c.pbkdf2_iterations = iterations;
+        c.remote_run_program = remote_run_program;
         let web = Arc::new(WebUi::start(h.clone(), c).unwrap());
         let addr = web.local_addr();
         let stop = Arc::new(AtomicBool::new(false));
@@ -2848,7 +2862,8 @@ fn native_prefs_model_and_partial_post() {
             "advanced",
             "diskcache",
             "diskio",
-            "trackers"
+            "trackers",
+            "run_program"
         ]
     );
     let fields = m.get("fields").expect("fields");
@@ -4091,4 +4106,483 @@ fn new_public_downloads_get_the_typed_trackers() {
     assert_eq!(tracker_prefs(&t, &sid), (Json::Bool(true), list, Json::Bool(false), String::new()));
     let again = add_stopped(&t, &sid, "trackers-after-restart", false);
     assert_eq!(trackers_of(&t, &sid, &again), with_list);
+}
+
+// ---- Run Program (D67) ------------------------------------------------------------------------
+
+/// A command line whose program does not exist: nothing can start, whatever a test does.
+const RUN_NOWHERE: &str = r#""/nonexistent/rookparcel-test/none" "%N" %I"#;
+/// What a request from another computer is told.
+const RUN_REMOTE: &str = "Run Program can be changed only on the computer that runs Rookparcel.";
+/// A client behind a reverse proxy on this machine: not this computer (`api::is_local`).
+const ELSEWHERE: (&str, &str) = ("X-Forwarded-For", "203.0.113.9");
+
+/// The four Run Program values: (added on, added, finished on, finished).
+fn run_prefs(t: &Harness, sid: &str) -> (Json, String, Json, String) {
+    let m = t.get(sid, "/pa/prefs").json();
+    let value = |id: &str| m.get("fields").unwrap().get(id).unwrap().get("value").cloned().unwrap();
+    (
+        value("run.added_enabled"),
+        s(Some(&value("run.added"))).to_owned(),
+        value("run.finished_enabled"),
+        s(Some(&value("run.finished"))).to_owned(),
+    )
+}
+
+/// A body that switches "when a torrent finishes" on with `line`, with `password` if any.
+fn run_body(line: &str, password: Option<&str>) -> String {
+    let mut j = Json::obj().with("run.finished_enabled", true).with("run.finished", line);
+    if let Some(p) = password {
+        j.set("webui.current_password", p);
+    }
+    j.to_json()
+}
+
+/// `POST /pa/prefs` as the page sends it, with more headers (a proxy's, an API key).
+fn pa_from(t: &Harness, sid: Option<&str>, extra: &[(&str, &str)], body: &str) -> Resp {
+    let origin = format!("http://{}", t.host());
+    let mut headers = vec![("Origin", origin.as_str()), ("X-Requested-With", "Rookparcel")];
+    if let Some(sid) = sid {
+        headers.push(("Cookie", sid));
+    }
+    headers.extend_from_slice(extra);
+    t.req("POST", "/pa/prefs", &headers, Body::Json(body))
+}
+
+/// The Logger's lines, as the Logger tab of `hash` shows them (all of the session's).
+fn logger_lines(t: &Harness, sid: &str, hash: &str) -> Vec<String> {
+    let (mut ws, _) = Ws::connect(t, sid);
+    ws.send_text(&format!(r#"{{"t":"detail","id":"{hash}","tab":"logger"}}"#));
+    let m = ws.detail_until("logger");
+    let Some(Json::Arr(lines)) = m.get("lines") else { panic!("{}", m.to_json()) };
+    lines.iter().map(|l| if let Json::Arr(v) = l { s(v.get(1)).to_owned() } else { String::new() }).collect()
+}
+
+/// Rules A, B, C, H and I: the Run Program page sits under Advanced after Trackers; its four
+/// settings change only from this computer and only with the current password; a request from
+/// elsewhere is refused before its password is looked at, keeps its session and leaves a
+/// Logger line; a line that is switched on must be one that can be started; what was saved is
+/// there again after a restart.
+#[test]
+fn run_program_changes_only_on_this_computer_with_the_password() {
+    let dir = temp_dir("run-program");
+    let t = Harness::start_in(dir.clone(), Some(PASS));
+    let sid = t.login();
+    let m = t.get(&sid, "/pa/prefs").json();
+    let Some(Json::Arr(pages)) = m.get("pages") else { panic!("{}", m.to_json()) };
+    let ids: Vec<&str> = pages.iter().map(|p| s(p.get("id"))).collect();
+    assert_eq!(ids[ids.len() - 2..], ["trackers", "run_program"], "{ids:?}");
+    let page = pages.last().unwrap();
+    assert_eq!((s(page.get("title")), s(page.get("under"))), ("Run Program", "advanced"));
+    let text = page.to_json();
+    for part in [
+        r#""f":"run.added_enabled""#,
+        r#""f":"run.added","enabled_by":"run.added_enabled""#,
+        r#""f":"run.finished_enabled""#,
+        r#""f":"run.finished","enabled_by":"run.finished_enabled""#,
+        "without a command shell",
+        "Whoever can change these lines can run programs under your account",
+    ] {
+        assert!(text.contains(part), "{part}: {text}");
+    }
+    assert!(!text.contains(RUN_REMOTE), "this computer may change them: {text}");
+    let field =
+        |m: &Json, id: &str| m.get("fields").unwrap().get(id).unwrap_or_else(|| panic!("{id}")).clone();
+    assert_eq!(s(field(&m, "run.added_enabled").get("type")), "bool");
+    assert_eq!(s(field(&m, "run.added").get("type")), "text");
+    assert_eq!(s(field(&m, "run.finished_enabled").get("type")), "bool");
+    assert_eq!(s(field(&m, "run.finished").get("type")), "text");
+    assert_eq!(s(field(&m, "run.added_enabled").get("label")), "Run this program when a torrent is added:");
+    const RUN_IDS: [&str; 4] = ["run.added_enabled", "run.added", "run.finished_enabled", "run.finished"];
+    for id in RUN_IDS {
+        assert!(!s(field(&m, id).get("help")).is_empty(), "{id} has no help text");
+        assert!(field(&m, id).get("readonly").is_none(), "{id}");
+    }
+    let off = (Json::Bool(false), String::new(), Json::Bool(false), String::new());
+    assert_eq!(run_prefs(&t, &sid), off, "off by default");
+    assert!(!t.web.run_program_enabled());
+
+    // A: from this computer, none of the four without the current password
+    for body in [
+        Json::obj().with("run.added_enabled", true).with("run.added", RUN_NOWHERE).to_json(),
+        Json::obj().with("run.added", RUN_NOWHERE).to_json(),
+        Json::obj().with("run.finished", RUN_NOWHERE).to_json(),
+        run_body(RUN_NOWHERE, None),
+    ] {
+        let r = t.pa(&sid, "/pa/prefs", &body);
+        assert_eq!(r.status, 400, "{body}");
+        assert!(r.text().contains("webui.current_password"), "{body}: {}", r.text());
+    }
+    assert_eq!(run_prefs(&t, &sid), off);
+    assert_eq!(t.get(&sid, "/api/v2/app/version").status, 200, "no password given: the session stays");
+
+    // I: with it, the line is checked while its box is on
+    let bad = |body: String| {
+        let r = t.pa(&sid, "/pa/prefs", &body);
+        assert_eq!(r.status, 400, "{body}: {}", r.text());
+        s(r.json().get("error")).to_owned()
+    };
+    assert_eq!(
+        bad(run_body(r#""C:\Program Files\x.exe %N"#, Some(PASS))),
+        "run.finished: The command line has a double quote that is never closed."
+    );
+    assert_eq!(
+        bad(run_body("", Some(PASS))),
+        "run.finished: Enter the program to run, or clear the check box."
+    );
+    assert_eq!(
+        bad(run_body("%N.exe --go", Some(PASS))),
+        "run.finished: The program's path must not contain a code such as %N: only the arguments may."
+    );
+    assert_eq!(
+        bad(run_body(&format!("prog {}", "x".repeat(5000)), Some(PASS))),
+        "run.finished: The command line is too long or has a line break in it."
+    );
+    assert_eq!(
+        bad(format!(
+            r#"{{"run.added_enabled":true,"run.added":"\"open","webui.current_password":"{PASS}"}}"#
+        )),
+        "run.added: The command line has a double quote that is never closed."
+    );
+    assert_eq!(run_prefs(&t, &sid), off);
+
+    // B: from elsewhere, refused with the reason whatever the password (the right one, a wrong
+    // one, none): the password is not looked at, so the session stays
+    let hash = add_stopped(&t, &sid, "run-program-logger", false);
+    for password in [Some(PASS), Some("a-guess"), None] {
+        let r = pa_from(&t, Some(&sid), &[ELSEWHERE], &run_body(RUN_NOWHERE, password));
+        assert_eq!(r.status, 400, "{password:?}");
+        assert_eq!(s(r.json().get("error")), format!("run.finished_enabled: {RUN_REMOTE}"), "{password:?}");
+        assert_eq!(t.get(&sid, "/api/v2/app/version").status, 200, "{password:?}: the session stays");
+    }
+    assert_eq!(run_prefs(&t, &sid), off);
+    // every other proxy header, and a forwarded address that claims to be this computer
+    for forwarded in
+        [("Forwarded", "for=203.0.113.9"), ("X-Real-IP", "203.0.113.9"), ("X-Forwarded-For", "127.0.0.1")]
+    {
+        let r = pa_from(&t, Some(&sid), &[forwarded], &run_body(RUN_NOWHERE, Some(PASS)));
+        assert_eq!((r.status, r.text().contains(RUN_REMOTE)), (400, true), "{forwarded:?}: {}", r.text());
+    }
+    assert_eq!(run_prefs(&t, &sid), off);
+    // each refusal is in the Logger with the client's address, the one the ban list counts
+    let lines = logger_lines(&t, &sid, &hash);
+    let refused = "Run Program: a change from 203.0.113.9 was refused (not this computer)";
+    assert_eq!(lines.iter().filter(|l| *l == refused).count(), 3, "{lines:?}");
+    // (the other headers name no address the ban list would count: the proxy's own stands)
+    let proxy = "Run Program: a change from 127.0.0.1 was refused (not this computer)";
+    assert_eq!(lines.iter().filter(|l| *l == proxy).count(), 3, "{lines:?}");
+    // C: such a session sees the four read-only, with the reason on the page
+    let theirs = t.req("GET", "/pa/prefs", &[("Cookie", &sid), ELSEWHERE], Body::None).json();
+    for id in RUN_IDS {
+        assert_eq!(field(&theirs, id).get("readonly"), Some(&Json::Bool(true)), "{id}");
+    }
+    assert!(field(&theirs, "trackers.url").get("readonly").is_none());
+    let Some(Json::Arr(their_pages)) = theirs.get("pages") else { panic!() };
+    assert!(their_pages.last().unwrap().to_json().contains(RUN_REMOTE));
+
+    // A: this computer and the current password
+    let r = t.pa(&sid, "/pa/prefs", &run_body(&format!("  {RUN_NOWHERE} "), Some(PASS)));
+    assert_eq!(r.status, 204, "{}", r.text());
+    let saved = (Json::Bool(false), String::new(), Json::Bool(true), RUN_NOWHERE.to_owned());
+    assert_eq!(run_prefs(&t, &sid), saved, "read back, trimmed");
+    assert!(t.web.run_program_enabled());
+    // H: the daemon's starter has the line by the next batch of alerts
+    wait_until("the starter armed", || t.web.run_program_armed());
+    // the same values again are no change and need no password
+    assert_eq!(t.pa(&sid, "/pa/prefs", &run_body(RUN_NOWHERE, None)).status, 204);
+    // stored as the frontend's keys; the remote option is not a stored thing
+    let stored = std::fs::read_to_string(dir.join("state").join(STATE_FILE)).unwrap();
+    assert!(stored.contains(r#""run.finished_enabled":"1""#), "{stored}");
+    assert!(stored.contains("rookparcel-test/none"), "{stored}");
+    assert!(!stored.contains("remote_run") && !stored.contains("remote-run"), "{stored}");
+
+    // B: switching it off, or changing the line, is no different: not from elsewhere
+    for body in [
+        format!(r#"{{"run.finished_enabled":false,"webui.current_password":"{PASS}"}}"#),
+        format!(r#"{{"run.finished":"/bin/evil","webui.current_password":"{PASS}"}}"#),
+        format!(r#"{{"run.added_enabled":true,"run.added":"/bin/evil","webui.current_password":"{PASS}"}}"#),
+    ] {
+        let r = pa_from(&t, Some(&sid), &[ELSEWHERE], &body);
+        assert_eq!((r.status, r.text().contains(RUN_REMOTE)), (400, true), "{body}: {}", r.text());
+    }
+    // nothing else in a refused request is taken either
+    let r = pa_from(
+        &t,
+        Some(&sid),
+        &[ELSEWHERE],
+        &format!(
+            r#"{{"ui.add_stopped":true,"run.finished_enabled":false,"webui.current_password":"{PASS}"}}"#
+        ),
+    );
+    assert_eq!(r.status, 400);
+    let m = t.get(&sid, "/pa/prefs").json();
+    assert_eq!(field(&m, "ui.add_stopped").get("value"), Some(&Json::Bool(false)));
+    assert_eq!(run_prefs(&t, &sid), saved);
+    // a request from elsewhere that changes none of the four is an ordinary one
+    let r = pa_from(&t, Some(&sid), &[ELSEWHERE], &run_body(RUN_NOWHERE, None));
+    assert_eq!(r.status, 204, "{}", r.text());
+
+    // A: a wrong password from this computer ends the session, as for every security field
+    let r = t.pa(&sid, "/pa/prefs", r#"{"run.finished_enabled":false,"webui.current_password":"a-guess"}"#);
+    assert_eq!(r.status, 400);
+    assert!(r.text().contains("webui.current_password"), "{}", r.text());
+    assert_eq!(t.get(&sid, "/api/v2/app/version").status, 403, "the session is over");
+    let sid = t.login();
+    assert_eq!(run_prefs(&t, &sid), saved);
+
+    // H: there again after a restart, and the starter with it (the harness removes another
+    // directory, so this one stays for the second run)
+    let mut t = t;
+    t.dir = temp_dir("run-program-scratch");
+    drop(t);
+    let t = Harness::start_in(dir, None);
+    let sid = t.login();
+    assert_eq!(run_prefs(&t, &sid), saved);
+    assert!(t.web.run_program_enabled());
+    wait_until("the starter armed after the restart", || t.web.run_program_armed());
+    // ... and the gate is as closed as before
+    let off_body = format!(r#"{{"run.finished_enabled":false,"webui.current_password":"{PASS}"}}"#);
+    let r = pa_from(&t, Some(&sid), &[ELSEWHERE], &off_body);
+    assert_eq!((r.status, r.text().contains(RUN_REMOTE)), (400, true), "{}", r.text());
+    assert_eq!(t.pa(&sid, "/pa/prefs", &off_body).status, 204);
+    assert!(!t.web.run_program_enabled());
+    wait_until("the starter disarmed", || !t.web.run_program_armed());
+}
+
+/// Rule C: `--webui-remote-run-program` opens the gate for other computers, and nothing else:
+/// the current password is needed all the same, the shim stays shut, and the option is the
+/// command line's alone (a daemon started without it on the same files has the gate closed).
+#[test]
+fn the_remote_run_program_option_opens_the_gate_but_not_the_password() {
+    let dir = temp_dir("run-program-remote");
+    let start = |remote: bool| {
+        let settings = Harness::settings();
+        let session = Session::start(SessionParams {
+            settings: settings.clone(),
+            state_dir: None,
+            ..Default::default()
+        })
+        .unwrap();
+        Harness::with_config(dir.clone(), Some(PASS), settings, session, Vec::new(), 2, remote)
+    };
+    let t = start(true);
+    let sid = t.login();
+    let off = (Json::Bool(false), String::new(), Json::Bool(false), String::new());
+    // the page of a session from elsewhere is an ordinary one
+    let theirs = t.req("GET", "/pa/prefs", &[("Cookie", &sid), ELSEWHERE], Body::None).json();
+    for id in ["run.added_enabled", "run.added", "run.finished_enabled", "run.finished"] {
+        assert!(theirs.get("fields").unwrap().get(id).unwrap().get("readonly").is_none(), "{id}");
+    }
+    assert!(!theirs.to_json().contains(RUN_REMOTE));
+    // without the password: refused as every security field is
+    let r = pa_from(&t, Some(&sid), &[ELSEWHERE], &run_body(RUN_NOWHERE, None));
+    assert_eq!(r.status, 400);
+    assert!(r.text().contains("webui.current_password"), "{}", r.text());
+    assert_eq!(run_prefs(&t, &sid), off);
+    // the checks hold
+    let r = pa_from(&t, Some(&sid), &[ELSEWHERE], &run_body("\"open", Some(PASS)));
+    assert_eq!(r.status, 400);
+    assert!(r.text().contains("double quote"), "{}", r.text());
+    // with it: accepted from elsewhere
+    let r = pa_from(&t, Some(&sid), &[ELSEWHERE], &run_body(RUN_NOWHERE, Some(PASS)));
+    assert_eq!(r.status, 204, "{}", r.text());
+    let saved = (Json::Bool(false), String::new(), Json::Bool(true), RUN_NOWHERE.to_owned());
+    assert_eq!(run_prefs(&t, &sid), saved);
+    // D: the shim takes none of it, option or not
+    let set = format!(
+        "json={}",
+        enc(&format!(
+            r#"{{"autorun_enabled":false,"autorun_program":"/bin/evil","autorun_on_torrent_added_enabled":true,"autorun_on_torrent_added_program":"/bin/evil","web_ui_current_password":"{PASS}"}}"#
+        ))
+    );
+    for extra in [&[][..], &[ELSEWHERE][..]] {
+        let mut headers = vec![("Cookie", sid.as_str())];
+        headers.extend_from_slice(extra);
+        let r = t.req("POST", "/api/v2/app/setPreferences", &headers, Body::Form(&set));
+        assert_eq!(r.status, 200, "{}", r.text());
+        assert_eq!(run_prefs(&t, &sid), saved);
+    }
+    // a wrong password from elsewhere ends the session here: it was looked at
+    let r = pa_from(&t, Some(&sid), &[ELSEWHERE], &run_body("/bin/evil", Some("a-guess")));
+    assert_eq!(r.status, 400);
+    assert_eq!(t.get(&sid, "/api/v2/app/version").status, 403);
+    let stored = std::fs::read_to_string(dir.join("state").join(STATE_FILE)).unwrap();
+    assert!(!stored.contains("remote_run") && !stored.contains("remote-run"), "{stored}");
+
+    // the same files without the option: the saved line is there, the gate is closed
+    let mut t = t;
+    t.dir = temp_dir("run-program-remote-scratch");
+    drop(t);
+    let t = start(false);
+    let sid = t.login();
+    assert_eq!(run_prefs(&t, &sid), saved);
+    let r = pa_from(
+        &t,
+        Some(&sid),
+        &[ELSEWHERE],
+        &format!(r#"{{"run.finished_enabled":false,"webui.current_password":"{PASS}"}}"#),
+    );
+    assert_eq!((r.status, r.text().contains(RUN_REMOTE)), (400, true), "{}", r.text());
+    assert_eq!(run_prefs(&t, &sid), saved);
+    // no request switches the option on: not as a preference, natively or through the shim
+    for id in ["webui.remote_run_program", "webui-remote-run-program", "run.remote", "remote_run_program"] {
+        let body = format!(r#"{{"{id}":true,"webui.current_password":"{PASS}"}}"#);
+        let r = t.pa(&sid, "/pa/prefs", &body);
+        assert_eq!(r.status, 400, "{id}");
+        assert!(r.text().contains("unknown preference"), "{id}: {}", r.text());
+    }
+    let r = pa_from(
+        &t,
+        Some(&sid),
+        &[ELSEWHERE],
+        &format!(r#"{{"run.finished_enabled":false,"webui.current_password":"{PASS}"}}"#),
+    );
+    assert_eq!(r.status, 400);
+    assert_eq!(run_prefs(&t, &sid), saved);
+}
+
+/// Rules A (2) and D: sessions that gave no password (the loopback bypass, the API key, the
+/// subnet whitelist) cannot change the Run Program lines, though they are on this computer;
+/// qBittorrent's `autorun_*` keys are ignored by `app/setPreferences` from everyone, and
+/// `app/preferences` shows the command lines only to a client on this computer.
+#[test]
+fn passwordless_sessions_and_the_shim_cannot_change_run_program() {
+    let t = Harness::start("run-program-bypass");
+    let sid = t.login();
+    let mut setup = json::parse(&run_body(RUN_NOWHERE, Some(PASS))).unwrap();
+    setup.set("webui.bypass_local_auth", true);
+    setup.set("webui.api_key", API_KEY);
+    setup.set("webui.api_key_enabled", true);
+    let r = t.pa(&sid, "/pa/prefs", &setup.to_json());
+    assert_eq!(r.status, 204, "{}", r.text());
+    let saved = (Json::Bool(false), String::new(), Json::Bool(true), RUN_NOWHERE.to_owned());
+    assert_eq!(run_prefs(&t, &sid), saved);
+    let origin = format!("http://{}", t.host());
+    let auth = format!("Bearer {API_KEY}");
+    let attempts = [
+        r#"{"run.finished_enabled":false}"#,
+        r#"{"run.finished":"/bin/evil --now"}"#,
+        r#"{"run.added_enabled":true,"run.added":"/bin/evil"}"#,
+        r#"{"run.added":"/bin/evil"}"#,
+    ];
+    let keys = |password: bool| {
+        let mut j = Json::obj()
+            .with("autorun_enabled", false)
+            .with("autorun_program", "/bin/evil \"%F\"")
+            .with("autorun_on_torrent_added_enabled", true)
+            .with("autorun_on_torrent_added_program", "/bin/evil \"%F\"");
+        if password {
+            j.set("web_ui_current_password", PASS);
+        }
+        j
+    };
+    let set = |password: bool| format!("json={}", enc(&keys(password).to_json()));
+    // the loopback bypass (no cookie at all), then the API key
+    for who in [None, Some(("Authorization", auth.as_str()))] {
+        let mut headers = vec![("Origin", origin.as_str()), ("X-Requested-With", "Rookparcel")];
+        headers.extend(who);
+        assert_eq!(t.req("GET", "/pa/prefs", &headers, Body::None).status, 200, "{who:?} is let in");
+        for body in attempts {
+            let r = t.req("POST", "/pa/prefs", &headers, Body::Json(body));
+            assert_eq!(r.status, 400, "{who:?} {body}");
+            assert!(r.text().contains("webui.current_password"), "{who:?} {body}: {}", r.text());
+        }
+        // another preference is theirs to change
+        let r = t.req("POST", "/pa/prefs", &headers, Body::Json(r#"{"ui.add_stopped":true}"#));
+        assert_eq!(r.status, 204, "{who:?}: {}", r.text());
+        // D: the shim, with and without the current password
+        let mut headers: Vec<(&str, &str)> = Vec::new();
+        headers.extend(who);
+        for password in [false, true] {
+            let r = t.req("POST", "/api/v2/app/setPreferences", &headers, Body::Form(&set(password)));
+            assert_eq!(r.status, 200, "{who:?}: {}", r.text());
+            assert_eq!(run_prefs(&t, &sid), saved, "{who:?} {password}");
+        }
+    }
+    // D: a logged-in session's setPreferences changes none of it either, though the same call
+    // does change what the shim supports
+    for password in [false, true] {
+        let mut j = keys(password);
+        j.set("max_active_downloads", 9i64);
+        let form = format!("json={}", enc(&j.to_json()));
+        let r = t.post(&sid, "/api/v2/app/setPreferences", &form);
+        assert_eq!(r.status, 200, "{}", r.text());
+        assert_eq!(run_prefs(&t, &sid), saved, "{password}");
+    }
+    let p = t.get(&sid, "/api/v2/app/preferences").json();
+    assert_eq!(p.get("max_active_downloads").and_then(Json::as_i64), Some(9));
+    // D: reads. Whether they are on, to everyone; the command lines, to this computer only
+    assert_eq!(p.get("autorun_enabled"), Some(&Json::Bool(true)));
+    assert_eq!(s(p.get("autorun_program")), RUN_NOWHERE);
+    assert_eq!(p.get("autorun_on_torrent_added_enabled"), Some(&Json::Bool(false)));
+    assert_eq!(s(p.get("autorun_on_torrent_added_program")), "");
+    for forwarded in [ELSEWHERE, ("Forwarded", "for=203.0.113.9"), ("X-Real-IP", "203.0.113.9")] {
+        let p = t.req("GET", "/api/v2/app/preferences", &[("Cookie", &sid), forwarded], Body::None).json();
+        assert_eq!(p.get("autorun_enabled"), Some(&Json::Bool(true)), "{forwarded:?}");
+        assert_eq!(p.get("autorun_program"), Some(&Json::from("")), "{forwarded:?}");
+        assert_eq!(p.get("autorun_on_torrent_added_program"), Some(&Json::from("")), "{forwarded:?}");
+        assert!(!p.to_json().contains("rookparcel-test"), "{forwarded:?}");
+    }
+    // the subnet whitelist in place of the loopback bypass
+    let r = t.pa(
+        &sid,
+        "/pa/prefs",
+        &format!(
+            r#"{{"webui.bypass_local_auth":false,"webui.bypass_auth_subnets":"127.0.0.0/8","webui.current_password":"{PASS}"}}"#
+        ),
+    );
+    assert_eq!(r.status, 204, "{}", r.text());
+    let headers = [("Origin", origin.as_str()), ("X-Requested-With", "Rookparcel")];
+    for body in attempts {
+        let r = t.req("POST", "/pa/prefs", &headers, Body::Json(body));
+        assert_eq!(r.status, 400, "subnet {body}");
+        assert!(r.text().contains("webui.current_password"), "subnet {body}: {}", r.text());
+    }
+    assert_eq!(run_prefs(&t, &sid), saved);
+    // no other native command takes a preference: the four ids are unknown to them
+    for path in ["/pa/session/limits", "/pa/torrents/label", "/pa/prefs/trackers/update"] {
+        let _ = t.pa(&sid, path, r#"{"run.finished_enabled":false,"run.finished":"/bin/evil","ids":[]}"#);
+        assert_eq!(run_prefs(&t, &sid), saved, "{path}");
+    }
+}
+
+/// Rules G and H, end to end, and the one test in which a program really starts: the daemon's
+/// own binary asked for its version, which prints a line and ends. Set from this computer with
+/// the password, it runs once for a torrent that is added, its start and its end are in the
+/// Logger, and after the line is switched off nothing runs for the next torrent.
+#[test]
+fn a_program_runs_when_a_torrent_is_added_and_the_logger_says_so() {
+    let t = Harness::start("run-program-e2e");
+    let sid = t.login();
+    let nox = env!("CARGO_BIN_EXE_rookparcel-nox");
+    let line = format!(r#""{nox}" --version"#);
+    let body = Json::obj()
+        .with("run.added_enabled", true)
+        .with("run.added", line.as_str())
+        .with("webui.current_password", PASS)
+        .to_json();
+    let before = add_stopped(&t, &sid, "run-before-it-was-set", false);
+    assert!(!logger_lines(&t, &sid, &before).iter().any(|l| l.starts_with("Run Program")));
+    assert_eq!(t.pa(&sid, "/pa/prefs", &body).status, 204);
+    wait_until("the starter armed", || t.web.run_program_armed());
+    let hash = add_stopped(&t, &sid, "run-when-added", false);
+    let started = format!("Run Program: started {nox} (1 arguments)");
+    let ended = format!("Run Program: {nox} ended");
+    let of = |lines: &[String], what: &str| lines.iter().filter(|l| *l == what).count();
+    wait_until("the program's start and end in the Logger", || {
+        let lines = logger_lines(&t, &sid, &hash);
+        of(&lines, &started) == 1 && of(&lines, &ended) == 1
+    });
+    // switched off: the next torrent starts nothing
+    let r = t.pa(
+        &sid,
+        "/pa/prefs",
+        &format!(r#"{{"run.added_enabled":false,"webui.current_password":"{PASS}"}}"#),
+    );
+    assert_eq!(r.status, 204, "{}", r.text());
+    wait_until("the starter disarmed", || !t.web.run_program_armed());
+    let after = add_stopped(&t, &sid, "run-after-it-was-switched-off", false);
+    std::thread::sleep(Duration::from_millis(600));
+    let lines = logger_lines(&t, &sid, &after);
+    assert_eq!((of(&lines, &started), of(&lines, &ended)), (1, 1), "{lines:?}");
 }

@@ -58,9 +58,9 @@ use crate::sched_grid;
 use crate::util::{hiword, loword, scale, send, wide, window_text};
 use crate::webui_host::{Edit, Setup as WebSetup, Status as WebStatus, View as WebView};
 
-/// The tree, in µTorrent 2.2.1's order; Disk Cache and Rookparcel's Disk I/O and Trackers sit
-/// under Advanced.
-pub const PAGES: [S; 13] = [
+/// The tree, in µTorrent 2.2.1's order; Disk Cache and Rookparcel's Disk I/O, Trackers and Run
+/// Program sit under Advanced.
+pub const PAGES: [S; 14] = [
     S::PageGeneral,
     S::PageUi,
     S::PageDirectories,
@@ -74,6 +74,7 @@ pub const PAGES: [S; 13] = [
     S::PageDiskCache,
     S::PageDiskIo,
     S::PageTrackers,
+    S::PageRunProgram,
 ];
 /// Connection: where a listen failure in the status bar leads.
 pub const PAGE_CONNECTION: usize = 3;
@@ -82,6 +83,7 @@ const PAGE_ADVANCED: usize = 9;
 const PAGE_DISK_CACHE: usize = 10;
 const PAGE_DISK_IO: usize = 11;
 const PAGE_TRACKERS: usize = 12;
+const PAGE_RUN_PROGRAM: usize = 13;
 
 const fn id(page: u16, n: u16) -> u16 {
     1000 + page * 100 + n
@@ -251,6 +253,13 @@ const ID_TRK_URL: u16 = id(12, 4);
 const ID_TRK_UPDATE: u16 = id(12, 5);
 const ID_TRK_STATUS: u16 = id(12, 6);
 const ID_TRK_NOTE: u16 = id(12, 7);
+// Run Program (D67)
+const ID_RUN_ADDED_ON: u16 = id(13, 1);
+const ID_RUN_ADDED: u16 = id(13, 2);
+const ID_RUN_FINISHED_ON: u16 = id(13, 3);
+const ID_RUN_FINISHED: u16 = id(13, 4);
+const ID_RUN_NOTE: u16 = id(13, 5);
+const ID_RUN_SAFETY_NOTE: u16 = id(13, 6);
 
 /// "Outgoing" encryption, in the combo's order.
 const ENC_OUT: [(S, EncPolicy); 3] = [
@@ -372,6 +381,10 @@ const FIELD_KEYS: &[(u16, &str)] = &[
     (ID_TRK_LIST, pref_pages::TRACKERS_LIST),
     (ID_TRK_FROM_URL, pref_pages::TRACKERS_FROM_URL),
     (ID_TRK_URL, pref_pages::TRACKERS_URL),
+    (ID_RUN_ADDED_ON, pref_pages::RUN_ADDED_ON),
+    (ID_RUN_ADDED, pref_pages::RUN_ADDED),
+    (ID_RUN_FINISHED_ON, pref_pages::RUN_FINISHED_ON),
+    (ID_RUN_FINISHED, pref_pages::RUN_FINISHED),
 ];
 
 /// The help of the controls that are not `pref_pages` fields: the Win32-only buttons, the
@@ -845,6 +858,23 @@ static FIELDS: &[Field] = &[
         get: |o| o.gui.trackers_url.clone(),
         set: |o, v| o.gui.trackers_url = v.trim().to_owned(),
     },
+    Field::Check { id: ID_RUN_ADDED_ON, get: |o| o.gui.run_added_on, set: |o, v| o.gui.run_added_on = v },
+    // as typed (`read_controls` refuses a line that cannot be run when its box is on)
+    Field::Text {
+        id: ID_RUN_ADDED,
+        get: |o| o.gui.run_added.clone(),
+        set: |o, v| o.gui.run_added = v.trim().to_owned(),
+    },
+    Field::Check {
+        id: ID_RUN_FINISHED_ON,
+        get: |o| o.gui.run_finished_on,
+        set: |o, v| o.gui.run_finished_on = v,
+    },
+    Field::Text {
+        id: ID_RUN_FINISHED,
+        get: |o| o.gui.run_finished.clone(),
+        set: |o, v| o.gui.run_finished = v.trim().to_owned(),
+    },
 ];
 
 /// A value of several lines (line feeds between them) as a multi-line edit control holds it.
@@ -1285,6 +1315,19 @@ fn build() -> (Vec<u16>, Vec<(u16, u16)>) {
     b.ctl(STATIC, ID_TRK_STATUS, status, [8, 147, 294, 9], "");
     b.ctl(STATIC, ID_TRK_NOTE, C | SS_NOPREFIX, [0, 170, W, 36], tr!(PrefTrackersNote));
 
+    // programs started when a torrent is added or finishes (D67): each box over its command
+    // line, which scrolls sideways (a path and its arguments are long); the two notes take the
+    // lines their texts need (`fit_run_notes`)
+    b.page(PAGE_RUN_PROGRAM);
+    b.group([0, 0, W, 80], tr!(PageRunProgram));
+    b.ctl(BUTTON, ID_RUN_ADDED_ON, CHECK, [8, 13, 294, 10], tr!(PrefRunAdded));
+    b.ctl(EDIT, ID_RUN_ADDED, LINE, [8, 26, 294, 13], "");
+    b.ctl(BUTTON, ID_RUN_FINISHED_ON, CHECK, [8, 46, 294, 10], tr!(PrefRunFinished));
+    b.ctl(EDIT, ID_RUN_FINISHED, LINE, [8, 59, 294, 13], "");
+    // the % codes are no access keys
+    b.ctl(STATIC, ID_RUN_NOTE, C | SS_NOPREFIX, [0, 86, W, 45], tr!(PrefRunNote));
+    b.ctl(STATIC, ID_RUN_SAFETY_NOTE, C | SS_NOPREFIX, [0, 135, W, 27], tr!(PrefRunSafetyNote));
+
     let labels = b.labels;
     let mut t = b.t;
     let vis = windows_sys::Win32::UI::WindowsAndMessaging::WS_VISIBLE;
@@ -1351,6 +1394,7 @@ unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
             // at the width `fit` left it
             fit_integration_note(dlg);
             fit_tracker_notes(dlg);
+            fit_run_notes(dlg);
             // the greyed controls' tooltips where `fit` left the controls
             let st = &mut *(lp as *mut State<'_>);
             place_tips(dlg, st);
@@ -1412,7 +1456,7 @@ unsafe fn init(dlg: HWND, st: &mut State<'_>) {
         send(tree, TVM_SETIMAGELIST, TVSIL_NORMAL as usize, st.images);
         let mut parent = TVI_ROOT;
         for (i, title) in PAGES.iter().enumerate() {
-            let nested = matches!(i, PAGE_DISK_CACHE | PAGE_DISK_IO | PAGE_TRACKERS);
+            let nested = matches!(i, PAGE_DISK_CACHE | PAGE_DISK_IO | PAGE_TRACKERS | PAGE_RUN_PROGRAM);
             let under = if nested { parent } else { TVI_ROOT };
             let h = insert_tree(tree, under, lang::text(*title), i, page_icon(*title));
             if i == PAGE_ADVANCED {
@@ -1693,6 +1737,7 @@ unsafe fn write_controls(dlg: HWND, st: &mut State<'_>) {
         update_cache_controls(dlg);
         update_check_rate_controls(dlg);
         update_tracker_controls(dlg);
+        update_run_controls(dlg, st);
         update_proxy_controls(dlg);
     }
 }
@@ -2139,6 +2184,18 @@ unsafe fn read_controls(dlg: HWND, st: &mut State<'_>) -> Result<(), (u16, Strin
         }
         // the list as the page shows it from now on: no repeats, one blank line between tiers
         o.gui.trackers_list = tracker_list::to_text(&typed.tiers);
+        // as `pref_pages::check`: a line that cannot be run is refused while its box is on
+        // (D67); a remote window has the page greyed and changes nothing on it
+        if !remote_window(st) {
+            for (on, line, id) in [
+                (o.gui.run_added_on, &o.gui.run_added, ID_RUN_ADDED),
+                (o.gui.run_finished_on, &o.gui.run_finished, ID_RUN_FINISHED),
+            ] {
+                if let Some(e) = pref_pages::run_command_error(line).filter(|_| on) {
+                    return Err((id, e));
+                }
+            }
+        }
         st.opts = o;
         Ok(())
     }
@@ -2211,6 +2268,7 @@ unsafe fn command(dlg: HWND, st: &mut State<'_>, id: u16, code: u32) -> bool {
             ID_CHECK_RATE_LIMIT if code == BN_CLICKED => update_check_rate_controls(dlg),
             ID_TRK_APPEND | ID_TRK_FROM_URL if code == BN_CLICKED => update_tracker_controls(dlg),
             ID_TRK_UPDATE if code == BN_CLICKED => update_tracker_list(dlg, st),
+            ID_RUN_ADDED_ON | ID_RUN_FINISHED_ON if code == BN_CLICKED => update_run_controls(dlg, st),
             ID_STORE | ID_MOVE_TORRENTS | ID_AUTOLOAD if code == BN_CLICKED => {
                 update_torrent_folder_controls(dlg)
             }
@@ -2478,6 +2536,37 @@ unsafe fn fit_tracker_notes(dlg: HWND) {
         let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 9 };
         MapDialogRect(dlg, &mut rc);
         for id in [ID_TRK_STATUS, ID_TRK_NOTE] {
+            crate::fit::fit_note_height(dlg, id, rc.bottom, |id| page_of(id).map(|p| p as i32));
+        }
+    }
+}
+
+/// Whether this is a window onto a remote Rookparcel: the owner says so through the Web UI
+/// page, which such a window does not have (`WebStatus::Unavailable`).
+fn remote_window(st: &State<'_>) -> bool {
+    st.webui.status == WebStatus::Unavailable
+}
+
+/// Each Run Program command line follows its own box (`pref_pages`' `needs` for the two
+/// fields). In a remote window all four are greyed: the programs run on the computer that owns
+/// the engine and are set there only (D67); the notes stay to say so.
+unsafe fn update_run_controls(dlg: HWND, st: &State<'_>) {
+    unsafe {
+        let local = !remote_window(st);
+        for (on, line) in [(ID_RUN_ADDED_ON, ID_RUN_ADDED), (ID_RUN_FINISHED_ON, ID_RUN_FINISHED)] {
+            EnableWindow(item(dlg, on), local as i32);
+            EnableWindow(item(dlg, line), (local && checked(dlg, on)) as i32);
+        }
+    }
+}
+
+/// The two notes of the Run Program page take the lines their texts need (the list of % codes
+/// is long in any language), at least one each; the second follows the first.
+unsafe fn fit_run_notes(dlg: HWND) {
+    unsafe {
+        let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 9 };
+        MapDialogRect(dlg, &mut rc);
+        for id in [ID_RUN_NOTE, ID_RUN_SAFETY_NOTE] {
             crate::fit::fit_note_height(dlg, id, rc.bottom, |id| page_of(id).map(|p| p as i32));
         }
     }
@@ -3758,6 +3847,244 @@ mod tests {
             if top { r.top } else { r.bottom }
         };
         assert!(bottom(ID_TRK_NOTE, false) <= bottom(ID_HELP_FRAME, true));
+    }
+
+    const RUN_LINE: &str = r#""C:\Program Files\x\run.exe" "%F" %N"#;
+
+    /// Advanced > Run Program (D67): the last page, under Advanced; each command line is one
+    /// line that scrolls sideways and greys with its own box.
+    #[test]
+    fn run_program_controls_under_advanced() {
+        use windows_sys::Win32::UI::Controls::{TVGN_PARENT, TVM_GETNEXTITEM};
+        let mut f = Fixture::new(defaults());
+        f.page(PAGE_RUN_PROGRAM);
+        let enabled = |f: &Fixture, id| unsafe { IsWindowEnabled(item(f.dlg, id)) != 0 };
+        let all = [
+            ID_RUN_ADDED_ON,
+            ID_RUN_ADDED,
+            ID_RUN_FINISHED_ON,
+            ID_RUN_FINISHED,
+            ID_RUN_NOTE,
+            ID_RUN_SAFETY_NOTE,
+        ];
+        unsafe {
+            for id in all {
+                assert!(!item(f.dlg, id).is_null() && shown(item(f.dlg, id)), "control {id}");
+                assert_eq!(page_of(id), Some(PAGE_RUN_PROGRAM));
+            }
+            assert_eq!(PAGE_RUN_PROGRAM, PAGES.len() - 1);
+            let tree = item(f.dlg, ID_TREE);
+            let parent = send(tree, TVM_GETNEXTITEM, TVGN_PARENT as usize, f.st.tree_items[PAGE_RUN_PROGRAM]);
+            assert_eq!(parent, f.st.tree_items[PAGE_ADVANCED]);
+            assert!(page_icon(PAGES[PAGE_RUN_PROGRAM]).is_some());
+            for id in [ID_RUN_ADDED, ID_RUN_FINISHED] {
+                let style = GetWindowLongW(item(f.dlg, id), GWL_STYLE) as u32;
+                assert_eq!(style & ES_AUTOHSCROLL as u32, ES_AUTOHSCROLL as u32);
+                assert_eq!(style & ES_MULTILINE as u32, 0);
+            }
+            // both off at first
+            assert!(!checked(f.dlg, ID_RUN_ADDED_ON) && !checked(f.dlg, ID_RUN_FINISHED_ON));
+        }
+        assert_eq!((f.text(ID_RUN_ADDED), f.text(ID_RUN_FINISHED)), (String::new(), String::new()));
+        assert_eq!(f.text(ID_RUN_ADDED_ON), tr!(PrefRunAdded));
+        assert_eq!(f.text(ID_RUN_FINISHED_ON), tr!(PrefRunFinished));
+        assert_eq!(f.text(ID_RUN_NOTE), tr!(PrefRunNote));
+        assert_eq!(f.text(ID_RUN_SAFETY_NOTE), tr!(PrefRunSafetyNote));
+        assert!(enabled(&f, ID_RUN_ADDED_ON) && enabled(&f, ID_RUN_FINISHED_ON));
+        assert!(!enabled(&f, ID_RUN_ADDED) && !enabled(&f, ID_RUN_FINISHED));
+
+        // each line follows its own box
+        f.check(ID_RUN_ADDED_ON, true);
+        f.click(ID_RUN_ADDED_ON);
+        assert!(enabled(&f, ID_RUN_ADDED) && !enabled(&f, ID_RUN_FINISHED));
+        f.check(ID_RUN_FINISHED_ON, true);
+        f.click(ID_RUN_FINISHED_ON);
+        assert!(enabled(&f, ID_RUN_ADDED) && enabled(&f, ID_RUN_FINISHED));
+        f.check(ID_RUN_ADDED_ON, false);
+        f.click(ID_RUN_ADDED_ON);
+        assert!(!enabled(&f, ID_RUN_ADDED) && enabled(&f, ID_RUN_FINISHED));
+        f.check(ID_RUN_FINISHED_ON, false);
+        f.click(ID_RUN_FINISHED_ON);
+        assert!(!enabled(&f, ID_RUN_ADDED) && !enabled(&f, ID_RUN_FINISHED));
+
+        // options that have them on open with the lines live
+        let mut o = defaults();
+        o.gui.run_added_on = true;
+        o.gui.run_added = "notify.exe %N".into();
+        o.gui.run_finished_on = true;
+        o.gui.run_finished = RUN_LINE.into();
+        let g = Fixture::new(o);
+        assert!(enabled(&g, ID_RUN_ADDED) && enabled(&g, ID_RUN_FINISHED));
+    }
+
+    /// A command line with quotes and backslashes goes through its field and the settings
+    /// file unchanged; a box that is off keeps its line.
+    #[test]
+    fn run_program_lines_round_trip() {
+        let mut o = defaults();
+        o.gui.run_added_on = true;
+        o.gui.run_added = RUN_LINE.into();
+        o.gui.run_finished = r"D:\tools\done.cmd --path=%D".into();
+        let mut f = Fixture::new(o.clone());
+        f.page(PAGE_RUN_PROGRAM);
+        unsafe { assert!(checked(f.dlg, ID_RUN_ADDED_ON) && !checked(f.dlg, ID_RUN_FINISHED_ON)) };
+        assert_eq!(f.text(ID_RUN_ADDED), RUN_LINE);
+        assert_eq!(f.text(ID_RUN_FINISHED), r"D:\tools\done.cmd --path=%D");
+        // Apply without changes hands back exactly what came in
+        f.click(ID_APPLY);
+        assert_eq!(f.last_applied(), o);
+
+        // typed anew, with blanks around it; the other box switched on
+        let typed = r#""C:\Program Files\x\run.exe" "%F" %N "a ""quoted"" word" 100%%"#;
+        f.set(ID_RUN_ADDED, &format!("  {typed}  "));
+        f.check(ID_RUN_FINISHED_ON, true);
+        f.click(ID_RUN_FINISHED_ON);
+        f.set(ID_RUN_FINISHED, RUN_LINE);
+        f.click(ID_APPLY);
+        assert!(dialogs::take_told().is_empty());
+        let applied = f.last_applied();
+        assert!(applied.gui.run_added_on && applied.gui.run_finished_on);
+        assert_eq!(applied.gui.run_added, typed);
+        assert_eq!(applied.gui.run_finished, RUN_LINE);
+        assert_eq!(applied.gui.run_commands(), (typed, RUN_LINE));
+        assert_eq!(f.text(ID_RUN_ADDED), typed);
+        let mut prefs = Prefs::default();
+        applied.store(&mut prefs);
+        let reread = Prefs::from_text(&prefs.to_text());
+        assert_eq!(Options::load(&reread, "unused"), applied);
+
+        // the boxes off: the lines are kept for the day they are switched on again
+        f.check(ID_RUN_ADDED_ON, false);
+        f.check(ID_RUN_FINISHED_ON, false);
+        f.click(ID_APPLY);
+        let off = f.last_applied();
+        assert!(!off.gui.run_added_on && !off.gui.run_finished_on);
+        assert_eq!((off.gui.run_added.as_str(), off.gui.run_finished.as_str()), (typed, RUN_LINE));
+        assert_eq!(off.gui.run_commands(), ("", ""));
+    }
+
+    /// OK and Apply refuse a command line that cannot be run while its box is on (an unclosed
+    /// quote, nothing at all, a % code in the program's path), on the Run Program page with the
+    /// focus on the line; nothing is applied.
+    #[test]
+    fn a_run_program_line_that_cannot_run_is_refused() {
+        let mut f = Fixture::new(defaults());
+        let cases = [
+            (r#""C:\Program Files\x\run.exe "%F""#, tr!(RunErrQuote)),
+            ("", tr!(RunErrEmpty)),
+            ("   ", tr!(RunErrEmpty)),
+            (r"C:\tools\%N.exe now", tr!(RunErrProgram)),
+        ];
+        for (on, line) in [(ID_RUN_ADDED_ON, ID_RUN_ADDED), (ID_RUN_FINISHED_ON, ID_RUN_FINISHED)] {
+            f.check(on, true);
+            f.click(on);
+            for (bad, message) in cases {
+                f.page(0);
+                f.set(line, bad);
+                let err = unsafe { read_controls(f.dlg, &mut f.st) }.unwrap_err();
+                assert_eq!((err.0, page_of(err.0)), (line, Some(PAGE_RUN_PROGRAM)), "{bad:?}");
+                assert_eq!(err.1, message, "{bad:?}");
+                // Apply says so, shows the page and puts the focus on the line
+                f.click(ID_APPLY);
+                assert_eq!(dialogs::take_told(), [message.to_owned()], "{bad:?}");
+                assert_eq!(f.st.page, PAGE_RUN_PROGRAM);
+                assert_eq!(unsafe { GetFocus() }, unsafe { item(f.dlg, line) }, "{bad:?}");
+                // and so does OK, which then leaves the dialog open
+                f.page(0);
+                f.click(IDOK as u16);
+                assert_eq!(dialogs::take_told(), [message.to_owned()], "{bad:?}");
+                assert!(unsafe { windows_sys::Win32::UI::WindowsAndMessaging::IsWindow(f.dlg) } != 0);
+                assert_eq!(f.st.page, PAGE_RUN_PROGRAM);
+                assert_eq!(unsafe { GetFocus() }, unsafe { item(f.dlg, line) }, "{bad:?}");
+            }
+            assert!(f.applied.borrow().is_empty());
+            assert_eq!(f.st.opts, defaults(), "nothing half-applied");
+            // with its box off the same line is not asked about
+            f.set(line, r#"run.exe "open"#);
+            f.check(on, false);
+            f.click(on);
+            unsafe { read_controls(f.dlg, &mut f.st) }.unwrap();
+            f.st.opts = defaults();
+            f.set(line, "");
+        }
+
+        // put right, it is taken
+        f.check(ID_RUN_FINISHED_ON, true);
+        f.click(ID_RUN_FINISHED_ON);
+        f.set(ID_RUN_FINISHED, RUN_LINE);
+        f.click(ID_APPLY);
+        assert!(dialogs::take_told().is_empty());
+        assert_eq!(f.last_applied().gui.run_commands(), ("", RUN_LINE));
+    }
+
+    /// A remote window (the owner's Web UI page says so) has the Run Program boxes and lines
+    /// greyed, whatever its own settings hold, keeps the notes, and Apply changes nothing there.
+    #[test]
+    fn run_program_is_greyed_in_a_remote_window() {
+        let mut o = defaults();
+        o.gui.run_added_on = true;
+        // nothing a local window would take: a remote one does not ask about it
+        o.gui.run_added = r#"run.exe "open"#.into();
+        let mut f = Fixture::new(o.clone());
+        f.page(PAGE_RUN_PROGRAM);
+        let enabled = |f: &Fixture, id| unsafe { IsWindowEnabled(item(f.dlg, id)) != 0 };
+        assert!(enabled(&f, ID_RUN_ADDED_ON) && enabled(&f, ID_RUN_ADDED) && enabled(&f, ID_RUN_FINISHED_ON));
+        f.web.borrow_mut().status = WebStatus::Unavailable;
+        f.st.webui = f.web.borrow().clone();
+        unsafe { write_controls(f.dlg, &mut f.st) };
+        for id in [ID_RUN_ADDED_ON, ID_RUN_ADDED, ID_RUN_FINISHED_ON, ID_RUN_FINISHED] {
+            assert!(!enabled(&f, id), "control {id}");
+        }
+        unsafe {
+            assert!(shown(item(f.dlg, ID_RUN_NOTE)) && shown(item(f.dlg, ID_RUN_SAFETY_NOTE)));
+        }
+        assert_eq!(f.text(ID_RUN_SAFETY_NOTE), tr!(PrefRunSafetyNote));
+        // a click that reaches a box all the same leaves the lines greyed
+        f.click(ID_RUN_FINISHED_ON);
+        assert!(!enabled(&f, ID_RUN_FINISHED_ON) && !enabled(&f, ID_RUN_FINISHED));
+        f.click(ID_APPLY);
+        assert!(dialogs::take_told().is_empty());
+        assert_eq!(f.last_applied(), o);
+        for id in [ID_RUN_ADDED_ON, ID_RUN_ADDED, ID_RUN_FINISHED_ON, ID_RUN_FINISHED] {
+            assert!(!enabled(&f, id), "control {id} after Apply");
+        }
+    }
+
+    /// The two notes of the Run Program page are as tall as their texts, the second under the
+    /// first, both above the help pane.
+    #[test]
+    fn the_run_program_notes_are_as_tall_as_their_texts() {
+        let mut f = Fixture::new(defaults());
+        f.page(PAGE_RUN_PROGRAM);
+        let rect = |f: &Fixture, id: u16| unsafe {
+            let mut r: RECT = std::mem::zeroed();
+            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect(item(f.dlg, id), &mut r);
+            r
+        };
+        let height = |f: &Fixture, id: u16| rect(f, id).bottom - rect(f, id).top;
+        let mut line = RECT { left: 0, top: 0, right: 0, bottom: 9 };
+        unsafe { MapDialogRect(f.dlg, &mut line) };
+        let (note, safety) = (height(&f, ID_RUN_NOTE), height(&f, ID_RUN_SAFETY_NOTE));
+        // the list of codes is four lines or more in English, the other note two or more
+        assert!(note >= 3 * line.bottom, "{note}");
+        assert!(safety >= 2 * line.bottom, "{safety}");
+        assert!(rect(&f, ID_RUN_NOTE).top >= rect(&f, ID_RUN_FINISHED).bottom);
+        assert!(rect(&f, ID_RUN_SAFETY_NOTE).top >= rect(&f, ID_RUN_NOTE).bottom);
+        // fitting again changes nothing: each is exactly as tall as its text
+        unsafe { fit_run_notes(f.dlg) };
+        assert_eq!((height(&f, ID_RUN_NOTE), height(&f, ID_RUN_SAFETY_NOTE)), (note, safety));
+
+        // twice the text: about twice the lines, the second note moves down and still ends
+        // above the help pane
+        let top = rect(&f, ID_RUN_SAFETY_NOTE).top;
+        f.set(ID_RUN_NOTE, &format!("{0} {0}", tr!(PrefRunNote)));
+        f.set(ID_RUN_SAFETY_NOTE, &format!("{0} {0}", tr!(PrefRunSafetyNote)));
+        unsafe { fit_run_notes(f.dlg) };
+        assert!(height(&f, ID_RUN_NOTE) >= note * 2 - line.bottom, "{} {note}", height(&f, ID_RUN_NOTE));
+        assert!(height(&f, ID_RUN_SAFETY_NOTE) >= safety * 2 - line.bottom);
+        assert!(rect(&f, ID_RUN_SAFETY_NOTE).top > top);
+        assert!(rect(&f, ID_RUN_SAFETY_NOTE).top >= rect(&f, ID_RUN_NOTE).bottom);
+        assert!(rect(&f, ID_RUN_SAFETY_NOTE).bottom <= rect(&f, ID_HELP_FRAME).top);
     }
 
     #[test]

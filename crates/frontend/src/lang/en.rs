@@ -932,6 +932,27 @@ strings! {
     TrackersErrLine = "Every line of the tracker list must be a tracker address that starts with http://, https:// or udp://";
     /// Logger line. {count} and {old} are numbers of trackers.
     TrackersLogChanged = "The tracker list from the web changed: {count} trackers (before: {old}).";
+    /// Preferences > Advanced > Run Program (µTorrent 2.2.1 has this page): programs started
+    /// when a torrent is added or finishes. Also the group's title on the page.
+    PageRunProgram = "Run Program";
+    /// Check box above a field for a command line (a program's path and its arguments).
+    PrefRunAdded = "Run this program when a torrent is added:";
+    /// Check box above a field for a command line (a program's path and its arguments).
+    PrefRunFinished = "Run this program when a torrent finishes downloading:";
+    /// Keep the %N %L %F %D %Z %T %I %J %K codes exactly as they are.
+    PrefRunNote = "Write the program's path first, in double quotes if it has spaces, then its arguments. In the arguments you can use: %N name, %L label, %F path of the data, %D save folder, %Z size in bytes, %T tracker, %I info hash (v1), %J info hash (v2), %K torrent ID. The program is started directly, without a command shell.";
+    /// "Web UI" is the program's web interface; keep the name.
+    PrefRunSafetyNote = "Whoever can change these lines can run programs under your account. They can be changed only on this computer: never through a remote connection, and in the Web UI only from this computer with the current password.";
+    /// Error: a Run Program check box is on and its field is empty.
+    RunErrEmpty = "Enter the program to run, or clear the check box.";
+    /// Error: the command line has an opening double quote without a closing one.
+    RunErrQuote = "The command line has a double quote that is never closed.";
+    /// Error. Keep %N as it is.
+    RunErrProgram = "The program's path must not contain a code such as %N: only the arguments may.";
+    /// Error: the command line is too long or has a line break in it.
+    RunErrLong = "The command line is too long or has a line break in it.";
+    /// Error (Web UI): someone tried to change the Run Program lines from another computer.
+    RunErrRemote = "Run Program can be changed only on the computer that runs Rookparcel.";
     /// Logger line; {error} says why. The list in use stays as it was.
     TrackersLogRejected = "The tracker list from the web was not used: {error}.";
     /// Checks run at the system's background disk priority and wait while other programs use

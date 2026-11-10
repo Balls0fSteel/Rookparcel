@@ -476,6 +476,8 @@ impl Core {
         self.torrent_folders = o.gui.torrent_folders.clone();
         // (a remote window has none: its server keeps its own list)
         self.configure_trackers(&o.gui);
+        // (nor a Run Program: its server starts its own)
+        self.configure_run(&o.gui);
         let automatic = o.gui.check_updates && self.updates_here;
         self.updates.set_automatic(automatic, std::time::Instant::now());
         self.update_beta = o.gui.update_beta;

@@ -578,7 +578,7 @@ fn serve_inner(shared: &Shared, req: &Request) -> Response {
         ),
         "app/preferences" => {
             let st = shared.lock();
-            Response::json(&preferences(&st, shared))
+            Response::json(&preferences(&st, shared, is_local(head, req.peer)))
         }
         "app/setPreferences" => {
             let Some(text) = p.get("json") else { return Response::text(400, "missing json") };
@@ -1024,7 +1024,7 @@ fn proxy_type_number(t: ProxyType) -> i64 {
 }
 
 /// `app/preferences`: the subset we support.
-fn preferences(st: &State, shared: &Shared) -> Json {
+fn preferences(st: &State, shared: &Shared, local: bool) -> Json {
     let s = &st.settings;
     let p = &st.prefs;
     let _ = shared;
@@ -1095,6 +1095,12 @@ fn preferences(st: &State, shared: &Shared) -> Json {
         // them, the list is changed on the native page with the current password only
         .with("add_trackers_enabled", p.trackers_append)
         .with("add_trackers", p.trackers_list.as_str())
+        // Run Program (D67), read-only: setPreferences takes none of these, ever. Whether they
+        // are on is no secret; the command lines go only to a client on this computer
+        .with("autorun_on_torrent_added_enabled", p.run_added_on)
+        .with("autorun_on_torrent_added_program", if local { p.run_added.as_str() } else { "" })
+        .with("autorun_enabled", p.run_finished_on)
+        .with("autorun_program", if local { p.run_finished.as_str() } else { "" })
         .with("web_ui_csrf_protection_enabled", p.csrf_protection)
         .with("web_ui_host_header_validation_enabled", p.host_header_validation)
         .with("web_ui_domain_list", p.domain_list.as_str())
@@ -1174,6 +1180,11 @@ pub(crate) fn apply_preferences(shared: &Shared, st: &mut State, v: &Json, keep:
             "web_ui_session_timeout" => one("webui.session_timeout", clamp(val, 1, 86_400 * 365)),
             // never here: `add_trackers`, `add_trackers_enabled` and anything else of the
             // trackers added to new downloads (D66) are read-only in the shim
+            // never here either: `autorun_enabled`, `autorun_program`,
+            // `autorun_on_torrent_added_enabled`, `autorun_on_torrent_added_program` (Run
+            // Program, D67). qBittorrent takes them from anyone who is logged in, which was
+            // CVE-2023-30801; here they fall through to the keys that are ignored, and
+            // `prefs::commit` below could not change the lines even if they were mapped
             _ => Vec::new(),
         };
         for (id, j) in mapped {

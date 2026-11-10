@@ -4,7 +4,7 @@ This page lists every page of the Preferences window and what each setting on it
 
 ## Opening Preferences
 
-Open **Options > Preferences**, press <kbd>Ctrl</kbd>+<kbd>P</kbd>, or click **Preferences** on the toolbar. The pages are listed on the left; **Disk Cache**, **Disk I/O** and **Trackers** sit under **Advanced**. **OK** saves and closes, **Apply** saves and keeps the window open, **Cancel** forgets the changes.
+Open **Options > Preferences**, press <kbd>Ctrl</kbd>+<kbd>P</kbd>, or click **Preferences** on the toolbar. The pages are listed on the left; **Disk Cache**, **Disk I/O**, **Trackers** and **Run Program** sit under **Advanced**. **OK** saves and closes, **Apply** saves and keeps the window open, **Cancel** forgets the changes.
 
 Help is built in:
 
@@ -261,6 +261,37 @@ Good to know:
 - **Whoever runs that address chooses its trackers**, and those trackers then see your address and your public downloads. Use a list you trust.
 - In the Web UI the page's settings change only with the current password, and the qBittorrent-compatible API cannot change them.
 - `rookparcel-nox` keeps these settings with the Web UI's, so it needs `--webui` to use them.
+
+## Run Program
+
+*New in 1.2.41.* Starts a program of yours when a torrent is added or finishes. Both boxes are off at first.
+
+| Setting | What it does |
+|---|---|
+| **Run this program when a torrent is added:** | Starts the program on the line below for each new torrent. Not for one that was already in the list, nor for the torrents loaded at the start. |
+| **Run this program when a torrent finishes downloading:** | Starts the program for each torrent that finishes. Not after a re-check or a restart, and not for a torrent whose data was complete when you added it. |
+
+Write the program's path first, in double quotes if it has spaces, then its arguments, for example `"C:\Tools\notify.exe" --name "%N" --path "%F"`. In the arguments these codes stand for the torrent's details:
+
+| Code | Stands for |
+|---|---|
+| `%N` | the torrent's name |
+| `%L` | its label |
+| `%F` | where its data is: the file, or the folder of a torrent with several files |
+| `%D` | the folder it was saved in |
+| `%Z` | its size in bytes |
+| `%T` | its current tracker |
+| `%I`, `%J` | its info hash, v1 and v2 (`-` when it has none) |
+| `%K` | its id: the v1 hash, or the shortened v2 hash |
+| `%%` | a percent sign |
+
+Good to know:
+
+- **The program is started directly, without a command shell.** Pipes, `>` and `&&` do nothing; to use them, run a script and put them in the script. To run a script, name its interpreter first where the system needs one (`powershell -File ...`, `/bin/sh /path/script.sh`).
+- **A torrent's name can never become a command.** Each code is put inside its own argument, quotes or not, and the program's own path takes no code. A name can still begin with a dash, which some programs read as an option: write `--name=%N` or put `--` before it where that matters.
+- The program gets no window and no input, at most four run at once, and each start and end is written to the Logger.
+- The program runs on the computer that has the torrents: in a window connected to a remote `rookparcel-nox`, this page's lines do nothing; set them on the server.
+- **Who can change the lines.** Whoever can change them can run programs under your account, so: the desktop programs on their own computer; the Web UI only from a browser on the same computer, with the current password; never the qBittorrent-compatible API, and never a remote connection. A server you can only reach from elsewhere (Docker, for one) needs `--webui-remote-run-program` on its command line: see [Running rookparcel-nox](Running-rookparcel-nox). Think before you give it: with it, the Web UI's password is all that stands between a visitor and running programs on the server.
 
 ## Differences in the GTK version
 

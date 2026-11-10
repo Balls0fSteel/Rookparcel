@@ -16,6 +16,7 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use rookparcel_core::fetch::{FetchOptions, FetchProxy, http_get};
 use rookparcel_core::metainfo::{TorrentInfo, parse_magnet_uri};
+use rookparcel_core::run_program::RunProgram;
 use rookparcel_core::{
     AddTorrentParams, Alert, IpFilter, MoveCompleted, MoveFlags, QueueMove, RemoveFlags, Session,
     SessionHandle, SessionParams, SessionStats, TorrentFlags, TorrentId, TorrentSource, same_dir,
@@ -114,6 +115,9 @@ struct App {
     /// The trackers added to new downloads (D66, Preferences > Advanced > Trackers); `None` in
     /// a remote window, whose server keeps its own list.
     trackers: Option<TrackerList>,
+    /// The programs started when a torrent is added or finishes (D67, Preferences > Advanced >
+    /// Run Program); `None` in a remote window, whose server starts its own.
+    run: Option<RunProgram>,
 }
 
 /// The widgets that draw from [`App`].
@@ -1383,6 +1387,10 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
                 let cache = paths::settings_dir().join(tracker_list::CACHE_FILE);
                 TrackerList::new(Some(cache), tracker_list::Config::of(&opts.gui))
             }),
+            run: remote.is_none().then(|| {
+                let (added, finished) = opts.gui.run_commands();
+                RunProgram::new(added, finished)
+            }),
         })
     });
     with_app(|a| {
@@ -1733,6 +1741,12 @@ fn on_alerts() {
                 let name = a.list.get(id).map(|st| st.name.clone()).unwrap_or_default();
                 a.detail.push_log(format!("{} {}", now_hms(), tr!(LogMovingCompleted, name, dir)));
                 a.handle.post_torrent_updates();
+            }
+            // Run Program (D67): every alert, it starts the programs itself
+            if let Some(r) = &mut a.run {
+                for line in r.on_alert(&alert, label_of) {
+                    a.detail.push_log(format!("{} {line}", now_hms()));
+                }
             }
             for line in a.torrent_files.on_alert(&alert, &a.torrent_folders, &a.handle) {
                 a.detail.push_log(format!("{} {line}", now_hms()));
@@ -3228,6 +3242,11 @@ fn apply_options(a: &mut App, o: &Options) {
         l.configure(tracker_list::Config::of(&o.gui));
     }
     send_extra_trackers(a);
+    // (nor a Run Program: its server starts its own)
+    if let Some(r) = &mut a.run {
+        let (added, finished) = o.gui.run_commands();
+        r.set(added, finished);
+    }
     a.updates.set_automatic(o.gui.check_updates && updates_here(), std::time::Instant::now());
     a.update_beta = o.gui.update_beta;
     // the title gains or loses the speeds now, not at the next second

@@ -488,6 +488,19 @@ shim's `app/preferences` shows `add_trackers_enabled` and `add_trackers`; `setPr
 ignores them. A Web UI hosted by a desktop program leaves the page out: the program owns the
 list.
 
+Run Program (D67, Preferences > Advanced > Run Program): `run.added_enabled`, `run.added`,
+`run.finished_enabled` and `run.finished` name programs the server starts, so they have the
+strictest rule (`prefs::RunGate`). `POST /pa/prefs` changes them only when the request is local
+(`api::is_local`: a loopback peer without a forwarding header, so not through a reverse proxy)
+or nox was started with `--webui-remote-run-program`, and then only with the current password
+like every security field. A request the gate refuses gets 400 with `RunErrRemote` before its
+password is looked at (no oracle, the session stays) and a Logger line with its address.
+`GET /pa/prefs` marks the four fields `readonly` for a session that cannot change them. The
+flag is a command-line option only, never stored. The shim ignores qBittorrent's `autorun_*`
+keys in `setPreferences` and shows the program lines only to a local client; the remote GUI
+protocol has no way to carry the lines; a hosted Web UI leaves the page out. At the start nox
+warns when a line is enabled and the Web UI listens beyond loopback.
+
 Search sources (D41; owner may revisit): adding a source, or changing a source's URL or API
 key, needs the current password too (`password` in `/pa/search/source-add` and
 `source-edit`; a wrong one ends the session, as above). So does the search helper's download

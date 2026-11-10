@@ -49,6 +49,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use rookparcel_core::fetch::FetchProxy;
+use rookparcel_core::run_program::RunProgram;
 use rookparcel_core::util::private_file;
 use rookparcel_core::util::time::local_utc_offset;
 use rookparcel_core::{
@@ -124,6 +125,10 @@ pub struct Config {
     /// state directory, or hosted the window's own profile folder, so the pages act on the
     /// window's helper. `None`: the pages offer no helper.
     pub helper_dir: Option<PathBuf>,
+    /// `--webui-remote-run-program`: the Run Program lines (D67) may be changed from another
+    /// computer too (still only with the current password). Off unless the command line says
+    /// so: it is never stored and no request can set it.
+    pub remote_run_program: bool,
 }
 
 /// A desktop client that hosts the Web UI over its own engine (D40: the Windows GUI, as
@@ -200,6 +205,7 @@ impl Config {
             save_roots: Vec::new(),
             hosted: None,
             helper_dir: None,
+            remote_run_program: false,
         }
     }
 }
@@ -269,6 +275,15 @@ pub(crate) struct Prefs {
     pub trackers_list: String,
     pub trackers_from_url: bool,
     pub trackers_url: String,
+    /// Preferences > Advanced > Run Program (D67, `GuiOptions::run_*`): the command lines the
+    /// daemon starts when a torrent is added and when one finishes downloading. Changed only
+    /// through `prefs::commit_request`, from this computer (or with
+    /// `--webui-remote-run-program`) and with the current password (`prefs::RunGate`,
+    /// `prefs::SECURITY_FIELDS`); hosted, the host's own.
+    pub run_added_on: bool,
+    pub run_added: String,
+    pub run_finished_on: bool,
+    pub run_finished: String,
     pub bypass_local_auth: bool,
     /// `Authorization: Bearer <key>` is accepted (with a key stored: `State::api_key`).
     pub api_key_enabled: bool,
@@ -322,6 +337,10 @@ impl Prefs {
             trackers_list: String::new(),
             trackers_from_url: false,
             trackers_url: String::new(),
+            run_added_on: false,
+            run_added: String::new(),
+            run_finished_on: false,
+            run_finished: String::new(),
             bypass_local_auth: false,
             api_key_enabled: false,
             auth_subnets: String::new(),
@@ -376,12 +395,25 @@ impl Prefs {
             trackers_list: self.trackers_list.clone(),
             trackers_from_url: self.trackers_from_url,
             trackers_url: self.trackers_url.clone(),
+            run_added_on: self.run_added_on,
+            run_added: self.run_added.clone(),
+            run_finished_on: self.run_finished_on,
+            run_finished: self.run_finished.clone(),
         }
     }
 
+    /// The Run Program command lines in force (D67), (added, finished): empty for one that is
+    /// switched off (`GuiOptions::run_commands`, without building the whole `GuiOptions`).
+    pub fn run_commands(&self) -> (&str, &str) {
+        (
+            if self.run_added_on { self.run_added.trim() } else { "" },
+            if self.run_finished_on { self.run_finished.trim() } else { "" },
+        )
+    }
+
     /// Writes these preferences into `g`, leaving the desktop-only options (tray, balloons,
-    /// window activation and title, updates, the trackers added to new downloads) as they are:
-    /// a host's options with the Web UI's changes on them.
+    /// window activation and title, updates, the trackers added to new downloads, the Run
+    /// Program lines) as they are: a host's options with the Web UI's changes on them.
     pub fn apply_to(&self, g: &mut GuiOptions) {
         let mine = self.gui();
         *g = GuiOptions {
@@ -400,6 +432,11 @@ impl Prefs {
             trackers_list: g.trackers_list.clone(),
             trackers_from_url: g.trackers_from_url,
             trackers_url: g.trackers_url.clone(),
+            // the host's own programs (D67): a browser never changes them
+            run_added_on: g.run_added_on,
+            run_added: g.run_added.clone(),
+            run_finished_on: g.run_finished_on,
+            run_finished: g.run_finished.clone(),
             ..mine
         };
     }
@@ -429,6 +466,10 @@ impl Prefs {
         self.trackers_list = g.trackers_list.clone();
         self.trackers_from_url = g.trackers_from_url;
         self.trackers_url = g.trackers_url.clone();
+        self.run_added_on = g.run_added_on;
+        self.run_added = g.run_added.clone();
+        self.run_finished_on = g.run_finished_on;
+        self.run_finished = g.run_finished.clone();
     }
 }
 
@@ -625,6 +666,26 @@ pub(crate) struct Shared {
     /// ([`Shared::trackers_tick`]). `None` hosted: the host owns its own list. Its lock is taken
     /// alone or after the State lock, never before it.
     pub(crate) trackers: Option<Mutex<TrackerList>>,
+    /// Run Program (D67): the daemon's one starter of the user's programs, fed every alert by
+    /// [`WebUi::on_alerts`] and pointed at `Prefs::run_commands` there, so before the first
+    /// alert after a commit. `None` hosted: the host runs its own. Only the alert thread takes
+    /// this lock, and always before the State lock (never while holding it).
+    pub(crate) run_program: Option<Mutex<RunPrograms>>,
+    /// [`Config::remote_run_program`]: the command line's alone; nothing changes it later.
+    pub(crate) remote_run_program: bool,
+}
+
+/// [`Shared::run_program`]: the starter and the command lines it was last given.
+pub(crate) struct RunPrograms {
+    runner: RunProgram,
+    added: String,
+    finished: String,
+}
+
+impl RunPrograms {
+    pub(crate) fn new() -> RunPrograms {
+        RunPrograms { runner: RunProgram::new("", ""), added: String::new(), finished: String::new() }
+    }
 }
 
 /// Hosted, a category is the host's `webui.category.<name>` key (its save folder as the value),
@@ -1074,6 +1135,12 @@ impl WebUi {
                     tracker_list::Config::default(),
                 ))),
             },
+            // hosted, the host starts its own programs (D67): none here
+            run_program: match hosted {
+                Some(_) => None,
+                None => Some(Mutex::new(RunPrograms::new())),
+            },
+            remote_run_program: config.remote_run_program && hosted.is_none(),
         });
         // the helper's source is routed to the running helper from the first search on
         helper::configure(&shared);
@@ -1464,6 +1531,60 @@ impl WebUi {
         if ticked && !hosted {
             rss::tick(&self.shared);
         }
+        // last: the cache knows the batch's torrents and their labels by now
+        self.run_programs(alerts);
+    }
+
+    /// Run Program (D67): points the daemon's starter at the command lines in force, then
+    /// shows it every alert of the batch; it starts the programs itself. Its lines (a program
+    /// started, ended, failed) go to the Logger and to the daemon's output. Hosted: nothing
+    /// (the host runs its own).
+    fn run_programs(&self, alerts: &[Alert]) {
+        let Some(run) = &self.shared.run_program else { return };
+        let mut run = run.lock().unwrap_or_else(|e| e.into_inner());
+        let changed = {
+            let st = self.shared.lock();
+            let (added, finished) = st.prefs.run_commands();
+            ((added, finished) != (run.added.as_str(), run.finished.as_str()))
+                .then(|| (added.to_owned(), finished.to_owned()))
+        };
+        if let Some((added, finished)) = changed {
+            run.runner.set(&added, &finished);
+            run.added = added;
+            run.finished = finished;
+        }
+        let mut lines = Vec::new();
+        for a in alerts {
+            // the label is asked only when a program is about to run (the State lock, briefly)
+            lines.extend(run.runner.on_alert(a, |id| self.label_of(id)));
+        }
+        drop(run);
+        if lines.is_empty() {
+            return;
+        }
+        let now = unix_now();
+        let mut st = self.shared.lock();
+        for line in lines {
+            println!("* {line}");
+            st.push_log(None, line, now);
+        }
+    }
+
+    /// Whether a Run Program line (D67) is set and switched on, for the warning at start.
+    pub fn run_program_enabled(&self) -> bool {
+        let st = self.shared.lock();
+        let (added, finished) = st.prefs.run_commands();
+        !st.hosted && (!added.is_empty() || !finished.is_empty())
+    }
+
+    /// Whether the daemon's starter has a program to run: what [`WebUi::on_alerts`] last gave
+    /// it. For tests.
+    #[doc(hidden)]
+    pub fn run_program_armed(&self) -> bool {
+        self.shared
+            .run_program
+            .as_ref()
+            .is_some_and(|r| r.lock().unwrap_or_else(|e| e.into_inner()).runner.enabled())
     }
 
     /// Stops accepting connections (also done on drop). Open connections end on their own
@@ -1788,6 +1909,8 @@ impl State {
             helper: Mutex::default(),
             this: Weak::new(),
             trackers: Some(Mutex::new(TrackerList::new(None, tracker_list::Config::default()))),
+            run_program: Some(Mutex::new(RunPrograms::new())),
+            remote_run_program: false,
         }
     }
 

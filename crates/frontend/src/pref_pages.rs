@@ -124,6 +124,25 @@ pub const TRACKERS_LIST: &str = "trackers.list";
 pub const TRACKERS_FROM_URL: &str = "trackers.from_url";
 pub const TRACKERS_URL: &str = "trackers.url";
 
+/// Advanced > Run Program (D67): the two check boxes and their command lines.
+pub const RUN_ADDED_ON: &str = "run.added_enabled";
+pub const RUN_ADDED: &str = "run.added";
+pub const RUN_FINISHED_ON: &str = "run.finished_enabled";
+pub const RUN_FINISHED: &str = "run.finished";
+
+/// Why a Run Program command line cannot be stored, if it cannot (D67): the same rule for
+/// every client and the Web UI.
+pub fn run_command_error(line: &str) -> Option<String> {
+    use rookparcel_core::run_program::{CommandError, split_command};
+    match split_command(line.trim()) {
+        Ok(args) if args.is_empty() => Some(tr_owned(S::RunErrEmpty)),
+        Ok(_) => None,
+        Err(CommandError::OpenQuote) => Some(tr_owned(S::RunErrQuote)),
+        Err(CommandError::ProgramPlaceholder) => Some(tr_owned(S::RunErrProgram)),
+        Err(CommandError::Malformed) => Some(tr_owned(S::RunErrLong)),
+    }
+}
+
 /// The Scheduler page's "Enable Scheduler" box, which greys the table and the rates.
 pub const SCHED_ENABLE: &str = "sched.enable";
 
@@ -1227,6 +1246,47 @@ pub fn pages(features: Features) -> Vec<Page> {
                 Note(|| crate::tr!(PrefTrackersNote).to_owned()),
             ],
         },
+        // programs started when a torrent is added or finishes (D67, core `run_program`)
+        Page {
+            key: "run_program",
+            title: S::PageRunProgram,
+            parent: Some("advanced"),
+            items: vec![
+                Group(S::PageRunProgram),
+                F(checkbox(
+                    RUN_ADDED_ON,
+                    S::PrefRunAdded,
+                    |o| o.gui.run_added_on,
+                    |o, v| o.gui.run_added_on = v,
+                )),
+                F(text(
+                    RUN_ADDED,
+                    None,
+                    TextKind::Plain,
+                    |o| o.gui.run_added.clone(),
+                    |o, v| o.gui.run_added = v.trim().to_owned(),
+                )
+                .help(H::PrefRunAdded)
+                .needs(&[RUN_ADDED_ON])),
+                F(checkbox(
+                    RUN_FINISHED_ON,
+                    S::PrefRunFinished,
+                    |o| o.gui.run_finished_on,
+                    |o, v| o.gui.run_finished_on = v,
+                )),
+                F(text(
+                    RUN_FINISHED,
+                    None,
+                    TextKind::Plain,
+                    |o| o.gui.run_finished.clone(),
+                    |o, v| o.gui.run_finished = v.trim().to_owned(),
+                )
+                .help(H::PrefRunFinished)
+                .needs(&[RUN_FINISHED_ON])),
+                Note(|| crate::tr!(PrefRunNote).to_owned()),
+                Note(|| crate::tr!(PrefRunSafetyNote).to_owned()),
+            ],
+        },
     ]
 }
 
@@ -1291,6 +1351,13 @@ pub fn check(o: &Options) -> Result<(), (&'static str, String)> {
     }
     if g.trackers_from_url && !crate::tracker_list::is_list_url(&g.trackers_url) {
         return Err((TRACKERS_URL, tr_owned(S::TrackersErrHttps)));
+    }
+    for (on, line, key) in
+        [(g.run_added_on, &g.run_added, RUN_ADDED), (g.run_finished_on, &g.run_finished, RUN_FINISHED)]
+    {
+        if let Some(e) = run_command_error(line).filter(|_| on) {
+            return Err((key, e));
+        }
     }
     Ok(())
 }
@@ -1412,7 +1479,10 @@ mod tests {
         assert_eq!(page_of(&without, "cache.mb").map(|p| p.key), Some("disk_cache"));
         assert_eq!(without.iter().find(|p| p.key == "disk_cache").unwrap().parent, Some("advanced"));
         let order: Vec<&str> = without.iter().map(|p| p.key).collect();
-        assert_eq!(order[6..], ["queueing", "scheduler", "advanced", "disk_cache", "disk_io", "trackers"]);
+        assert_eq!(
+            order[6..],
+            ["queueing", "scheduler", "advanced", "disk_cache", "disk_io", "trackers", "run_program"]
+        );
         assert_eq!(without.iter().find(|p| p.key == "trackers").unwrap().parent, Some("advanced"));
         assert_eq!(page_of(&without, "check_gently").map(|p| p.key), Some("disk_io"));
         assert_eq!(without.iter().find(|p| p.key == "disk_io").unwrap().parent, Some("advanced"));

@@ -288,6 +288,10 @@ helps! {
     PrefTrackersAppend = "Adds the trackers in the box to every torrent you add from now on, after the torrent's own trackers. One address per line; a blank line starts a new tier. Private torrents never get them, and torrents already in the list are not changed.";
     /// frontend tracker_list::fetch (https only, 256 KiB, parse_fetched) and TrackerList::tick (daily, cache trackers-url.txt)
     PrefTrackersFromUrl = "Reads a list of trackers from the https address below, at the start and then once a day, and adds them to every torrent you add, after the box's trackers. Only lines that are tracker addresses are used, and a file that is not such a list is ignored: the last good list stays in use. Whoever runs the address decides which trackers you announce to, so use a list you trust.";
+    /// core run_program::RunProgram::on_alert (TorrentAdded, new torrents only) -> split_command, expand, spawn
+    PrefRunAdded = "Starts the program on the line below each time a new torrent is added, with the torrent's details in place of the % codes. Not for torrents that were already in the list, nor for the ones loaded at the start. The program runs without a command shell and without a window of its own; at most four run at once.";
+    /// core run_program::RunProgram::on_alert (TorrentFinished with all_time_download > 0) -> split_command, expand, spawn
+    PrefRunFinished = "Starts the program on the line below each time a torrent finishes downloading, with the torrent's details in place of the % codes. Not after a re-check or a restart, and not for a torrent whose data was already complete when it was added. The program runs without a command shell and without a window of its own; at most four run at once.";
     /// frontend pref_pages Action::UpdateTrackerList -> TrackerList::refresh_now
     PrefTrackersUpdate = "Applies the page and reads the list from the address now, without waiting for the daily update. The line below shows the result.";
     /// engine: docs/DISKIO.md (part 1, implementation status), crates/core/src/settings.rs (check_gently)

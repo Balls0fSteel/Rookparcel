@@ -42,6 +42,15 @@ impl Core {
             self.log(tr!(LogMovingCompleted, name, dir));
             self.handle.post_torrent_updates();
         }
+        // Run Program (D67): every alert, it starts the programs itself
+        let list = &self.list;
+        let run_lines = match &mut self.run {
+            Some(r) => r.on_alert(&alert, |id| Some(list.extra(id).label.to_owned())),
+            None => Vec::new(),
+        };
+        for line in run_lines {
+            self.log(line);
+        }
         for line in self.torrent_files.on_alert(&alert, &self.torrent_folders, &self.handle) {
             self.log(line);
         }

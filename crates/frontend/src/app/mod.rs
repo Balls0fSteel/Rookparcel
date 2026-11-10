@@ -43,6 +43,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use rookparcel_core::fetch::FetchProxy;
+use rookparcel_core::run_program::RunProgram;
 use rookparcel_core::{Alert, Exit, MoveCompleted, Session, SessionHandle, SessionStats, TorrentId};
 
 use crate::add::AwaitingMetadata;
@@ -278,6 +279,9 @@ pub struct Core {
     trackers: Option<TrackerList>,
     /// What the engine was last given of them.
     extra_trackers: Vec<Vec<String>>,
+    /// The programs started when a torrent is added or finishes (D67); `None` in a remote
+    /// window, whose server starts its own, and in a demo, whose torrents are not real.
+    run: Option<RunProgram>,
     /// The update check's answer, from its thread.
     update_result: Arc<Mutex<Option<Result<Manifest, String>>>>,
     /// Finished `.torrent` downloads: (URL, the file or why not).
@@ -361,6 +365,10 @@ impl Core {
         // a demo keeps no list from the web, and so no cache of one
         let cache = (!demo).then(|| dirs.settings.join(tracker_list::CACHE_FILE));
         let trackers = remote.is_none().then(|| TrackerList::new(cache, tracker_config(&opts.gui, demo)));
+        let run = (remote.is_none() && !demo).then(|| {
+            let (added, finished) = opts.gui.run_commands();
+            RunProgram::new(added, finished)
+        });
         let w = wake.clone();
         let mut core = Core {
             session: Some(session),
@@ -403,6 +411,7 @@ impl Core {
             demo,
             trackers,
             extra_trackers: Vec::new(),
+            run,
             update_result: Arc::new(Mutex::new(None)),
             fetched: Arc::new(Mutex::new(Vec::new())),
             listen: ListenProblem::new(settings::listen_port(&opts.settings)),
@@ -607,6 +616,22 @@ impl Core {
         if let Some(l) = &mut self.trackers {
             l.refresh_now();
         }
+    }
+
+    // ---- Run Program (D67) --------------------------------------------------------------------
+
+    /// The preferences' two command lines as they are in `gui`, from now on.
+    pub(super) fn configure_run(&mut self, gui: &GuiOptions) {
+        if let Some(r) = &mut self.run {
+            let (added, finished) = gui.run_commands();
+            r.set(added, finished);
+        }
+    }
+
+    /// Whether this window starts a program when a torrent is added or finishes: never a
+    /// remote window (its server does) nor a demo.
+    pub fn run_enabled(&self) -> bool {
+        self.run.as_ref().is_some_and(RunProgram::enabled)
     }
 
     /// A line in the Logger, with the time.

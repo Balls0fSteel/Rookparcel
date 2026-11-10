@@ -102,6 +102,14 @@ pub struct GuiOptions {
     pub trackers_list: String,
     pub trackers_from_url: bool,
     pub trackers_url: String,
+    /// Preferences > Advanced > Run Program (D67, `rookparcel_core::run_program`): the
+    /// command lines started when a torrent is added and when one finishes downloading
+    /// (`run.added_enabled`, `run.added`, `run.finished_enabled`, `run.finished`). Both off
+    /// by default. They run in the program that owns the engine, never in a remote window.
+    pub run_added_on: bool,
+    pub run_added: String,
+    pub run_finished_on: bool,
+    pub run_finished: String,
 }
 
 impl GuiOptions {
@@ -149,6 +157,10 @@ impl GuiOptions {
             trackers_list: crate::tracker_list::from_stored(prefs.get("trackers.list").unwrap_or_default()),
             trackers_from_url: prefs.get_bool("trackers.from_url", false),
             trackers_url: prefs.get("trackers.url").unwrap_or_default().trim().to_owned(),
+            run_added_on: prefs.get_bool("run.added_enabled", false),
+            run_added: prefs.get("run.added").unwrap_or_default().trim().to_owned(),
+            run_finished_on: prefs.get_bool("run.finished_enabled", false),
+            run_finished: prefs.get("run.finished").unwrap_or_default().trim().to_owned(),
         }
     }
 
@@ -201,9 +213,13 @@ impl GuiOptions {
         prefs.set_bool("update.beta", self.update_beta);
         prefs.set_bool("trackers.append", self.trackers_append);
         prefs.set_bool("trackers.from_url", self.trackers_from_url);
+        prefs.set_bool("run.added_enabled", self.run_added_on);
+        prefs.set_bool("run.finished_enabled", self.run_finished_on);
         for (key, value) in [
             ("trackers.list", crate::tracker_list::to_stored(&self.trackers_list)),
             ("trackers.url", self.trackers_url.trim().to_owned()),
+            ("run.added", self.run_added.trim().to_owned()),
+            ("run.finished", self.run_finished.trim().to_owned()),
         ] {
             if value.is_empty() {
                 prefs.remove(key);
@@ -211,6 +227,15 @@ impl GuiOptions {
                 prefs.set(key, value);
             }
         }
+    }
+
+    /// The Run Program command lines in force, (added, finished): empty for one that is
+    /// switched off. For `rookparcel_core::run_program::RunProgram::new` / `set`.
+    pub fn run_commands(&self) -> (&str, &str) {
+        (
+            if self.run_added_on { self.run_added.trim() } else { "" },
+            if self.run_finished_on { self.run_finished.trim() } else { "" },
+        )
     }
 
     /// The block list to load: the configured path, or `ipfilter.dat` in `settings_dir`.
@@ -382,7 +407,12 @@ mod tests {
                     .into(),
             trackers_from_url: true,
             trackers_url: "https://lists.example/trackers.txt".into(),
+            run_added_on: true,
+            run_added: r#""C:\Program Files\Tools\added.exe" "%N" %I"#.into(),
+            run_finished_on: false,
+            run_finished: "/usr/local/bin/done.sh --path=%F".into(),
         };
+        assert_eq!(changed.gui.run_commands(), (r#""C:\Program Files\Tools\added.exe" "%N" %I"#, ""));
         changed.store(&mut prefs);
         let text = prefs.to_text();
         let mut reread = Prefs::default();

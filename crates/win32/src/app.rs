@@ -16,6 +16,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use rookparcel_core::fetch::FetchProxy;
 use rookparcel_core::metainfo::TorrentInfo;
+use rookparcel_core::run_program::RunProgram;
 use rookparcel_core::util::lockfile;
 use rookparcel_core::util::time::{local_utc_offset, unix_now};
 use rookparcel_core::{
@@ -502,6 +503,10 @@ struct App {
     /// fetched from the web (run from the timer, which hands the engine each new list). `None`
     /// in a remote window, whose server has its own, and in a demo, which fetches nothing.
     trackers: Option<TrackerList>,
+    /// Preferences > Advanced > Run Program (D67): the programs started when a torrent is added
+    /// and when one finishes downloading, fed every alert. `None` in a remote window, whose
+    /// server runs its own, and in a demo, which never starts a program.
+    run_program: Option<RunProgram>,
     /// The RSS Downloader (`rss.dat` beside `rookparcel.ini`) with its fetches and whether it
     /// changed since it was saved (`Rss::dirty`), shared with the Web UI this window serves
     /// (`Hosted::rss`: one model, edited from both sides; see [`rss_lock`]), and its dialog
@@ -885,6 +890,9 @@ pub fn run(args: Args) -> i32 {
                 let cache = dir.join(tracker_list::CACHE_FILE);
                 a.trackers = Some(TrackerList::new(Some(cache), tracker_list::Config::of(&opts.gui)));
                 tracker_list_timer(a);
+                // before the first alert of this session is read (D67)
+                let (added, finished) = opts.gui.run_commands();
+                a.run_program = Some(RunProgram::new(added, finished));
             }
         });
         for p in lang_problems {
@@ -1431,6 +1439,7 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
             seeding_goal,
             scrapes: Scrapes::default(),
             trackers: None,
+            run_program: None,
             rss,
             rss_dialog: null_mut(),
             feed_tree: Vec::new(),
@@ -2969,6 +2978,14 @@ unsafe fn on_alerts(hwnd: HWND) {
                 a.handle.post_torrent_updates();
             }
             for line in a.torrent_files.on_alert(&alert, &a.torrent_folders, &a.handle) {
+                a.detail.push_log(format!("{} {line}", now_hms()));
+            }
+            // Run Program (D67): it starts the programs itself and says so in the Logger
+            let run_lines = match a.run_program.as_mut() {
+                Some(r) => r.on_alert(&alert, |id| Some(a.list.extra(id).label.to_owned())),
+                None => Vec::new(),
+            };
+            for line in run_lines {
                 a.detail.push_log(format!("{} {line}", now_hms()));
             }
             magnet_ready |= a.awaiting.on_alert(&alert, &a.handle, &mut a.prefs);
@@ -4923,6 +4940,11 @@ fn apply_options_from(a: &mut App, old: &Options, o: &Options) {
     a.schedule = o.gui.schedule.clone();
     run_scheduler(a, Some(o));
     configure_tracker_list(a, &o.gui);
+    if let Some(r) = a.run_program.as_mut() {
+        // programs already waiting still run; the next torrent gets the new lines (D67)
+        let (added, finished) = o.gui.run_commands();
+        r.set(added, finished);
+    }
     o.gui.update_move_completed(&mut a.move_completed);
     a.seeding_goal = o.gui.seeding_goal();
     a.torrent_folders = o.gui.torrent_folders.clone();
@@ -5506,6 +5528,64 @@ mod search_tests {
             with_app(|a| a.alerts.push(Alert::SessionStats(stats)));
             on_alerts(hwnd);
             assert!(shown().contains(&peers), "{}", shown());
+
+            // Run Program (D67): a window started as the tests start it has none, as a remote
+            // window and a demo have none, and applying options gives it none
+            let run_lines =
+                || with_app(|a| a.detail.log.iter().filter(|l| l.contains("Run Program")).count()).unwrap();
+            let finished = |raw: u64| {
+                let id = TorrentId::from_raw(raw);
+                let st = rookparcel_core::TorrentStatus {
+                    id,
+                    name: format!("Done {raw}"),
+                    all_time_download: 1,
+                    ..Default::default()
+                };
+                with_app(|a| {
+                    a.alerts.push(Alert::TorrentFinished { id });
+                    a.alerts.push(Alert::StateUpdate(vec![st]));
+                });
+                on_alerts(hwnd);
+            };
+            // a program that does not exist: nothing can start even if a line were taken
+            let line = r#""Z:\no such folder\rookparcel-test-none.exe" "%F" %N"#;
+            let options = |on: bool| {
+                with_app(|a| {
+                    let mut o = Options::load(&a.prefs, &a.save_path);
+                    o.gui.run_finished_on = on;
+                    o.gui.run_finished = line.to_owned();
+                    apply_options(a, &o);
+                })
+                .unwrap()
+            };
+            options(true);
+            assert!(with_app(|a| a.run_program.is_none()).unwrap());
+            finished(9001);
+            assert_eq!(run_lines(), 0);
+            // the local window's helper with both lines off: a finished torrent starts nothing
+            options(false);
+            with_app(|a| a.run_program = Some(RunProgram::new("", "")));
+            finished(9002);
+            assert_eq!(run_lines(), 0);
+            assert_eq!(with_app(|a| a.run_program.as_ref().map(RunProgram::enabled)).unwrap(), Some(false));
+            // the box on: the options applied hand it the line, and the next finished torrent
+            // is its to run (the Logger says the program could not be started)
+            options(true);
+            assert_eq!(with_app(|a| a.run_program.as_ref().map(RunProgram::enabled)).unwrap(), Some(true));
+            finished(9003);
+            let said =
+                with_app(|a| a.detail.log.iter().filter(|l| l.contains("Run Program")).cloned().collect())
+                    .unwrap_or_else(Vec::new);
+            assert_eq!(said.len(), 1, "{said:?}");
+            assert!(
+                said[0].contains("cannot start") && said[0].contains("rookparcel-test-none.exe"),
+                "{said:?}"
+            );
+            // and off again with the box
+            options(false);
+            assert_eq!(with_app(|a| a.run_program.as_ref().map(RunProgram::enabled)).unwrap(), Some(false));
+            finished(9004);
+            assert_eq!(run_lines(), 1);
             DestroyWindow(hwnd);
             assert!(crate::statistics::window().is_null());
         }
