@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-10_230554_1794348354
+Last updated: 2026-11-11_000208_1794351728
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D68](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -25,7 +25,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 - **Artwork (2026-11-05):** the Postal Rook won ([concepts](docs/art/rookparcel-candidates-2026-11-05/README.md), [small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
 
-- **Releases:** 1.0.1 to 1.2.45 ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes.
+- **Releases:** 1.0.1 to 1.2.46 ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes.
 - **Benchmarks:** [2026-11-09 results](docs/BENCHMARKS.md) for 1.2.29, `tools/bench`, with 1.0.1 and 1.1.40 in the same rounds: 10,000 torrents after restart use 67 MB (qBittorrent 612 MB); one-peer download 3,154 MiB/s, 0.99 CPU s/GiB, both as in 1.0.1. **Regression found there, fixed in 1.2.30:** idle CPU with 10,000 torrents was 0.33% in 1.2.29 (1.0.1: 0.07%), 0.12% with the fix; the Win32 process at 100,000 idles at 0.36-0.39% again (1.2.29: 0.8-1.0%). Causes: the Web UI's metadata pass for the private flag after each start, and LSD's walk over every torrent per tick. The site's page of that run is held back on the branch `site-benchmarks-1.2.29` (owner, 2026-11-10: benchmarks again after the release).
 - CI, FreeBSD, Fuzz and the Release run were green for `v1.2.44` (recorded 2026-11-10, not a live check).
 - Scale baseline on this development PC (2026-10-23): Win32 lists 100,000 torrents in 1.16 s, GUI-thread idle CPU 0.05-0.10%, working set 232 MB. Name sort 49 ms, Ctrl+A 4.7 ms, add 19 ms, remove one 14 ms. 1.2.29 on 2026-11-10: 1.37 s, GUI thread 0.16-0.18%, 264-269 MB, Name sort 32-36 ms (the published 1.0.1 the same day: 1.27 s, 0.05-0.18%, 250 MB, 49-53 ms). The low-end-machine gate remains open.
@@ -39,7 +39,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 **1.2.45, published 2026-11-10 (2026-11-10_223619_1794346579, D68):** the default seeding goal no longer stops anything until "Limit the upload rate to [0: stop]" is ticked (as µTorrent ships it); a goal acts on a torrent once, so a torrent started again seeds on; the Logger says what was reached; settings from before are carried over once. The released `rookparcel-nox.exe` carried three scratch profiles over as designed (changelog). Open: the owner's installed copy updating through Help > Check for Updates, and the hand checks in BACKLOG "Seeding goals" (the pages in the three GUIs and the Web UI); the same RELEASING.md step 5 checks as 1.2.44 were skipped.
 
-**1.2.46, on `main`, not released (2026-11-10_230554_1794348354):** resume data whose only fault is a file that is gone keeps the other pieces (the owner's 12 GB torrent was hashed at every start because Defender removes its `setup.exe`); the Logger leaves out "received N peers". Open: a start of the built client on the owner's profile; BACKLOG "Disk and storage" has what the journal showed and did not explain (seeds that came out of a check empty) and the "Queued" status for a waiting check.
+**1.2.46, published 2026-11-11 (2026-11-11_000208_1794351728):** resume data whose only fault is a file that is gone keeps the other pieces (the owner's 12 GB torrent was hashed at every start because Defender removes its `setup.exe`); the Logger leaves out "received N peers". `update.txt` should say `stable=1.2.46` after the Pages run. Open: the owner's installed copy updating and starting on its profile (one line "setup.exe is missing", no long check); BACKLOG "Disk and storage" has what the journal showed and did not explain (seeds that came out of a check empty) and the "Queued" status for a waiting check; the same RELEASING.md step 5 checks as 1.2.44 were skipped.
 
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 
