@@ -26,6 +26,7 @@
         <li><a href="faq.html"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-help"/></svg>FAQ</a></li>
         <li><a href="benchmarks.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-speed"/></svg>Benchmarks</a></li>
         <li><a href="docs.html"><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-files"/></svg>Docs</a></li>
+        <li><a href="donate.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-heart"/></svg>Donate</a></li>
         <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a></li>
       </ul>
     </nav>
@@ -121,12 +122,20 @@
           <p>The goal is 100,000 torrents on a modest PC with an instant UI. On the author's PC the Windows GUI lists 100,000 torrents in about a second, with idle GUI CPU under 0.1 %.</p>
         </li>
         <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-privacy"/></svg>Stays on your VPN</h3>
+          <p><strong>Use only this network</strong> (Preferences &gt; Connection) binds all torrent traffic to one network: any VPN adapter, one adapter by name, or an address range. Peers, the DHT, trackers and web seeds go through it and nothing else. When the VPN drops, torrents wait instead of carrying on over your normal connection, and resume by themselves when it is back.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-general"/></svg>Dark mode and themes</h3>
+          <p>Every program follows your system's light or dark setting. The Windows program can also be fixed to Light or Dark (Preferences &gt; UI Settings &gt; Theme), and every window and dialog follows. The Web UI has nine themes, among them Midnight, Slate, Solarized and High Contrast, and takes your own CSS files.</p>
+        </li>
+        <li class="feature">
           <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-web-ui"/></svg>Headless, with a Web UI</h3>
-          <p><code>rookparcel-nox</code> runs as a daemon with its own Web UI (laid out for phones too), HTTPS, and a qBittorrent-compatible Web API subset so existing tools can talk to it. It runs as a service under systemd, FreeBSD's rc.d or Windows. The Windows GUI serves the same Web UI over its own torrents, RSS Downloader included: Preferences &gt; Web UI.</p>
+          <p><code>rookparcel-nox</code> runs as a daemon with its own Web UI (laid out for phones too), HTTPS, and a qBittorrent-compatible Web API subset so existing tools can talk to it. It runs as a service under systemd, FreeBSD's rc.d or Windows, and as a Docker image. The Windows GUI serves the same Web UI over its own torrents, RSS Downloader included: Preferences &gt; Web UI.</p>
         </li>
         <li class="feature">
           <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-rss"/></svg>Search and RSS</h3>
-          <p>Search for torrents through the Prowlarr or Jackett you already run (Torznab), from either GUI or the Web UI. No search plugins of its own, so nothing breaks when a site changes. The RSS downloader picks up new releases by your filters.</p>
+          <p>Search for torrents through the Prowlarr or Jackett you already run (Torznab), from either GUI or the Web UI. No search plugins of its own, so nothing breaks when a site changes. If you run neither, the search helper downloads and runs Jackett for you at a click. The RSS downloader picks up new releases by your filters.</p>
         </li>
         <li class="feature">
           <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-downloading"/></svg>Sonarr, Radarr, Prowlarr</h3>
@@ -135,6 +144,30 @@
         <li class="feature">
           <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-remote"/></svg>Remote mode</h3>
           <p>Either desktop GUI can drive a <code>rookparcel-nox</code> on another machine: File &gt; Connect to Remote..., or start it with <code>--remote</code>.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-all-torrents"/></svg>Profiles and portable mode</h3>
+          <p>A profile is a whole Rookparcel of its own: settings, torrents, RSS feeds, ports and window. Run one that uses only your VPN beside a normal one, both at once (File &gt; Profiles, or <code>--profile</code>). An empty <code>rookparcel.ini</code> beside the program keeps everything in that folder instead: portable mode.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-download"/></svg>Bring your torrents along</h3>
+          <p>Import from µTorrent or qBittorrent on the same computer. The data stays where it is; labels, file priorities, trackers and statistics come over, and Rookparcel checks the files itself before it relies on them.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-downloading"/></svg>Queue, seeding goals, watch folder</h3>
+          <p>A queue for downloads and seeds, seeding goals by ratio or time (for all torrents or one), completed downloads moved to another folder, labels, a folder watched for new <code>.torrent</code> files, speed limits and the weekly scheduler.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-files"/></svg>Big torrents stay manageable</h3>
+          <p>The Files tab shows a torrent's folders as a tree, filters thousands of files as you type, and sets a priority for a whole folder at once. The Add New Torrent dialog has the same filter.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-help"/></svg>Help where you need it</h3>
+          <p>A Setup Guide asks a few questions at the first start. Every setting in Preferences explains itself in a tooltip and on F1, and the <a href="https://github.com/Balls0fSteel/Rookparcel/wiki">user guide</a> covers the rest, with screenshots.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-download"/></svg>Tells you about updates</h3>
+          <p>Rookparcel checks for a newer release and tells you. A copy installed by the Windows setup can download the new setup, check it against the release's checksums and install it; nothing is downloaded without your yes, and the check can be turned off.</p>
         </li>
         <li class="feature">
           <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-language"/></svg>English and 34 more languages</h3>
@@ -171,6 +204,12 @@
           <p><a href="https://github.com/Balls0fSteel/Rookparcel#building">Building from source</a></p>
         </div>
       </div>
+    </section>
+
+    <section class="section" aria-labelledby="support">
+      <h2 id="support">Support Rookparcel</h2>
+      <p>Rookparcel is free and shows no ads. If you like it, a donation helps to keep the project going: through <a href="https://www.paypal.com/ncp/payment/2UDQNM8TGRUA4" rel="noopener">PayPal</a> or <a href="https://github.com/sponsors/Balls0fSteel" rel="noopener">GitHub Sponsors</a>. Please give only if you can comfortably afford it.</p>
+      <p><a class="btn btn-primary" href="donate.html">Donate</a></p>
     </section>
 
     <section class="section" aria-labelledby="free">

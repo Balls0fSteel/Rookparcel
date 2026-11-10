@@ -14,18 +14,18 @@ only) copies them to `_site/` and fills in the newest release from the GitHub re
 
 | Path | What |
 |---|---|
-| `site/index.html` | Home: what Rookparcel is, the download button, screenshots, features, platforms |
+| `site/index.html` | Home: what Rookparcel is, the download button, screenshots, features (keep the list complete when a feature ships), platforms, a Support section linking the donation page |
 | `site/news.html` | News: a short entry per release, newest first (below) |
 | `news.atom` (built) | The Atom feed of the news entries, written by the build from `news.html`; linked from `news.html` and the home page |
 | `site/download.html` | Every file of the release on offer, how to start each, SmartScreen and Gatekeeper, the daemon, checksums, updating |
 | `site/faq.html` | The license in plain words, settings and portable mode, languages, the Web UI and remote mode, torrent search, Sonarr and Radarr, privacy and the update check, private trackers |
 | `site/benchmarks.html` | Measurements beside other clients ([BENCHMARKS.md](BENCHMARKS.md)); its charts and tables between `<!-- bench:NAME -->` markers are written by `tools/bench/summarize.py RESULTS --fill site/benchmarks.html` |
 | `site/docs.html` | Links to the documents in the repository, a command-line summary |
-| `site/donate.html` | The donation page Help > Donate opens (`frontend::update::DONATE_URL`; the Web UI's button too). The ways to give are listed here only, so they change without a release; now a PayPal button (the owner's link, 2026-11-10). Not in the toolbar |
+| `site/donate.html` | The donation page Help > Donate opens (`frontend::update::DONATE_URL`; the Web UI's button too). The ways to give are listed here only, so they change without a release; PayPal and GitHub Sponsors, each as a button and as its address. In every page's toolbar (Donate) and linked from the home page |
 | `site/404.html` | Served by Pages for any missing path; its `<base>` makes its links start at the site's root |
 | `site/css/style.css` | All styles: colour tokens for light and dark (`prefers-color-scheme`), layout down to 360 px |
 | `site/js/site.js` | The only script (about 20 lines): shows the visitor's own system's download line and marks its section; the pages work without it |
-| `site/img/icons.svg` | A sprite of 15 of the app's own UI symbols (the bold family, `assets/ui-icon-explorations/svg-size/bold/24`); the page sets their colour. News uses `i-rss` |
+| `site/img/icons.svg` | A sprite of 15 of the app's own UI symbols, and `i-heart`, drawn for the Donate link (the bold family, `assets/ui-icon-explorations/svg-size/bold/24`); the page sets their colour. News uses `i-rss` |
 | `site/img/add-new-torrent.png` | A copy of `docs/screenshots/add-new-torrent.png` |
 | `site/img/screenshot-windows.png` | The main window on Windows, shown on the home page (added separately; the build warns while it is missing) |
 | `site/build.py` | The build (below) |
