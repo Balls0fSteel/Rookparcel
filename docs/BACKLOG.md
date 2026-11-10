@@ -336,6 +336,12 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   uses preferred Windows UI languages, Unix locale variables and macOS CFLocale;
   daemons inherit their service account/environment. Registry descriptions use
   the language when written.
+- Cut-off texts (2026-11-10_102840_1794302920, 1.2.35): `tools/win32-shots/capture.ps1
+  -Audit` is clean for all 35 tables on the dialogs it opens with a fresh profile at 100 %.
+  Not audited: texts that depend on state (errors, Web UI status, multi-torrent Properties),
+  message boxes, menus, list columns, 125-200 %. `fit_texts` counts the Preferences tree as a
+  control "before" a label, so a too-long label on a page moves 8 px left of its column.
+  A native check of the shortened Greek `PrefWebUiNote` is wanted.
 - Win32 fitting can still clip text or misalign fields after long labels grow.
   Recheck after the new font/layout: full translated screenshots did not cover
   every dialog/language. Notes on Advanced/Disk Cache wrap mid-word in some

@@ -1118,7 +1118,8 @@ fn build() -> (Vec<u16>, Vec<(u16, u16)>) {
     b.ctl(EDIT, ID_IPF_PATH, LINE, [8, 157, 224, 13], "");
     b.ctl(BUTTON, ID_IPF_BROWSE, PUSH, [236, 157, 18, 13], "...");
     b.ctl(BUTTON, ID_IPF_RELOAD, PUSH, [258, 156, 44, 14], tr!(PrefReload));
-    b.ctl(STATIC, ID_IPF_STATUS, C, [8, 175, 294, 9], "");
+    // wraps inside a path too (`SS_EDITCONTROL`): a path has no spaces to break at
+    b.ctl(STATIC, ID_IPF_STATUS, C | crate::fit::SS_EDITCONTROL, [8, 175, 294, 9], "");
 
     b.page(6);
     b.group([0, 0, W, 78], tr!(PrefQueue));
@@ -1273,6 +1274,8 @@ unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
             init(dlg, &mut *(lp as *mut State<'_>));
             // the pages share the dialog: each fits among its own controls
             crate::fit::fit_texts(dlg, |id| page_of(id).map(|p| p as i32));
+            // at the width `fit` left it
+            fit_integration_note(dlg);
             // the greyed controls' tooltips where `fit` left the controls
             let st = &mut *(lp as *mut State<'_>);
             place_tips(dlg, st);
@@ -1651,7 +1654,19 @@ unsafe fn write_integration(dlg: HWND, st: &State<'_>) {
         let note = st.integration.note();
         let note = if note.is_empty() { st.integration.profile_note() } else { tr!(AssocChoose, note) };
         set_text(item(dlg, ID_ASSOC_NOTE), &note);
+        fit_integration_note(dlg);
+        place_tips(dlg, st);
         update_autostart_controls(dlg);
+    }
+}
+
+/// The note under the General page's boxes takes the lines its text needs (two ProgIDs in a
+/// long language are four), at least the two the page is drawn with; the Privacy box follows.
+unsafe fn fit_integration_note(dlg: HWND) {
+    unsafe {
+        let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 18 };
+        MapDialogRect(dlg, &mut rc);
+        crate::fit::fit_note_height(dlg, ID_ASSOC_NOTE, rc.bottom, |id| page_of(id).map(|p| p as i32));
     }
 }
 
@@ -2280,6 +2295,10 @@ unsafe fn update_ip_filter_status(dlg: HWND, st: &State<'_>, result: Option<Resu
             None => String::new(),
         };
         set_text(item(dlg, ID_IPF_STATUS), &text);
+        // a settings folder's path or an error can need a second line; the box follows
+        let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 9 };
+        MapDialogRect(dlg, &mut rc);
+        crate::fit::fit_note_height(dlg, ID_IPF_STATUS, rc.bottom, |id| page_of(id).map(|p| p as i32));
     }
 }
 
@@ -2837,6 +2856,42 @@ mod tests {
         assert_eq!(f.integrations.borrow().last(), Some(&(all, off)));
         assert_eq!(f.registry.borrow().set, off);
         unsafe { assert!(!checked(f.dlg, ID_START_MIN), "shown as read back") };
+    }
+
+    /// A note of four lines was cut after the second (Hungarian, two ProgIDs): the note takes
+    /// the height its text needs, its box grows and the Privacy box moves down.
+    #[test]
+    fn the_integration_note_is_as_tall_as_its_text() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect;
+        let rect = |f: &Fixture, id: u16| unsafe {
+            let mut r: RECT = std::mem::zeroed();
+            GetWindowRect(item(f.dlg, id), &mut r);
+            r
+        };
+        let plain = Fixture::new(defaults());
+        let (note0, updates0) = (rect(&plain, ID_ASSOC_NOTE), rect(&plain, ID_CHECK_UPDATES));
+        let long = "A.Very.Long.Program.Identifier.Of.Another.Client.File.Torrent";
+        let registry = Status {
+            set: Integration { torrent: true, magnet: true, ..Integration::default() },
+            torrent_choice: Some(long.into()),
+            magnet_choice: Some(format!("{long}.Url.Magnet")),
+            ..Status::default()
+        };
+        let f = Fixture::with_registry(defaults(), registry);
+        let (note, updates) = (rect(&f, ID_ASSOC_NOTE), rect(&f, ID_CHECK_UPDATES));
+        let grown = (note.bottom - note.top) - (note0.bottom - note0.top);
+        assert!(grown > 0, "more than two lines");
+        assert_eq!(updates.top - updates0.top, grown, "the Privacy box follows");
+        assert!(updates.top > note.bottom);
+
+        // the text gone (the other program no longer chosen), the page is as drawn again
+        f.registry.borrow_mut().torrent_choice = None;
+        f.registry.borrow_mut().magnet_choice = None;
+        f.check(ID_AUTOSTART, true);
+        f.click(ID_APPLY);
+        assert_eq!(f.text(ID_ASSOC_NOTE), "");
+        assert_eq!(rect(&f, ID_ASSOC_NOTE).bottom - rect(&f, ID_ASSOC_NOTE).top, note0.bottom - note0.top);
+        assert_eq!(rect(&f, ID_CHECK_UPDATES).top - rect(&f, ID_ASSOC_NOTE).top, updates0.top - note0.top);
     }
 
     #[test]

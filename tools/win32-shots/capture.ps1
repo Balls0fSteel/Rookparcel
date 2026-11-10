@@ -15,7 +15,10 @@ param(
     [string]$Desktop = 'AgentHidden',
     [string]$RunHidden = 'L:\dev\tools\run_hidden\run_hidden.ps1',
     [switch]$SkipMenu,
-    [switch]$ResetIni   # truncate rookparcel.ini first, so the run starts from a fresh portable profile
+    [switch]$ResetIni,  # truncate rookparcel.ini first, so the run starts from a fresh portable profile
+    [string]$Language,  # with -ResetIni: the fresh ini says ui.language=<code>
+    [switch]$Audit,     # list the cut-off texts of every pictured window in audit.txt
+    [switch]$NoShots    # no PNGs (an audit run over every language)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,7 +27,7 @@ $ErrorActionPreference = 'Stop'
 if (-not (Test-Path $ExePath)) { throw "exe not found: $ExePath" }
 $ini = Join-Path (Split-Path $ExePath) 'rookparcel.ini'
 if (-not (Test-Path $ini)) { throw "portable ini not found beside the exe: $ini" }
-if ($ResetIni) { Set-Content -Path $ini -Value '' -NoNewline }
+if ($ResetIni) { Set-Content -Path $ini -Value $(if ($Language) { "ui.language=$Language`n" } else { '' }) -NoNewline }
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 Get-ChildItem $OutDir -File | Where-Object { $_.Extension -eq '.png' -or $_.Name -in 'manifest.txt', 'capture-log.txt' } | Remove-Item -Force
 
@@ -84,6 +87,74 @@ public static class Shot {
         return list;
     }
 
+    // ---- the audit of cut-off texts (-Audit) ----
+    [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc cb, IntPtr lp);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] static extern int GetWindowLong(IntPtr h, int idx);
+    [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr h);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SendMessageTimeoutW")] static extern IntPtr SendGetText(IntPtr hwnd, uint msg, IntPtr wp, StringBuilder lp, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int DrawTextW(IntPtr dc, string s, int n, ref RECT r, uint flags);
+    [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr dc);
+    [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr dc);
+    [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr dc, IntPtr o);
+    [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr o);
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateFontW(int h, int w, int esc, int ori, int weight, uint italic, uint underline, uint strike, uint charset, uint outp, uint clip, uint quality, uint pitch, string face);
+
+    // Every visible label, check box, radio button, push button and group box under `top` whose
+    // text needs more room than the control has: "id | class | need WxH, has WxH | text".
+    // Measured with Segoe UI 9 pt at the window's DPI (the message font the dialogs use), so a
+    // control in another font (bold) is measured a little small. Values with an ellipsis style
+    // are skipped: they are meant to be cut.
+    public static List<string> Audit(IntPtr top) {
+        var found = new List<string>();
+        int dpi = (int)GetDpiForWindow(top); if (dpi <= 0) dpi = 96;
+        IntPtr dc = CreateCompatibleDC(IntPtr.Zero);
+        IntPtr font = CreateFontW(-(9 * dpi + 36) / 72, 0, 0, 0, 400, 0, 0, 0, 1, 0, 0, 5, 0, "Segoe UI");
+        IntPtr old = SelectObject(dc, font);
+        const uint CALC = 0x400, WORDBREAK = 0x10, SINGLE = 0x20, NOPREFIX = 0x800;
+        EnumChildWindows(top, delegate(IntPtr h, IntPtr lp) {
+            if (!IsWindowVisible(h)) return true;
+            var sb = new StringBuilder(256); GetClassName(h, sb, 256); string cls = sb.ToString();
+            bool isStatic = String.Equals(cls, "Static", StringComparison.OrdinalIgnoreCase);
+            bool isButton = String.Equals(cls, "Button", StringComparison.OrdinalIgnoreCase);
+            if (!isStatic && !isButton) return true;
+            var tb = new StringBuilder(2048); IntPtr res;
+            SendGetText(h, 0x000D, new IntPtr(2048), tb, 2, 2000, out res);
+            string text = tb.ToString();
+            if (text.Trim().Length == 0) return true;
+            RECT wr; GetWindowRect(h, out wr); int w = wr.R - wr.L, hgt = wr.B - wr.T;
+            uint style = (uint)GetWindowLong(h, -16);
+            int needW = 0, needH = 0; bool cut = false;
+            int line = dpi * 15 / 96;
+            if (isStatic) {
+                uint t = style & 0x1F;
+                if ((style & 0xC000) != 0 || t > 2 && t != 0xB && t != 0xC) return true;
+                // SS_EDITCONTROL wraps inside a long word (a path) too: DT_EDITCONTROL
+                uint f = CALC | ((style & 0x80) != 0 ? NOPREFIX : 0) | (style & 0x2000);
+                var r = new RECT(); r.R = w;
+                bool wraps = t <= 2 && hgt >= line * 7 / 4;
+                needH = DrawTextW(dc, text, -1, ref r, f | (wraps ? WORDBREAK : SINGLE));
+                needW = r.R - r.L;
+                cut = needW > w || (wraps && needH > hgt + 1);
+            } else {
+                uint t = style & 0xF;
+                int extra;
+                if (t == 0 || t == 1) extra = dpi * 8 / 96;                 // push
+                else if (t == 7) extra = dpi * 14 / 96;                    // group box title
+                else if (t == 2 || t == 3 || t == 4 || t == 5 || t == 6 || t == 9) extra = dpi * 17 / 96;  // check, radio
+                else return true;
+                bool multi = (style & 0x2000) != 0 && t != 7;
+                var r = new RECT(); r.R = Math.Max(1, w - extra);
+                needH = DrawTextW(dc, text, -1, ref r, CALC | (multi ? WORDBREAK : SINGLE));
+                needW = r.R - r.L + extra;
+                cut = needW > w || (multi && needH > hgt + 1);
+            }
+            if (cut) found.Add(GetWindowLong(h, -12) + " | " + cls + " | need " + needW + "x" + needH + ", has " + w + "x" + hgt + " | " + text.Replace("\r", "").Replace("\n", "\\n"));
+            return true;
+        }, IntPtr.Zero);
+        SelectObject(dc, old); DeleteObject(font); DeleteDC(dc);
+        return found;
+    }
+
     public static string SendText(IntPtr hwnd) {
         var sb = new StringBuilder(512); GetWindowText(hwnd, sb, 512); return sb.ToString();
     }
@@ -133,6 +204,7 @@ $manifest.Add("# light-mode baseline, $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 $manifest.Add("# exe: $ExePath")
 $manifest.Add("# format: png | class | title | size | note")
 $log = New-Object System.Collections.Generic.List[string]
+$cut = New-Object System.Collections.Generic.List[string]
 function Log($s) { $script:log.Add($s); Write-Host $s }
 
 function Post($h, $msg, $wp, $lp) { [Shot]::PostMessageW($h, [uint32]$msg, [IntPtr][int64]$wp, [IntPtr][int64]$lp) | Out-Null }
@@ -148,7 +220,8 @@ function Key($h, $vk) { Post $h $WM_KEYDOWN $vk 0; Start-Sleep -Milliseconds 40;
 function Wins() { [Shot]::Windows($desk, 0) }
 function Shot($name, $hwnd, $note, $flags = 2) {
     $path = Join-Path $OutDir $name
-    $size = [Shot]::Capture($desk, $hwnd, $path, [uint32]$flags)
+    if ($Audit) { foreach ($l in [Shot]::Audit($hwnd)) { $script:cut.Add("$Language | $name | $l") } }
+    $size = if ($NoShots) { 'not pictured' } else { [Shot]::Capture($desk, $hwnd, $path, [uint32]$flags) }
     $ws = Wins | Where-Object { $_.H -eq $hwnd } | Select-Object -First 1
     $cls = if ($ws) { $ws.Cls } else { '?' }
     $title = if ($ws) { $ws.Title } else { '?' }
@@ -321,4 +394,5 @@ finally {
     & taskkill /T /F /PID $appPid 2>&1 | ForEach-Object { Log "  $_" }
     $manifest | Set-Content -Encoding UTF8 (Join-Path $OutDir 'manifest.txt')
     $log | Set-Content -Encoding UTF8 (Join-Path $OutDir 'capture-log.txt')
+    if ($Audit) { $cut | Select-Object -Unique | Set-Content -Encoding UTF8 (Join-Path $OutDir 'audit.txt') }
 }

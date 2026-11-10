@@ -326,6 +326,21 @@ unsafe extern "system" fn input_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM
                 SetWindowTextW(edit, i.as_ptr());
                 SendMessageW(edit, EM_SETSEL, 0, -1);
                 crate::fit::fit_texts(dlg, |_| Some(0));
+                // a prompt longer than the dialog is wide (Add Torrent from URL in German)
+                // takes a second line, and the dialog grows by it
+                use windows_sys::Win32::Foundation::RECT;
+                use windows_sys::Win32::UI::WindowsAndMessaging::{
+                    GetWindowRect, MapDialogRect, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos,
+                };
+                let mut line = RECT { left: 0, top: 0, right: 0, bottom: 9 };
+                MapDialogRect(dlg, &mut line);
+                let grown = crate::fit::fit_note_height(dlg, ID_PROMPT, line.bottom, |_| Some(0));
+                if grown > 0 {
+                    let mut r: RECT = zeroed();
+                    GetWindowRect(dlg, &mut r);
+                    let flags = SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE;
+                    SetWindowPos(dlg, null_mut(), 0, 0, r.right - r.left, r.bottom - r.top + grown, flags);
+                }
                 1
             }
             WM_COMMAND => {

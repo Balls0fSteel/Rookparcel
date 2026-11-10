@@ -12,8 +12,8 @@ use std::ptr::null_mut;
 
 use windows_sys::Win32::Foundation::{HWND, POINT, RECT};
 use windows_sys::Win32::Graphics::Gdi::{
-    DT_CALCRECT, DT_NOPREFIX, DT_SINGLELINE, DrawTextW, GetDC, HFONT, MapWindowPoints, ReleaseDC,
-    SelectObject,
+    DT_CALCRECT, DT_EDITCONTROL, DT_NOPREFIX, DT_SINGLELINE, DT_WORDBREAK, DrawTextW, GetDC, HFONT,
+    MapWindowPoints, ReleaseDC, SelectObject,
 };
 use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -31,6 +31,8 @@ const SS_RIGHT: u32 = 2;
 const SS_LEFTNOWORDWRAP: u32 = 0xc;
 const SS_TYPEMASK: u32 = 0x1f;
 const SS_NOPREFIX: u32 = 0x80;
+/// A static that wraps as an edit control does: inside a word wider than the line as well.
+pub const SS_EDITCONTROL: u32 = 0x2000;
 /// `SS_ENDELLIPSIS`, `SS_PATHELLIPSIS` and `SS_WORDELLIPSIS` together.
 const SS_ELLIPSISMASK: u32 = 0xc000;
 
@@ -156,6 +158,75 @@ pub fn fit_texts(dlg: HWND, group: impl Fn(u16) -> Option<i32>) {
                 place(&mut ctls[i], r);
             }
         }
+    }
+}
+
+/// Makes the note `id` (a static of several lines whose text changes) as tall as its text needs
+/// at its width, and never lower than `min` pixels. The group box around it grows or shrinks by
+/// the difference, and the controls of its set (`group`, as for [`fit_texts`]) that start below
+/// it move with its bottom edge. Run after each new text, and after [`fit_texts`], which may
+/// change the note's width. Returns how many pixels taller the note became (negative: lower),
+/// for a dialog that has to grow with it.
+pub fn fit_note_height(dlg: HWND, id: u16, min: i32, group: impl Fn(u16) -> Option<i32>) -> i32 {
+    unsafe {
+        let note = windows_sys::Win32::UI::WindowsAndMessaging::GetDlgItem(dlg, id as i32);
+        if note.is_null() {
+            return 0;
+        }
+        let own = rect_in(dlg, note);
+        let need = wrapped_height(note, own.right - own.left).max(min);
+        let delta = need - (own.bottom - own.top);
+        if delta == 0 {
+            return 0;
+        }
+        let set = group(id);
+        let flags = SWP_NOZORDER | SWP_NOACTIVATE;
+        let mut h = GetWindow(dlg, GW_CHILD);
+        while !h.is_null() {
+            let r = rect_in(dlg, h);
+            let same = h != note && group(GetWindowLongW(h, GWL_ID) as u16) == set;
+            let (w, height) = (r.right - r.left, r.bottom - r.top);
+            if h == note {
+                SetWindowPos(h, null_mut(), r.left, r.top, w, need, flags);
+            } else if same && r.top >= own.bottom {
+                SetWindowPos(h, null_mut(), r.left, r.top + delta, w, height, flags);
+            } else if same
+                && kind(h, 96) == Kind::Group
+                && r.top <= own.top
+                && r.bottom >= own.bottom
+                && r.left <= own.left
+                && r.right >= own.right
+            {
+                SetWindowPos(h, null_mut(), r.left, r.top, w, height + delta, flags);
+            }
+            h = GetWindow(h, GW_HWNDNEXT);
+        }
+        windows_sys::Win32::Graphics::Gdi::InvalidateRect(dlg, std::ptr::null(), 1);
+        delta
+    }
+}
+
+/// The height `h`'s text takes when wrapped at `width` pixels in its font; 0 for no text.
+unsafe fn wrapped_height(h: HWND, width: i32) -> i32 {
+    unsafe {
+        let len = GetWindowTextLengthW(h);
+        if len <= 0 || width <= 0 {
+            return 0;
+        }
+        let mut text = vec![0u16; len as usize + 1];
+        let n = GetWindowTextW(h, text.as_mut_ptr(), text.len() as i32).max(0);
+        let style = GetWindowLongW(h, GWL_STYLE) as u32;
+        let dc = GetDC(h);
+        let old = SelectObject(dc, SendMessageW(h, WM_GETFONT, 0, 0) as HFONT);
+        let mut r = RECT { left: 0, top: 0, right: width, bottom: 0 };
+        let mut flags = DT_CALCRECT | DT_WORDBREAK | if style & SS_NOPREFIX == 0 { 0 } else { DT_NOPREFIX };
+        if style & SS_EDITCONTROL != 0 {
+            flags |= DT_EDITCONTROL; // breaks inside a word that is wider than the line
+        }
+        let height = DrawTextW(dc, text.as_ptr(), n, &mut r, flags);
+        SelectObject(dc, old);
+        ReleaseDC(h, dc);
+        height
     }
 }
 

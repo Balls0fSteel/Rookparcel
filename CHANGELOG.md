@@ -4,6 +4,16 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-10_102840_1794302920: Version 1.2.35: Win32 notes that were cut off; an audit of cut-off texts in every language
+
+- **Reported by the owner (screenshot, Hungarian):** Preferences > General, the note "Windows still opens .torrent files with ..." was cut after its second line. The note was a fixed box of two lines beside the Default Apps button; with two ProgIDs it needs three lines in English and four in Hungarian.
+- **Fix:** `fit::fit_note_height` makes a note as tall as its wrapped text (never lower than drawn), grows the group box around it and moves the controls below; the General page runs it after each new note text and after `fit_texts`. The Privacy box moves down with it and back when the note empties. Test: `the_integration_note_is_as_tall_as_its_text`.
+- **Asked: do others suffer the same?** `tools/win32-shots/capture.ps1` got `-Audit`, `-Language` and `-NoShots`: it measures every visible label, check box, button and group title of each window it opens against the control's size. Run over all 35 tables (every dialog it opens, the Setup Guide, the 12 Preferences pages). Three more places, all fixed:
+  - **Preferences > BitTorrent, the IP filter's status** (every language): "Empty: `<path>`" showed only the first word, because a path has no place to wrap. The status now wraps inside words (`SS_EDITCONTROL`) and takes the lines it needs.
+  - **Add Torrent from URL's prompt** (German, Bulgarian, Greek): wider than the dialog. `dialogs::input`'s prompt takes a second line and the dialog grows by it (also for New Label, New Profile and the other prompts).
+  - **Preferences > Web UI, the note at the bottom** (Greek): five lines in room for four, on the one page with no room to grow. The Greek text is three words shorter (machine translation, like the original).
+- **Validation:** the 125 Win32 and 364 frontend tests on one thread, clippy `-D warnings`, fmt. Pictures on the hidden desktop: the General page in Hungarian with a note of two ProgIDs (a temporary build that faked the registry answer, not committed), the German IP filter status and Add URL prompt, the Greek Web UI page; a second audit of Greek, Bulgarian and Hungarian is clean. **Not covered:** the audit sees only what the script opens with a fresh profile, so texts that depend on state (errors, the Web UI's status, Properties of several torrents), message boxes, menus, list columns and 125-200 % are unchecked; it measures in Segoe UI 9 pt; long page names in the Preferences tree are cut by design (tooltip). The General fix was not tried on the owner's real registry state.
+
 ## 2026-11-10_094303_1794300183: Website: Donate everywhere, PayPal and GitHub Sponsors, the missing features
 
 - **Asked by the owner:** a donation page and link on the website with the PayPal address and the GitHub Sponsors link, and all the features shown, naming the VPN interface binding and dark mode.

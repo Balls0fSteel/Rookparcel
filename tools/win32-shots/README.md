@@ -22,6 +22,25 @@ Add URL, Create, Properties, RSS, Connect to Remote, Notices, Search Sources, Ne
 Guide, Donate), `prefs-01..12.png` (every Preferences page through the tree), `menu-file.png`, and
 `manifest.txt` (file, class, title, size, note) plus `capture-log.txt`.
 
+**Cut-off texts:** `-Audit` lists, in `audit.txt`, every visible label, check box, radio button,
+push button and group box title of each pictured window whose text needs more room than the
+control has (`language | view | control id | class | need, has | text`); `-Language <code>` with
+`-ResetIni` starts the program in that language, `-NoShots` skips the PNGs. One run per language
+(about 50 s each; a second desktop name lets it run beside other captures):
+
+```powershell
+foreach ($l in (Get-ChildItem crates\frontend\lang\*.lng).BaseName) {
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\win32-shots\capture.ps1 `
+        -ExePath C:\scratch\app\rookparcel.exe -OutDir C:\scratch\audit\$l `
+        -ResetIni -Language $l -Audit -NoShots -SkipMenu -DemoCount 5 -Desktop AgentAudit
+}
+```
+
+It measures with Segoe UI 9 pt at the window's DPI, sees only what the script opens (texts that
+depend on state, such as the General page's note about another program, show only when that
+state exists), and always reports the system file picker's `Files of &type:` (a hidden label of
+Windows' own dialog).
+
 Comparing two runs (Pillow in the Python environment):
 
 ```python
