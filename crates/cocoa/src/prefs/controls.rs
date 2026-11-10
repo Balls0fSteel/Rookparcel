@@ -42,8 +42,9 @@ enum Row {
     Group(Retained<NSView>),
     /// A table or the scheduler grid, across both columns.
     Wide(Retained<NSView>),
-    /// The message row under a text field (hidden until there is one).
-    Error(&'static str, Retained<NSTextField>),
+    /// The message row under a text field (hidden until there is one), and the field's view,
+    /// whose leading edge the message starts at.
+    Error(&'static str, Retained<NSTextField>, Retained<NSView>),
 }
 
 /// What building the pages collects for the window.
@@ -183,8 +184,7 @@ impl Builder {
                 let (scroll, view) = crate::dialogs::properties::text_box("", LINES_HEIGHT, mtm);
                 layout::min_width(&scroll, 360.0);
                 layout::stretch(&scroll);
-                // Tab leaves the box (`RPTarget`'s `textView:doCommandBySelector:`)
-                view.setDelegate(Some(ProtocolObject::from_ref(&*crate::ui::target(mtm))));
+                // (Tab leaves the box: `text_box` makes `RPTarget` its delegate)
                 // it commits when its editing ends (the focus leaves it, the window closes),
                 // not at every key: a text view has no action of its own
                 let block = RcBlock::new(move |_n: NonNull<NSNotification>| crate::app::run(cmd));
@@ -230,7 +230,7 @@ impl Builder {
         let view = ctl.outer().retain();
         self.help(&view, h);
         grey.extend(control_of(&ctl));
-        let mut parts: Vec<Retained<NSView>> = vec![view];
+        let mut parts: Vec<Retained<NSView>> = vec![view.clone()];
         if let Control::Text { kind: TextKind::Folder(title) | TextKind::File(title), .. } = f.control {
             let browse_cmd = self.act(Act::Browse(f.key));
             let b = ui::button("", browse_cmd, mtm);
@@ -278,7 +278,7 @@ impl Builder {
             let l = ui::note("", mtm);
             l.setTextColor(Some(&super::error_color()));
             l.setPreferredMaxLayoutWidth(NOTE_WIDTH);
-            rows.push(Row::Error(f.key, l));
+            rows.push(Row::Error(f.key, l, view));
         }
         // the message's row is set once the grid is made (`grid_page`)
         self.fields.insert(f.key, FieldUi { field: *f, ctl, grey, error: None });
@@ -292,7 +292,7 @@ impl Builder {
             .map(|r| match r {
                 Row::Pair(caption, content) => vec![caption.as_deref(), Some(&**content)],
                 Row::Group(v) | Row::Wide(v) => vec![Some(&**v), None],
-                Row::Error(_, l) => vec![None, Some(as_view(l))],
+                Row::Error(_, l, _) => vec![None, Some(as_view(l))],
             })
             .collect();
         let grid = layout::grid(&cells, mtm);
@@ -314,8 +314,15 @@ impl Builder {
                         row.setTopPadding(12.0);
                     }
                 }
-                Row::Error(key, label) => {
+                Row::Error(key, label, field) => {
                     row.setHidden(true);
+                    // the message starts where its field does (an indented one, one beside
+                    // another), not at the column's edge: the grid leaves its x to us
+                    grid.cellAtColumnIndex_rowIndex(1, i as isize).setXPlacement(NSGridCellPlacement::None);
+                    layout::activate(&[
+                        label.leadingAnchor().constraintEqualToAnchor(&field.leadingAnchor()),
+                        label.trailingAnchor().constraintLessThanOrEqualToAnchor(&grid.trailingAnchor()),
+                    ]);
                     if let Some(f) = self.fields.get_mut(key) {
                         f.error = Some((label.clone(), row));
                     }

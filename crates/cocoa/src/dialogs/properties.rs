@@ -9,13 +9,16 @@
 //! hands the changes to `Core::apply_properties`.
 
 use std::cell::RefCell;
+use std::ptr::NonNull;
 use std::rc::Rc;
 
+use block2::RcBlock;
 use objc2::rc::Retained;
+use objc2::runtime::ProtocolObject;
 use objc2::{MainThreadMarker, Message};
 use objc2_app_kit::{
-    NSButton, NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSScrollView,
-    NSTextField, NSTextView, NSView, NSWindow,
+    NSAppearance, NSButton, NSColor, NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn,
+    NSFont, NSScrollView, NSTextField, NSTextView, NSView, NSWindow,
 };
 use rookparcel_core::TorrentId;
 use rookparcel_frontend::properties::{Field, Fields, Properties, Tri};
@@ -69,7 +72,9 @@ struct Dialog {
 }
 
 /// A multi-line plain text box in a scroll view: no rich text, nothing substituted or detected
-/// in what is typed or pasted (Preferences' tracker list is one too).
+/// in what is typed or pasted, the text fields' font, and Tab / Shift-Tab move the focus on as
+/// in a field (`RPTarget`'s `textView:doCommandBySelector:`). Preferences' tracker list and
+/// Create Torrent's boxes are ones too.
 pub(crate) fn text_box(
     text: &str,
     height: f64,
@@ -91,7 +96,40 @@ pub(crate) fn text_box(
     view.setAutomaticLinkDetectionEnabled(false);
     view.setAutomaticSpellingCorrectionEnabled(false);
     view.setString(&ns(text));
+    // a text view's own font (Helvetica 12) is smaller than the fields' (the system font, 13)
+    view.setFont(Some(&NSFont::systemFontOfSize(NSFont::systemFontSize())));
+    view.setDelegate(Some(ProtocolObject::from_ref(&*crate::ui::target(mtm))));
     (scroll, view)
+}
+
+/// Turns a [`text_box`] on or off. A text view is no control: off, it is read-only and looks as
+/// a disabled text field does (grey text on a greyed background).
+pub(crate) fn enable_text_box(scroll: &NSScrollView, view: &NSTextView, enabled: bool) {
+    view.setEditable(enabled);
+    view.setSelectable(enabled);
+    let (text, background) = if enabled {
+        (NSColor::textColor(), NSColor::textBackgroundColor())
+    } else {
+        (NSColor::disabledControlTextColor(), disabled_background())
+    };
+    view.setTextColor(Some(&text));
+    view.setBackgroundColor(&background);
+    scroll.setBackgroundColor(&background);
+}
+
+/// A disabled text field's background, which AppKit draws as its enabled fill at half strength
+/// over the window: white at 50 % in light mode (246 -> 251 on macOS 15), white at 2.5 % in dark
+/// mode (40 -> 45), a shade lighter than the window, as the field beside the box shows.
+fn disabled_background() -> Retained<NSColor> {
+    let provider = RcBlock::new(|appearance: NonNull<NSAppearance>| {
+        // SAFETY: AppKit hands the provider a valid appearance for the call.
+        let dark = crate::images::dark_of(unsafe { appearance.as_ref() });
+        let color = NSColor::colorWithWhite_alpha(1.0, if dark { 0.025 } else { 0.5 });
+        // the provider returns an autoreleased color (AppKit resolves it inside a pool)
+        NonNull::new(Retained::autorelease_ptr(color)).expect("a color")
+    });
+    // SAFETY: the provider returns a valid color for every appearance.
+    unsafe { NSColor::colorWithName_dynamicProvider(None, &provider) }
 }
 
 /// A number field.
@@ -188,7 +226,8 @@ fn show(parent: &NSWindow, ids: Vec<TorrentId>, title: &str, props: Properties, 
     root.setSpacing(14.0);
 
     let sheet = super::window(title, &root, None, false, mtm);
-    sheet.setInitialFirstResponder(Some(&*trackers));
+    // the tracker box first, with a key view loop: Tab leaves the box for the number fields
+    super::focus_first(&sheet, &trackers);
     let d = Rc::new(Dialog {
         id,
         ids,
