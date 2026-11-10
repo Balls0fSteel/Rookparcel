@@ -70,6 +70,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="1.2.30" date="2026-11-10" type="stable">
+      <description>
+        <p>Less CPU use while idle: the app no longer reads every torrent's metadata again after each start when its Web UI is on, and local peer discovery no longer looks at every stopped torrent several times a second.</p>
+      </description>
+    </release>
     <release version="1.2.29" date="2026-11-09" type="stable">
       <description>
         <p>Dark mode on Windows (following the system, or chosen), nine themes and your own CSS themes for the Web UI, and dark-theme fixes for the GTK app's drawn parts, icons and scheduler.</p>
