@@ -1,0 +1,12 @@
+# Changelog archive: 2026-11-10, 1.2.38
+
+1 entry moved verbatim from the root changelog on 2026-11-10_154556_1794321956 to keep it under budget: the first-run guide in the Mac disk image and the site's install guide (1.2.38). Links and paths keep their original repository-root context.
+
+## 2026-11-10_112228_1794306148: Version 1.2.38: a first-run guide in the Mac disk image; an install guide on the site
+
+- **Asked by the owner:** macOS refuses the app as unverified and the `.dmg` says nothing about it; an interactive page that guides the install on each platform.
+- **Disk image:** `packaging/macos/How to open Rookparcel.html` goes into the dmg (`release.yml`; the job fails when the mounted image lacks it): one file, no script, light and dark, with the steps for macOS 15 and newer (Done, then Privacy & Security > Open Anyway), 11 to 14 (Control-click > Open), the `xattr` line and why macOS asks.
+- **Site:** `site/install.html` with numbered steps for the installer, the zip, AppImage, Flatpak, the plain binaries and the Mac app, and drawings of the SmartScreen, UAC and Gatekeeper dialogs in HTML and CSS (`.mock`, no screenshots). `site/js/install.js` picks the visitor's system and shows one path, one step at a time; without JavaScript every path is listed. Linked from the home page's buttons, the Download page (each file's "Starting it" text, `GUIDE_ANCHORS` in `build.py`), the FAQ and Docs; no new toolbar item (the owner's choice).
+- **Wording corrected:** the site, README, `docs/RELEASING.md` and the wiki pages said right-click > Open for every macOS; Apple's own pages now give only Open Anyway, so that is the route for 15 and newer and Control-click stays for 11 to 14.
+- **Validation:** the site's tests (four new: the linked anchors exist, the chooser matches the paths, step numbers, the dmg file has the same command and loads nothing) and a `--strict` build from the sample releases; in the built-in browser: `#macos` and `#windows-setup` open their path, Back/Next and Show all steps, dark and light, 375 px without sideways scroll, no console errors. **Not done:** the dmg step was not run (it needs a Mac; the next Release run shows it), the dialog texts are from Apple's pages and memory, not from a Mac of each version, the drawings of the Windows dialogs were not compared with a real one, and the page was not tried with JavaScript turned off in a browser. The wiki's stale notes about 1.1.40 and the unreleased Mac app are untouched.
+

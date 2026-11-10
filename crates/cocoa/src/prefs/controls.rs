@@ -183,6 +183,8 @@ impl Builder {
                 let (scroll, view) = crate::dialogs::properties::text_box("", LINES_HEIGHT, mtm);
                 layout::min_width(&scroll, 360.0);
                 layout::stretch(&scroll);
+                // Tab leaves the box (`RPTarget`'s `textView:doCommandBySelector:`)
+                view.setDelegate(Some(ProtocolObject::from_ref(&*crate::ui::target(mtm))));
                 // it commits when its editing ends (the focus leaves it, the window closes),
                 // not at every key: a text view has no action of its own
                 let block = RcBlock::new(move |_n: NonNull<NSNotification>| crate::app::run(cmd));

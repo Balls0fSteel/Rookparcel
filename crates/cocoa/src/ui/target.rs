@@ -9,11 +9,12 @@
 use std::cell::OnceCell;
 
 use objc2::rc::Retained;
-use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol};
+use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, Sel};
 use objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSMenu, NSMenuDelegate,
-    NSMenuItem, NSMenuItemValidation, NSToolbarItem, NSToolbarItemValidation,
+    NSMenuItem, NSMenuItemValidation, NSTextDelegate, NSTextView, NSTextViewDelegate, NSToolbarItem,
+    NSToolbarItemValidation,
 };
 use objc2_foundation::{NSString, NSTimer};
 
@@ -70,7 +71,34 @@ define_class!(
             crate::menu::needs_update(menu);
         }
     }
+
+    unsafe impl NSTextDelegate for RPTarget {}
+
+    // Preferences' multi-line box: Tab and Shift-Tab leave it, as they leave a text field
+    // (a text view would insert a tab, and the box commits when the focus leaves it).
+    unsafe impl NSTextViewDelegate for RPTarget {
+        #[unsafe(method(textView:doCommandBySelector:))]
+        fn text_view_do_command(&self, view: &NSTextView, command: Sel) -> bool {
+            leave_text_view(view, command)
+        }
+    }
 );
+
+/// Tab or Shift-Tab typed in `view`: the focus goes to the next or previous control. False for
+/// every other command, which the text view then does itself.
+fn leave_text_view(view: &NSTextView, command: Sel) -> bool {
+    let Some(window) = view.window() else { return false };
+    let sender: &AnyObject = view.as_ref();
+    if command == sel!(insertTab:) {
+        window.selectNextKeyView(Some(sender));
+        true
+    } else if command == sel!(insertBacktab:) {
+        window.selectPreviousKeyView(Some(sender));
+        true
+    } else {
+        false
+    }
+}
 
 fn validate_menu_item(item: &NSMenuItem) -> bool {
     let Some(cmd) = Command::from_tag(item.tag()) else { return true };

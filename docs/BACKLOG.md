@@ -1076,11 +1076,25 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
 
 ## Statistics, trackers and Run Program (D65-D67; 2026-11-10)
 
-- **Statistics (1.2.39), hand checks:** the GTK window on the Xubuntu VM and the Mac window on
-  the macOS VM (neither was run: layout, Escape in GTK, the refresh, sizing); the Win32 window
-  at 150/200 %, in a right-to-left language and through a live theme switch; a long translation
-  in each; the Web UI dialog in the nine themes and right-to-left; a real download and upload
-  with the window open; an upgrade of a real profile (the totals start from the torrents' sums).
+- **Run on the VMs 2026-11-10 (1.2.42):** the GTK client under Xvfb on Xubuntu and the Mac
+  app on the Intel macOS VM, all three features with real transfers; see the changelog. Left
+  from those runs:
+  - `pref_pages::live` (the Mac's instant apply) writes a refused text to the ini while its
+    check box is off (`trackers.url=http://...` with `trackers.from_url=0`, a `run.added` line
+    with an open quote with its box off). Nothing uses it and ticking the box is refused, but
+    "refused" should mean "not stored".
+  - GTK: after the web list is switched off and OK pressed, the Trackers status line still
+    showed the old "20 trackers, downloaded ..." until the next start (seen once; the cause was
+    not found: `TrackerList::status` answers nothing when the list is off).
+  - Mac: the tracker box uses NSTextView's default font, smaller than the 13 pt fields; a
+    disabled empty box stays white in light mode; red messages start 20 pt left of indented
+    fields; Tab still types a tab in Create Torrent's and Properties' boxes.
+  - Not run: a real window manager on Linux, pasting into the GTK box, `run.added` in GTK,
+    Cmd+W on the Mac's Statistics window, Retina, arm64.
+- **Statistics (1.2.39), hand checks still open:** the Win32 window at 150/200 %, in a
+  right-to-left language and through a live theme switch; a long translation in each client;
+  the Web UI dialog in the nine themes and right-to-left; an upgrade of a real profile (the
+  totals start from the torrents' sums).
 - **Web UI dates are UTC** (seen 2026-11-10 in the end-to-end run): nox never calls
   `fmt::set_utc_offset`, so every date text the server formats (Added On, Completed On, RSS
   times, the tracker list's status, Statistics' Counted Since) is UTC, not the server's or the

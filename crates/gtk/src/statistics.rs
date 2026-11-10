@@ -11,9 +11,11 @@ use rookparcel_frontend::lang::{self, gtk_mnemonic};
 use rookparcel_frontend::statistics::{self, Row};
 use rookparcel_frontend::tr;
 
-/// The open window and its value labels, in the order of the value rows.
+/// The open window and its value labels, in the order of the value rows. The window is held
+/// weakly: GTK emits `destroy` only when the last reference goes, so a strong one here would
+/// keep a closed window as the open one, to be presented again destroyed.
 struct Open {
-    window: gtk::Window,
+    window: gtk::glib::WeakRef<gtk::Window>,
     values: Vec<gtk::Label>,
 }
 
@@ -23,7 +25,7 @@ thread_local! {
 
 /// Shows the window over `parent` with `stats`; a window already open comes to the front.
 pub fn show(parent: &impl IsA<gtk::Window>, stats: &SessionStats) {
-    let open = OPEN.with(|o| o.borrow().as_ref().map(|o| o.window.clone()));
+    let open = OPEN.with(|o| o.borrow().as_ref().and_then(|o| o.window.upgrade()));
     if let Some(window) = open {
         update(stats);
         window.present();
@@ -93,17 +95,19 @@ pub fn show(parent: &impl IsA<gtk::Window>, stats: &SessionStats) {
     // closed (by the button, Escape, the title bar or with the main window): the next
     // Help > Statistics builds a new one
     window.connect_destroy(|_| {
-        // (try: never a panic in a signal handler)
-        OPEN.with(|o| {
+        // (try: never a panic in a signal handler, also not when the window goes at the
+        // program's end, after the thread's own storage)
+        let _ = OPEN.try_with(|o| {
             if let Ok(mut o) = o.try_borrow_mut() {
                 *o = None;
             }
         });
     });
-    OPEN.with(|o| *o.borrow_mut() = Some(Open { window: window.clone(), values }));
+    OPEN.with(|o| *o.borrow_mut() = Some(Open { window: window.downgrade(), values }));
+    // (a selectable label that takes the first focus shows its whole text selected, and keeps
+    // it selected when the focus moves on: the button has the focus before the window is shown)
+    GtkWindowExt::set_focus(&window, Some(&close));
     window.present();
-    // (a selectable label that takes the first focus shows its whole text selected)
-    close.grab_focus();
 }
 
 /// The engine's new figures (once a second): the open window's values follow. A text that did
