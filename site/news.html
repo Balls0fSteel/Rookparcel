@@ -45,6 +45,21 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.45" data-date="2026-11-10" aria-labelledby="v1.2.45-h">
+      <h2 id="v1.2.45-h"><a href="#v1.2.45"><time datetime="2026-11-10">Tue 10 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.45</span></a></h2>
+      <p class="news-lede">Rookparcel no longer stops your seeds by itself: the seeding goal of 150 % acts only once you switch it on, and a torrent you start again keeps seeding.</p>
+      <ul class="changes">
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>Seeds are no longer stopped at a ratio of 1.5 by default. The goal in Preferences &gt; Queueing does nothing until "Limit the upload rate to (kB/s): [0: stop]" is ticked, as in µTorrent.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>A torrent you start again after its goal keeps seeding. Before, it was stopped again a second later.</span></li>
+        <li><span class="tag tag-area">Updates</span><span class="vh">:</span> <span>A goal you never changed is switched off by the update. A goal you had set yourself stays in force: its box is ticked for you, with 0.</span></li>
+        <li><span class="tag tag-area">Logger</span><span class="vh">:</span> <span>The line of a stopped torrent says what was reached, for example "seeding goal reached, stopped (ratio 1.523, goal 1.500)".</span></li>
+        <li><span class="tag tag-area">Properties</span><span class="vh">:</span> <span>A torrent's own goal, also one sent by Sonarr or Radarr or imported from qBittorrent, is always in force.</span></li>
+        <li><span class="tag tag-area">Web UI</span><span class="vh">:</span> <span>The Queueing page's box reads "Stop the torrent or limit its upload rate"; the qBittorrent-compatible API reports the global share limit only when it is switched on and stops torrents.</span></li>
+      </ul>
+      <p class="news-note">To keep stopping torrents at 150 %, tick the box in Preferences &gt; Queueing and leave the rate at 0. Auto Shutdown's "When Everything Completes" waits for seeds to stop, so it needs a goal that is switched on.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.45">Download 1.2.45 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.45.md">Full release notes</a></p>
+    </article>
+
     <article class="news-entry" id="v1.2.44" data-date="2026-11-10" aria-labelledby="v1.2.44-h">
       <h2 id="v1.2.44-h"><a href="#v1.2.44"><time datetime="2026-11-10">Tue 10 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.44</span></a></h2>
       <p class="news-lede">Statistics with all-time totals, trackers for new downloads and Run Program on torrent events; a fix for starts that hashed every file again, a quieter Logger, and a first-run guide for every system.</p>
