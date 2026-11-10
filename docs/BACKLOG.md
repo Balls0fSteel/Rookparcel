@@ -1094,8 +1094,9 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   - nox behind a proxy on the same computer that adds no `X-Forwarded-For`, `Forwarded` or
     `X-Real-IP` (nginx's bare `proxy_pass`, stunnel, `ssh -L`): every client is a loopback one,
     so Run Program's gate is open to whoever has the password, and nox prints no warning (it
-    listens on loopback). The `Host` header does not tell (nginx sends the upstream's). Needs
-    the owner's choice: say so in WEBUI.md, or an explicit "this is behind a proxy" option.
+    listens on loopback). The `Host` header does not tell (nginx sends the upstream's). Owner's
+    choice (2026-11-10): documented, in WEBUI.md and the wiki's Preferences reference and nox
+    page; an explicit "this is behind a proxy" option was not built.
   - The "added" program runs for a magnet about a second after the link is added: before its
     metadata, before its Add dialog is answered, and also when that dialog is cancelled.
   - A typed tracker line that is no tracker is dropped without a word when its check box is

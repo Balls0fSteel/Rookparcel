@@ -292,6 +292,7 @@ Good to know:
 - The program gets no window and no input, at most four run at once, and each start and end is written to the Logger.
 - The program runs on the computer that has the torrents: in a window connected to a remote `rookparcel-nox`, this page's lines do nothing; set them on the server.
 - **Who can change the lines.** Whoever can change them can run programs under your account, so: the desktop programs on their own computer; the Web UI only from a browser on the same computer, with the current password; never the qBittorrent-compatible API, and never a remote connection. A server you can only reach from elsewhere (Docker, for one) needs `--webui-remote-run-program` on its command line: see [Running rookparcel-nox](Running-rookparcel-nox). Think before you give it: with it, the Web UI's password is all that stands between a visitor and running programs on the server.
+- **Behind a reverse proxy.** If the Web UI is reached through a proxy or tunnel on the server itself (nginx, HAProxy, stunnel, an SSH tunnel), the server sees every visitor as a browser on the same computer unless the proxy says otherwise. Make the proxy add the visitor's address (`X-Forwarded-For`; for nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`). Without that header, anyone who reaches the proxy and knows the password can change these lines, exactly as with `--webui-remote-run-program`.
 
 ## Differences in the GTK version
 

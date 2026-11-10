@@ -491,7 +491,8 @@ list.
 Run Program (D67, Preferences > Advanced > Run Program): `run.added_enabled`, `run.added`,
 `run.finished_enabled` and `run.finished` name programs the server starts, so they have the
 strictest rule (`prefs::RunGate`). `POST /pa/prefs` changes them only when the request is local
-(`api::is_local`: a loopback peer without a forwarding header, so not through a reverse proxy)
+(`api::is_local`: a loopback peer without a forwarding header, so not through a reverse proxy
+that adds one; one that adds none counts as local, see "Behind a reverse proxy" below)
 or nox was started with `--webui-remote-run-program`, and then only with the current password
 like every security field. A request the gate refuses gets 400 with `RunErrRemote` before its
 password is looked at (no oracle, the session stays) and a Logger line with its address.
@@ -525,6 +526,23 @@ with `X-Forwarded-For`, `Forwarded` or `X-Real-IP` never gets the local-auth byp
 from a loopback peer the last `X-Forwarded-For` address (the one the proxy added) is the
 client for bans, so one client's failed logins do not ban everyone. Configure the proxy to
 set or append that header.
+
+**A proxy that adds none of the three headers makes every client local.** nginx's bare
+`proxy_pass`, HAProxy without `option forwardfor`, stunnel, `socat`, `ssh -L` and
+`kubectl port-forward` pass requests on as plain loopback connections, and nothing in such a
+request tells nox it came from elsewhere (the `Host` header does not: nginx sends the
+upstream's). Everything that is "local only" is then open to whoever reaches the proxy: the
+local-auth bypass when it is on, and Run Program's gate (D67), where the Web UI's password
+becomes all that stands between a visitor and running programs on the server, as with
+`--webui-remote-run-program`. nox prints no warning in that setup, since it listens on
+loopback. So a proxy in front of nox must add the client's address, for nginx:
+
+```nginx
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
+
+A tunnel that cannot add a header (`ssh -L`, stunnel) is as trusted as a browser on the server
+itself: give it only to people who may run programs there.
 
 Two more ways in, both off by default (owner decision 2026-10-30), both changed only with the
 current password, and reported read-only by the shim's `app/preferences`:
