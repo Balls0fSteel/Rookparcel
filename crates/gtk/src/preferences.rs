@@ -36,6 +36,8 @@ use crate::table::Table;
 
 /// Loads a block list: the number of rules or an error.
 pub type ReloadIpFilter = Box<dyn Fn(&Path) -> Result<usize, String>>;
+/// The Trackers page's status line for its "from the web" box and address.
+pub type TrackerStatus = Box<dyn Fn(bool, &str) -> String>;
 
 /// What the dialog asks of its owner.
 pub struct Hooks {
@@ -46,8 +48,9 @@ pub struct Hooks {
     /// "Update Now" on the Trackers page: store these options' tracker settings (the four
     /// `trackers_*` values, nothing else of them), put them into effect and fetch the list.
     pub update_tracker_list: Box<dyn Fn(&GuiOptions)>,
-    /// The Trackers page's status line for the list from the web (`TrackerList::status`).
-    pub tracker_status: Box<dyn Fn() -> String>,
+    /// The Trackers page's status line for the list from the web, for the page's "from the
+    /// web" box and address as they stand (`TrackerList::status_for`).
+    pub tracker_status: TrackerStatus,
     /// Where `ipfilter.dat` is looked for when no path is set.
     pub settings_dir: PathBuf,
     /// A tray is on screen: UI Settings shows the tray and notification boxes.
@@ -391,6 +394,23 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
             }
             Ctl::Entry(_) | Ctl::Lines(..) => {}
         }
+    }
+    // the list's status line follows the page's box and address at once
+    if let Some(Ctl::Check(c)) = d.controls.get(TRACKERS_FROM_URL) {
+        let w = Rc::downgrade(&d);
+        c.connect_toggled(move |_| {
+            if let Some(d) = w.upgrade() {
+                d.update_tracker_status();
+            }
+        });
+    }
+    if let Some(Ctl::Entry(e)) = d.controls.get(TRACKERS_URL) {
+        let w = Rc::downgrade(&d);
+        e.connect_changed(move |_| {
+            if let Some(d) = w.upgrade() {
+                d.update_tracker_status();
+            }
+        });
     }
     // "..." beside folders and files
     for (button, key, kind) in browse {
@@ -741,9 +761,12 @@ impl Dialog {
         self.update_tracker_status();
     }
 
+    /// The status line for the page's box and address as they stand, applied or not: a box
+    /// switched off has no line even while OK is refused for another field.
     fn update_tracker_status(&self) {
         let Some(label) = &self.tracker_status else { return };
-        let text = (self.hooks.tracker_status)();
+        let from_url = self.value(TRACKERS_FROM_URL) == "true";
+        let text = (self.hooks.tracker_status)(from_url, &self.value(TRACKERS_URL));
         if label.text() != text {
             label.set_text(&text);
         }

@@ -3204,8 +3204,10 @@ fn preferences_at(page: Option<&str>) {
                 }
             });
         }),
-        tracker_status: Box::new(|| {
-            with_app(|a| a.trackers.as_ref().map(TrackerList::status)).flatten().unwrap_or_default()
+        tracker_status: Box::new(|from_url, url| {
+            with_app(|a| a.trackers.as_ref().map(|l| l.status_for(from_url, url)))
+                .flatten()
+                .unwrap_or_default()
         }),
         settings_dir: paths::settings_dir(),
         tray: tray_shown(),
