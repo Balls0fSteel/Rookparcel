@@ -551,4 +551,48 @@ mod tests {
         assert_eq!(got.lines().collect::<Vec<_>>(), [v.name.as_str(), "lab el / /dl/A", "end"]);
         let _ = std::fs::remove_file(&out);
     }
+
+    /// A `.bat` or `.cmd` program runs through cmd.exe, whose rules are not the ones of other
+    /// programs: the standard library escapes its arguments for cmd (Rust 1.77.2's fix of
+    /// CVE-2024-24576). Pinned here, so a toolchain that loses it fails a test: a name with `&`,
+    /// `|`, `>`, `^`, `%` or `"` reaches the batch file as one argument and runs nothing.
+    #[cfg(windows)]
+    #[test]
+    fn a_batch_file_gets_each_argument_whole_and_runs_nothing_else() {
+        let dir = std::env::temp_dir().join(format!("rp-run-program-bat-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let log = dir.join("args.txt");
+        let ran = dir.join("ran.txt");
+        // a careful batch file quotes its arguments: "%~1"
+        let script = "@echo off\r\n>>\"%~dp0args.txt\" echo \"%~1\"\r\n>>\"%~dp0args.txt\" echo \"%~2\"\r\n";
+        for program in ["log args.bat", "LOG.CMD"] {
+            std::fs::write(dir.join(program), script).unwrap();
+        }
+        let r = ran.display();
+        let names = [
+            "Rook's test & more (1) %TEMP% ;x --delete.bin".to_owned(),
+            format!("a&echo.X>{r}"),
+            format!("a\"&echo.X>{r}&\"b"),
+            format!("^\"&echo.X>{r}"),
+            format!("x|echo.X>{r}"),
+            "%PATH% %cd:~,% !TEMP! (a) <b> %%".to_owned(),
+        ];
+        for program in ["log args.bat", "LOG.CMD"] {
+            for name in &names {
+                let _ = std::fs::remove_file(&log);
+                let line = format!(r#""{}" %N "%L / %F""#, dir.join(program).display());
+                let v = Values { name: name.clone(), ..values() };
+                let args = arguments(&split_command(&line).unwrap(), &v);
+                let status = spawn(&args).unwrap().wait().unwrap();
+                assert!(status.success(), "{program} {name}");
+                assert!(!ran.exists(), "{program}: {name} ran a second command");
+                // inside the argument cmd.exe sees a quote doubled, as the escaping writes it
+                let want =
+                    [name.replace('"', "\"\""), "lab el / /dl/A".to_owned()].map(|s| format!("\"{s}\""));
+                let got = std::fs::read_to_string(&log).unwrap();
+                assert_eq!(got.lines().collect::<Vec<_>>(), want, "{program}");
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
