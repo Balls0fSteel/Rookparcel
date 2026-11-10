@@ -4,6 +4,13 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-10_204108_1794339668: Release 1.2.44 prepared
+
+- **Asked by the owner:** prepare, commit and release, with the notes and the website's news.
+- **Written:** `docs/releases/1.2.44.md` (everything since 1.2.30: Statistics, trackers for new downloads, Run Program, the recheck fix, nox's stored settings, the quieter Logger, Donate, the Mac guide, the Win32 and GTK looks; remote protocol 18 means both ends update; the limits the review left). `docs/releases/1.2.38.md` removed: 1.2.38 was never tagged and its text is in the new file. The Flatpak metainfo's first release is 1.2.44 in place of 1.2.38.
+- **Website:** the 1.2.38 news entry, never deployed, is taken off the branch so `main` can be pushed; the 1.2.44 entry is a commit of its own, pushed after publishing (RELEASING.md step 2).
+- **Order:** `main` fast-forwarded to this branch, CI and FreeBSD green, tag `v1.2.44`, the Release run's draft, published, then the news and the wiki. What ran and what was skipped of step 5 is in the entry that follows the publication.
+
 ## 2026-11-10_202226_1794338546: Version 1.2.44: a bug review of everything since 1.2.30; five fixes
 
 - **Asked by the owner:** look over the changes waiting for the release and fix the bugs found. `git diff v1.2.30..HEAD` read in five parts: core here, and four read-only agents for the frontend, nox and the Web UI, Win32, and GTK with the Mac crate.

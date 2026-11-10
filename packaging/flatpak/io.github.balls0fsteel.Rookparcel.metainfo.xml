@@ -70,9 +70,9 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
-    <release version="1.2.38" date="2026-11-10" type="stable">
+    <release version="1.2.44" date="2026-11-10" type="stable">
       <description>
-        <p>Closing while a torrent waits for its check no longer makes the next start hash every file. The Logger leaves out trackers that do not answer. Help &gt; Donate. Lower buttons and fields.</p>
+        <p>Help &gt; Statistics with all-time totals. Trackers added to new downloads, typed or from a list on the web. Run Program when a torrent is added or finishes. Closing while a torrent waits for its check no longer makes the next start hash every file. The Logger leaves out trackers that do not answer. Help &gt; Donate. Lower buttons and fields.</p>
       </description>
     </release>
     <release version="1.2.30" date="2026-11-10" type="stable">
