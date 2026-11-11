@@ -33,7 +33,7 @@ The left part of the status bar shows the state of the network:
 |---|---|
 | **Network OK** | Other peers have connected to you, so your listening port is reachable. |
 | **No incoming connections** | No peer has connected to you yet. Right after the start this is normal; if it stays, your port is probably blocked by the router or the firewall. |
-| **Port 6881 in use** (with your port number) | Another program, often another Rookparcel profile, holds the port, so Rookparcel listens on another one where nothing is forwarded. Click the text to open **Preferences > Connection** and choose another port. *New in 1.1.45; not in a published release yet.* |
+| **Port 6881 in use** (with your port number) | Another program, often another Rookparcel profile, holds the port, so Rookparcel listens on another one where nothing is forwarded. Click the text to open **Preferences > Connection** and choose another port. *New in 1.1.45.* |
 
 To make the port reachable:
 
@@ -42,7 +42,7 @@ To make the port reachable:
 3. Allow `rookparcel.exe` through the firewall (on Linux, `rookparcel-gtk`), or open the port in it.
 4. Behind a VPN, incoming connections work only if the VPN forwards a port to you.
 
-The **General** tab shows "Your address as trackers see it:", which tells you whether your traffic goes through a VPN. *New in 1.1.58; not in a published release yet.* More in [Connection, ports and firewall](Connection-ports-and-firewall).
+The **General** tab shows "Your address as trackers see it:", which tells you whether your traffic goes through a VPN. *New in 1.1.58.* More in [Connection, ports and firewall](Connection-ports-and-firewall).
 
 ## Windows SmartScreen or macOS Gatekeeper warns about Rookparcel
 
@@ -116,7 +116,7 @@ See [Running rookparcel-nox](Running-rookparcel-nox).
 ## Resetting settings
 
 - **One setting:** in **Preferences > Advanced**, select it and click **Reset**, then **OK**. Rows marked `*` differ from the default.
-- **The first-start questions:** **Options > Setup Guide** (<kbd>Ctrl</kbd>+<kbd>G</kbd>) asks them again. *New in 1.1.62; not in a published release yet.*
+- **The first-start questions:** **Options > Setup Guide** (<kbd>Ctrl</kbd>+<kbd>G</kbd>) asks them again. *New in 1.1.62.*
 - **Everything:** exit Rookparcel (**File > Exit**), then rename the folder where it keeps its settings and torrents (on Linux and BSD, the settings folder and the data folder); Rookparcel then starts as new, with an empty torrent list. On Windows **Help > About Rookparcel** shows the folder. Renaming it back restores everything. See [Where Rookparcel keeps its files](Where-Rookparcel-keeps-its-files).
 
 ## Reporting a bug

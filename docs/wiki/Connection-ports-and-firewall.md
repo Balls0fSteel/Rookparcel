@@ -54,9 +54,9 @@ The left part of the status bar tells you:
 | **No incoming connections** | No peer has connected in yet. Normal for the first minutes after a start; if it stays, the port is not reachable. |
 | **Port 6881 in use** (with your port number) | Another program, often another Rookparcel profile, holds the port, and Rookparcel listens on a later port where nothing is forwarded. Click it to open Preferences at Connection and choose another port. |
 
-*"Port ... in use" is new in 1.1.45; not in a published release yet.*
+*"Port ... in use" is new in 1.1.45.*
 
-Hold the pointer over that part to see **Your address as trackers see it:**, the public address trackers report back. The **General** tab shows the same line. *New in 1.1.58; not in a published release yet.*
+Hold the pointer over that part to see **Your address as trackers see it:**, the public address trackers report back. The **General** tab shows the same line. *New in 1.1.58.*
 
 Rookparcel has no built-in port test. If the status stays at "No incoming connections" with active torrents:
 
@@ -68,7 +68,7 @@ See also [Troubleshooting and FAQ](Troubleshooting-and-FAQ).
 
 ## Use only this network (VPNs)
 
-*New in 1.1.58; not in a published release yet.*
+*New in 1.1.58.*
 
 "Use only this network" keeps all torrent traffic on one network adapter, typically a VPN. Peers, the DHT, trackers and web seeds all go through it and nothing else. When the VPN drops, torrents wait instead of carrying on over your normal connection.
 

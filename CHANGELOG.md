@@ -4,6 +4,12 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-11_085223_1794383543: Wiki source and the FAQ's client ID brought up to 1.2.46
+
+- **Wiki (`docs/wiki`, 20 pages):** every "not in a published release yet" mark is gone (all of it shipped by 1.2.46; the "New in x" versions stay); the macOS notes say "new in 1.2.19"; Home and Installing name 1.2.46, with 1.2.46 file names in the examples; Profiles says "New in 1.2.0". BRIEF.md now tells writers to add the mark only for unreleased features and remove it at the release.
+- **Site:** `site/faq.html` gives the client ID as `RP` (peer ID `-RP1014-`), was `PA`. Site tests 37 of 37.
+- **Not done:** nothing pushed, neither the GitHub wiki nor the site.
+
 ## 2026-11-11_085003_1794383403: README brought up to 1.2.46
 
 - **Asked by the owner:** the README still named 1.1.40 as the latest stable release.

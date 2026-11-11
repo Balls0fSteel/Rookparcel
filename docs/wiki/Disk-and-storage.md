@@ -38,7 +38,7 @@ If you quit while files are moving, the closing window waits for the moves, with
 
 Smart disk I/O keeps the computer responsive while Rookparcel reads and writes. Its settings are on **Options > Preferences > Advanced > Disk I/O** (a page under Advanced in the page list).
 
-The Setup Guide's **Use smart disk I/O** box turns all four parts on or off together. Gentle checks and per-drive tuning are on from the start; the box adds the slow-down while a disk is busy. *The Setup Guide is new in 1.1.62; not in a published release yet. The Disk I/O page itself is in 1.1.40.*
+The Setup Guide's **Use smart disk I/O** box turns all four parts on or off together. Gentle checks and per-drive tuning are on from the start; the box adds the slow-down while a disk is busy. *The Setup Guide is new in 1.1.62. The Disk I/O page itself is in 1.1.40.*
 
 ### Checking
 

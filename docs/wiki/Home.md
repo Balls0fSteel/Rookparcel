@@ -11,9 +11,9 @@ Rookparcel comes as four programs:
 | `Rookparcel.app` | macOS 11 or newer, Apple silicon and Intel | the native macOS window (GUI): the same main window and dialogs, with the Mac's menu bar and <kbd>⌘</kbd> shortcuts |
 | `rookparcel-nox` | all of them | runs without a window, controlled from a browser through its Web UI |
 
-Most pages describe the Windows window and then say what differs in the GTK window and the Web UI. The macOS app works like the GTK window; where it differs, the page has a macOS section: [Installing Rookparcel](Installing-Rookparcel#macos), [Keyboard shortcuts](Keyboard-shortcuts#macos), [Tray, notifications and startup](Tray-notifications-and-startup#macos), [Preferences reference](Preferences-reference#differences-on-macos) and [Auto Shutdown](Auto-shutdown). *The native macOS app is not in a published release yet; earlier releases have the GTK window for Apple silicon on macOS.*
+Most pages describe the Windows window and then say what differs in the GTK window and the Web UI. The macOS app works like the GTK window; where it differs, the page has a macOS section: [Installing Rookparcel](Installing-Rookparcel#macos), [Keyboard shortcuts](Keyboard-shortcuts#macos), [Tray, notifications and startup](Tray-notifications-and-startup#macos), [Preferences reference](Preferences-reference#differences-on-macos) and [Auto Shutdown](Auto-shutdown). *The native macOS app is new in 1.2.19; releases before it have the GTK window for Apple silicon on macOS.*
 
-**Version:** the wiki follows the current code (1.1.63). The newest published release is [1.1.40](https://github.com/Balls0fSteel/Rookparcel/releases/latest); features added after it are marked on their pages.
+**Version:** the wiki follows the current code (1.2.46), which is also the newest published release: [1.2.46](https://github.com/Balls0fSteel/Rookparcel/releases/latest). Pages say in which version a newer feature arrived.
 
 ## Getting started
 

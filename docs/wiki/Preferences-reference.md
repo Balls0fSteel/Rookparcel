@@ -11,7 +11,7 @@ Help is built in:
 - Point at a setting and a tooltip explains it. The pane under the pages shows the same text for the setting under the pointer, or else for the one that has the keyboard focus.
 - Press <kbd>F1</kbd> and the focused setting's help appears beside it.
 
-*The help texts, tooltips and F1 are new in 1.1.57; not in a published release yet.*
+*The help texts, tooltips and F1 are new in 1.1.57.*
 
 The texts below are short versions of that built-in help. Rates on the pages are in kB/s; 0 means unlimited unless the label says otherwise.
 
@@ -90,7 +90,7 @@ More: [Disk and storage](Disk-and-storage), [Adding torrents](Adding-torrents), 
 | **Address range:** | A range such as `10.2.0.0/16` or `fd00::/8`, for the **Address range** choice: the adapter holding an address in it carries the torrent traffic. |
 | **Pause torrents while this network is missing** | While no adapter matches (the VPN is down), running torrents wait and show "Waiting for the network", then carry on by themselves. |
 
-*The Use Only This Network group is new in 1.1.58; not in a published release yet.*
+*The Use Only This Network group is new in 1.1.58.*
 
 More: [Connection, ports and firewall](Connection-ports-and-firewall).
 
@@ -311,7 +311,7 @@ The macOS app opens Preferences from **Rookparcel > Preferences** (<kbd>⌘</kbd
 - A value that is not allowed, such as a port out of range, is shown in red under its field, and the last good value stays in use. Closing the window puts the good value back in the field.
 - The association boxes work only in `Rookparcel.app` and only in the default profile.
 
-*The native macOS app is not in a published release yet.*
+*The native macOS app is new in 1.2.19.*
 
 ## Differences in the Web UI
 

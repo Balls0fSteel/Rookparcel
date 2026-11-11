@@ -17,9 +17,11 @@ End users of Rookparcel, not developers. Task-oriented: "how do I...". Cover the
   (and `help_en.rs` / `docs/HELP_TEXTS.md` for what a setting does). Do not guess a name.
 - Where a behaviour is only in the code, read the code (`crates/win32/src`, `crates/gtk/src`,
   `crates/cocoa/src`, `crates/frontend/src`, `crates/nox/src`). If you cannot confirm something, leave it out.
-- The wiki describes the current code, version 1.1.63. The latest published release is
-  **1.1.40**. When a feature is newer than 1.1.40, say so in one line, e.g.
-  "*New in 1.1.59; not in a published release yet.*" Find the version in CHANGELOG.md or
+- The wiki describes the current code, version 1.2.46, which is also the latest published
+  release. When a feature is newer than 1.1.40, say so in one line, e.g. "*New in 1.1.59.*";
+  when it is newer than the latest published release, add "not in a published release yet"
+  (and take that out at the next release). No release was published between 1.1.40 and
+  1.2.0, so 1.1.41-1.1.63 features first shipped in 1.2.0. Find the version in CHANGELOG.md or
   `docs/archive/` (search by topic), or in `docs/DECISIONS.md`.
 - Do not mention internal decision IDs (D42 etc.), gates, agents, or the development plan.
 - Leave out unfinished or proposal-only features (e.g. the Microsoft Store flavour).

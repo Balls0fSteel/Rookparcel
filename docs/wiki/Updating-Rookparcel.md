@@ -9,7 +9,7 @@ About ten seconds after Rookparcel starts, and then every 12 hours while it runs
 When a newer version is out:
 
 - A question box appears, once for each new version.
-- After that, a notice stays in the status bar until you click it: "Rookparcel 1.1.63 is available - click here to download it".
+- After that, a notice stays in the status bar until you click it: "Rookparcel 1.2.46 is available - click here to download it".
 - The Logger tab has a line with the link too.
 
 To check at once, choose **Help > Check for Updates**. It answers either way, with the newer version or with "You have the newest version".
@@ -18,7 +18,7 @@ To check at once, choose **Help > Check for Updates**. It answers either way, wi
 
 A Rookparcel installed by the Windows setup can install the new version itself. *New in 1.1.40.*
 
-1. The question reads "Rookparcel 1.1.63 is available. You have 1.1.40. Download and install it now?". Click **Download and install**. (**Open download page** opens the release page in your browser instead; **Cancel** does nothing.)
+1. The question reads "Rookparcel 1.2.46 is available. You have 1.2.45. Download and install it now?". Click **Download and install**. (**Open download page** opens the release page in your browser instead; **Cancel** does nothing.)
 2. A small window shows the download's progress. Rookparcel checks the downloaded setup against the release's `SHA256SUMS` before it uses it.
 3. Rookparcel asks: "To install it, Rookparcel closes now and starts again when Setup is done. Close and install now?". Click **Yes**.
 4. Rookparcel saves everything and closes. The setup installs the new version silently into the same folder and starts Rookparcel again.

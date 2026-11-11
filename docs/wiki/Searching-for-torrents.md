@@ -13,7 +13,7 @@ Rookparcel has no search engine of its own and does not scrape sites itself. It 
 
 A search goes to every source you pick at the same time. The answers are merged, duplicates (the same torrent from two sources) are shown once, and the list is sorted by seeds.
 
-*The search box and Manage Sources are in the 1.1.40 release. The search helper is new in 1.1.59; not in a published release yet.*
+*The search box and Manage Sources are in the 1.1.40 release. The search helper is new in 1.1.59.*
 
 ## Filtering your list versus searching
 
@@ -99,7 +99,7 @@ The Web UI never shows a stored API key, and never sends the result links (which
 
 The search helper is [Jackett](https://github.com/Jackett/Jackett), a separate free program by its own authors under the GPL-2.0 licence. Rookparcel downloads Jackett's own release from GitHub when you click the button, checks it against the checksum GitHub publishes, keeps it in a `search-helper` folder in your profile, and runs it only while you search. Nothing is downloaded or run before you click.
 
-*New in 1.1.59; not in a published release yet.*
+*New in 1.1.59.*
 
 ### Where it is offered
 

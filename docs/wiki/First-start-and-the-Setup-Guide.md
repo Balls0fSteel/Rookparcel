@@ -2,7 +2,7 @@
 
 This page covers what happens the first time you start Rookparcel: the Setup Guide, a short window with four questions, what each answer sets, and how to open the guide again later.
 
-*New in 1.1.62; not in a published release yet.* In 1.1.40 there is no guide: Rookparcel opens with its default settings, and everything below is set in **Options > Preferences** instead.
+*New in 1.1.62.* Up to 1.1.40 there is no guide: Rookparcel opens with its default settings, and everything below is set in **Options > Preferences** instead.
 
 ## When the guide opens
 

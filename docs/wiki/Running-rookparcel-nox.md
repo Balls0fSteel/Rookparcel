@@ -86,7 +86,7 @@ To stop it, type `q` and press <kbd>Enter</kbd>, or press <kbd>Ctrl</kbd>+<kbd>C
 | `--network RULE` | Use only this network: torrent traffic is bound to the matching adapter. RULE is `vpn` (any VPN adapter), `adapter:ID` (a device name; on Windows the adapter's GUID), `range:CIDR` (such as `10.2.0.0/16`), or `off`. |
 | `--no-pause-when-missing` | While the `--network` rule matches nothing, let torrents run unbound instead of waiting for the network. |
 
-*`--network` is new in 1.1.58; not in a published release yet.* The proxy and network options are kept in the Web UI's settings like the matching boxes of its **Preferences > Connection** page. Once you change something in the Web UI, the stored value wins over the command line, so change them in the page from then on. A proxy password on the command line can be seen by other users of the computer in the process list; set it in **Preferences > Connection** instead. More on these settings: [Connection, ports and firewall](Connection-ports-and-firewall).
+*`--network` is new in 1.1.58.* The proxy and network options are kept in the Web UI's settings like the matching boxes of its **Preferences > Connection** page. Once you change something in the Web UI, the stored value wins over the command line, so change them in the page from then on. A proxy password on the command line can be seen by other users of the computer in the process list; set it in **Preferences > Connection** instead. More on these settings: [Connection, ports and firewall](Connection-ports-and-firewall).
 
 ### Web UI
 
@@ -152,7 +152,7 @@ The desktop program's window for this is described in [Creating torrents](Creati
 - On Linux `$XDG_DATA_HOME` and `$XDG_CONFIG_HOME` are used when they are set.
 - `webui.json` is rewritten by the running nox whenever something changes in the Web UI. Edit it only while nox is stopped.
 - Only one nox can use a folder at a time. A second one stops with "... is in use by another rookparcel-nox".
-- **Portable mode:** with a `rookparcel.ini` beside the program, both go to a `nox` folder beside it, and download folders inside it are stored relative to it, so the whole folder can be moved. *New in 1.1.49; not in a published release yet.* See [Where Rookparcel keeps its files](Where-Rookparcel-keeps-its-files).
+- **Portable mode:** with a `rookparcel.ini` beside the program, both go to a `nox` folder beside it, and download folders inside it are stored relative to it, so the whole folder can be moved. *New in 1.1.49.* See [Where Rookparcel keeps its files](Where-Rookparcel-keeps-its-files).
 
 ## Profiles
 
@@ -166,7 +166,7 @@ The desktop program's window for this is described in [Creating torrents](Creati
 | Windows service | `RookparcelNox` | `RookparcelNox_work` |
 | systemd | `rookparcel-nox.service` | `rookparcel-nox@work.service` |
 
-Each profile's Web UI needs a port of its own, for example `--webui 127.0.0.1:8081`. A port already in use stops nox with "port N is in use, perhaps by another Rookparcel profile". *Profiles are new in 1.1.44; not in a published release yet.* See [Profiles](Profiles).
+Each profile's Web UI needs a port of its own, for example `--webui 127.0.0.1:8081`. A port already in use stops nox with "port N is in use, perhaps by another Rookparcel profile". *Profiles are new in 1.1.44.* See [Profiles](Profiles).
 
 ## The Windows service
 
@@ -228,7 +228,7 @@ The other service commands:
 
 To change the options, install again with `--replace`. To delete the torrents' state and the downloads too, delete `%ProgramData%\Rookparcel` after uninstalling.
 
-`start`, `stop`, `status` and `uninstall` take `--profile NAME` for a profile's service. *Services per profile are new in 1.1.47; not in a published release yet.*
+`start`, `stop`, `status` and `uninstall` take `--profile NAME` for a profile's service. *Services per profile are new in 1.1.47.*
 
 **Without the service:** `rookparcel-nox run` in a Command Prompt works too and stops cleanly on <kbd>Ctrl</kbd>+<kbd>C</kbd> or when the window is closed. The Task Scheduler is another way: a task "At startup" that runs `rookparcel-nox.exe run --save D:\Torrents --webui 8080 --log C:\Rookparcel\nox.log`. `--daemon` does not work on Windows.
 

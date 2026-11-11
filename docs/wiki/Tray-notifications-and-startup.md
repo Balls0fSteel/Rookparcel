@@ -52,7 +52,7 @@ When an update is available, Rookparcel says so in the status bar instead; see [
 
 On Windows this is an entry in your user account's startup programs. No administrator rights are needed, and a portable copy can use it too. If you move a portable copy to another folder, tick the box again: it is ticked only while the entry starts this very copy.
 
-With [profiles](Profiles), each profile has its own startup entry, so you can start several at login. *Per-profile entries are new in 1.1.46; not in a published release yet.*
+With [profiles](Profiles), each profile has its own startup entry, so you can start several at login. *Per-profile entries are new in 1.1.46.*
 
 The [Setup Guide](First-start-and-the-Setup-Guide) offers the same choice on its last page.
 
@@ -97,7 +97,7 @@ Good to know on Windows:
 
 Preferences on macOS have no **OK** button: each change applies at once.
 
-*The native macOS app is not in a published release yet.*
+*The native macOS app is new in 1.2.19.*
 
 ## Web UI and rookparcel-nox
 

@@ -2,7 +2,7 @@
 
 `rookparcel-nox`, the daemon without a window, also comes as a container image for Docker and other container engines. This page covers starting it with `docker run` or Docker Compose, its folders and ports, the Web UI password, running it as another user, using it with Sonarr, Radarr and Prowlarr in containers, and stopping and updating it.
 
-*New in 1.2.21; not in a published release yet.*
+*New in 1.2.21.*
 
 The image is `ghcr.io/balls0fsteel/rookparcel-nox`, for x86-64 (`amd64`) and 64-bit ARM (`arm64`) Linux. Each release has its own tag, such as `:1.2.21`, and `:latest` is the newest release (not a pre-release). Inside, nox runs the same way as on any Linux computer: everything on [Running rookparcel-nox](Running-rookparcel-nox) and [Web UI](Web-UI) applies.
 

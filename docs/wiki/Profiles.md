@@ -2,7 +2,7 @@
 
 A profile is a whole Rookparcel of its own: its own settings, torrent list, RSS feeds, ports and window. This page covers making and starting profiles, what each one keeps apart, and the `--profile` switch for shortcuts and the command line.
 
-*New in 1.1.43 to 1.1.50; not in a published release yet.* In 1.1.40 the only way to run two Rookparcels is two portable copies in separate folders ([portable mode](Where-Rookparcel-keeps-its-files#portable-mode)).
+*New in 1.2.0.* Up to 1.1.40 the only way to run two Rookparcels is two portable copies in separate folders ([portable mode](Where-Rookparcel-keeps-its-files#portable-mode)).
 
 ## What profiles are for
 
@@ -44,7 +44,7 @@ A new profile starts empty, like a new installation, and opens with the [Setup G
 
 ## Telling the windows apart
 
-A named profile's window shows its name in the title bar and in the tray icon's tooltip: `Rookparcel 1.1.63 [work]`. The default profile shows no name. On Windows each profile has its own taskbar button group, so you can pin them apart.
+A named profile's window shows its name in the title bar and in the tray icon's tooltip: `Rookparcel 1.2.46 [work]`. The default profile shows no name. On Windows each profile has its own taskbar button group, so you can pin them apart.
 
 ## What each profile keeps apart
 

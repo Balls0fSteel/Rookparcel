@@ -24,7 +24,7 @@ This page lists the keyboard shortcuts of the Windows version of Rookparcel, the
 
 With **Confirm when deleting torrents** on in Preferences, <kbd>Del</kbd> and <kbd>Shift</kbd>+<kbd>Del</kbd> ask first. **File > Exit** has no shortcut; see [Tray, notifications and startup](Tray-notifications-and-startup).
 
-*<kbd>Ctrl</kbd>+<kbd>G</kbd> and the Setup Guide are new in 1.1.62, and the Files tab's filter box in 1.1.56; neither is in a published release yet.*
+*<kbd>Ctrl</kbd>+<kbd>G</kbd> and the Setup Guide are new in 1.1.62, and the Files tab's filter box in 1.1.56.*
 
 Mouse shortcuts that go with them:
 
@@ -63,7 +63,7 @@ See [Adding torrents](Adding-torrents).
 | <kbd>Escape</kbd> | Closes a dialog like **Cancel**. In the Setup Guide it is **Skip**. |
 | <kbd>Tab</kbd>, <kbd>Enter</kbd>, <kbd>Escape</kbd> in the Search Torrents window | Move between its controls, act on the focused one, close it |
 
-The help in Preferences also appears as a tooltip when you point at a setting. In the main window, a menu item or toolbar button you point at is described in the status bar. *These help texts are new in 1.1.57; not in a published release yet.*
+The help in Preferences also appears as a tooltip when you point at a setting. In the main window, a menu item or toolbar button you point at is described in the status bar. *These help texts are new in 1.1.57.*
 
 See [Preferences reference](Preferences-reference).
 
@@ -131,7 +131,7 @@ What differs from Windows:
 - The right-click menu of the torrent list has the same items as the **Torrent** menu; Control-click opens it too.
 - **Edit** has the usual Undo, Cut, Copy and Paste for text boxes.
 
-*The native macOS app is not in a published release yet.*
+*The native macOS app is new in 1.2.19.*
 
 ## Web UI
 

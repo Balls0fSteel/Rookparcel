@@ -4,7 +4,7 @@ This page lists the downloads for each platform, how to install and start each o
 
 ## Where to download
 
-Every release is on the [Releases page](https://github.com/Balls0fSteel/Rookparcel/releases). The latest published release is 1.1.40. Each release has notes with the first-run steps per platform, and a `SHA256SUMS` file with the checksum of every download.
+Every release is on the [Releases page](https://github.com/Balls0fSteel/Rookparcel/releases). The latest published release is 1.2.46. Each release has notes with the first-run steps per platform, and a `SHA256SUMS` file with the checksum of every download.
 
 | Platform | File | What is inside |
 |---|---|---|
@@ -19,7 +19,7 @@ Every release is on the [Releases page](https://github.com/Balls0fSteel/Rookparc
 
 The window on Linux and the BSDs is the GTK version; on macOS it is a native Mac app. Both work like the Windows version; where they differ, the wiki pages say so. For running the headless daemon, see [Running rookparcel-nox](Running-rookparcel-nox).
 
-*The native macOS app is not in a published release yet. Earlier releases have `Rookparcel-<version>-arm64.dmg` instead: the GTK window bundled for Apple silicon, macOS 15 or newer.*
+*The native macOS app is new in 1.2.19. Releases before it have `Rookparcel-<version>-arm64.dmg` instead: the GTK window bundled for Apple silicon, macOS 15 or newer.*
 
 ## Windows
 
@@ -73,7 +73,7 @@ The setup takes these switches, for scripts and administrators:
 For example, from an administrator prompt:
 
 ```
-rookparcel-1.1.40-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
+rookparcel-1.2.46-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
 ```
 
 ### The zip
@@ -90,7 +90,7 @@ To open `.torrent` files and `magnet:` links with the zip copy, tick the associa
 Each release's `SHA256SUMS` lists the SHA-256 of every file. In PowerShell:
 
 ```
-Get-FileHash .\rookparcel-1.1.40-windows-x64-setup.exe -Algorithm SHA256
+Get-FileHash .\rookparcel-1.2.46-windows-x64-setup.exe -Algorithm SHA256
 ```
 
 The hash should match the file's line in `SHA256SUMS`.
@@ -103,13 +103,13 @@ The hash should match the file's line in `SHA256SUMS`.
 2. Make it executable and start it:
 
    ```bash
-   chmod +x Rookparcel-1.1.40-x86_64.AppImage
-   ./Rookparcel-1.1.40-x86_64.AppImage
+   chmod +x Rookparcel-1.2.46-x86_64.AppImage
+   ./Rookparcel-1.2.46-x86_64.AppImage
    ```
 
 3. Without FUSE 2 on the system, start it with `--appimage-extract-and-run` added.
 
-The AppImage needs glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian 13 or later). Settings go to `~/.config/rookparcel/gtk`, torrents to `~/.local/share/rookparcel/gtk`. A `rookparcel.ini` file beside the `.AppImage` makes it portable instead (*new in 1.1.49; not in a published release yet*).
+The AppImage needs glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian 13 or later). Settings go to `~/.config/rookparcel/gtk`, torrents to `~/.local/share/rookparcel/gtk`. A `rookparcel.ini` file beside the `.AppImage` makes it portable instead (*new in 1.1.49*).
 
 ### Flatpak
 
@@ -117,7 +117,7 @@ The bundle holds the application; the runtime comes from Flathub. Add Flathub on
 
 ```bash
 flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak install --user Rookparcel-1.1.40-x86_64.flatpak
+flatpak install --user Rookparcel-1.2.46-x86_64.flatpak
 flatpak run io.github.balls0fsteel.Rookparcel
 ```
 
@@ -127,7 +127,7 @@ After that it is in your applications menu. The Flatpak has no update check of i
 
 `rookparcel-<version>-linux-<arch>.tar.gz` holds `rookparcel-gtk`, `rookparcel-nox`, the desktop entry and the systemd units (`systemd/system`, `systemd/user`). The binaries use the system's GTK 4 (4.12 or newer) and OpenSSL 3, as Ubuntu 24.04 has them, so they run on distributions about that age or newer.
 
-Unpack it and start `rookparcel-gtk`. A `rookparcel.ini` file beside the binary makes it portable (*new in 1.1.49; not in a published release yet*). For the systemd units, see [Running rookparcel-nox](Running-rookparcel-nox).
+Unpack it and start `rookparcel-gtk`. A `rookparcel.ini` file beside the binary makes it portable (*new in 1.1.49*). For the systemd units, see [Running rookparcel-nox](Running-rookparcel-nox).
 
 ### Headless server
 

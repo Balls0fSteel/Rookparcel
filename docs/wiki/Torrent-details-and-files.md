@@ -37,7 +37,7 @@ The overview of one torrent.
 | **Added On:**, **Completed On:** | dates |
 | **Pieces:** | "1200 x 1.00 MB (have 800)": the number of pieces, their size, and how many you have |
 | **Hash:** | the torrent's info-hash |
-| **Your address as trackers see it:** | your public address, so you can tell whether your VPN is in use. *New in 1.1.58; not in a published release yet.* |
+| **Your address as trackers see it:** | your public address, so you can tell whether your VPN is in use. *New in 1.1.58.* |
 
 ## Trackers
 
@@ -111,7 +111,7 @@ A folder row adds up its files' **Size** and **Done**; it has no piece columns.
 
 ### Tree view or one list
 
-*New in 1.2.21; not in a published release yet.*
+*New in 1.2.21.*
 
 The **Tree view** button beside the filter box, or **Tree View** in the right-click menu, switches between the folders and µTorrent 2.2.1's single list of paths (the torrent's own folder included). Rookparcel remembers the choice. In the tree:
 
@@ -140,7 +140,7 @@ After **Relocate...** to a file that was not on disk, run **Force Re-Check** so 
 
 ### Filtering the file list
 
-*New in 1.1.56; not in a published release yet.*
+*New in 1.1.56.*
 
 A torrent with thousands of files is easier to handle with the **Filter files** box at the top right of the Files tab.
 

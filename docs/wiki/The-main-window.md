@@ -23,7 +23,7 @@ Each part except the menus and the torrent list can be hidden from the **Options
 - **Options:** **Preferences**, **Setup Guide**, **RSS Downloader...**, the four **Show** items above, **Auto Shutdown**, **Close to Tray** and **Minimize to Tray**.
 - **Help:** **Rookparcel Website**, **Check for Updates**, **Statistics**, **Donate**, **About Rookparcel** and **Third-Party Notices**. **Statistics** (new in 1.2.39) shows what Rookparcel uploaded and downloaded in all its sessions and in this one, the share ratio, the data thrown away, the connected peers and the disk queue and read cache; the all-time totals stay when torrents are removed. **Donate** (new in 1.2.34) shows a short note and a button that opens the website's donation page in your browser.
 
-*File > Profiles is new in 1.1.48 and Options > Setup Guide in 1.1.62; neither is in a published release yet.*
+*File > Profiles is new in 1.1.48 and Options > Setup Guide in 1.1.62.*
 
 Pages: [Adding torrents](Adding-torrents), [Creating torrents](Creating-torrents), [Importing from µTorrent and qBittorrent](Importing-from-uTorrent-and-qBittorrent), [Profiles](Profiles), [Remote control](Remote-control), [Preferences reference](Preferences-reference), [First start and the Setup Guide](First-start-and-the-Setup-Guide), [RSS Downloader](RSS-Downloader), [Auto Shutdown](Auto-shutdown), [Tray, notifications and startup](Tray-notifications-and-startup), [Updating Rookparcel](Updating-Rookparcel).
 
@@ -42,7 +42,7 @@ From left to right:
 | **RSS Downloader** | opens the RSS Downloader |
 | **Preferences** | opens Preferences (<kbd>Ctrl</kbd>+<kbd>P</kbd>) |
 
-Hover a button to see its name. From 1.1.57 on (not in a published release yet), the status bar also shows a line on what the button under the pointer, or the highlighted menu item, does. What Start, Pause and Stop mean is on [Managing torrents](Managing-torrents#start-pause-stop-and-force-start).
+Hover a button to see its name. From 1.1.57 on, the status bar also shows a line on what the button under the pointer, or the highlighted menu item, does. What Start, Pause and Stop mean is on [Managing torrents](Managing-torrents#start-pause-stop-and-force-start).
 
 ### The search box
 
@@ -122,7 +122,7 @@ Click a column header to sort by it. The first click sorts the way that is usual
 | **Downloading metadata** | a magnet link fetching the torrent's file list |
 | **Checking 45.3 %**, **Queued for checking** | checking the files on disk |
 | **Moving** | moving its files to another folder |
-| **Waiting for the network** | **Use only this network** finds no matching network adapter (the VPN is down); it carries on by itself when it is back. *New in 1.1.58; not in a published release yet.* |
+| **Waiting for the network** | **Use only this network** finds no matching network adapter (the VPN is down); it carries on by itself when it is back. *New in 1.1.58.* |
 | **Error: ...** | something went wrong; the message says what |
 
 See [Managing torrents](Managing-torrents) for the actions behind these states.
@@ -145,7 +145,7 @@ From left to right:
 
 With **Keep ping low** holding the speeds down, the speed parts add the automatic limit, for example "D: 400 kB/s (auto 450 kB/s) T: 2.10 GB".
 
-*New in 1.1.58, not in a published release yet:* while **Use only this network** finds no matching adapter, the network part says "Waiting for the network", and hovering it shows your address as trackers see it. The **Port ... in use** text came with profiles in 1.1.45, also after the 1.1.40 release.
+*New in 1.1.58:* while **Use only this network** finds no matching adapter, the network part says "Waiting for the network", and hovering it shows your address as trackers see it. The **Port ... in use** text came with profiles in 1.1.45.
 
 See [Connection, ports and firewall](Connection-ports-and-firewall), [Speed limits and scheduler](Speed-limits-and-scheduler) and [Keep ping low](Keep-ping-low).
 
