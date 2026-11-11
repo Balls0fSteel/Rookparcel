@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-11_083809_1794382689
+Last updated: 2026-11-11_085003_1794383403
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D68](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -26,6 +26,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 - **Artwork (2026-11-05):** the Postal Rook won ([concepts](docs/art/rookparcel-candidates-2026-11-05/README.md), [small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
 
 - **Releases:** 1.0.1 to 1.2.46 ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes.
+- **Stale version texts (2026-11-11_085003_1794383403):** the README is at 1.2.46. Still to update: `docs/wiki/Home.md` and `docs/wiki/Installing-Rookparcel.md` (1.1.63 / 1.1.40, and the "not in a published release yet" marks on wiki pages), and `site/faq.html`'s client ID `PA` (now `RP`).
 - **Benchmarks:** [2026-11-11 results](docs/BENCHMARKS.md) for the published 1.2.46 (2026-11-11_083809_1794382689), `tools/bench`, with 1.0.1, 1.1.40 and 1.2.29 in the same rounds, all 88 runs good: 10,000 torrents after restart use 67 MB (qBittorrent 612 MB) and idle at 0.07% of a core (1.2.29 beside it: 0.35%, the regression 1.2.30 fixed; qBittorrent 0.10%); one-peer download 3,148 MiB/s, 1.01 CPU s/GiB, as in 1.0.1. Win32 at 100,000 torrents: the process idles at 0.21-0.42% (1.2.29: 0.81-0.86%, 1.0.1: 0.29-0.44%), the list after 1.37-1.49 s (1.0.1: 1.27 s). Mac GUI: 100,000 demo rows in 0.50-0.57 s, 188 MB. `site/benchmarks.html` is filled with this run in the working tree's commit, **not pushed** (the owner's call); the branch `site-benchmarks-1.2.29` no longer exists and is not needed.
 - CI, FreeBSD, Fuzz and the Release run were green for `v1.2.44` (recorded 2026-11-10, not a live check).
 - Scale baseline on this development PC (2026-10-23): Win32 lists 100,000 torrents in 1.16 s, GUI-thread idle CPU 0.05-0.10%, working set 232 MB. Name sort 49 ms, Ctrl+A 4.7 ms, add 19 ms, remove one 14 ms. 1.2.29 on 2026-11-10: 1.37 s, GUI thread 0.16-0.18%, 264-269 MB, Name sort 32-36 ms (the published 1.0.1 the same day: 1.27 s, 0.05-0.18%, 250 MB, 49-53 ms). The low-end-machine gate remains open.

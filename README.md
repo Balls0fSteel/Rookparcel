@@ -29,7 +29,7 @@ Please donate - if you can. Your support means the world to us, but only give if
 [Donate with PayPal](https://www.paypal.com/ncp/payment/2UDQNM8TGRUA4) or [sponsor on GitHub](https://github.com/sponsors/Balls0fSteel) (both also on the website's [donation page](https://balls0fsteel.github.io/Rookparcel/donate.html), which Help > Donate opens).
 
 > [!NOTE]
-> **Rookparcel 1.1.40 is the latest stable release.** It has been used mostly by its author so far, and nothing is code-signed. Do not use it on private trackers yet: its client ID is not whitelisted anywhere.
+> **Rookparcel 1.2.46 is the latest stable release.** It has been used mostly by its author so far, and nothing is code-signed. Do not use it on private trackers yet: its client ID is not whitelisted anywhere.
 >
 > Feedback and [bug reports](https://github.com/Balls0fSteel/Rookparcel/issues) are welcome.
 
@@ -47,17 +47,26 @@ User guide: the [wiki](https://github.com/Balls0fSteel/Rookparcel/wiki): install
   - low RAM and CPU use
   - 100,000 torrents on a modest PC, with an instant UI
 
-**Status:** 1.1. The engine downloads and seeds over TCP and uTP, with HTTP, HTTPS and UDP trackers, magnet links, DHT, peer exchange, local peer discovery, encryption, web seeds, proxies, UPnP / NAT-PMP and IP filters. The Win32 GUI has:
+**Status:** 1.2. The engine downloads and seeds over TCP and uTP, with HTTP, HTTPS and UDP trackers, magnet links, DHT, peer exchange, local peer discovery, encryption, web seeds, proxies, UPnP / NAT-PMP and IP filters. The Win32 GUI has:
 - the µTorrent 2.2.1 main window, Preferences, the Add and Create dialogs, RSS and the scheduler;
-- since 1.1.7, a Web UI of its own (Preferences > Web UI), which since 1.1.17 includes the RSS Downloader.
+- since 1.1.7, a Web UI of its own (Preferences > Web UI), which since 1.1.17 includes the RSS Downloader;
+- since 1.2.29, a dark mode that follows Windows' setting or is fixed in Preferences.
 
 `rookparcel-nox` runs headless with its own Web UI and a qBittorrent-compatible API that Sonarr, Radarr and Prowlarr use as a download client. The GTK 4 GUI runs on Linux and BSD; on macOS the native app `Rookparcel.app` replaces the earlier GTK bundle ([docs/MACOS_GUI.md](docs/MACOS_GUI.md)). BitTorrent v2 and hybrid torrents, 34 languages, HTTPS and remote mode are in.
 
-1.1 added a search box for the torrent list and importers for µTorrent and qBittorrent torrents. 1.1.17 adds torrent search through your own Prowlarr or Jackett (Torznab), in all three interfaces, with no search plugins or scrapers of our own; from 1.1.59 the search helper downloads Jackett for you at a click ([docs/SEARCH_ON_WINDOWS.md](docs/SEARCH_ON_WINDOWS.md), the step-by-step guide with screenshots, also on the [wiki](https://github.com/Balls0fSteel/Rookparcel/wiki/Searching-for-torrents-on-Windows)). Validation on more machines continues. See [PLAN.md](PLAN.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PORTING.md](docs/PORTING.md).
+1.2 added, in every interface:
+- profiles (`--profile work`, File > Profiles): several independent Rookparcels side by side, and portable mode on every platform (1.2.0);
+- the Files tab as a folder tree and a file filter in the Add Torrent dialog (1.2.21);
+- themes for the Web UI: nine built in, plus your own CSS files (1.2.29);
+- Help > Statistics with all-time totals, trackers for new downloads, and Run Program on torrent events (1.2.44).
+
+1.2.19 brought the native Mac app and 1.2.21 the Docker image of `rookparcel-nox`. From 1.1.40 there are also a mode that keeps your ping low while Rookparcel downloads and smart disk I/O.
+
+1.1 added a search box for the torrent list and importers for µTorrent and qBittorrent torrents. 1.1.17 adds torrent search through your own Prowlarr or Jackett (Torznab), in every interface, with no search plugins or scrapers of our own; from 1.1.59 the search helper downloads Jackett for you at a click ([docs/SEARCH_ON_WINDOWS.md](docs/SEARCH_ON_WINDOWS.md), the step-by-step guide with screenshots, also on the [wiki](https://github.com/Balls0fSteel/Rookparcel/wiki/Searching-for-torrents-on-Windows)). Validation on more machines continues. See [PLAN.md](PLAN.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PORTING.md](docs/PORTING.md).
 
 ## Download
 
-Release builds are on the [Releases page](https://github.com/Balls0fSteel/Rookparcel/releases); the newest is [1.1.40](https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.1.40). What changed in each release: the website's [News](https://balls0fsteel.github.io/Rookparcel/news.html) page, or the release notes in [docs/releases](docs/releases). The archives need no installation: unpack and run; Windows also has an installer (from 1.0.1 on). Each release has `SHA256SUMS` and notes with the first-run steps per platform.
+Release builds are on the [Releases page](https://github.com/Balls0fSteel/Rookparcel/releases); the newest is [1.2.46](https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.46). What changed in each release: the website's [News](https://balls0fsteel.github.io/Rookparcel/news.html) page, or the release notes in [docs/releases](docs/releases). The archives need no installation: unpack and run; Windows also has an installer (from 1.0.1 on). Each release has `SHA256SUMS` and notes with the first-run steps per platform.
 
 | Platform | File | What is inside |
 |---|---|---|
@@ -68,7 +77,7 @@ Release builds are on the [Releases page](https://github.com/Balls0fSteel/Rookpa
 | Linux, plain binaries | `rookparcel-<version>-linux-<arch>.tar.gz` | `rookparcel-gtk`, `rookparcel-nox`, the desktop entry and the systemd units; they use the system's GTK 4.12+ and OpenSSL 3 |
 | Linux server, headless | `rookparcel-nox-<version>-<arch>.AppImage` | `rookparcel-nox` with OpenSSL bundled |
 | Docker, amd64 or arm64 | `ghcr.io/balls0fsteel/rookparcel-nox:<version>` (from 1.2.21 on) | `rookparcel-nox` in a container image, for Sonarr, Radarr and Prowlarr setups ([wiki: Docker](https://github.com/Balls0fSteel/Rookparcel/wiki/Docker)) |
-| macOS, Apple silicon or Intel | `Rookparcel-<version>-macos.dmg` | `Rookparcel.app`, the native macOS GUI, one universal app (macOS 11 Big Sur or newer; ad-hoc signed, so macOS has to be told to open it the first time: `How to open Rookparcel.html` in the disk image has the steps). Earlier releases have `Rookparcel-<version>-arm64.dmg` instead: the GTK GUI for Apple silicon, macOS 15 or newer |
+| macOS, Apple silicon or Intel | `Rookparcel-<version>-macos.dmg` | `Rookparcel.app`, the native macOS GUI, one universal app (macOS 11 Big Sur or newer; ad-hoc signed, so macOS has to be told to open it the first time: `How to open Rookparcel.html` in the disk image has the steps). Releases before 1.2.19 have `Rookparcel-<version>-arm64.dmg` instead: the GTK GUI for Apple silicon, macOS 15 or newer |
 | macOS, headless | `rookparcel-nox-<version>-macos-<arch>.tar.gz` | `rookparcel-nox` for Apple silicon and Intel |
 
 The builds are not code-signed, so Windows SmartScreen and macOS Gatekeeper warn the first time; the [install guide](https://balls0fsteel.github.io/Rookparcel/install.html) walks through each system. How the files are made: [docs/RELEASING.md](docs/RELEASING.md).
@@ -101,7 +110,7 @@ Settings and torrents go to `%APPDATA%\Rookparcel`. An empty `rookparcel.ini` be
 | Binary | What it is today |
 |---|---|
 | `rookparcel` | Windows GUI: the µTorrent 2.2.1 main window on the real engine. The arrow beside the toolbar's search box searches your Prowlarr or Jackett ([docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)). `rookparcel --demo 10000` loads 10,000 simulated torrents instead; `rookparcel --remote` (File > Connect to Remote...) drives a `rookparcel-nox` elsewhere through its Web UI port; Preferences > Web UI serves the Web UI from the window itself (the same page nox serves, over this window's torrents, [docs/WEBUI.md](docs/WEBUI.md)). |
-| `rookparcel-gtk` | Linux / BSD GUI on GTK 4 (built and tested by CI; run on Linux under Xvfb, not yet used on a desktop): the main window (category list, the torrent list with every column, toolbar, menus, status bar, detail tabs) on the real engine; the dialogs (Add New Torrent, Preferences, Torrent Properties, Create New Torrent, RSS Downloader, Auto Shutdown, Search Torrents and Search Sources); the tray, file associations and autostart; `rookparcel-gtk --remote` (File > Connect to Remote...) drives a `rookparcel-nox` elsewhere. Needs GTK 4.12 or later (`libgtk-4-dev` to build). Settings in `~/.config/rookparcel/gtk`, torrents in `~/.local/share/rookparcel/gtk`. |
+| `rookparcel-gtk` | Linux / BSD GUI on GTK 4 (built and tested by CI and checked by hand on an Xubuntu VM; GNOME and KDE desktops are still to check): the main window (category list, the torrent list with every column, toolbar, menus, status bar, detail tabs) on the real engine; the dialogs (Add New Torrent, Preferences, Torrent Properties, Create New Torrent, RSS Downloader, Auto Shutdown, Search Torrents and Search Sources); the tray, file associations and autostart; `rookparcel-gtk --remote` (File > Connect to Remote...) drives a `rookparcel-nox` elsewhere. Needs GTK 4.12 or later (`libgtk-4-dev` to build). Settings in `~/.config/rookparcel/gtk`, torrents in `~/.local/share/rookparcel/gtk`. |
 | `rookparcel-mac` | macOS GUI on AppKit (`crates/cocoa`), bundled as `Rookparcel.app` for macOS 11 or later, Apple silicon and Intel in one universal app: the same main window, dialogs, tray (a menu-bar status item), notifications, login item and associations as the GTK GUI, with the Mac's menu bar and ⌘ shortcuts ([docs/MACOS_GUI.md](docs/MACOS_GUI.md)). Settings and torrents in `~/Library/Application Support/Rookparcel/mac`; the first start takes over the earlier GTK bundle's `gtk` folder. On macOS, `rookparcel-gtk` is only a stub that points to `Rookparcel.app`. |
 | `rookparcel-nox` | Command-line client: `rookparcel-nox add file.torrent --save DIR [--seed]`, `rookparcel-nox run` to resume saved torrents, `rookparcel-nox run --webui 8080 --webui-pass PASS` for the Web UI and a qBittorrent-compatible WebAPI subset that Sonarr, Radarr and Prowlarr can use ([docs/INTEGRATIONS.md](docs/INTEGRATIONS.md); `--webui-https` for HTTPS with a self-signed certificate, or `--webui-cert` / `--webui-key` for yours; `--no-update-check` turns the update check off). As a service (systemd units, a FreeBSD rc.d script, `--daemon`, signals, where its files go): [docs/DAEMON.md](docs/DAEMON.md) |
 | `lt-swarm` | Benchmarks: `lt-swarm loopback`, `lt-swarm load --count 10000`, `lt-swarm scale --torrents 100000`, or `lt-swarm gen --out corpus` then `lt-swarm parse corpus`. Interop: `lt-swarm interop` downloads from qBittorrent, Transmission and Deluge (`--encryption`, `--version` v1, hybrid or v2, `--transport` tcp, utp or utp-only), or with `--super-seed` super-seeds to them and reports the copies uploaded (setup: PLAN.md Q10) |

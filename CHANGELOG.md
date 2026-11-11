@@ -4,6 +4,12 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-11_085003_1794383403: README brought up to 1.2.46
+
+- **Asked by the owner:** the README still named 1.1.40 as the latest stable release.
+- **Changed (documentation only, no version bump):** the note box and the Download link say 1.2.46 (`gh release view`: `v1.2.46`, not a pre-release); Status says 1.2 and lists what 1.2 added (profiles, the Files tab folder tree, Web UI themes, Statistics, trackers for new downloads, Run Program, the Mac app, the Docker image, Win32 dark mode) plus 1.1.40's keep-ping-low and smart disk I/O; search is "in every interface"; the old arm64 dmg is dated "before 1.2.19"; the GTK row no longer says "not yet used on a desktop" (checked by hand on the Xubuntu VM; GNOME and KDE still open).
+- **Found and left:** `docs/wiki/Home.md` and `docs/wiki/Installing-Rookparcel.md` still say 1.1.63 / 1.1.40, and `site/faq.html` gives the client ID as `PA` (it is `RP` since 1.2.2). PLAN "Current status".
+
 ## 2026-11-11_083809_1794382689: Benchmarks run again on the published 1.2.46
 
 - **Asked by the owner:** the run of 2026-11-09 found the idle CPU regression and its site page was held back; run it all again overnight.
