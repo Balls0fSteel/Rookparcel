@@ -331,9 +331,15 @@ fn sources_search_and_add() {
     assert_eq!(st, 400, "{body}");
     assert_eq!(body, r#"{"error":"Prowlarr: HTTP 404 Not Found"}"#);
     assert_eq!(t.pa(&sid, "/pa/search/add", r#"{"id":"nope"}"#).0, 404);
+    // both in the list: the magnet's first status may come a tick after the .torrent's, and
+    // the 409 below is answered from the list
     let deadline = Instant::now() + Duration::from_secs(20);
-    while !t.names(&sid).iter().any(|n| n == "fawlty") {
-        assert!(Instant::now() < deadline, "{:?}", t.names(&sid));
+    loop {
+        let names = t.names(&sid);
+        if names.len() == 2 && names.iter().any(|n| n == "fawlty") {
+            break;
+        }
+        assert!(Instant::now() < deadline, "{names:?}");
         std::thread::sleep(Duration::from_millis(50));
     }
     // a second add of the same torrent

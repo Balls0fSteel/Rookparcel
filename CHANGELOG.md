@@ -4,6 +4,13 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-11_085623_1794383783: The nox search test no longer races the torrent list
+
+- **Failure:** CI for `05f93fdd` (no code changed), Windows only: `sources_search_and_add` got 200 where it expects 409 for a second add of the same magnet.
+- **Cause (read from the code, not reproduced here):** `/pa/search/add` answers 409 from `by_hash`, which is filled when a torrent's first status arrives. The test added a `.torrent` and a magnet, waited only for the `.torrent` to be listed, then added the magnet again; on a slow runner the magnet's status had not come yet.
+- **Fix (test only, no version bump):** the test waits until both torrents are listed. `cargo test -p rookparcel-nox --test search`: 3 passed, and the test alone passed 8 more times.
+- **Left:** the gap itself (PLAN "Current status"): a real second add inside it returns 200.
+
 ## 2026-11-11_085223_1794383543: Wiki source and the FAQ's client ID brought up to 1.2.46
 
 - **Wiki (`docs/wiki`, 20 pages):** every "not in a published release yet" mark is gone (all of it shipped by 1.2.46; the "New in x" versions stay); the macOS notes say "new in 1.2.19"; Home and Installing name 1.2.46, with 1.2.46 file names in the examples; Profiles says "New in 1.2.0". BRIEF.md now tells writers to add the mark only for unreleased features and remove it at the release.
