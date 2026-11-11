@@ -6,7 +6,94 @@ Deluge and rTorrent, on the same machine with the same torrents. The website sho
 The harness is `tools/bench/bench.py` (Python 3, standard library; Deluge's RPC needs
 `pip install deluge-client`) and `tools/bench/summarize.py` turns its JSON lines into tables.
 
-## Results, 2026-11-09 (Rookparcel 1.2.29)
+## Results, 2026-11-11 (Rookparcel 1.2.46)
+
+Run on the VMware VM described under Limits (8 GB), 2026-11-11 from 00:11 to 04:30 with the host left alone; raw results in `docs/benchmarks/2026-11-11-ubuntu-vm-1.2.46.jsonl`. Transfer: 2 GiB, 5 runs each, medians with the range; throughput and CPU between 10% and 80% of the payload. Many torrents: 3 runs per count, medians; memory and idle CPU after the restart. All 88 runs finished, Deluge's too. The other clients are the same packages as before and measure as on 2026-10-27 and 2026-11-09.
+
+- Right after adding 10,000, Rookparcel used 326 MB (qBittorrent 635, Transmission 328, Deluge 904, rTorrent 2,102).
+- rTorrent still slows to about 32 MB/s near the end of a download; Transmission still holds 62.3-62.4 MiB/s from one peer.
+- **The session's first download is slow for whichever client makes it,** and round 1 starts with Rookparcel. This time, minutes after the VM had booted, it ran at 349 MiB/s with 21.6 s of CPU, all of it system time in the eight disk threads (2,124 MiB/s on 2026-10-27 and 2026-11-09). Checked afterwards (`2026-11-11-ubuntu-vm-first-run-check.jsonl`): the four Rookparcel versions alone on the warm VM, 1.2.46 first: 1,924 MiB/s in its first run, 3,140 median; then 1.0.1 put first, twice: 1,955 and 1,822 MiB/s, with 1.2.46 right after it at 3,161 and 3,599. So it is the position, not the version; the medians are not touched by it. Why the first writer to the tmpfs pays is not looked into (the guest's memory being touched for the first time is the guess).
+
+### Transfer
+
+| Client | Version | Runs | Throughput (MiB/s) | range | CPU s per GiB | range | First byte to done (s) |
+|---|---|---|---|---|---|---|---|
+| Rookparcel | rookparcel-nox 1.2.46 | 5 of 5 | 3,148 | 349–3,160 | 1.01 | 0.99–13.48 | 1.5 |
+| qBittorrent | v5.1.4 | 5 of 5 | 1,550 | 1,247–1,766 | 1.93 | 1.81–2.11 | 2.6 |
+| Transmission | Transmission 4.1.1 (56442e2929) | 5 of 5 | 62.3 | 62.3–62.4 | 2.75 | 2.74–2.79 | 41.3 |
+| Deluge | Deluge 2.2.1.dev0+20250824 (libtorrent 2.0.12.0) | 5 of 5 | 1,661 | 1,467–1,896 | 1.86 | 1.67–1.96 | 1.7 |
+| rTorrent | rTorrent 0.9.8 (libtorrent 0.13.8) | 5 of 5 | 1,870 | 1,526–1,985 | 0.89 | 0.86–1.02 | 127 |
+
+### 1,000 torrents
+
+| Client | Add (s) | Start with all listed (s) | Memory, RSS (MB) | PSS (MB) | Idle CPU (%) | Empty RSS (MB) |
+|---|---|---|---|---|---|---|
+| Rookparcel | 0.1 | 0.07 | 21.5 | 14.3 | 0.07 | 15.8 |
+| qBittorrent | 0.1 | 0.17 | 105 | 89.5 | 0.05 | 53.6 |
+| Transmission | 0.5 | 0.10 | 52.4 | 39.8 | 0.12 | 20.9 |
+| Deluge | 51.2 | 0.84 | 135 | 120 | 0.13 | 68.3 |
+| rTorrent | 1.2 | 0.56 | 230 | 219 | 0.07 | 16.4 |
+
+### 10,000 torrents
+
+| Client | Add (s) | Start with all listed (s) | Memory, RSS (MB) | PSS (MB) | Idle CPU (%) | Empty RSS (MB) |
+|---|---|---|---|---|---|---|
+| Rookparcel | 1.2 | 0.20 | 67.1 | 59.9 | 0.07 | 15.6 |
+| qBittorrent | 1.2 | 0.86 | 612 | 596 | 0.10 | 53.6 |
+| Transmission | 5.1 | 1.01 | 327 | 314 | 1.13 | 20.8 |
+| Deluge | 518 | 5.91 | 701 | 686 | 0.42 | 68.4 |
+| rTorrent | 25.1 | 21.70 | 2,142 | 2,132 | 1.70 | 16.5 |
+
+### Rookparcel 1.0.1, 1.1.40, 1.2.29 and 1.2.46 in the same rounds
+
+The published 1.0.1, 1.1.40 and 1.2.29 Linux releases ran as `--control` entries beside 1.2.46. Medians with the range.
+
+| Measure | 1.0.1 | 1.1.40 | 1.2.29 | 1.2.46 |
+|---|---|---|---|---|
+| Download, MiB/s (median of 5, range) | 3,132 (3,071–3,180) | 3,158 (3,081–3,614) | 3,164 (2,739–3,631) | 3,148 (349–3,160) |
+| Download, CPU s per GiB | 1.02 (0.96–1.04) | 1.01 (0.91–1.03) | 1.06 (0.88–1.16) | 1.01 (0.99–13.48) |
+| 1,000 torrents: add (s) | 0.12 (0.12–0.12) | 0.12 (0.11–0.12) | 0.11 (0.11–0.13) | 0.12 (0.11–0.12) |
+| 1,000 torrents: start with all listed (s) | 0.07 (0.07–0.07) | 0.07 (0.07–0.07) | 0.07 (0.07–0.07) | 0.07 (0.07–0.08) |
+| 1,000 torrents: memory after a restart (MB) | 15.0 (15.0–15.0) | 20.9 (20.8–20.9) | 21.5 (21.4–21.5) | 21.5 (21.4–21.6) |
+| 1,000 torrents: memory right after adding (MB) | 50.1 (50.1–50.1) | 55.9 (55.8–56.0) | 56.5 (56.5–56.5) | 56.5 (56.5–56.5) |
+| 1,000 torrents: idle CPU (%) | 0.05 (0.03–0.10) | 0.07 (0.05–0.12) | 0.10 (0.05–0.12) | 0.07 (0.02–0.07) |
+| 10,000 torrents: add (s) | 1.06 (1.04–1.24) | 1.39 (1.08–1.40) | 1.37 (1.30–1.39) | 1.18 (1.12–1.36) |
+| 10,000 torrents: start with all listed (s) | 0.20 (0.19–0.20) | 0.20 (0.19–0.20) | 0.20 (0.20–0.20) | 0.20 (0.20–0.20) |
+| 10,000 torrents: memory after a restart (MB) | 60.2 (60.2–60.3) | 66.2 (66.1–66.2) | 67.0 (66.8–67.0) | 67.1 (67.1–67.1) |
+| 10,000 torrents: memory right after adding (MB) | 319 (319–321) | 316 (316–326) | 316 (316–317) | 326 (318–327) |
+| 10,000 torrents: idle CPU (%) | 0.13 (0.12–0.15) | 0.12 (0.10–0.15) | 0.35 (0.25–0.37) | 0.07 (0.07–0.07) |
+| Empty session, memory (MB) | 9.4 (9.4–9.4) | 15.5 (15.4–15.5) | 15.7 (15.7–15.8) | 15.6 (15.6–15.8) |
+
+- **The idle CPU regression is gone in a published release:** 0.07% with 10,000 torrents in all three rounds, against 0.35% for 1.2.29 beside it and 0.12-0.13% for 1.0.1 and 1.1.40.
+- **Unchanged:** download speed and CPU per GiB, add, start, memory after a restart.
+- **To watch:** memory right after adding 10,000 was 326 MB in two rounds of three (318 in the third) against 316-319 for the older versions; the ranges touch, three runs do not settle it.
+
+## Engine and GUIs, 2026-11-11 (1.2.46 against 1.2.29 and 1.0.1)
+
+On the development PC (Windows 11, i9-13900K) right after the VM run, release builds; raw output in `docs/benchmarks/2026-11-11-engine-1.2.46.txt` and `2026-11-11-win32-gui-100k-1.2.46.txt`.
+
+**Engine alone** (`lt-swarm` built from each tag, the CI set, alternating, three rounds): no difference. 10,000 simulated torrents update in 7-9 ms; 256 MiB over loopback at 296-317 MB/s (one 1.2.29 round at 143); 5,000 torrents parsed in 130-169 ms (1.0.1: 155-159, 1.2.29: 174-178); 1,000 saved torrents restored in 15-21 ms (1.0.1: 22-24, 1.2.29: 24-33). `load --count 100000 --idle 60`, four runs each: restored in 1,314-1,352 ms (1.2.29: 1,274-1,305; 1.0.1: 1,160-1,459), 184 MB (184; 182), idle 0.03-0.16% (0.03-0.10%; 0.00-0.05%; one or two 15.6 ms clock ticks apart).
+
+**Win32 GUI, 100,000 saved torrents** (the published zips, each on state its own `lt-swarm` wrote, a fresh copy per run, `ROOKPARCEL_BENCH=1` on the hidden desktop, three rounds with the first version rotating):
+
+| Measure | 1.0.1 | 1.2.29 | 1.2.46 |
+|---|---|---|---|
+| All rows listed after start (s) | 1.27 | 1.36-1.38 | 1.37-1.49 |
+| Idle 60 s, GUI thread (% of a core) | 0.13-0.26 | 0.13-0.23 | 0.10-0.21 |
+| Idle 60 s, whole process (%) | 0.29-0.44 | 0.81-0.86 | 0.21-0.42 |
+| Working set after 60 s idle (MB) | 258 | 271-279 | 263-272 |
+| Sort by Name / Size / Status (ms) | 45-53 / 18-19 / 57-59 | 51-57 / 19-22 / 57-65 | 49-53 / 18 / 61-64 |
+| Select All (ms) | 4.1-5.0 | 3.5-4.0 | 3.6-3.9 |
+| Add a magnet / remove one, until painted (ms) | 14-18 / 16-19 | 14-18 / 12-15 | 13-16 / 11-18 |
+| Remove 1,000, wall (ms) | 484-604, once 1,463 | 470-502 | 480-611 |
+
+- **Fixed:** the process's idle CPU is back at 1.0.1's level (1.2.30's fix, now measured on a published build).
+- **Still there:** the list comes 0.1-0.2 s later than in 1.0.1 (two of three 1.2.46 runs and a trial run at 1.47-1.50 s, one at 1.37 s), and 5-14 MB more memory. While closing, every version's working set rises (last 2 s sample 343-352 MB for 1.2.46, 344-346 for 1.2.29, 298-334 for 1.0.1), with about 2 s of CPU per 2 s: not new in 1.2.x.
+- The faster Name sort seen for 1.2.29 on 2026-11-10 (32-36 ms) did not repeat: all three versions sort in 45-57 ms.
+
+**Mac GUI** (release build of 1.2.46 on the Intel macOS 15.8 VM, `--demo 100000`, three runs, the owner back at the PC): the list after 0.50-0.57 s, 188-189 MB by `top` (0.54-0.57 s and 191 MB on 2026-11-10).
+
+## Earlier results, 2026-11-09 (Rookparcel 1.2.29)
 
 Run on the VMware VM described under Limits, again with 8 GB, in the night of 2026-11-09 to 2026-11-10; raw results in `docs/benchmarks/2026-11-09-ubuntu-vm-1.2.29.jsonl`. Transfer: 2 GiB, 5 runs each, medians with the range; throughput and CPU between 10% and 80% of the payload. Many torrents: 3 runs per count, medians; memory and idle CPU after the restart. The other clients are the same packages as on 2026-10-27 and measure the same as then, which says the VM does too.
 
@@ -111,7 +198,7 @@ Measured with the fix (`docs/benchmarks/2026-11-10-ubuntu-vm-idle-fix-1.2.30.jso
 | Add (s) | 1.26 | 1.30 | 1.33 |
 | Memory after a restart (MB) | 60.3 | 67.1 | 67.4 |
 
-Win32 at 100,000 real torrents on the development PC, two runs: the process idles at 0.36-0.39% (1.2.29: 0.81-0.96%; 1.0.1 the same morning: 0.26%), its engine thread uses 60-95 ms of CPU in the idle minute (1.2.29: about 350 ms; 1.0.1: about 50 ms). The site's tables stay those of the published 1.2.29 until a release with the fix is measured in a full run.
+Win32 at 100,000 real torrents on the development PC, two runs: the process idles at 0.36-0.39% (1.2.29: 0.81-0.96%; 1.0.1 the same morning: 0.26%), its engine thread uses 60-95 ms of CPU in the idle minute (1.2.29: about 350 ms; 1.0.1: about 50 ms). The full run of a release with the fix is the 2026-11-11 one above (1.2.46), which the site's tables show.
 
 ## Earlier results, 2026-10-27 (Rookparcel 1.0.1)
 
@@ -191,7 +278,7 @@ different client first each round.
 - Every client runs from a throwaway profile with DHT, local peer discovery, peer exchange and
   port mapping off (no outside peers), everything else at its defaults: queueing, caches,
   connection limits and encryption are each client's own. Nothing is tuned for Rookparcel.
-- Rookparcel is a published release (`rookparcel-1.2.29-linux-x86_64.tar.gz` for the current
+- Rookparcel is a published release (`rookparcel-1.2.46-linux-x86_64.tar.gz` for the current
   results; 1.0.1 and 1.1.40 were `patorrent-<version>-linux-x86_64.tar.gz`), each checked
   against its `SHA256SUMS`, not a local build. The other clients are the distribution's packages.
 - Ubuntu confines `transmission-daemon` with an AppArmor profile to its service user's folders,
@@ -223,7 +310,7 @@ names its `rookparcel-nox`; without it `~/bench/pa/rookparcel-nox`). Add these t
 line below:
 
 ```bash
-A="--rookparcel ~/bench/pa/rookparcel-1.2.29-linux-x86_64/rookparcel-nox"
+A="--rookparcel ~/bench/pa/rookparcel-1.2.46-linux-x86_64/rookparcel-nox"
 sudo mount -t tmpfs -o size=6g,uid=$(id -u),gid=$(id -g) tmpfs /mnt/benchram
 sudo mount -t tmpfs -o size=6g,uid=debian-transmission,gid=debian-transmission,mode=0755 \
     tmpfs /var/lib/transmission-daemon/downloads
@@ -237,7 +324,8 @@ python3 tools/bench/summarize.py results.jsonl --fill site/benchmarks.html
 
 All of it took 4 h 17 min on 2026-11-09 (transfer 45 min, of which 20 were two Deluge timeouts;
 1,000 torrents 1.5 h; 10,000 torrents 2 h): most is the two 60 s settle and two 60 s idle
-windows per client and run. The two tmpfs mounts do not survive a reboot.
+windows per client and run. On 2026-11-11, with a fourth Rookparcel version and no Deluge
+timeout: 4 h 19 min (transfer 21 min, 1,000 torrents 1 h 45, 10,000 torrents 2 h 12). The two tmpfs mounts do not survive a reboot.
 
 `--control LABEL=PATH` (several allowed) measures another `rookparcel-nox`, an older release, in
 the same rounds as client `rookparcel@LABEL`; `summarize.py results.jsonl --versions` puts the

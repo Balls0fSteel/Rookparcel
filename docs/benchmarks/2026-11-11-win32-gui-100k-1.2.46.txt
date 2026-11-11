@@ -1,0 +1,443 @@
+# Win32 GUI, 100,000 saved torrents, ROOKPARCEL_BENCH=1 (1.0.1: PATORRENT_BENCH=1), 2026-11-11, development PC.
+# Published zips on state each version's own lt-swarm wrote. Blocks in order: 1.2.46 r1, 1.2.29 r1, 1.0.1 r1, 1.2.29 r2, 1.0.1 r2, 1.2.46 r2, 1.0.1 r3, 1.2.46 r3, 1.2.29 r3.
+bench | step | wall ms | gui thread cpu ms
+bench | 100000 rows, settled at 1.47 s (3 s before this line) | - | -
+bench | paint the first page | 12.47 | 11.38
+bench | idle 60 s from 4.5 s | - | -
+bench | idle 60 s: timer x60 avg / max | 0.71 / 22.73 | 0.70
+bench | idle 60 s: model.refresh x74 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: refresh_list x74 avg / max | 0.00 / 0.01 | 0.00
+bench | idle 60 s: update_tree x74 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: on_alerts x74 avg / max | 0.10 / 2.58 | 0.07
+bench | idle 60.0 s: gui thread 0.104 % of a core, process 0.208 % | - | -
+bench | sort by Name | 52.89 | 52.96
+bench | reverse Name | 42.05 | 41.21
+bench | sort by Size | 18.44 | 18.15
+bench | reverse Size | 17.48 | 17.32
+bench | sort by Status | 61.21 | 61.05
+bench | reverse Status | 33.26 | 32.62
+bench | sort by Down Speed | 20.57 | 20.10
+bench | reverse Down Speed | 21.20 | 20.96
+bench | status updates, sorted by Down Speed: timer x10 avg / max | 1.89 / 18.60 | 1.87
+bench | status updates, sorted by Down Speed: model.refresh x14 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: refresh_list x14 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: update_tree x14 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: on_alerts x14 avg / max | 0.04 / 0.06 | 0.04
+bench | status updates, sorted by Name: timer x10 avg / max | 0.03 / 0.05 | 0.03
+bench | status updates, sorted by Name: model.refresh x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: refresh_list x10 avg / max | 0.00 / 0.01 | 0.00
+bench | status updates, sorted by Name: update_tree x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: on_alerts x10 avg / max | 0.05 / 0.08 | 0.05
+bench | page down (avg of 20, max 27.21) | 5.83 | 5.67
+bench | scroll to the end (SB_BOTTOM) | 3.56 | 3.57
+bench | scroll to the top (SB_TOP) | 3.96 | 3.73
+bench | LVM_ENSUREVISIBLE the last row | 3.44 | 3.43
+bench | LVM_ENSUREVISIBLE the middle row | 3.69 | 3.68
+bench | Select All (Ctrl+A) | 3.63 | 3.61
+bench | status updates, all rows selected: model.refresh x8 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: refresh_list x8 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: update_tree x8 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: on_alerts x8 avg / max | 0.86 / 1.97 | 0.63
+bench | status updates, all rows selected: timer x6 avg / max | 0.03 / 0.04 | 0.03
+bench | clear the selection | 3.72 | 3.71
+bench | category Completed | 6.95 | 6.90
+bench | category Downloading | 14.15 | 14.11
+bench | category No Label | 8.12 | 7.90
+bench | category All | 3.96 | 3.96
+bench | add a magnet, until its row is painted | 15.65 | 12.82
+bench | remove one torrent, until painted | 17.71 | 16.65
+bench | select 1,000 rows (LVM_SETITEMSTATE each) | 21.87 | 20.52
+bench | remove 1,000 torrents, until painted | 610.52 | 65.47
+bench | done at 95.2 s (100000 rows at start) | - | -
+bench | step | wall ms | gui thread cpu ms
+bench | 100000 rows, settled at 1.38 s (3 s before this line) | - | -
+bench | paint the first page | 11.36 | 10.98
+bench | idle 60 s from 4.4 s | - | -
+bench | idle 60 s: timer x60 avg / max | 0.63 / 21.15 | 0.62
+bench | idle 60 s: model.refresh x68 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: refresh_list x68 avg / max | 0.00 / 0.01 | 0.00
+bench | idle 60 s: update_tree x68 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: on_alerts x68 avg / max | 0.21 / 2.85 | 0.19
+bench | idle 60.0 s: gui thread 0.234 % of a core, process 0.807 % | - | -
+bench | sort by Name | 50.76 | 50.38
+bench | reverse Name | 37.24 | 36.95
+bench | sort by Size | 19.37 | 19.24
+bench | reverse Size | 18.33 | 18.04
+bench | sort by Status | 57.44 | 57.12
+bench | reverse Status | 30.53 | 30.36
+bench | sort by Down Speed | 20.37 | 19.91
+bench | reverse Down Speed | 24.48 | 24.33
+bench | status updates, sorted by Down Speed: timer x10 avg / max | 1.85 / 18.26 | 1.84
+bench | status updates, sorted by Down Speed: model.refresh x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: refresh_list x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: update_tree x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: on_alerts x12 avg / max | 0.44 / 2.30 | 0.37
+bench | status updates, sorted by Name: timer x10 avg / max | 0.02 / 0.04 | 0.02
+bench | status updates, sorted by Name: model.refresh x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: refresh_list x10 avg / max | 0.00 / 0.01 | 0.00
+bench | status updates, sorted by Name: update_tree x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: on_alerts x10 avg / max | 0.28 / 2.05 | 0.27
+bench | page down (avg of 20, max 14.88) | 5.42 | 5.30
+bench | scroll to the end (SB_BOTTOM) | 3.46 | 3.42
+bench | scroll to the top (SB_TOP) | 3.68 | 3.67
+bench | LVM_ENSUREVISIBLE the last row | 3.22 | 3.23
+bench | LVM_ENSUREVISIBLE the middle row | 3.61 | 3.57
+bench | Select All (Ctrl+A) | 3.97 | 3.72
+bench | status updates, all rows selected: model.refresh x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: refresh_list x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: update_tree x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: on_alerts x6 avg / max | 0.54 / 1.14 | 0.44
+bench | status updates, all rows selected: timer x5 avg / max | 0.03 / 0.04 | 0.02
+bench | clear the selection | 9.76 | 9.61
+bench | category Completed | 8.50 | 7.83
+bench | category Downloading | 13.58 | 13.10
+bench | category No Label | 7.34 | 7.35
+bench | category All | 3.83 | 3.84
+bench | add a magnet, until its row is painted | 14.46 | 10.24
+bench | remove one torrent, until painted | 15.12 | 14.59
+bench | select 1,000 rows (LVM_SETITEMSTATE each) | 27.19 | 25.80
+bench | remove 1,000 torrents, until painted | 470.24 | 18.50
+bench | done at 94.8 s (100000 rows at start) | - | -
+bench | step | wall ms | gui thread cpu ms
+bench | 100000 rows, settled at 1.27 s (3 s before this line) | - | -
+bench | paint the first page | 9.50 | 6.21
+bench | idle 60 s from 4.3 s | - | -
+bench | idle 60 s: timer x60 avg / max | 0.76 / 24.55 | 0.73
+bench | idle 60 s: model.refresh x69 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: refresh_list x69 avg / max | 0.00 / 0.01 | 0.00
+bench | idle 60 s: update_tree x69 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: on_alerts x69 avg / max | 0.23 / 3.63 | 0.22
+bench | idle 60.0 s: gui thread 0.260 % of a core, process 0.442 % | - | -
+bench | sort by Name | 49.89 | 49.38
+bench | reverse Name | 32.55 | 32.42
+bench | sort by Size | 18.91 | 18.71
+bench | reverse Size | 18.02 | 17.70
+bench | sort by Status | 57.81 | 57.16
+bench | reverse Status | 30.01 | 29.52
+bench | sort by Down Speed | 27.76 | 27.35
+bench | reverse Down Speed | 22.33 | 22.28
+bench | status updates, sorted by Down Speed: timer x10 avg / max | 1.54 / 15.15 | 1.54
+bench | status updates, sorted by Down Speed: model.refresh x13 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: refresh_list x13 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: update_tree x13 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: on_alerts x13 avg / max | 0.24 / 1.24 | 0.20
+bench | status updates, sorted by Name: timer x10 avg / max | 0.03 / 0.04 | 0.02
+bench | status updates, sorted by Name: model.refresh x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: refresh_list x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: update_tree x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: on_alerts x10 avg / max | 0.17 / 1.13 | 0.17
+bench | page down (avg of 20, max 21.75) | 6.22 | 5.88
+bench | scroll to the end (SB_BOTTOM) | 3.86 | 3.83
+bench | scroll to the top (SB_TOP) | 3.90 | 3.89
+bench | LVM_ENSUREVISIBLE the last row | 3.60 | 3.59
+bench | LVM_ENSUREVISIBLE the middle row | 4.40 | 4.13
+bench | Select All (Ctrl+A) | 4.12 | 4.10
+bench | status updates, all rows selected: model.refresh x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: refresh_list x6 avg / max | 0.00 / 0.01 | 0.00
+bench | status updates, all rows selected: update_tree x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: on_alerts x6 avg / max | 0.89 / 1.53 | 0.71
+bench | status updates, all rows selected: timer x5 avg / max | 0.03 / 0.05 | 0.02
+bench | clear the selection | 13.27 | 13.05
+bench | category Completed | 6.95 | 6.82
+bench | category Downloading | 10.15 | 9.57
+bench | category No Label | 4.64 | 4.53
+bench | category All | 4.00 | 4.01
+bench | add a magnet, until its row is painted | 13.89 | 10.60
+bench | remove one torrent, until painted | 18.14 | 14.73
+bench | select 1,000 rows (LVM_SETITEMSTATE each) | 10.95 | 10.60
+bench | remove 1,000 torrents, until painted | 1463.49 | 32.18
+bench | done at 95.8 s (100000 rows at start) | - | -
+bench | step | wall ms | gui thread cpu ms
+bench | 100000 rows, settled at 1.36 s (3 s before this line) | - | -
+bench | paint the first page | 8.46 | 6.67
+bench | idle 60 s from 4.4 s | - | -
+bench | idle 60 s: timer x60 avg / max | 0.63 / 19.82 | 0.63
+bench | idle 60 s: model.refresh x68 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: refresh_list x68 avg / max | 0.00 / 0.01 | 0.00
+bench | idle 60 s: update_tree x68 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: on_alerts x68 avg / max | 0.34 / 2.18 | 0.33
+bench | idle 60.0 s: gui thread 0.130 % of a core, process 0.859 % | - | -
+bench | sort by Name | 57.19 | 54.68
+bench | reverse Name | 56.54 | 51.53
+bench | sort by Size | 22.02 | 21.98
+bench | reverse Size | 18.59 | 18.34
+bench | sort by Status | 64.74 | 63.91
+bench | reverse Status | 29.43 | 29.32
+bench | sort by Down Speed | 19.22 | 19.23
+bench | reverse Down Speed | 20.03 | 19.92
+bench | status updates, sorted by Down Speed: timer x10 avg / max | 1.95 / 19.28 | 1.94
+bench | status updates, sorted by Down Speed: model.refresh x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: refresh_list x12 avg / max | 0.00 / 0.01 | 0.00
+bench | status updates, sorted by Down Speed: update_tree x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: on_alerts x12 avg / max | 0.38 / 1.77 | 0.38
+bench | status updates, sorted by Name: timer x10 avg / max | 0.03 / 0.07 | 0.03
+bench | status updates, sorted by Name: model.refresh x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: refresh_list x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: update_tree x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: on_alerts x10 avg / max | 0.44 / 2.30 | 0.42
+bench | page down (avg of 20, max 22.95) | 5.63 | 5.45
+bench | scroll to the end (SB_BOTTOM) | 3.32 | 3.31
+bench | scroll to the top (SB_TOP) | 3.43 | 3.44
+bench | LVM_ENSUREVISIBLE the last row | 3.83 | 3.45
+bench | LVM_ENSUREVISIBLE the middle row | 3.49 | 3.50
+bench | Select All (Ctrl+A) | 3.49 | 3.50
+bench | status updates, all rows selected: model.refresh x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: refresh_list x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: update_tree x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: on_alerts x6 avg / max | 1.04 / 2.28 | 0.84
+bench | status updates, all rows selected: timer x6 avg / max | 0.03 / 0.04 | 0.03
+bench | clear the selection | 12.11 | 11.81
+bench | category Completed | 7.02 | 6.93
+bench | category Downloading | 13.31 | 13.13
+bench | category No Label | 7.42 | 7.37
+bench | category All | 3.90 | 3.92
+bench | add a magnet, until its row is painted | 17.52 | 12.81
+bench | remove one torrent, until painted | 14.23 | 12.46
+bench | select 1,000 rows (LVM_SETITEMSTATE each) | 22.48 | 21.82
+bench | remove 1,000 torrents, until painted | 470.61 | 17.85
+bench | done at 94.9 s (100000 rows at start) | - | -
+bench | step | wall ms | gui thread cpu ms
+bench | 100000 rows, settled at 1.27 s (3 s before this line) | - | -
+bench | paint the first page | 8.58 | 8.12
+bench | idle 60 s from 4.3 s | - | -
+bench | idle 60 s: timer x60 avg / max | 0.60 / 17.92 | 0.59
+bench | idle 60 s: model.refresh x68 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: refresh_list x68 avg / max | 0.01 / 0.12 | 0.00
+bench | idle 60 s: update_tree x68 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: on_alerts x68 avg / max | 0.20 / 1.87 | 0.16
+bench | idle 60.1 s: gui thread 0.156 % of a core, process 0.312 % | - | -
+bench | sort by Name | 53.45 | 53.38
+bench | reverse Name | 26.39 | 26.25
+bench | sort by Size | 18.63 | 18.49
+bench | reverse Size | 18.22 | 18.19
+bench | sort by Status | 58.57 | 57.66
+bench | reverse Status | 37.97 | 37.51
+bench | sort by Down Speed | 21.46 | 21.20
+bench | reverse Down Speed | 26.86 | 26.70
+bench | status updates, sorted by Down Speed: timer x10 avg / max | 1.56 / 15.38 | 1.54
+bench | status updates, sorted by Down Speed: model.refresh x13 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: refresh_list x13 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: update_tree x13 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: on_alerts x13 avg / max | 0.16 / 1.44 | 0.13
+bench | status updates, sorted by Name: timer x10 avg / max | 0.03 / 0.08 | 0.03
+bench | status updates, sorted by Name: model.refresh x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: refresh_list x10 avg / max | 0.00 / 0.01 | 0.00
+bench | status updates, sorted by Name: update_tree x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: on_alerts x10 avg / max | 0.12 / 0.56 | 0.10
+bench | page down (avg of 20, max 17.90) | 5.97 | 5.83
+bench | scroll to the end (SB_BOTTOM) | 4.23 | 4.05
+bench | scroll to the top (SB_TOP) | 4.19 | 4.19
+bench | LVM_ENSUREVISIBLE the last row | 4.25 | 4.19
+bench | LVM_ENSUREVISIBLE the middle row | 4.28 | 4.28
+bench | Select All (Ctrl+A) | 4.96 | 4.46
+bench | status updates, all rows selected: model.refresh x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: refresh_list x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: update_tree x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: on_alerts x6 avg / max | 1.90 / 4.01 | 1.10
+bench | status updates, all rows selected: timer x5 avg / max | 0.06 / 0.11 | 0.03
+bench | clear the selection | 10.06 | 9.95
+bench | category Completed | 7.95 | 7.70
+bench | category Downloading | 10.52 | 10.42
+bench | category No Label | 4.84 | 4.59
+bench | category All | 4.14 | 4.13
+bench | add a magnet, until its row is painted | 17.87 | 14.54
+bench | remove one torrent, until painted | 15.89 | 12.64
+bench | select 1,000 rows (LVM_SETITEMSTATE each) | 9.83 | 9.82
+bench | remove 1,000 torrents, until painted | 484.38 | 22.09
+bench | done at 94.8 s (100000 rows at start) | - | -
+bench | step | wall ms | gui thread cpu ms
+bench | 100000 rows, settled at 1.49 s (3 s before this line) | - | -
+bench | paint the first page | 9.42 | 9.78
+bench | idle 60 s from 4.5 s | - | -
+bench | idle 60 s: timer x60 avg / max | 0.65 / 20.70 | 0.68
+bench | idle 60 s: model.refresh x70 avg / max | 0.00 / 0.01 | 0.00
+bench | idle 60 s: refresh_list x70 avg / max | 0.00 / 0.01 | 0.00
+bench | idle 60 s: update_tree x70 avg / max | 0.00 / 0.01 | 0.00
+bench | idle 60 s: on_alerts x70 avg / max | 0.19 / 2.10 | 0.17
+bench | idle 60.1 s: gui thread 0.208 % of a core, process 0.416 % | - | -
+bench | sort by Name | 51.80 | 53.05
+bench | reverse Name | 31.44 | 32.80
+bench | sort by Size | 17.96 | 18.64
+bench | reverse Size | 18.08 | 18.69
+bench | sort by Status | 63.67 | 65.84
+bench | reverse Status | 30.23 | 31.53
+bench | sort by Down Speed | 19.86 | 20.52
+bench | reverse Down Speed | 19.55 | 20.34
+bench | status updates, sorted by Down Speed: timer x10 avg / max | 2.19 / 21.59 | 2.28
+bench | status updates, sorted by Down Speed: model.refresh x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: refresh_list x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: update_tree x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: on_alerts x12 avg / max | 0.19 / 1.33 | 0.19
+bench | status updates, sorted by Name: timer x10 avg / max | 0.03 / 0.07 | 0.03
+bench | status updates, sorted by Name: model.refresh x11 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: refresh_list x11 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: update_tree x11 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: on_alerts x11 avg / max | 0.04 / 0.07 | 0.04
+bench | page down (avg of 20, max 12.75) | 5.10 | 5.19
+bench | scroll to the end (SB_BOTTOM) | 3.61 | 3.74
+bench | scroll to the top (SB_TOP) | 3.90 | 3.85
+bench | LVM_ENSUREVISIBLE the last row | 3.48 | 3.63
+bench | LVM_ENSUREVISIBLE the middle row | 3.98 | 4.06
+bench | Select All (Ctrl+A) | 3.94 | 4.00
+bench | status updates, all rows selected: model.refresh x7 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: refresh_list x7 avg / max | 0.00 / 0.01 | 0.00
+bench | status updates, all rows selected: update_tree x7 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: on_alerts x7 avg / max | 0.76 / 1.64 | 0.71
+bench | status updates, all rows selected: timer x6 avg / max | 0.03 / 0.05 | 0.03
+bench | clear the selection | 10.92 | 8.32
+bench | category Completed | 9.37 | 9.62
+bench | category Downloading | 15.68 | 16.43
+bench | category No Label | 8.27 | 8.65
+bench | category All | 4.31 | 4.16
+bench | add a magnet, until its row is painted | 13.40 | 10.58
+bench | remove one torrent, until painted | 10.64 | 11.11
+bench | select 1,000 rows (LVM_SETITEMSTATE each) | 22.72 | 23.13
+bench | remove 1,000 torrents, until painted | 572.00 | 17.82
+bench | done at 95.1 s (100000 rows at start) | - | -
+bench | step | wall ms | gui thread cpu ms
+bench | 100000 rows, settled at 1.27 s (3 s before this line) | - | -
+bench | paint the first page | 4.31 | 4.19
+bench | idle 60 s from 4.3 s | - | -
+bench | idle 60 s: timer x60 avg / max | 0.63 / 19.43 | 0.62
+bench | idle 60 s: model.refresh x68 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: refresh_list x68 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: update_tree x68 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: on_alerts x68 avg / max | 0.14 / 1.02 | 0.13
+bench | idle 60.1 s: gui thread 0.130 % of a core, process 0.286 % | - | -
+bench | sort by Name | 45.04 | 44.44
+bench | reverse Name | 26.34 | 26.10
+bench | sort by Size | 18.40 | 18.16
+bench | reverse Size | 18.53 | 17.80
+bench | sort by Status | 57.46 | 56.97
+bench | reverse Status | 31.43 | 31.02
+bench | sort by Down Speed | 21.32 | 20.60
+bench | reverse Down Speed | 19.51 | 19.41
+bench | status updates, sorted by Down Speed: timer x10 avg / max | 2.11 / 20.82 | 2.09
+bench | status updates, sorted by Down Speed: model.refresh x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: refresh_list x12 avg / max | 0.00 / 0.01 | 0.00
+bench | status updates, sorted by Down Speed: update_tree x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: on_alerts x12 avg / max | 0.22 / 2.28 | 0.13
+bench | status updates, sorted by Name: timer x10 avg / max | 0.02 / 0.04 | 0.02
+bench | status updates, sorted by Name: model.refresh x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: refresh_list x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: update_tree x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: on_alerts x10 avg / max | 0.03 / 0.05 | 0.03
+bench | page down (avg of 20, max 23.40) | 6.34 | 6.19
+bench | scroll to the end (SB_BOTTOM) | 4.06 | 4.03
+bench | scroll to the top (SB_TOP) | 4.08 | 4.08
+bench | LVM_ENSUREVISIBLE the last row | 4.49 | 4.07
+bench | LVM_ENSUREVISIBLE the middle row | 4.32 | 4.28
+bench | Select All (Ctrl+A) | 4.49 | 4.44
+bench | status updates, all rows selected: model.refresh x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: refresh_list x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: update_tree x6 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: on_alerts x6 avg / max | 0.99 / 1.97 | 0.76
+bench | status updates, all rows selected: timer x5 avg / max | 0.04 / 0.06 | 0.03
+bench | clear the selection | 4.32 | 4.27
+bench | category Completed | 6.65 | 6.49
+bench | category Downloading | 9.97 | 9.66
+bench | category No Label | 4.20 | 4.20
+bench | category All | 3.97 | 3.96
+bench | add a magnet, until its row is painted | 17.64 | 13.77
+bench | remove one torrent, until painted | 19.49 | 11.64
+bench | select 1,000 rows (LVM_SETITEMSTATE each) | 14.59 | 12.90
+bench | remove 1,000 torrents, until painted | 603.54 | 28.33
+bench | done at 95.0 s (100000 rows at start) | - | -
+bench | step | wall ms | gui thread cpu ms
+bench | 100000 rows, settled at 1.37 s (3 s before this line) | - | -
+bench | paint the first page | 8.62 | 8.56
+bench | idle 60 s from 4.4 s | - | -
+bench | idle 60 s: timer x60 avg / max | 0.50 / 16.65 | 0.51
+bench | idle 60 s: model.refresh x72 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: refresh_list x72 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: update_tree x72 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: on_alerts x72 avg / max | 0.19 / 2.64 | 0.11
+bench | idle 60.1 s: gui thread 0.208 % of a core, process 0.312 % | - | -
+bench | sort by Name | 49.20 | 49.84
+bench | reverse Name | 33.05 | 33.50
+bench | sort by Size | 17.99 | 18.24
+bench | reverse Size | 16.93 | 17.07
+bench | sort by Status | 60.75 | 61.36
+bench | reverse Status | 36.05 | 36.37
+bench | sort by Down Speed | 25.71 | 25.97
+bench | reverse Down Speed | 23.18 | 23.41
+bench | status updates, sorted by Down Speed: timer x10 avg / max | 1.70 / 16.83 | 1.73
+bench | status updates, sorted by Down Speed: model.refresh x13 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: refresh_list x13 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: update_tree x13 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: on_alerts x13 avg / max | 0.08 / 0.40 | 0.08
+bench | status updates, sorted by Name: timer x10 avg / max | 0.01 / 0.03 | 0.01
+bench | status updates, sorted by Name: model.refresh x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: refresh_list x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: update_tree x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: on_alerts x10 avg / max | 0.02 / 0.02 | 0.02
+bench | page down (avg of 20, max 27.78) | 6.17 | 6.08
+bench | scroll to the end (SB_BOTTOM) | 3.55 | 3.62
+bench | scroll to the top (SB_TOP) | 3.69 | 3.73
+bench | LVM_ENSUREVISIBLE the last row | 3.36 | 3.43
+bench | LVM_ENSUREVISIBLE the middle row | 4.14 | 3.87
+bench | Select All (Ctrl+A) | 3.79 | 3.87
+bench | status updates, all rows selected: model.refresh x7 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: refresh_list x7 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: update_tree x7 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: on_alerts x7 avg / max | 1.13 / 2.76 | 0.59
+bench | status updates, all rows selected: timer x6 avg / max | 0.03 / 0.06 | 0.03
+bench | clear the selection | 11.56 | 11.55
+bench | category Completed | 7.03 | 7.14
+bench | category Downloading | 13.23 | 13.18
+bench | category No Label | 7.39 | 7.53
+bench | category All | 3.77 | 3.84
+bench | add a magnet, until its row is painted | 15.24 | 12.04
+bench | remove one torrent, until painted | 12.40 | 12.36
+bench | select 1,000 rows (LVM_SETITEMSTATE each) | 20.82 | 20.65
+bench | remove 1,000 torrents, until painted | 479.95 | 30.30
+bench | done at 95.0 s (100000 rows at start) | - | -
+bench | step | wall ms | gui thread cpu ms
+bench | 100000 rows, settled at 1.38 s (3 s before this line) | - | -
+bench | paint the first page | 9.65 | 8.56
+bench | idle 60 s from 4.4 s | - | -
+bench | idle 60 s: timer x60 avg / max | 0.57 / 16.74 | 0.57
+bench | idle 60 s: model.refresh x71 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: refresh_list x71 avg / max | 0.00 / 0.01 | 0.00
+bench | idle 60 s: update_tree x71 avg / max | 0.00 / 0.00 | 0.00
+bench | idle 60 s: on_alerts x71 avg / max | 0.35 / 1.88 | 0.33
+bench | idle 60.1 s: gui thread 0.156 % of a core, process 0.807 % | - | -
+bench | sort by Name | 54.66 | 54.46
+bench | reverse Name | 50.65 | 50.72
+bench | sort by Size | 20.02 | 19.78
+bench | reverse Size | 21.05 | 20.92
+bench | sort by Status | 58.39 | 58.10
+bench | reverse Status | 37.17 | 36.94
+bench | sort by Down Speed | 27.99 | 27.77
+bench | reverse Down Speed | 26.20 | 25.54
+bench | status updates, sorted by Down Speed: timer x10 avg / max | 2.10 / 20.84 | 2.11
+bench | status updates, sorted by Down Speed: model.refresh x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: refresh_list x12 avg / max | 0.00 / 0.01 | 0.00
+bench | status updates, sorted by Down Speed: update_tree x12 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Down Speed: on_alerts x12 avg / max | 0.13 / 0.47 | 0.13
+bench | status updates, sorted by Name: timer x10 avg / max | 0.03 / 0.05 | 0.02
+bench | status updates, sorted by Name: model.refresh x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: refresh_list x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: update_tree x10 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, sorted by Name: on_alerts x10 avg / max | 0.05 / 0.06 | 0.05
+bench | page down (avg of 20, max 18.40) | 5.28 | 5.17
+bench | scroll to the end (SB_BOTTOM) | 3.80 | 3.53
+bench | scroll to the top (SB_TOP) | 3.44 | 3.42
+bench | LVM_ENSUREVISIBLE the last row | 3.37 | 3.34
+bench | LVM_ENSUREVISIBLE the middle row | 3.72 | 3.57
+bench | Select All (Ctrl+A) | 3.93 | 3.70
+bench | status updates, all rows selected: model.refresh x7 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: refresh_list x7 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: update_tree x7 avg / max | 0.00 / 0.00 | 0.00
+bench | status updates, all rows selected: on_alerts x7 avg / max | 1.10 / 2.26 | 0.91
+bench | status updates, all rows selected: timer x6 avg / max | 0.03 / 0.03 | 0.02
+bench | clear the selection | 12.75 | 12.41
+bench | category Completed | 7.37 | 7.05
+bench | category Downloading | 13.86 | 13.58
+bench | category No Label | 7.38 | 7.39
+bench | category All | 4.46 | 4.28
+bench | add a magnet, until its row is painted | 17.19 | 12.79
+bench | remove one torrent, until painted | 11.87 | 11.20
+bench | select 1,000 rows (LVM_SETITEMSTATE each) | 21.52 | 20.81
+bench | remove 1,000 torrents, until painted | 501.98 | 16.82
+bench | done at 94.9 s (100000 rows at start) | - | -

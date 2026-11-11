@@ -4,6 +4,16 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-11_083809_1794382689: Benchmarks run again on the published 1.2.46
+
+- **Asked by the owner:** the run of 2026-11-09 found the idle CPU regression and its site page was held back; run it all again overnight.
+- **Daemon run (Xubuntu VM, 8 GB, 00:11-04:30, host left alone):** `rookparcel-1.2.46-linux-x86_64.tar.gz` (checked against `SHA256SUMS`) with 1.0.1, 1.1.40 and 1.2.29 as `--control`, beside qBittorrent, Transmission, Deluge and rTorrent; all 88 runs good. 10,000 torrents: idle 0.07% of a core (1.2.29 in the same rounds 0.35%, 1.0.1 0.13%, qBittorrent 0.10%), 67 MB after a restart; download 3,148 MiB/s and 1.01 CPU s/GiB, as every older version.
+- **Odd figure, explained as far as checked:** the session's first download (Rookparcel's, minutes after the VM booted) ran at 349 MiB/s with 21.6 s of system time in the disk threads. Two short runs afterwards: 1.0.1 put first is the slow one too (1,822-1,955 MiB/s, 1.2.46 right after it 3,161-3,599). The position, not the version; medians untouched; cause not looked into (BACKLOG).
+- **Development PC, 100,000 torrents:** engine alone (three `lt-swarm` builds, three rounds) no difference; Win32 GUI from the published zips, three rounds each: the process idles at 0.21-0.42% (1.2.29: 0.81-0.86%, 1.0.1: 0.29-0.44%), the list after 1.37-1.49 s (1.2.29: 1.36-1.38, 1.0.1: 1.27). One engine idle figure of 0.16% was three repeats at 0.03-0.05%: noise.
+- **Mac VM:** release build of 1.2.46, `--demo 100000`, three runs: the list after 0.50-0.57 s, 188-189 MB (these three ran after the owner was back at the PC).
+- **Written:** BENCHMARKS.md (new results first, 2026-11-09 kept as earlier), raw files under `docs/benchmarks/2026-11-11-*`, `site/benchmarks.html` filled by `summarize.py --fill` with a "Since 1.0.1" section and its prose rechecked by hand (site tests 37 of 37). **Not done:** the page is committed but not pushed (looked at once in a local build: six sections, the version table's 13 rows, no overflow); no program changed, so no version bump.
+- The Claude app was found closed in the morning, cause unknown; every run had finished and nothing was lost.
+
 ## 2026-11-11_000208_1794351728: Release 1.2.46 published
 
 - **Asked by the owner** after the change below. `main` at `965b54ca` (the notes `docs/releases/1.2.46.md`, the Flatpak metainfo entry) with CI, FreeBSD and Fuzz green; tag `v1.2.46`; the Release run built 13 files and `SHA256SUMS` and both container images; published as the latest release (2026-11-10 23:02 UTC). Then the site's news entry pushed to `main`. No wiki page changed.

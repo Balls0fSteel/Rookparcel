@@ -1180,14 +1180,20 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   Add rTorrent/2.2.1 and three-client PEX cases to the ongoing matrix.
 - **Idle CPU regression in 1.2.x: fixed in 1.2.30** (found and fixed 2026-11-10, BENCHMARKS.md
   "The idle CPU regression"): the Web UI's per-start metadata pass for the private flag, and
-  `lsd_tick`'s walk over every slot. Still open from the 2026-11-09 run: a full `tools/bench`
-  run of a release with the fix, for the site's tables; the first start after an upgrade still
-  does the pass once (records without `lt-private`), 128 torrents a second; the Win32 list is
-  0.1 s later (1.37 s) and 15 MB larger at 100,000 than 1.0.1; its working set jumps to
-  360-640 MB while it closes; the engine's 100,000 restore measured 1,318 ms against 1,199 ms
-  (one run each); Deluge's transfer failed three times in the night run for no found reason; a
-  256 MiB download once cost 1.2.29 2.8 CPU s in its disk threads against 0.4 s for 1.1.40 (one
-  smoke run, not seen at 2 GiB). Other walks over every slot remain where they run on an event,
+  `lsd_tick`'s walk over every slot. The full `tools/bench` run of a release with the fix is
+  done (1.2.46, 2026-11-11: 0.07% at 10,000 torrents). Still open: the first start after an
+  upgrade still does the pass once (records without `lt-private`), 128 torrents a second; the
+  Win32 list is 0.1-0.2 s later (1.37-1.49 s) and 5-14 MB larger at 100,000 than 1.0.1; its
+  working set rises to about 350 MB while it closes, with a core busy (1.0.1 does it too:
+  300-330 MB); the engine's 100,000 restore is 1,314-1,352 ms against 1,160-1,180 ms for
+  1.0.1 (four runs each, one 1.0.1 run at 1,459); memory right after adding 10,000 was 326 MB
+  in two rounds of three (older versions 316-319); Deluge's transfer failed three times in
+  the 2026-11-09 night run for no found reason (none on 2026-11-11). **The first download of
+  a bench session is slow for whichever client goes first** (always Rookparcel in round 1):
+  349 MiB/s and 21.6 s of system time in the disk threads on a freshly booted VM, about
+  1,900 MiB/s on a warm one, 1.0.1 the same when put first; this also explains the 256 MiB
+  smoke run that once cost 1.2.29 2.8 CPU s. Not looked into why (first touch of guest
+  memory is the guess); `bench.py` could make one unmeasured warm-up download first. Other walks over every slot remain where they run on an event,
   not a tick (`torrent_ids` in the DHT, IP filter, listen and network-rule code).
 - Flaky on CI's Windows runner (2026-11-10, once): `crates/core/tests/proxy.rs`
   `http_proxy_requests_trackers_and_web_seeds_by_url` timed out "waiting for finished" although
@@ -1198,8 +1204,8 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   before releases, with the last release as `--control`. Not covered yet: 100,000 torrents (the corpus is ~3 GB of metadata, too big
   for the 8 GB VM's libtorrent clients), multi-peer swarms, uTP, seeding CPU, a current rTorrent
   (Ubuntu ships 0.9.8) and the GUIs (Win32 vs µTorrent 2.2.1 and qBittorrent on Windows). The
-  VM keeps `~/bench` (harness, Rookparcel 1.0.1, 1.1.40 and 1.2.29 under `pa/`, venv with
-  deluge-client, `run-night.sh`); the full run takes 4.3 hours; the two tmpfs mounts
+  VM keeps `~/bench` (harness, Rookparcel 1.0.1, 1.1.40, 1.2.29 and 1.2.46 under `pa/`, venv
+  with deluge-client, `run-night-1.2.46.sh` with `args-1.2.46.txt`); the full run takes 4.3 hours; the two tmpfs mounts
   (`/mnt/benchram`, Transmission's downloads) do not survive a reboot.
 - Preserve parser review before each release and ongoing fuzzing. UDP tracker,
   resume-data and remote-wire targets already exist; do not list them as missing.
