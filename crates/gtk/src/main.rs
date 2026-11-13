@@ -30,6 +30,8 @@ mod integration;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod list;
 #[cfg(all(unix, not(target_os = "macos")))]
+mod lock;
+#[cfg(all(unix, not(target_os = "macos")))]
 mod notices;
 #[cfg(all(unix, not(target_os = "macos")))]
 mod paths;

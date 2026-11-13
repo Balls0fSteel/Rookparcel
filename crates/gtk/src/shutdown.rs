@@ -120,19 +120,25 @@ pub fn is_open() -> bool {
     OPEN.with(|o| o.borrow().is_some())
 }
 
-/// Shows the countdown over `parent`; `cancelled` runs on the user's Cancel (or Escape, or the
-/// title bar's close), not when [`close`] ends it.
-pub fn open(parent: &gtk::ApplicationWindow, mode: Mode, secs: u32, cancelled: impl Fn() + 'static) {
+/// The countdown's window while it is open (the windows' lock leaves it on screen, D69).
+pub fn window() -> Option<gtk::Window> {
+    OPEN.with(|o| o.borrow().as_ref().map(|o| o.window.clone()))
+}
+
+/// Shows the countdown, over `parent` (`None`: standing alone, while the windows are locked);
+/// `cancelled` runs on the user's Cancel (or Escape, or the title bar's close), not when
+/// [`close`] ends it.
+pub fn open(parent: Option<&gtk::ApplicationWindow>, mode: Mode, secs: u32, cancelled: impl Fn() + 'static) {
     if is_open() {
         return;
     }
     let window = gtk::Window::builder()
         .title(tr!(ShutdownTitle))
-        .transient_for(parent)
-        .modal(true)
+        .modal(parent.is_some())
         .resizable(false)
         .default_width(340)
         .build();
+    window.set_transient_for(parent);
     let label = gtk::Label::new(Some(&auto_shutdown::countdown_text(mode, secs)));
     label.set_xalign(0.0);
     label.set_wrap(true);
