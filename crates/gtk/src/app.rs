@@ -40,6 +40,7 @@ use rookparcel_frontend::seeding::{SeedGoal, SeedingGoal};
 use rookparcel_frontend::status::{self, status_icon};
 use rookparcel_frontend::torrent_folders::{self, TorrentFiles, TorrentFolders, Watcher};
 use rookparcel_frontend::tracker_list::{self, TrackerList};
+use rookparcel_frontend::ui_lock::{self, Form};
 use rookparcel_frontend::update::{self, Checker, Kind, Manifest, Version};
 use rookparcel_frontend::{actions, add, create, fmt, help, profile, settings, setup_guide, tr};
 
@@ -162,6 +163,33 @@ thread_local! {
     /// Torrents from the command line that came before the window (a remote window's, while
     /// it connects): opened once it is built.
     static PENDING: RefCell<Vec<Source>> = const { RefCell::new(Vec::new()) };
+    /// The windows are locked behind the PIN (D69; `ui.locked` in the settings, saved at once).
+    static LOCKED: Cell<bool> = const { Cell::new(false) };
+    /// What the lock holds while the windows are locked.
+    static LOCK: RefCell<LockState> = RefCell::new(LockState::default());
+    /// The first start came with `--reset-lock`: asked before the window is built.
+    static RESET_LOCK: Cell<bool> = const { Cell::new(false) };
+    /// That reset removed the PIN before the Logger was there: it says so once it is.
+    static PIN_RESET: Cell<bool> = const { Cell::new(false) };
+}
+
+/// The windows' lock (D69) while it holds them.
+#[derive(Default)]
+struct LockState {
+    /// The windows it hid, to show again.
+    hidden: Vec<crate::lock::Hidden>,
+    /// The PIN prompt while it is up.
+    prompt: Option<crate::lock::Pin>,
+    /// What waits for the unlock: message boxes, a downloaded torrent's Add dialog, an update
+    /// offer.
+    held: crate::lock::Held<Box<dyn FnOnce()>>,
+    /// Torrents another start handed over: opened at the unlock, dropped when the prompt is
+    /// cancelled.
+    sources: Vec<Source>,
+    /// Magnets' Add New Torrent dialogs wait.
+    magnets: bool,
+    /// Wrong PINs, in every PIN dialog.
+    guard: ui_lock::Guard,
 }
 
 /// A torrent named on the command line.
@@ -177,6 +205,11 @@ fn open(source: Source) {
     let built = APP.with(|a| a.try_borrow().map(|a| a.is_some()).unwrap_or(true));
     if !built {
         PENDING.with(|p| p.borrow_mut().push(source));
+        return;
+    }
+    // locked, they wait for the PIN; a cancelled prompt drops them (D69)
+    if locked() {
+        LOCK.with(|l| l.borrow_mut().sources.push(source));
         return;
     }
     match source {
@@ -274,7 +307,11 @@ pub fn run() -> ExitCode {
         });
     }
     app.connect_activate(move |app| {
-        if let Some(w) = app.active_window() {
+        if locked() {
+            // another start, or the desktop's launcher: the PIN first (D69). (The active window
+            // may be the hidden main one: GTK names it even unmapped.)
+            ask_unlock(false);
+        } else if let Some(w) = app.active_window() {
             w.present();
         } else if !WINDOW_COMING.with(|c| c.replace(true)) {
             let a = app.clone();
@@ -300,10 +337,21 @@ pub fn run() -> ExitCode {
             cmdline.arguments().iter().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
         let args = profile::split_args(&args).map_or(args, |(_, rest)| rest);
         let torrents = args.iter().any(|a| !a.starts_with("--"));
-        let stay = app.active_window().is_some()
+        // `--reset-lock`, for a forgotten PIN (D69): the running window asks; a first start
+        // asks before its window is built
+        let running = with_app(|_| ()).is_some();
+        let reset = ui_lock::reset_requested(&args);
+        if reset && !running {
+            RESET_LOCK.with(|r| r.set(true));
+        }
+        // locked, the torrents wait for the PIN, which is asked for at once
+        let stay = !locked()
+            && app.active_window().is_some()
             && torrents
             && with_app(|a| !GuiOptions::load(&a.prefs, &a.save_path).activate_on_add).unwrap_or(false);
-        if !stay {
+        if reset && running {
+            reset_lock_running(app);
+        } else if !stay {
             app.activate();
         }
         for arg in &args {
@@ -322,8 +370,10 @@ pub fn run() -> ExitCode {
     let code = app.run();
     // the search helper (D51) never outlives the program
     rookparcel_frontend::search::helper::shutdown();
-    // the tray goes while the toolkit is still there, not with the thread's locals at exit
+    // the tray goes while the toolkit is still there, not with the thread's locals at exit; so
+    // does what the lock held (D69)
     TRAY.with(|t| t.borrow_mut().take());
+    drop(LOCK.with(RefCell::take));
     // Auto Shutdown's Shut Down, once the session has saved its state and stopped
     if let Some(Err(e)) = shutdown::take_after_exit().map(shutdown::perform) {
         eprintln!("{e}");
@@ -491,6 +541,8 @@ fn startup(app: &gtk::Application) {
         ("win.start", &["<Control>s"]),
         ("win.stop", &["<Control>t"]),
         ("win.pause", &["<Control><Shift>p"]),
+        // File > Lock Rookparcel (D69)
+        ("win.lock", &["<Control>l"]),
         ("app.quit", &["<Control>q"]),
     ] {
         app.set_accels_for_action(action, keys);
@@ -519,6 +571,7 @@ fn startup(app: &gtk::Application) {
     item(&remote_section, tr!(MenuConnectRemote), "app.connect-remote");
     file.append_section(None, &remote_section);
     let quit_section = gio::Menu::new();
+    item(&quit_section, tr!(MenuLock), "win.lock");
     item(&quit_section, tr!(MenuExit), "app.quit");
     file.append_section(None, &quit_section);
     menubar.append_submenu(Some(&gtk_mnemonic(tr!(MenuFile))), &file);
@@ -538,6 +591,12 @@ fn startup(app: &gtk::Application) {
     }
     let auto_section = gio::Menu::new();
     auto_section.append_submenu(Some(&gtk_mnemonic(tr!(MenuAutoShutdown))), &auto);
+    // Lock PIN (D69): each item greyed by whether a PIN is set (`pin_changed`)
+    let pin = gio::Menu::new();
+    item(&pin, tr!(MenuSetPin), "win.pin-set");
+    item(&pin, tr!(MenuChangePin), "win.pin-change");
+    item(&pin, tr!(MenuRemovePin), "win.pin-remove");
+    auto_section.append_submenu(Some(&gtk_mnemonic(tr!(MenuLockPin))), &pin);
     options.append_section(None, &auto_section);
     menubar.append_submenu(Some(&gtk_mnemonic(tr!(MenuOptions))), &options);
     let help = gio::Menu::new();
@@ -938,6 +997,23 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
             Some(code) => prefs.set("ui.language", code),
             None => prefs.remove("ui.language"),
         }
+    }
+    // `--reset-lock` (D69): asked before anything else, then this again, which reads the file
+    // the answer left
+    if RESET_LOCK.with(|r| r.replace(false)) {
+        let b = app.clone();
+        ask_reset(app, ui_lock::has_pin(&prefs), move |remove| {
+            if remove {
+                let mut prefs = prefs;
+                ui_lock::remove(&mut prefs);
+                match prefs.save() {
+                    Ok(()) => PIN_RESET.with(|r| r.set(true)),
+                    Err(e) => eprintln!("cannot save the settings: {e}"),
+                }
+            }
+            build(&b, remote_session);
+        });
+        return;
     }
     // (the language was picked in `run`)
     let downloads = glib::user_special_dir(glib::UserDirectory::Downloads)
@@ -1344,6 +1420,9 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
         search_menu,
     });
     UI.with(|u| *u.borrow_mut() = Some(ui));
+    // locked when it last ran (D69): from here on, nothing shows a window over the list
+    let start_locked = ui_lock::is_locked(&prefs);
+    LOCKED.with(|l| l.set(start_locked));
     APP.with(|a| {
         *a.borrow_mut() = Some(App {
             window: window.clone(),
@@ -1407,6 +1486,11 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
     });
     // the Files tab's view as last left (D62): the toggle button and the menu's check mark
     show_files_tree(files_tree);
+    // the Lock PIN items' greying (D69), and what `--reset-lock` did before the Logger was there
+    pin_changed();
+    if PIN_RESET.with(|r| r.replace(false)) {
+        log_line(tr!(LogLockPinRemoved));
+    }
 
     // the engine host's network adapters, for Preferences > Connection (D54)
     handle.post_network_adapters();
@@ -1456,12 +1540,29 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
         glib::Propagation::Proceed
     });
     update_status();
+    if start_locked {
+        // Locked behind the PIN (D69): the window is never shown, and existing unmapped it
+        // keeps the application running. The prompt asks at once (it stands in for the window
+        // until a tray comes); with `--minimized` it starts minimized, as the window would, and
+        // goes once the tray is there. Torrents named on the command line wait for the PIN.
+        start_tray(&window);
+        ask_unlock(START_MINIMIZED.with(Cell::get));
+        for source in PENDING.with(|p| p.take()) {
+            open(source);
+        }
+        return;
+    }
     // GNOME Shell reads a new desktop entry about 5 s after it appears, and a window shown
     // before then keeps a generic icon in the overview (in the Flatpak, the default app's
     // group): a profile's first window waits for it there (D42). Other desktops show it at once.
     if entry_written && !START_MINIMIZED.with(|m| m.get()) && gnome_shell() {
         let w = window.clone();
-        glib::timeout_add_local_once(std::time::Duration::from_secs(6), move || w.present());
+        glib::timeout_add_local_once(std::time::Duration::from_secs(6), move || {
+            // (not over a lock taken meanwhile, from the tray)
+            if !locked() {
+                w.present();
+            }
+        });
     } else {
         window.present();
     }
@@ -1504,7 +1605,11 @@ fn start_tray(window: &gtk::ApplicationWindow) {
     let tray = Tray::start(crate::tray::Hooks {
         activate: Box::new(toggle_window),
         command: Box::new(tray_command),
-        window_visible: Box::new(|| with_app(|a| a.window.is_visible()).unwrap_or(true)),
+        state: Box::new(|| {
+            let (window_visible, has_pin) =
+                with_app(|a| (a.window.is_visible(), ui_lock::has_pin(&a.prefs))).unwrap_or((true, false));
+            crate::tray::State { window_visible, locked: locked(), has_pin }
+        }),
         shown: Box::new(|on| {
             // started minimized: into the tray as soon as there is one
             let start = START_MINIMIZED.with(|m| m.replace(false));
@@ -1513,19 +1618,27 @@ fn start_tray(window: &gtk::ApplicationWindow) {
                     hide_window(w.upcast_ref());
                 }
             }
+            prompt_follows_tray(on, start);
         }),
     });
     TRAY.with(|t| *t.borrow_mut() = tray);
-    if let Some(toplevel) = window.surface().and_downcast::<gtk::gdk::Toplevel>() {
-        let w = window.downgrade();
-        toplevel.connect_state_notify(move |t| {
-            let minimized = t.state().contains(gtk::gdk::ToplevelState::MINIMIZED);
-            let to_tray = with_app(|a| a.prefs.get_bool("ui.minimize_to_tray", false)) == Some(true);
-            if let (true, true, true, Some(w)) = (minimized, to_tray, tray_shown(), w.upgrade()) {
-                hide_window(w.upcast_ref());
-            }
-        });
-    }
+    // the window's surface, which a window not shown yet does not have (GNOME's delayed first
+    // window, a start locked behind the PIN): watched once it is realized
+    watch_minimize(window);
+    window.connect_realize(watch_minimize);
+}
+
+/// "Minimize to tray": the window goes into the tray when its surface is minimized.
+fn watch_minimize(window: &gtk::ApplicationWindow) {
+    let Some(toplevel) = window.surface().and_downcast::<gtk::gdk::Toplevel>() else { return };
+    let w = window.downgrade();
+    toplevel.connect_state_notify(move |t| {
+        let minimized = t.state().contains(gtk::gdk::ToplevelState::MINIMIZED);
+        let to_tray = with_app(|a| a.prefs.get_bool("ui.minimize_to_tray", false)) == Some(true);
+        if let (true, true, true, Some(w)) = (minimized, to_tray, tray_shown(), w.upgrade()) {
+            hide_window(w.upcast_ref());
+        }
+    });
 }
 
 /// Hides the window into the tray.
@@ -1537,8 +1650,11 @@ fn hide_window(w: &gtk::Window) {
 }
 
 /// A click on the tray icon: the window comes to the front, or goes into the tray when it is
-/// in front already.
+/// in front already. Locked, the PIN is asked for first (D69).
 fn toggle_window() {
+    if locked() {
+        return ask_unlock(false);
+    }
     let Some(w) = with_app(|a| a.window.clone()) else { return };
     if w.is_visible() && w.is_active() {
         hide_window(w.upcast_ref());
@@ -1547,7 +1663,11 @@ fn toggle_window() {
     }
 }
 
+/// The main window comes to the front; locked, the PIN is asked for first (D69).
 fn show_window() {
+    if locked() {
+        return ask_unlock(false);
+    }
     let Some(w) = with_app(|a| a.window.clone()) else { return };
     w.set_visible(true);
     w.unminimize();
@@ -1560,6 +1680,9 @@ fn show_window() {
 fn tray_command(c: TrayCommand) {
     match c {
         TrayCommand::Toggle => toggle_window(),
+        // the locked menu has none of these: a click on a menu the host kept from before
+        TrayCommand::AddTorrent | TrayCommand::AddUrl | TrayCommand::StartAll | TrayCommand::StopAll
+            if locked() => {}
         TrayCommand::AddTorrent => {
             show_window();
             add_files();
@@ -1583,6 +1706,8 @@ fn tray_command(c: TrayCommand) {
                 a.handle.post_torrent_updates();
             });
         }
+        TrayCommand::Lock => lock_windows(),
+        // also while locked, without the PIN (D69)
         TrayCommand::Exit => quit_app(),
     }
 }
@@ -1604,8 +1729,253 @@ fn quit_app() {
         return;
     };
     for w in app.windows() {
-        w.close();
+        close_window(&w);
     }
+}
+
+/// Closes `w` as the title bar's close would. `gtk_window_close` does nothing for a window that
+/// was never realized (the main window of a start locked behind the PIN, D69), which gets the
+/// same close request by hand; one destroyed meanwhile (it left the application) is left alone.
+fn close_window(w: &gtk::Window) {
+    if w.is_realized() {
+        w.close();
+    } else if w.application().is_some() && !w.emit_by_name::<bool>("close-request", &[]) {
+        w.destroy();
+    }
+}
+
+// ---- the windows' lock (D69) ------------------------------------------------------------------
+// A PIN hides every window; showing them again asks for it (`crate::lock`'s prompt). It is
+// privacy, not security (`rookparcel_frontend::ui_lock`). While locked, nothing opens a window
+// over the hidden ones: message boxes, Add dialogs and update offers wait, completions are not
+// announced, the tray offers only Show and Exit. Exit and Quit need no PIN.
+
+/// The windows are locked.
+fn locked() -> bool {
+    LOCKED.with(Cell::get)
+}
+
+/// Runs `f` now, or at the unlock while the windows are locked: something that would open a
+/// window over them.
+fn when_unlocked(f: impl FnOnce() + 'static) {
+    if locked() {
+        LOCK.with(|l| l.borrow_mut().held.push(Box::new(f)));
+    } else {
+        f();
+    }
+}
+
+/// File > Lock Rookparcel (Ctrl+L) and the tray's Lock: the lock is saved at once and every
+/// window on screen hides but the Auto Shutdown countdown. Without a PIN, Set PIN comes first,
+/// and its OK locks.
+fn lock_windows() {
+    if locked() {
+        return;
+    }
+    let Some(has_pin) = with_app(|a| {
+        let ok = ui_lock::lock(&mut a.prefs);
+        if ok {
+            save_prefs(a);
+        }
+        ok
+    }) else {
+        return;
+    };
+    if !has_pin {
+        return pin_form(Form::Set, true);
+    }
+    LOCKED.with(|l| l.set(true));
+    let countdown = shutdown::window();
+    let hidden = crate::lock::hide_windows(|w| countdown.as_ref() == Some(w));
+    LOCK.with(|l| l.borrow_mut().hidden = hidden);
+    if let Some(t) = tray() {
+        t.menu_changed();
+    }
+    // without a tray nothing would be left to show them with: the prompt stands in
+    if !tray_shown() {
+        ask_unlock(false);
+    }
+}
+
+/// Asks for the PIN to show the windows; a prompt already up comes to the front. `minimized`:
+/// a locked start with `--minimized`.
+fn ask_unlock(minimized: bool) {
+    if let Some(w) = LOCK.with(|l| l.borrow().prompt.as_ref().map(|p| p.window.clone())) {
+        w.unminimize();
+        w.present();
+        return;
+    }
+    let Some(app) = with_app(|a| a.window.application()).flatten() else { return };
+    let pin = crate::lock::dialog(
+        &app,
+        Form::Unlock,
+        None,
+        |pin, _, _| submit_pin(Form::Unlock, pin, "", ""),
+        unlocked,
+        prompt_cancelled,
+    );
+    pin.set_cancel(tray_shown());
+    if minimized {
+        pin.window.minimize();
+    }
+    let window = pin.window.clone();
+    LOCK.with(|l| l.borrow_mut().prompt = Some(pin));
+    window.present();
+}
+
+/// What a PIN dialog's OK does (`ui_lock::submit`), saved at once; the `Err` is the dialog's
+/// message.
+fn submit_pin(form: Form, current: &str, new: &str, repeat: &str) -> Result<(), String> {
+    let mut guard = LOCK.with(|l| std::mem::take(&mut l.borrow_mut().guard));
+    let now = std::time::Instant::now();
+    let done = with_app(|a| {
+        let r = ui_lock::submit(form, &mut a.prefs, &mut guard, current, new, repeat, now);
+        if r.is_ok() {
+            save_prefs(a);
+        }
+        r
+    });
+    LOCK.with(|l| l.borrow_mut().guard = guard);
+    done.unwrap_or_else(|| Err(tr!(ErrNotRunning).to_owned()))
+}
+
+/// The right PIN: the windows come back as they were, then what waited for them.
+fn unlocked() {
+    LOCKED.with(|l| l.set(false));
+    let (hidden, held, sources, magnets) = LOCK.with(|l| {
+        let mut l = l.borrow_mut();
+        l.prompt = None;
+        (
+            std::mem::take(&mut l.hidden),
+            l.held.take(),
+            std::mem::take(&mut l.sources),
+            std::mem::replace(&mut l.magnets, false),
+        )
+    });
+    // none was on screen (the window was in the tray, or the program started locked)
+    if !crate::lock::show_windows(hidden) {
+        show_window();
+    }
+    if let Some(t) = tray() {
+        t.menu_changed();
+    }
+    for source in sources {
+        open(source);
+    }
+    for f in held {
+        f();
+    }
+    if magnets {
+        magnet_dialogs();
+    }
+}
+
+/// The prompt's Cancel or close: the torrents handed over meanwhile are dropped. Without a
+/// tray it stood in for the main window, and closing it quits, as closing that one would.
+fn prompt_cancelled() {
+    let dropped = LOCK.with(|l| {
+        let mut l = l.borrow_mut();
+        l.prompt = None;
+        std::mem::take(&mut l.sources)
+    });
+    drop(dropped);
+    if !tray_shown() && !QUITTING.with(Cell::get) {
+        quit_app();
+    }
+}
+
+/// The tray came (`on`) or went while the prompt is up: the prompt has Cancel only with a
+/// tray, and one that came takes the place of a minimized prompt the user is not at (a start
+/// locked with `--minimized`: `start`). A prompt on screen stays even when it does not have the
+/// keyboard yet: at a start the tray often comes before the window manager's focus does.
+fn prompt_follows_tray(on: bool, start: bool) {
+    let Some(pin) = LOCK.with(|l| l.borrow().prompt.clone()) else { return };
+    pin.set_cancel(on);
+    if on && !pin.window.is_active() && (start || crate::lock::minimized(&pin.window)) {
+        // not a cancel: the torrents handed over keep waiting
+        LOCK.with(|l| l.borrow_mut().prompt = None);
+        pin.window.destroy();
+    }
+}
+
+/// Options > Lock PIN > Set PIN..., Change PIN... and Remove PIN..., over the main window; with
+/// `then_lock`, Set PIN for File > Lock Rookparcel, which locks after its OK.
+fn pin_form(form: Form, then_lock: bool) {
+    let Some((window, Some(app))) = with_app(|a| (a.window.clone(), a.window.application())) else {
+        return;
+    };
+    let pin = crate::lock::dialog(
+        &app,
+        form,
+        Some(window.upcast_ref()),
+        move |current, new, repeat| submit_pin(form, current, new, repeat),
+        move || {
+            pin_changed();
+            if then_lock {
+                lock_windows();
+            }
+        },
+        || {},
+    );
+    pin.window.present();
+}
+
+/// The Lock PIN items' greying (Set PIN without a PIN, Change and Remove with one) and the
+/// tray's Lock follow whether a PIN is set.
+fn pin_changed() {
+    let Some((window, has_pin)) = with_app(|a| (a.window.clone(), ui_lock::has_pin(&a.prefs))) else {
+        return;
+    };
+    for (name, on) in [("pin-set", !has_pin), ("pin-change", has_pin), ("pin-remove", has_pin)] {
+        if let Some(a) = window.lookup_action(name).and_downcast::<gio::SimpleAction>() {
+            a.set_enabled(on);
+        }
+    }
+    if let Some(t) = tray() {
+        t.menu_changed();
+    }
+}
+
+/// `--reset-lock`, for a forgotten PIN: with a PIN set, asks whether to remove it (`done(true)`
+/// for OK); without one, says there is none (`done(false)`). Over no window: every one may be
+/// hidden behind the lock, or none be built yet.
+fn ask_reset(app: &gtk::Application, has_pin: bool, done: impl FnOnce(bool) + 'static) {
+    let hold = app.hold();
+    let d = gtk::AlertDialog::builder().modal(true);
+    let d = if has_pin {
+        d.message(tr!(LockResetAsk)).buttons([tr!(BtnCancel), tr!(BtnOk)]).cancel_button(0).default_button(1)
+    } else {
+        d.message(tr!(LockResetNone)).buttons([tr!(BtnOk)]).cancel_button(0).default_button(0)
+    };
+    d.build().choose(None::<&gtk::Window>, None::<&gio::Cancellable>, move |r| {
+        done(has_pin && r == Ok(1));
+        drop(hold);
+    });
+}
+
+/// `--reset-lock` from another start, given to this running one: asked here. OK removes the
+/// PIN, which unlocks; then the window comes forward as for any other start (asking for the PIN
+/// if it is still locked).
+fn reset_lock_running(app: &gtk::Application) {
+    let has_pin = with_app(|a| ui_lock::has_pin(&a.prefs)).unwrap_or(false);
+    ask_reset(app, has_pin, |remove| {
+        if remove {
+            with_app(|a| {
+                ui_lock::remove(&mut a.prefs);
+                save_prefs(a);
+            });
+            log_line(tr!(LogLockPinRemoved));
+            pin_changed();
+            if locked() {
+                // the prompt goes with the PIN
+                if let Some(pin) = LOCK.with(|l| l.borrow_mut().prompt.take()) {
+                    pin.window.destroy();
+                }
+                return unlocked();
+            }
+        }
+        show_window();
+    });
 }
 
 /// Desktop notifications for downloads that completed (Preferences > UI Settings "Show
@@ -1878,13 +2248,17 @@ fn on_alerts() {
     selection_changed();
     refresh_details();
     update_status();
+    // while locked, the boxes and the magnets' Add dialogs wait for the unlock, and the
+    // completions, which name torrents, are not announced at all (D69)
     for (message, detail) in errors {
         error(&message, &detail);
     }
     if magnet_ready {
         magnet_dialogs();
     }
-    notify_completed(completed);
+    if !locked() {
+        notify_completed(completed);
+    }
     if let Some(Err(e)) = suspend.map(shutdown::perform) {
         log_line(&tr!(LogShutdown, what = e.replace('\n', " ")));
         error(&e, "");
@@ -2061,12 +2435,21 @@ fn update_status() {
     }
 }
 
+/// A message box over the main window; locked, it waits for the unlock (D69).
 fn error(message: &str, detail: &str) {
+    if locked() {
+        let (message, detail) = (message.to_owned(), detail.to_owned());
+        return LOCK.with(|l| l.borrow_mut().held.push_message(Box::new(move || error(&message, &detail))));
+    }
     let Some(window) = with_app(|a| a.window.clone()) else { return };
     gtk::AlertDialog::builder().message(message).detail(detail).modal(true).build().show(Some(&window));
 }
 
 fn info(message: &str) {
+    if locked() {
+        let message = message.to_owned();
+        return LOCK.with(|l| l.borrow_mut().held.push_message(Box::new(move || info(&message))));
+    }
     let Some(window) = with_app(|a| a.window.clone()) else { return };
     gtk::AlertDialog::builder().message(message).modal(true).build().show(Some(&window));
 }
@@ -2155,6 +2538,11 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     });
     simple("preferences", preferences);
     simple("setup-guide", setup_guide_later);
+    // File > Lock Rookparcel and Options > Lock PIN (D69)
+    simple("lock", lock_windows);
+    simple("pin-set", || pin_form(Form::Set, false));
+    simple("pin-change", || pin_form(Form::Change, false));
+    simple("pin-remove", || pin_form(Form::Remove, false));
     simple("properties", show_properties);
     simple("set-location", set_download_location);
     simple("label-new", || {
@@ -2735,6 +3123,10 @@ fn add_magnet(uri: String) {
 /// the torrent the choices and starts it (or leaves it stopped); Cancel removes it with its
 /// part file (nothing else was written).
 fn magnet_dialogs() {
+    // locked, they wait for the unlock (D69)
+    if locked() {
+        return LOCK.with(|l| l.borrow_mut().magnets = true);
+    }
     let next = with_app(|a| {
         if a.awaiting_dialog {
             return None;
@@ -2904,7 +3296,9 @@ fn auto_shutdown_step(step: Step) {
                 return;
             };
             log_line(&tr!(LogShutdownDone, what = mode.action.doing(), secs));
-            shutdown::open(&window, mode, secs, || {
+            // it names no torrent: it shows while locked too, standing alone then (D69)
+            let parent = (!locked()).then_some(&window);
+            shutdown::open(parent, mode, secs, || {
                 with_app(|a| a.auto_shutdown.set_mode(None));
                 log_line(tr!(LogShutdownCancelled));
                 update_auto_shutdown_menu();
@@ -3038,9 +3432,12 @@ fn download(url: String) {
         let result = http_get(&url, &FetchOptions { proxy, ..FetchOptions::default() })
             .map_err(|e| e.to_string())
             .and_then(|r| if r.status == 200 { Ok(r.body) } else { Err(format!("HTTP {}", r.status)) });
-        glib::MainContext::default().invoke(move || match result {
-            Ok(bytes) => add_torrent_file(bytes),
-            Err(e) => error(&tr!(CannotDownload, url), &e),
+        glib::MainContext::default().invoke(move || {
+            // its Add New Torrent dialog waits for the unlock (D69)
+            when_unlocked(move || match result {
+                Ok(bytes) => add_torrent_file(bytes),
+                Err(e) => error(&tr!(CannotDownload, url), &e),
+            })
         });
     });
 }
@@ -3391,8 +3788,13 @@ fn update_done(result: Result<Manifest, String>) {
     }
 }
 
-/// "Rookparcel {v} is available. Open its download page?": OK opens the release's page.
+/// "Rookparcel {v} is available. Open its download page?": OK opens the release's page. Locked,
+/// the question waits for the unlock (D69).
 fn ask_open_release(v: &Version, current: &Version) {
+    if locked() {
+        let (v, current) = (v.clone(), current.clone());
+        return when_unlocked(move || ask_open_release(&v, &current));
+    }
     let Some(window) = with_app(|a| a.window.clone()) else { return };
     let d = gtk::AlertDialog::builder()
         .message(lang::plain(tr!(MenuCheckUpdates)))
@@ -3781,10 +4183,11 @@ impl crate::search::Host for SearchHost {
     }
 
     fn add(&self, download: Download) {
-        match download {
+        // a result that comes after a lock: its Add New Torrent dialog waits (D69)
+        when_unlocked(move || match download {
             Download::Torrent(bytes) => add_torrent_file(bytes),
             Download::Magnet(uri) => add_magnet(uri),
-        }
+        });
     }
 
     /// The profile's data folder (a program of 100 MB and more is data, not settings) and the

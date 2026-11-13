@@ -1,7 +1,9 @@
 //! The tray icon: the application icon where the desktop keeps such icons, the rates as its
 //! tooltip, a left click that shows or hides the window, and the Win32 tray's menu: Show /
-//! Hide, Add Torrent, Add Torrent from URL, Start All, Stop All, Exit. [`Tray`] is a
-//! StatusNotifierItem (the native Mac GUI, `rookparcel-mac`, has its own status item).
+//! Hide, Add Torrent, Add Torrent from URL, Start All, Stop All, Lock Rookparcel (with a lock
+//! PIN set, D69), Exit; while the windows are locked only Show (which asks for the PIN) and Exit
+//! ([`visible`]). [`Tray`] is a StatusNotifierItem (the native Mac GUI, `rookparcel-mac`, has
+//! its own status item).
 //!
 //! The StatusNotifierItem is the freedesktop.org / KDE tray protocol that KDE
 //! Plasma, Xfce, LXQt, Cinnamon, MATE, waybar and GNOME with the AppIndicator extension show,
@@ -30,11 +32,14 @@ pub enum Command {
     AddUrl,
     StartAll,
     StopAll,
+    /// Hide every window behind the lock PIN (D69).
+    Lock,
     Exit,
 }
 
-/// The menu: item ids from 1 (0 is the root), `None` a separator.
-pub const MENU: [Option<Command>; 9] = [
+/// The menu: item ids from 1 (0 is the root), `None` a separator. Which entries show depends
+/// on the [`State`] ([`visible`]).
+pub const MENU: [Option<Command>; 10] = [
     Some(Command::Toggle),
     None,
     Some(Command::AddTorrent),
@@ -43,16 +48,28 @@ pub const MENU: [Option<Command>; 9] = [
     Some(Command::StartAll),
     Some(Command::StopAll),
     None,
+    Some(Command::Lock),
     Some(Command::Exit),
 ];
+
+/// What the menu follows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct State {
+    /// The main window is on screen: the first entry says Hide.
+    pub window_visible: bool,
+    /// The windows are locked (D69): only Show, which asks for the PIN, and Exit.
+    pub locked: bool,
+    /// A lock PIN is set: Lock Rookparcel is offered.
+    pub has_pin: bool,
+}
 
 /// What the tray asks of its owner.
 pub struct Hooks {
     /// A left click on the icon.
     pub activate: Box<dyn Fn()>,
     pub command: Box<dyn Fn(Command)>,
-    /// Whether the window is on screen (the menu says Hide then).
-    pub window_visible: Box<dyn Fn() -> bool>,
+    /// The window's and the lock's state, which the menu follows.
+    pub state: Box<dyn Fn() -> State>,
     /// The tray came (true) or went (false): a StatusNotifierWatcher took the item or left the
     /// bus.
     pub shown: Box<dyn Fn(bool)>,
@@ -67,7 +84,32 @@ pub fn entry_text(c: Command, window_visible: bool) -> &'static str {
         Command::AddUrl => tr!(MenuAddUrl),
         Command::StartAll => tr!(MenuStartAll),
         Command::StopAll => tr!(MenuStopAll),
+        Command::Lock => tr!(MenuLock),
         Command::Exit => tr!(MenuExit),
+    }
+}
+
+/// Whether command `c` is in the menu in state `s`.
+fn offered(c: Command, s: State) -> bool {
+    match c {
+        Command::Toggle | Command::Exit => true,
+        Command::Lock => s.has_pin && !s.locked,
+        Command::AddTorrent | Command::AddUrl | Command::StartAll | Command::StopAll => !s.locked,
+    }
+}
+
+/// Whether `MENU[index]` is in the menu in state `s`. A separator is, when the group after it
+/// (up to the next separator) has an entry in the menu and so does something before it: never
+/// first, last or twice in a row.
+pub fn visible(index: usize, s: State) -> bool {
+    match MENU.get(index) {
+        None => false,
+        Some(Some(c)) => offered(*c, s),
+        Some(None) => {
+            let shown = |e: &Option<Command>| e.is_some_and(|c| offered(c, s));
+            let after = MENU[index + 1..].iter().take_while(|e| e.is_some()).any(shown);
+            after && MENU[..index].iter().any(shown)
+        }
     }
 }
 
@@ -81,7 +123,7 @@ mod sni {
     use gtk::{gio, glib};
     use rookparcel_frontend::lang::{self, gtk_mnemonic};
 
-    use super::{Hooks, MENU, entry_text};
+    use super::{Hooks, MENU, State, entry_text, visible};
 
     use crate::app::APP_ID;
 
@@ -344,7 +386,8 @@ mod sni {
             }
         }
 
-        /// The window was shown or hidden: the menu's first entry follows.
+        /// The window was shown or hidden, the windows were locked or unlocked, or the lock PIN
+        /// was set or removed: the menu follows (a new revision of its layout).
         pub fn menu_changed(&self) {
             let rev = self.revision.get() + 1;
             self.revision.set(rev);
@@ -407,11 +450,12 @@ mod sni {
                 return;
             }
             let mut clicked = Vec::new();
+            let state = (self.hooks.state)();
             let reply = match method {
                 "GetLayout" => {
                     let (parent, _depth, _names) =
                         params.get::<(i32, i32, Vec<String>)>().unwrap_or((0, -1, Vec::new()));
-                    let layout = if parent == 0 { self.root() } else { self.node(parent) };
+                    let layout = if parent == 0 { self.root(state) } else { self.node(parent, state) };
                     Some(glib::Variant::tuple_from_iter([self.revision.get().to_variant(), layout]))
                 }
                 "GetGroupProperties" => {
@@ -419,7 +463,10 @@ mod sni {
                     let ids: Vec<i32> = if ids.is_empty() { (1..=MENU.len() as i32).collect() } else { ids };
                     let items =
                         ids.into_iter().filter(|&id| id >= 0 && id as usize <= MENU.len()).map(|id| {
-                            glib::Variant::tuple_from_iter([id.to_variant(), self.props(id).to_variant()])
+                            glib::Variant::tuple_from_iter([
+                                id.to_variant(),
+                                self.props(id, state).to_variant(),
+                            ])
                         });
                     let ty = glib::VariantTy::new("(ia{sv})").expect("a valid type");
                     Some(glib::Variant::tuple_from_iter([glib::Variant::array_from_iter_with_type(
@@ -428,7 +475,7 @@ mod sni {
                 }
                 "GetProperty" => {
                     let (id, name) = params.get::<(i32, String)>().unwrap_or_default();
-                    let value = self.props(id).remove(&name).unwrap_or_else(|| "".to_variant());
+                    let value = self.props(id, state).remove(&name).unwrap_or_else(|| "".to_variant());
                     Some(glib::Variant::tuple_from_iter([glib::Variant::from_variant(&value)]))
                 }
                 "Event" => {
@@ -449,57 +496,62 @@ mod sni {
             };
             invocation.return_value(reply.as_ref());
             for (id, event) in clicked {
-                self.event(id, &event);
+                self.event(id, &event, state);
             }
         }
 
-        /// A clicked entry's command.
-        fn event(&self, id: i32, event: &str) {
+        /// A clicked entry's command; one the menu no longer has (a host showing an older
+        /// layout, the windows locked since) does nothing.
+        fn event(&self, id: i32, event: &str, state: State) {
             if event != "clicked" {
                 return;
             }
-            let Some(Some(command)) = usize::try_from(id - 1).ok().and_then(|i| MENU.get(i)).copied() else {
-                return;
-            };
+            let Some(i) = usize::try_from(id - 1).ok().filter(|&i| visible(i, state)) else { return };
+            let Some(Some(command)) = MENU.get(i).copied() else { return };
             (self.hooks.command)(command);
         }
 
         /// The properties of entry `id` (0: the root).
-        fn props(&self, id: i32) -> HashMap<String, glib::Variant> {
+        fn props(&self, id: i32, state: State) -> HashMap<String, glib::Variant> {
             let mut p = HashMap::new();
             if id == 0 {
                 p.insert("children-display".to_owned(), "submenu".to_variant());
                 return p;
             }
-            match usize::try_from(id - 1).ok().and_then(|i| MENU.get(i)).copied().flatten() {
+            let Some(i) = usize::try_from(id - 1).ok().filter(|&i| i < MENU.len()) else { return p };
+            let on = visible(i, state);
+            match MENU[i] {
                 None => {
                     p.insert("type".to_owned(), "separator".to_variant());
                 }
                 Some(c) => {
-                    p.insert(
-                        "label".to_owned(),
-                        gtk_mnemonic(entry_text(c, (self.hooks.window_visible)())).to_variant(),
-                    );
-                    p.insert("enabled".to_owned(), true.to_variant());
-                    p.insert("visible".to_owned(), true.to_variant());
+                    // locked, the first entry is Show: it asks for the PIN
+                    let window = state.window_visible && !state.locked;
+                    p.insert("label".to_owned(), gtk_mnemonic(entry_text(c, window)).to_variant());
+                    p.insert("enabled".to_owned(), on.to_variant());
                 }
             }
+            p.insert("visible".to_owned(), on.to_variant());
             p
         }
 
         /// `(ia{sv}av)` for entry `id`, without children.
-        fn node(&self, id: i32) -> glib::Variant {
+        fn node(&self, id: i32, state: State) -> glib::Variant {
             let children = glib::Variant::array_from_iter_with_type(
                 glib::VariantTy::VARIANT,
                 std::iter::empty::<glib::Variant>(),
             );
-            glib::Variant::tuple_from_iter([id.to_variant(), self.props(id).to_variant(), children])
+            glib::Variant::tuple_from_iter([id.to_variant(), self.props(id, state).to_variant(), children])
         }
 
-        fn root(&self) -> glib::Variant {
-            let children = (1..=MENU.len() as i32).map(|id| glib::Variant::from_variant(&self.node(id)));
+        /// The menu with the entries `state` shows: the others are left out of the layout as
+        /// well as marked invisible, for hosts that ignore the property.
+        fn root(&self, state: State) -> glib::Variant {
+            let children = (1..=MENU.len() as i32)
+                .filter(|&id| visible(id as usize - 1, state))
+                .map(|id| glib::Variant::from_variant(&self.node(id, state)));
             let children = glib::Variant::array_from_iter_with_type(glib::VariantTy::VARIANT, children);
-            glib::Variant::tuple_from_iter([0i32.to_variant(), self.props(0).to_variant(), children])
+            glib::Variant::tuple_from_iter([0i32.to_variant(), self.props(0, state).to_variant(), children])
         }
     }
 
@@ -545,11 +597,55 @@ mod tests {
             Command::AddUrl,
             Command::StartAll,
             Command::StopAll,
+            Command::Lock,
             Command::Exit,
         ];
         assert_eq!(commands, all);
         // no separator first, last or twice in a row
         assert!(MENU.first().is_some_and(Option::is_some) && MENU.last().is_some_and(Option::is_some));
         assert!(MENU.windows(2).all(|w| w[0].is_some() || w[1].is_some()));
+    }
+
+    /// The menu as shown in state `s`: its commands, `None` for a separator.
+    fn shown(s: State) -> Vec<Option<Command>> {
+        (0..MENU.len()).filter(|&i| visible(i, s)).map(|i| MENU[i]).collect()
+    }
+
+    #[test]
+    fn lock_is_offered_with_a_pin_and_locked_leaves_show_and_exit() {
+        use Command::*;
+        let open = State { window_visible: true, locked: false, has_pin: false };
+        assert_eq!(
+            shown(open),
+            [
+                Some(Toggle),
+                None,
+                Some(AddTorrent),
+                Some(AddUrl),
+                None,
+                Some(StartAll),
+                Some(StopAll),
+                None,
+                Some(Exit)
+            ]
+        );
+        let pin = State { has_pin: true, ..open };
+        assert_eq!(shown(pin)[7..], [None, Some(Lock), Some(Exit)]);
+        // locked: no separator left over between the two
+        let locked = State { window_visible: false, locked: true, has_pin: true };
+        assert_eq!(shown(locked), [Some(Toggle), None, Some(Exit)]);
+        // past the end: nothing
+        assert!(!visible(MENU.len(), pin));
+        // every state: no separator first, last or twice in a row
+        for window_visible in [false, true] {
+            for locked in [false, true] {
+                for has_pin in [false, true] {
+                    let s = shown(State { window_visible, locked, has_pin });
+                    assert!(s.first().is_some_and(Option::is_some) && s.last().is_some_and(Option::is_some));
+                    assert!(s.windows(2).all(|w| w[0].is_some() || w[1].is_some()), "{s:?}");
+                    assert_eq!(s.contains(&Some(Lock)), has_pin && !locked);
+                }
+            }
+        }
     }
 }
