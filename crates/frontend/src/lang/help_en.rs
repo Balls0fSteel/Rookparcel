@@ -630,6 +630,16 @@ helps! {
     MenuDonate = "Says how to support Rookparcel and offers to open its donation page in your web browser.";
     /// win32 app.rs cmd::STATISTICS -> statistics::show; frontend statistics::rows
     MenuStatistics = "Shows how much Rookparcel uploaded and downloaded in all its sessions and in this one, the share ratio, the data thrown away, and the disk queue and read cache. The all-time totals stay when torrents are removed.";
+    /// win32 app.rs cmd::LOCK -> lock_command (lock::hide_windows; no PIN: pin_dialog(Form::Set) first); frontend ui_lock
+    MenuLock = "Hides every Rookparcel window in the tray; showing them again asks for the lock PIN. The torrents keep running. Without a PIN, asks for one first.";
+    /// win32 app.rs main_menu: the submenu of cmd::SET_PIN, CHANGE_PIN, REMOVE_PIN
+    MenuLockPin = "Sets, changes or removes the PIN of 4 to 6 digits that Lock Rookparcel asks for.";
+    /// win32 app.rs cmd::SET_PIN -> pin_dialog(Form::Set); frontend ui_lock::submit
+    MenuSetPin = "Asks for a new lock PIN of 4 to 6 digits, twice.";
+    /// win32 app.rs cmd::CHANGE_PIN -> pin_dialog(Form::Change); frontend ui_lock::submit
+    MenuChangePin = "Asks for the current lock PIN, then a new one twice.";
+    /// win32 app.rs cmd::REMOVE_PIN -> pin_dialog(Form::Remove); frontend ui_lock::submit (remove)
+    MenuRemovePin = "Asks for the current lock PIN, then removes it: Rookparcel can no longer be locked until a new PIN is set.";
 
     // ---- Menu: torrent list
     /// win32 app.rs cmd::OPEN_FOLDER -> torrent_action -> open_folder_target, show_in_explorer (also the Files tab's FILE_OPEN_FOLDER -> open_file)

@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::ptr::{null, null_mut};
 
 use rookparcel_frontend::tr;
+use rookparcel_frontend::ui_lock::Form;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows_sys::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -17,18 +18,20 @@ use windows_sys::Win32::UI::Controls::Dialogs::{
 };
 use windows_sys::Win32::UI::HiDpi::SystemParametersInfoForDpi;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    BS_DEFPUSHBUTTON, BS_PUSHBUTTON, DLGTEMPLATE, DS_CENTER, DS_MODALFRAME, DialogBoxIndirectParamW,
-    ES_AUTOHSCROLL, EndDialog, GetDlgItem, GetWindowLongPtrW, IDCANCEL, IDOK, IDYES, MB_ICONERROR,
-    MB_ICONINFORMATION, MB_ICONQUESTION, MB_ICONWARNING, MB_OK, MB_RIGHT, MB_RTLREADING, MB_USERICON,
-    MB_YESNO, MSGBOXPARAMSW, MessageBoxIndirectW, MessageBoxW, NONCLIENTMETRICSW, SPI_GETNONCLIENTMETRICS,
-    SendMessageW, SetWindowLongPtrW, SetWindowTextW, WM_COMMAND, WM_INITDIALOG, WS_BORDER, WS_CAPTION,
-    WS_CHILD, WS_EX_LAYOUTRTL, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_TABSTOP,
-    WS_THICKFRAME, WS_VISIBLE,
+    BS_DEFPUSHBUTTON, BS_PUSHBUTTON, DLGTEMPLATE, DS_CENTER, DS_MODALFRAME, DestroyIcon,
+    DialogBoxIndirectParamW, ES_AUTOHSCROLL, ES_NUMBER, ES_PASSWORD, EndDialog, GetDlgItem,
+    GetWindowLongPtrW, HICON, ICON_BIG, ICON_SMALL, IDCANCEL, IDOK, IDYES, MB_ICONERROR, MB_ICONINFORMATION,
+    MB_ICONQUESTION, MB_ICONWARNING, MB_OK, MB_RIGHT, MB_RTLREADING, MB_SETFOREGROUND, MB_USERICON, MB_YESNO,
+    MSGBOXPARAMSW, MessageBoxIndirectW, MessageBoxW, NONCLIENTMETRICSW, SPI_GETNONCLIENTMETRICS,
+    SendMessageW, SetForegroundWindow, SetWindowLongPtrW, SetWindowTextW, WM_COMMAND, WM_INITDIALOG,
+    WM_NEXTDLGCTL, WM_SETICON, WS_BORDER, WS_CAPTION, WS_CHILD, WS_EX_LAYOUTRTL, WS_MAXIMIZEBOX,
+    WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_TABSTOP, WS_THICKFRAME, WS_VISIBLE,
 };
 
 use windows_sys::Win32::UI::Controls::{
-    EM_SETSEL, TASKDIALOG_BUTTON, TASKDIALOGCONFIG, TDCBF_CANCEL_BUTTON, TDF_ALLOW_DIALOG_CANCELLATION,
-    TDF_POSITION_RELATIVE_TO_WINDOW, TDF_RTL_LAYOUT, TDF_SIZE_TO_CONTENT, TaskDialogIndirect,
+    EM_LIMITTEXT, EM_SETSEL, TASKDIALOG_BUTTON, TASKDIALOGCONFIG, TDCBF_CANCEL_BUTTON,
+    TDF_ALLOW_DIALOG_CANCELLATION, TDF_POSITION_RELATIVE_TO_WINDOW, TDF_RTL_LAYOUT, TDF_SIZE_TO_CONTENT,
+    TaskDialogIndirect,
 };
 
 use crate::util::{from_wide, from_wide_ptr, loword, rtl, wide, window_text};
@@ -387,6 +390,256 @@ fn input_template() -> Vec<u16> {
     t.finish()
 }
 
+// ---- The windows' lock (D69): one dialog for the unlock prompt and Set / Change / Remove PIN
+
+const ID_PIN_CURRENT: u16 = 110;
+const ID_PIN_NEW: u16 = 111;
+const ID_PIN_REPEAT: u16 = 112;
+/// The line under the boxes that says what was wrong ("Wrong PIN.", the wait).
+const ID_PIN_MESSAGE: u16 = 113;
+/// The boxes' labels, by box index.
+const ID_PIN_LABEL: u16 = 120;
+
+/// What the PIN dialog's OK does with what was typed in the current, new and repeated PIN's
+/// boxes (empty for a box the form lacks): `None` when there is nothing to act on any more (the
+/// program is exiting; the dialog closes as Cancel), else `ui_lock::submit`'s answer, whose
+/// `Err` the dialog shows under its boxes, staying open.
+pub type PinSubmit<'a> = &'a mut dyn FnMut(&str, &str, &str) -> Option<Result<(), String>>;
+
+struct PinState<'a> {
+    form: Form,
+    submit: PinSubmit<'a>,
+    done: bool,
+    /// The application icon for the caption and the taskbar button of the unlock prompt,
+    /// which has no owner (destroyed once the dialog has closed).
+    icons: [HICON; 2],
+}
+
+thread_local! {
+    /// The unlock prompt while it is open.
+    static PROMPT: std::cell::Cell<HWND> = const { std::cell::Cell::new(null_mut()) };
+}
+
+/// The unlock prompt ([`Form::Unlock`]) while it is open, else null.
+pub fn pin_prompt() -> HWND {
+    PROMPT.with(|p| p.get())
+}
+
+/// Closes the open unlock prompt as Cancel (Exit chosen meanwhile, or the PIN reset).
+pub fn close_pin_prompt() {
+    let dlg = pin_prompt();
+    if !dlg.is_null() {
+        unsafe { EndDialog(dlg, IDCANCEL as isize) };
+        // ended: a request from now on is a new one
+        PROMPT.with(|p| p.set(null_mut()));
+    }
+}
+
+/// The PIN dialog for `form` (`ui_lock::Form`: the boxes it asks), modal on `owner`; the unlock
+/// prompt has none, so that it never enables a window a hidden dialog disabled, and comes to
+/// the front. True when OK's `submit` succeeded.
+pub fn pin(owner: HWND, form: Form, submit: PinSubmit<'_>) -> bool {
+    let mut state = PinState { form, submit, done: false, icons: [null_mut(); 2] };
+    let template = pin_template(form);
+    unsafe {
+        DialogBoxIndirectParamW(
+            GetModuleHandleW(null()),
+            template.as_ptr() as *const DLGTEMPLATE,
+            owner,
+            Some(pin_proc),
+            &mut state as *mut PinState<'_> as LPARAM,
+        );
+        if form == Form::Unlock {
+            PROMPT.with(|p| p.set(null_mut()));
+        }
+        for icon in state.icons.into_iter().filter(|i| !i.is_null()) {
+            DestroyIcon(icon);
+        }
+    }
+    state.done
+}
+
+/// The ids of `form`'s boxes, top down.
+fn pin_boxes(form: Form) -> Vec<u16> {
+    let mut boxes = Vec::new();
+    if form.asks_current() {
+        boxes.push(ID_PIN_CURRENT);
+    }
+    if form.asks_new() {
+        boxes.extend([ID_PIN_NEW, ID_PIN_REPEAT]);
+    }
+    boxes
+}
+
+fn pin_label(form: Form, id: u16) -> &'static str {
+    match id {
+        ID_PIN_CURRENT => form.current_label(),
+        ID_PIN_NEW => tr!(PinNew),
+        _ => tr!(PinRepeat),
+    }
+}
+
+/// A label above each box (a line of its own, so a long translation wraps and the dialog
+/// grows), the message line, OK and Cancel.
+fn pin_template(form: Form) -> Vec<u16> {
+    const W: i16 = 230;
+    let boxes = pin_boxes(form);
+    let height = 7 + 28 * boxes.len() as i16 + 20 + 14 + 7;
+    let mut t = Template::new(W, height);
+    let mut y = 7;
+    for (i, &id) in boxes.iter().enumerate() {
+        t.item(
+            STATIC,
+            ID_PIN_LABEL + i as u16,
+            WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
+            [7, y, W - 14, 9],
+            pin_label(form, id),
+        );
+        let style = WS_CHILD
+            | WS_VISIBLE
+            | WS_BORDER
+            | WS_TABSTOP
+            | ES_AUTOHSCROLL as u32
+            | ES_PASSWORD as u32
+            | ES_NUMBER as u32;
+        t.item(EDIT, id, style, [7, y + 11, 70, 13], "");
+        y += 28;
+    }
+    t.item(STATIC, ID_PIN_MESSAGE, WS_CHILD | WS_VISIBLE | SS_NOPREFIX, [7, y, W - 14, 18], "");
+    y += 20;
+    t.item(
+        BUTTON,
+        IDOK as u16,
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON as u32,
+        [W - 111, y, 50, 14],
+        tr!(BtnOk),
+    );
+    t.item(
+        BUTTON,
+        IDCANCEL as u16,
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON as u32,
+        [W - 57, y, 50, 14],
+        tr!(BtnCancel),
+    );
+    t.finish()
+}
+
+/// `SS_NOPREFIX`: an `&` in a translation shows as itself.
+const SS_NOPREFIX: u32 = 0x80;
+
+unsafe extern "system" fn pin_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> isize {
+    unsafe {
+        if let Some(r) = crate::theme::dialog_message(dlg, msg, wp, lp) {
+            return r;
+        }
+        match msg {
+            WM_INITDIALOG => {
+                SetWindowLongPtrW(dlg, DWLP_USER, lp);
+                let st = &mut *(lp as *mut PinState<'_>);
+                let title = wide(st.form.title());
+                SetWindowTextW(dlg, title.as_ptr());
+                let boxes = pin_boxes(st.form);
+                for &id in &boxes {
+                    SendMessageW(
+                        GetDlgItem(dlg, id as i32),
+                        EM_LIMITTEXT,
+                        rookparcel_frontend::ui_lock::MAX_DIGITS,
+                        0,
+                    );
+                }
+                crate::fit::fit_texts(dlg, |_| Some(0));
+                // a label longer than the dialog is wide takes more lines, and the dialog grows
+                use windows_sys::Win32::Foundation::RECT;
+                use windows_sys::Win32::UI::WindowsAndMessaging::{
+                    GetWindowRect, MapDialogRect, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos,
+                };
+                let mut line = RECT { left: 0, top: 0, right: 0, bottom: 9 };
+                MapDialogRect(dlg, &mut line);
+                let mut grown = 0;
+                for i in 0..boxes.len() {
+                    grown +=
+                        crate::fit::fit_note_height(dlg, ID_PIN_LABEL + i as u16, line.bottom, |_| Some(0));
+                }
+                if grown > 0 {
+                    let mut r: RECT = zeroed();
+                    GetWindowRect(dlg, &mut r);
+                    let flags = SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE;
+                    SetWindowPos(dlg, null_mut(), 0, 0, r.right - r.left, r.bottom - r.top + grown, flags);
+                }
+                if st.form == Form::Unlock {
+                    PROMPT.with(|p| p.set(dlg));
+                    let dpi = windows_sys::Win32::UI::HiDpi::GetDpiForWindow(dlg);
+                    st.icons = [
+                        crate::icons::app_icon(crate::util::scale(32, dpi) as usize),
+                        crate::icons::app_icon(crate::util::scale(16, dpi) as usize),
+                    ];
+                    SendMessageW(dlg, WM_SETICON, ICON_BIG as usize, st.icons[0] as LPARAM);
+                    SendMessageW(dlg, WM_SETICON, ICON_SMALL as usize, st.icons[1] as LPARAM);
+                    // started from a second start or the tray: in front of the window it came from
+                    SetForegroundWindow(dlg);
+                }
+                1
+            }
+            WM_COMMAND => {
+                let id = loword(wp) as i32;
+                if id == IDCANCEL {
+                    EndDialog(dlg, IDCANCEL as isize);
+                    return 1;
+                }
+                if id != IDOK {
+                    return 0;
+                }
+                let st = GetWindowLongPtrW(dlg, DWLP_USER) as *mut PinState<'_>;
+                if st.is_null() {
+                    return 0;
+                }
+                let text = |id: u16| {
+                    let h = GetDlgItem(dlg, id as i32);
+                    if h.is_null() { String::new() } else { window_text(h) }
+                };
+                let (current, new, repeat) = (text(ID_PIN_CURRENT), text(ID_PIN_NEW), text(ID_PIN_REPEAT));
+                match ((*st).submit)(&current, &new, &repeat) {
+                    None => {
+                        EndDialog(dlg, IDCANCEL as isize);
+                    }
+                    Some(Ok(())) => {
+                        (*st).done = true;
+                        EndDialog(dlg, IDOK as isize);
+                    }
+                    Some(Err(message)) => {
+                        let m = wide(&message);
+                        SetWindowTextW(GetDlgItem(dlg, ID_PIN_MESSAGE as i32), m.as_ptr());
+                        // the boxes the message is about are emptied, the first takes the keys
+                        let new_pin = message == tr!(PinBadLength) || message == tr!(PinMismatch);
+                        let again: &[u16] =
+                            if new_pin { &[ID_PIN_NEW, ID_PIN_REPEAT] } else { &[ID_PIN_CURRENT] };
+                        for &b in again {
+                            SetWindowTextW(GetDlgItem(dlg, b as i32), [0u16].as_ptr());
+                        }
+                        let first = GetDlgItem(dlg, again[0] as i32);
+                        if !first.is_null() {
+                            SendMessageW(dlg, WM_NEXTDLGCTL, first as WPARAM, 1);
+                        }
+                    }
+                }
+                1
+            }
+            _ => 0,
+        }
+    }
+}
+
+/// A Yes / No question without an owner, in front (asked before the main window exists, or for
+/// a forwarded reset while every window is hidden).
+pub fn ask_front(text: &str) -> bool {
+    message(null_mut(), text, MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND) == IDYES
+}
+
+/// An information box without an owner, in front.
+pub fn info_front(text: &str) {
+    message(null_mut(), text, MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
+}
+
 /// Predefined dialog control classes (atoms) and common-control classes by name.
 pub enum Class {
     Atom(u16),
@@ -478,6 +731,7 @@ mod tests {
     use std::ptr::null_mut;
 
     use windows_sys::Win32::Graphics::Gdi::{GetObjectW, HFONT, LOGFONTW};
+    use windows_sys::Win32::UI::Controls::EM_GETLIMITTEXT;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CreateDialogIndirectParamW, DestroyWindow, WM_GETFONT,
     };
@@ -514,5 +768,74 @@ mod tests {
             assert_eq!(bf, font);
             DestroyWindow(dlg);
         }
+    }
+
+    /// The PIN dialog (D69) has the boxes its form asks for, takes 6 digits at most, hands OK
+    /// what was typed and shows the answer's message, emptying the box it is about. Made
+    /// modeless and never shown (Change PIN: the unlock prompt would come to the front).
+    #[test]
+    fn the_pin_dialog_asks_its_boxes_and_says_what_was_wrong() {
+        assert_eq!(pin_boxes(Form::Unlock), [ID_PIN_CURRENT]);
+        assert_eq!(pin_boxes(Form::Set), [ID_PIN_NEW, ID_PIN_REPEAT]);
+        assert_eq!(pin_boxes(Form::Change), [ID_PIN_CURRENT, ID_PIN_NEW, ID_PIN_REPEAT]);
+        assert_eq!(pin_boxes(Form::Remove), [ID_PIN_CURRENT]);
+        let seen = std::cell::RefCell::new(Vec::new());
+        let mut submit = |c: &str, n: &str, r: &str| {
+            seen.borrow_mut().push(format!("{c}|{n}|{r}"));
+            Some(match (c, n == r) {
+                ("1234", true) => Ok(()),
+                ("1234", false) => Err(tr!(PinMismatch).to_owned()),
+                _ => Err(tr!(LockWrong).to_owned()),
+            })
+        };
+        let mut state =
+            PinState { form: Form::Change, submit: &mut submit, done: false, icons: [null_mut(); 2] };
+        let template = pin_template(Form::Change);
+        unsafe {
+            let dlg = CreateDialogIndirectParamW(
+                GetModuleHandleW(null()),
+                template.as_ptr() as *const DLGTEMPLATE,
+                null_mut(),
+                Some(pin_proc),
+                &mut state as *mut PinState<'_> as LPARAM,
+            );
+            assert!(!dlg.is_null());
+            let text = |id: u16| window_text(GetDlgItem(dlg, id as i32));
+            let set = |id: u16, s: &str| {
+                let w = wide(s);
+                SetWindowTextW(GetDlgItem(dlg, id as i32), w.as_ptr());
+            };
+            assert_eq!(window_text(dlg), tr!(PinChangeTitle));
+            assert_eq!(text(ID_PIN_LABEL), tr!(PinCurrent));
+            assert_eq!(text(ID_PIN_LABEL + 1), tr!(PinNew));
+            assert_eq!(text(ID_PIN_LABEL + 2), tr!(PinRepeat));
+            assert_eq!(SendMessageW(GetDlgItem(dlg, ID_PIN_CURRENT as i32), EM_GETLIMITTEXT, 0, 0), 6);
+            assert!(text(ID_PIN_MESSAGE).is_empty());
+            set(ID_PIN_CURRENT, "1111");
+            set(ID_PIN_NEW, "5678");
+            set(ID_PIN_REPEAT, "5678");
+            SendMessageW(dlg, WM_COMMAND, IDOK as usize, 0);
+            assert_eq!(text(ID_PIN_MESSAGE), tr!(LockWrong));
+            assert!(text(ID_PIN_CURRENT).is_empty(), "the wrong PIN goes");
+            assert_eq!(text(ID_PIN_NEW), "5678", "the new one stays");
+            set(ID_PIN_CURRENT, "1234");
+            set(ID_PIN_REPEAT, "567");
+            SendMessageW(dlg, WM_COMMAND, IDOK as usize, 0);
+            assert_eq!(text(ID_PIN_MESSAGE), tr!(PinMismatch));
+            assert!(text(ID_PIN_NEW).is_empty() && text(ID_PIN_REPEAT).is_empty());
+            assert_eq!(text(ID_PIN_CURRENT), "1234");
+            assert!(!state_done(dlg));
+            set(ID_PIN_NEW, "5678");
+            set(ID_PIN_REPEAT, "5678");
+            SendMessageW(dlg, WM_COMMAND, IDOK as usize, 0);
+            assert!(state_done(dlg));
+            DestroyWindow(dlg);
+        }
+        assert_eq!(*seen.borrow(), ["1111|5678|5678", "1234|5678|567", "1234|5678|5678"]);
+        assert!(pin_prompt().is_null(), "only the unlock prompt is the prompt");
+    }
+
+    unsafe fn state_done(dlg: HWND) -> bool {
+        unsafe { (*(GetWindowLongPtrW(dlg, DWLP_USER) as *const PinState<'_>)).done }
     }
 }

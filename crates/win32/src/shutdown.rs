@@ -220,6 +220,11 @@ pub fn is_open() -> bool {
     !OPEN.with(Cell::get).is_null()
 }
 
+/// The countdown dialog while it is open, else null (the lock leaves it shown, D69).
+pub fn window() -> HWND {
+    OPEN.with(Cell::get)
+}
+
 /// The seconds left, if the countdown is showing.
 pub fn tick(secs: u32) {
     let dlg = OPEN.with(Cell::get);

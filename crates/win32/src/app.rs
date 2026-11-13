@@ -46,6 +46,7 @@ use rookparcel_frontend::setup_guide;
 use rookparcel_frontend::status::{self, Category, status_icon};
 use rookparcel_frontend::torrent_folders::{self, TorrentFiles, TorrentFolders, Watcher};
 use rookparcel_frontend::tracker_list::{self, TrackerList};
+use rookparcel_frontend::ui_lock::{self, Form};
 use rookparcel_frontend::update::{self, Checker, Kind, Manifest, Version};
 use rookparcel_frontend::{actions, add, create, fmt, profile, settings, tr};
 use rookparcel_nox::webui::{Rss, WebUi};
@@ -75,6 +76,7 @@ use crate::details::{self, Detail, Page, PaintCtx};
 use crate::dialogs;
 use crate::icons::{self, Icon};
 use crate::integration::{self, Integration, Keys};
+use crate::lock::{self, LockUi, Popup, ResetBy};
 use crate::search::{self as search_ui, SearchMode};
 use crate::shutdown::{self, Outcome, Power};
 use crate::tray;
@@ -103,6 +105,13 @@ const WM_APP_UPDATE: u32 = WM_APP + 9;
 /// The Web UI this window serves: what a browser changed is queued (`wparam` 0), or a browser
 /// asked for the exit (`wparam` 1).
 pub(crate) const WM_APP_WEBUI: u32 = WM_APP + 10;
+// WM_APP + 11 is `theme::WM_APP_THEME`.
+/// Rookparcel is locked and was asked to show itself (D69): the PIN prompt, or the open one to
+/// the front. Posted, so that no prompt runs inside a message another program waits for.
+const WM_APP_UNLOCK: u32 = WM_APP + 12;
+/// A second start asked to remove the PIN (`lock::COPYDATA_RESET_LOCK`); `wParam` is the
+/// `lock::ResetBy` code.
+const WM_APP_RESET_LOCK: u32 = WM_APP + 13;
 /// `COPYDATASTRUCT::dwData` for arguments forwarded by a second instance.
 pub const COPYDATA_ARGS: usize = 0x4c54_4152;
 
@@ -327,6 +336,12 @@ mod cmd {
     pub const DONATE: u16 = 156;
     /// Help > Statistics (D65).
     pub const STATISTICS: u16 = 157;
+    /// File > Lock Rookparcel (D69), Ctrl+L, and the tray menu's.
+    pub const LOCK: u16 = 158;
+    /// Options > Lock PIN: Set PIN, Change PIN, Remove PIN.
+    pub const SET_PIN: u16 = 159;
+    pub const CHANGE_PIN: u16 = 160;
+    pub const REMOVE_PIN: u16 = 161;
     /// File > Profiles' list, by `profile::menu` index (at most 256 entries).
     pub const PROFILE_BASE: u16 = 3700;
     pub const LABEL_BASE: u16 = 1000;
@@ -536,10 +551,18 @@ struct App {
     web_host: Arc<WindowHost>,
     web_status: WebStatus,
     keys: HashMap<String, TorrentId>,
+    /// The windows' lock (D69): the windows it hid, what waits for the PIN, the wrong PINs.
+    /// Whether it is locked is `ui_lock::is_locked(&prefs)`.
+    lock: LockUi<UrlResult>,
 }
 
 thread_local! {
     static APP: RefCell<Option<App>> = const { RefCell::new(None) };
+}
+
+/// Whether the windows are locked (D69); false once the app is gone.
+fn is_locked() -> bool {
+    with_app(|a| ui_lock::is_locked(&a.prefs)) == Some(true)
 }
 
 fn with_app<R>(f: impl FnOnce(&mut App) -> R) -> Option<R> {
@@ -646,11 +669,13 @@ pub struct Args {
     pub remote: bool,
     /// Start in the tray, without showing the window.
     pub minimized: bool,
+    /// Remove the lock's PIN after asking (D69): `--reset-lock`, or Ctrl held (`main` adds it).
+    pub reset: Option<ResetBy>,
     pub sources: Vec<String>,
 }
 
 pub fn parse_args(args: &[String]) -> Args {
-    let mut out = Args { demo: None, remote: false, minimized: false, sources: Vec::new() };
+    let mut out = Args { demo: None, remote: false, minimized: false, reset: None, sources: Vec::new() };
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -662,6 +687,7 @@ pub fn parse_args(args: &[String]) -> Args {
                 break;
             }
             s if s.eq_ignore_ascii_case(integration::MINIMIZED) => out.minimized = true,
+            s if ui_lock::is_reset_switch(s) => out.reset = Some(ResetBy::Switch),
             s if s.starts_with("--") => {}
             s => out.sources.push(s.to_owned()),
         }
@@ -771,6 +797,10 @@ pub fn run(args: Args) -> i32 {
             key => prefs.set("ui.theme", key),
         }
     }
+    // a forgotten lock PIN (D69): asked before any window shows
+    let pin_removed = args.reset.is_some_and(|by| reset_at_start(&mut prefs, by));
+    // a locked Rookparcel starts in the tray and asks for the PIN before it shows anything
+    let start_locked = ui_lock::is_locked(&prefs);
     // a seeding goal stored before 1.2.45
     rookparcel_frontend::seeding::migrate(&mut prefs);
     let mut opts = Options::load(&prefs, &downloads_folder());
@@ -900,6 +930,9 @@ pub fn run(args: Args) -> i32 {
         for p in lang_problems {
             log_line(&p);
         }
+        if pin_removed {
+            log_line(tr!(LogLockPinRemoved));
+        }
         if let Some(r) = crate::remote_ui::get() {
             let title = wide(&tr!(TitleRemote, version = profile::version(), label = r.label));
             SetWindowTextW(hwnd, title.as_ptr());
@@ -908,21 +941,26 @@ pub fn run(args: Args) -> i32 {
         if opts.gui.ip_filter && local {
             with_app(|a| load_ip_filter(a, &opts.gui));
         }
-        restore_placement(hwnd, args.minimized);
+        restore_placement(hwnd, args.minimized || start_locked);
         if local {
             // PaTorrent's associations and autostart entries become ours (D59)
             let _ = integration::adopt_patorrent(&Keys::user(), &exe_path());
             // an association from before `--shell` (SEC-18); failing leaves it as it was
             let _ = integration::upgrade(&Keys::user(), &exe_path(), profile::current().name.as_deref());
         }
-        // not at a login's minimized start, where nobody asked for the window
-        if opts.gui.check_association && local && !args.minimized {
+        // not at a login's minimized start, where nobody asked for the window, nor while locked
+        if opts.gui.check_association && local && !args.minimized && !start_locked {
             check_association(hwnd);
         }
         // the main window takes second starts from now on
         let mut sources = args.sources.clone();
         sources.extend(close_waiting_window(waiting));
+        // locked: held, and the PIN asked for
         add_sources(hwnd, &sources);
+        // a locked start by hand asks for the PIN at once; Cancel leaves it in the tray
+        if start_locked && !args.minimized && sources.is_empty() {
+            PostMessageW(hwnd, WM_APP_UNLOCK, 0, 0);
+        }
 
         let accels = [
             ACCEL { fVirt: FCONTROL | FVIRTKEY, key: b'O' as u16, cmd: cmd::ADD },
@@ -932,6 +970,7 @@ pub fn run(args: Args) -> i32 {
             ACCEL { fVirt: FCONTROL | FVIRTKEY, key: b'G' as u16, cmd: cmd::SETUP_GUIDE },
             ACCEL { fVirt: FCONTROL | FVIRTKEY, key: b'A' as u16, cmd: cmd::SELECT_ALL },
             ACCEL { fVirt: FCONTROL | FVIRTKEY, key: b'F' as u16, cmd: cmd::FIND },
+            ACCEL { fVirt: FCONTROL | FVIRTKEY, key: b'L' as u16, cmd: cmd::LOCK },
             ACCEL { fVirt: FVIRTKEY, key: VK_DELETE, cmd: cmd::REMOVE },
             ACCEL { fVirt: FSHIFT | FVIRTKEY, key: VK_DELETE, cmd: cmd::REMOVE_DATA },
             ACCEL { fVirt: FCONTROL | FVIRTKEY, key: b'S' as u16, cmd: cmd::START },
@@ -996,6 +1035,7 @@ unsafe fn main_menu() -> HMENU {
         submenu(file, profiles, tr!(MenuProfiles));
         append(file, cmd::CONNECT_REMOTE, tr!(MenuConnectRemote));
         separator(file);
+        append(file, cmd::LOCK, &shortcut(tr!(MenuLock), Hotkey::Ctrl('L')));
         append(file, cmd::EXIT, tr!(MenuExit));
         let options = CreatePopupMenu();
         append(options, cmd::PREFS, &shortcut(tr!(MenuPreferences), Hotkey::Ctrl('P')));
@@ -1020,6 +1060,13 @@ unsafe fn main_menu() -> HMENU {
         separator(options);
         append(options, cmd::CLOSE_TO_TRAY, tr!(MenuCloseToTray));
         append(options, cmd::MIN_TO_TRAY, tr!(MenuMinimizeToTray));
+        separator(options);
+        // greyed by `update_menu` as a PIN is set or not (D69)
+        let pin = CreatePopupMenu();
+        append(pin, cmd::SET_PIN, tr!(MenuSetPin));
+        append(pin, cmd::CHANGE_PIN, tr!(MenuChangePin));
+        append(pin, cmd::REMOVE_PIN, tr!(MenuRemovePin));
+        submenu(options, pin, tr!(MenuLockPin));
         let help = CreatePopupMenu();
         append(help, cmd::WEBSITE, tr!(MenuWebsite));
         if update::AVAILABLE {
@@ -1456,6 +1503,7 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
             web_host: WindowHost::new(hwnd),
             web_status: WebStatus::Off,
             keys: HashMap::new(),
+            lock: LockUi::default(),
         };
         APP.with(|a| *a.borrow_mut() = Some(app));
 
@@ -1978,6 +2026,16 @@ unsafe fn update_menu(hwnd: HWND) {
         if let Some(mode) = with_app(|a| a.auto_shutdown.mode()) {
             check_auto_shutdown(menu, mode);
         }
+        if let Some(has_pin) = with_app(|a| ui_lock::has_pin(&a.prefs)) {
+            grey_pin_items(menu, has_pin);
+        }
+    }
+}
+
+/// Options > Lock PIN (D69): Set PIN while there is none, Change and Remove PIN once there is.
+unsafe fn grey_pin_items(menu: HMENU, has_pin: bool) {
+    for (id, off) in [(cmd::SET_PIN, has_pin), (cmd::CHANGE_PIN, !has_pin), (cmd::REMOVE_PIN, !has_pin)] {
+        unsafe { EnableMenuItem(menu, id as u32, MF_BYCOMMAND | if off { MF_GRAYED } else { MF_ENABLED }) };
     }
 }
 
@@ -3187,24 +3245,27 @@ unsafe fn on_alerts(hwnd: HWND) {
                 let _ = a.prefs.save();
             });
         }
-        if with_app(|a| a.prefs.get_bool("ui.balloons", true)) != Some(true) {
+        // locked (D69): no balloon names a torrent, and the error boxes wait for the PIN
+        let locked = is_locked();
+        if locked || with_app(|a| a.prefs.get_bool("ui.balloons", true)) != Some(true) {
             balloons.clear();
         }
         for name in balloons {
             tray::balloon(hwnd, tr!(BalloonComplete), &name);
         }
         for e in errors {
-            dialogs::error(hwnd, &e);
+            show_or_hold(hwnd, Popup::Error(e));
         }
         if magnet_ready {
-            // posted: the dialog's message loop must not run inside this alert batch
+            // posted: the dialog's message loop must not run inside this alert batch (and it
+            // waits there while locked)
             PostMessageW(hwnd, WM_APP_MAGNET, 0, 0);
         }
         bench::after_alerts();
         // Auto Shutdown's Standby / Hibernate; returns once the computer is awake again
         if let Some(Err(e)) = suspend.map(shutdown::perform) {
             log_line(&tr!(LogShutdown, what = e.replace('\n', " ")));
-            dialogs::error(hwnd, &e);
+            show_or_hold(hwnd, Popup::Error(e));
         }
     }
 }
@@ -3333,7 +3394,17 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 0
             }
             WM_APP_URL => {
-                url_done(hwnd, *Box::from_raw(lparam as *mut UrlResult));
+                show_or_hold(hwnd, Popup::Url(*Box::from_raw(lparam as *mut UrlResult)));
+                0
+            }
+            WM_APP_UNLOCK => {
+                request_unlock(hwnd);
+                0
+            }
+            WM_APP_RESET_LOCK => {
+                if let Some(by) = ResetBy::from_code(wparam as u32) {
+                    reset_lock(hwnd, by);
+                }
                 0
             }
             WM_APP_COUNTDOWN => {
@@ -3341,8 +3412,21 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 0
             }
             WM_APP_ARGS => {
+                // a forwarded reset is being asked (D69): the arguments wait for its answer
+                let wait = with_app(|a| {
+                    a.lock.deferred_args |= a.lock.asking_reset;
+                    a.lock.asking_reset
+                });
+                if wait == Some(true) {
+                    return 0;
+                }
                 let args = with_app(|a| std::mem::take(&mut a.pending_args)).unwrap_or_default();
-                add_sources(hwnd, &args);
+                if args.is_empty() && is_locked() {
+                    // a start without torrents shows the window: here, the PIN prompt
+                    request_unlock(hwnd);
+                } else {
+                    add_sources(hwnd, &args);
+                }
                 0
             }
             WM_APP_RSS => {
@@ -3355,7 +3439,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 0
             }
             WM_APP_MAGNET => {
-                magnet_dialogs(hwnd);
+                show_or_hold(hwnd, Popup::Magnet);
                 0
             }
             WM_APP_UPDATE => {
@@ -3577,12 +3661,20 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 if lparam == 0 {
                     return 0;
                 }
-                let Some(args) = copydata_args(&*(lparam as *const COPYDATASTRUCT)) else { return 0 };
+                let cds = &*(lparam as *const COPYDATASTRUCT);
+                // a second start's reset of the lock PIN, before its arguments (D69): asked
+                // once this message has returned
+                if let Some(by) = lock::copydata_reset(cds) {
+                    PostMessageW(hwnd, WM_APP_RESET_LOCK, by.code() as usize, 0);
+                    return 1;
+                }
+                let Some(args) = copydata_args(cds) else { return 0 };
                 // µTorrent's "Activate the program window"; without it only the Add New
                 // Torrent dialog comes up. A start without torrents always shows the window.
+                // Locked, the PIN prompt comes with `WM_APP_ARGS` instead.
                 let activate = args.is_empty()
                     || with_app(|a| GuiOptions::load(&a.prefs, &a.save_path).activate_on_add).unwrap_or(true);
-                if activate {
+                if activate && !is_locked() {
                     show_window(hwnd);
                 }
                 // The sender waits for this message to return: the Add New Torrent dialog must
@@ -3715,8 +3807,14 @@ unsafe fn close_session(hwnd: HWND, end_session: bool) {
     }
 }
 
+/// Shows the main window; while locked, asks for the PIN first (posted, as this may run inside
+/// a message another program waits for).
 unsafe fn show_window(hwnd: HWND) {
     unsafe {
+        if is_locked() {
+            PostMessageW(hwnd, WM_APP_UNLOCK, 0, 0);
+            return;
+        }
         if IsIconic(hwnd) != 0 {
             ShowWindow(hwnd, SW_RESTORE);
         } else {
@@ -3728,10 +3826,231 @@ unsafe fn show_window(hwnd: HWND) {
 
 unsafe fn toggle_window(hwnd: HWND) {
     unsafe {
-        if IsWindowVisible(hwnd) != 0 && IsIconic(hwnd) == 0 {
+        if is_locked() {
+            // hidden by the lock (or a prompt to bring forward)
+            show_window(hwnd);
+        } else if IsWindowVisible(hwnd) != 0 && IsIconic(hwnd) == 0 {
             ShowWindow(hwnd, SW_HIDE);
         } else {
             show_window(hwnd);
+        }
+    }
+}
+
+// ---- The windows' lock (D69): `lock.rs` has the state, `ui_lock` the PIN, `dialogs::pin`
+// the dialog
+
+/// Saves the preferences at once (a lock or a PIN must survive a crash); a failure goes to the
+/// Logger.
+fn save_prefs_now(a: &mut App) {
+    if let Err(e) = a.prefs.save() {
+        a.detail.push_log(format!("{} {}", now_hms(), tr!(LogPrefsNotSaved, error = e)));
+    }
+}
+
+/// The PIN dialog for `form` on the main window: Set, Change or Remove PIN, or Set before the
+/// first lock. True when its OK went through (saved).
+unsafe fn pin_dialog(hwnd: HWND, form: Form) -> bool {
+    let mut submit = |current: &str, new: &str, repeat: &str| {
+        with_app(|a| {
+            let now = std::time::Instant::now();
+            let r = ui_lock::submit(form, &mut a.prefs, &mut a.lock.guard, current, new, repeat, now);
+            if r.is_ok() {
+                save_prefs_now(a);
+            }
+            r
+        })
+    };
+    // modal; nothing is borrowed across it
+    let done = dialogs::pin(hwnd, form, &mut submit);
+    unsafe { update_menu(hwnd) };
+    done
+}
+
+/// File > Lock Rookparcel, Ctrl+L, the tray's Lock: without a PIN, Set PIN first.
+unsafe fn lock_command(hwnd: HWND) {
+    let Some(has_pin) = with_app(|a| ui_lock::has_pin(&a.prefs)) else { return };
+    if !has_pin && !unsafe { pin_dialog(hwnd, Form::Set) } {
+        return;
+    }
+    unsafe { lock_now() };
+}
+
+/// Locks: `ui.locked` saved at once, every visible window of the GUI hidden and remembered (the
+/// Auto Shutdown countdown, which names no torrent, stays).
+unsafe fn lock_now() {
+    let locked = with_app(|a| {
+        let locked = ui_lock::lock(&mut a.prefs);
+        if locked {
+            save_prefs_now(a);
+        }
+        locked
+    });
+    if locked != Some(true) {
+        return;
+    }
+    unsafe {
+        // an open menu (the menu bar's, a context menu) closes
+        EndMenu();
+        let hidden = lock::hide_windows(&[crate::shutdown::window()]);
+        with_app(|a| a.lock.hidden = hidden);
+    }
+}
+
+/// Asks for the PIN to show Rookparcel again: the prompt, without an owner (a hidden dialog
+/// may have disabled the main window) and in front; an open prompt only comes forward. OK
+/// with the PIN unlocks; Cancel leaves Rookparcel locked in the tray and drops the sources
+/// that were waiting. Exit chosen from the tray meanwhile closes the prompt and the app.
+unsafe fn request_unlock(hwnd: HWND) {
+    unsafe {
+        let open = dialogs::pin_prompt();
+        if !open.is_null() {
+            SetForegroundWindow(open);
+            return;
+        }
+        if !is_locked() {
+            return;
+        }
+        let mut submit = |current: &str, new: &str, repeat: &str| {
+            with_app(|a| {
+                let now = std::time::Instant::now();
+                let r =
+                    ui_lock::submit(Form::Unlock, &mut a.prefs, &mut a.lock.guard, current, new, repeat, now);
+                if r.is_ok() {
+                    save_prefs_now(a);
+                }
+                r
+            })
+        };
+        // modal; nothing is borrowed across it
+        if dialogs::pin(null_mut(), Form::Unlock, &mut submit) {
+            unlocked(hwnd);
+        } else {
+            with_app(|a| {
+                if ui_lock::is_locked(&a.prefs) {
+                    a.lock.held.take_sources();
+                }
+            });
+        }
+    }
+}
+
+/// After the PIN (or a reset): the windows the lock hid come back as they were, else the main
+/// window shows; then what waited for the PIN.
+unsafe fn unlocked(hwnd: HWND) {
+    let Some(hidden) = with_app(|a| std::mem::take(&mut a.lock.hidden)) else { return };
+    unsafe {
+        match lock::restore_windows(&hidden) {
+            Some(top) => {
+                SetForegroundWindow(top);
+            }
+            None if IsWindowVisible(hwnd) == 0 => show_window(hwnd),
+            None => {}
+        }
+        release_held(hwnd);
+    }
+}
+
+/// What waited for the PIN: the sources first (what the user just did), then the popups in
+/// their order, each only while still unlocked (one of them may be where the user locks again).
+unsafe fn release_held(hwnd: HWND) {
+    let sources = with_app(|a| a.lock.held.take_sources()).unwrap_or_default();
+    unsafe {
+        add_sources(hwnd, &sources);
+        while let Some(Some(p)) =
+            with_app(|a| if ui_lock::is_locked(&a.prefs) { None } else { a.lock.held.pop() })
+        {
+            show_popup(hwnd, p);
+        }
+    }
+}
+
+/// Shows `p` now, or holds it while locked.
+unsafe fn show_or_hold(hwnd: HWND, p: Popup<UrlResult>) {
+    let mut p = Some(p);
+    with_app(|a| {
+        if ui_lock::is_locked(&a.prefs) {
+            a.lock.held.push(p.take().expect("not taken yet"));
+        }
+    });
+    if let Some(p) = p {
+        unsafe { show_popup(hwnd, p) };
+    }
+}
+
+unsafe fn show_popup(hwnd: HWND, p: Popup<UrlResult>) {
+    unsafe {
+        match p {
+            Popup::Error(text) => dialogs::error(hwnd, &text),
+            Popup::Info(text) => dialogs::info(hwnd, &text),
+            Popup::Magnet => magnet_dialogs(hwnd),
+            Popup::Url(r) => url_done(hwnd, r),
+            Popup::Update(v) => offer_update(hwnd, &v),
+        }
+    }
+}
+
+/// `--reset-lock` or Ctrl held at start (D69), before any window: with a PIN, asks and removes
+/// it (true: removed, saved); without one, the switch says so and the key does nothing.
+fn reset_at_start(prefs: &mut Prefs, by: ResetBy) -> bool {
+    if !ui_lock::has_pin(prefs) {
+        if by == ResetBy::Switch {
+            dialogs::info_front(tr!(LockResetNone));
+        }
+        return false;
+    }
+    if !dialogs::ask_front(tr!(LockResetAsk)) {
+        return false;
+    }
+    ui_lock::remove(prefs);
+    if let Err(e) = prefs.save() {
+        dialogs::error(null_mut(), &tr!(LogPrefsNotSaved, error = e));
+    }
+    true
+}
+
+/// `WM_APP_RESET_LOCK`: a second start asked to remove the PIN; asked here as at start, before
+/// its arguments are handled (`WM_APP_ARGS` waits). Yes unlocks, closing an open prompt; No
+/// leaves it to the arguments (a start asks for the PIN).
+unsafe fn reset_lock(hwnd: HWND, by: ResetBy) {
+    let Some(has_pin) = with_app(|a| {
+        a.lock.asking_reset = true;
+        ui_lock::has_pin(&a.prefs)
+    }) else {
+        return;
+    };
+    let yes = if has_pin {
+        dialogs::ask_front(tr!(LockResetAsk))
+    } else {
+        if by == ResetBy::Switch {
+            dialogs::info_front(tr!(LockResetNone));
+        }
+        false
+    };
+    let deferred = with_app(|a| {
+        a.lock.asking_reset = false;
+        std::mem::take(&mut a.lock.deferred_args)
+    });
+    if deferred == Some(true) {
+        unsafe { PostMessageW(hwnd, WM_APP_ARGS, 0, 0) };
+    }
+    if !yes {
+        return;
+    }
+    let Some(was_locked) = with_app(|a| {
+        let was = ui_lock::is_locked(&a.prefs);
+        ui_lock::remove(&mut a.prefs);
+        save_prefs_now(a);
+        was
+    }) else {
+        return;
+    };
+    log_line(tr!(LogLockPinRemoved));
+    unsafe {
+        update_menu(hwnd);
+        dialogs::close_pin_prompt();
+        if was_locked {
+            unlocked(hwnd);
         }
     }
 }
@@ -3793,20 +4112,42 @@ unsafe fn popup(hwnd: HWND, menu: HMENU, x: i32, y: i32) -> u16 {
     }
 }
 
+/// The tray menu's items (`None`: a separator). Locked (D69), only Show (which asks for the
+/// PIN) and Exit; Lock Rookparcel once there is a PIN to unlock with.
+fn tray_items(shown: bool, locked: bool, has_pin: bool) -> Vec<Option<(u16, &'static str)>> {
+    if locked {
+        return vec![Some((cmd::TRAY_TOGGLE, tr!(MenuShow))), None, Some((cmd::EXIT, tr!(MenuExit)))];
+    }
+    let mut items = vec![
+        Some((cmd::TRAY_TOGGLE, if shown { tr!(MenuHide) } else { tr!(MenuShow) })),
+        None,
+        Some((cmd::ADD, tr!(MenuAddTorrent))),
+        Some((cmd::ADD_URL, tr!(MenuAddUrl))),
+        None,
+        Some((cmd::START_ALL, tr!(MenuStartAll))),
+        Some((cmd::STOP_ALL, tr!(MenuStopAll))),
+        None,
+    ];
+    if has_pin {
+        items.push(Some((cmd::LOCK, tr!(MenuLock))));
+    }
+    items.push(Some((cmd::EXIT, tr!(MenuExit))));
+    items
+}
+
 unsafe fn tray_menu(hwnd: HWND) {
     unsafe {
         let menu = CreatePopupMenu();
         // as `toggle_window` acts: a minimized window is shown, not hidden
         let shown = IsWindowVisible(hwnd) != 0 && IsIconic(hwnd) == 0;
-        append(menu, cmd::TRAY_TOGGLE, if shown { tr!(MenuHide) } else { tr!(MenuShow) });
-        separator(menu);
-        append(menu, cmd::ADD, tr!(MenuAddTorrent));
-        append(menu, cmd::ADD_URL, tr!(MenuAddUrl));
-        separator(menu);
-        append(menu, cmd::START_ALL, tr!(MenuStartAll));
-        append(menu, cmd::STOP_ALL, tr!(MenuStopAll));
-        separator(menu);
-        append(menu, cmd::EXIT, tr!(MenuExit));
+        let (locked, has_pin) =
+            with_app(|a| (ui_lock::is_locked(&a.prefs), ui_lock::has_pin(&a.prefs))).unwrap_or_default();
+        for item in tray_items(shown, locked, has_pin) {
+            match item {
+                Some((id, text)) => append(menu, id, text),
+                None => separator(menu),
+            }
+        }
         let mut p: POINT = zeroed();
         GetCursorPos(&mut p);
         // Without this the menu does not close when clicking elsewhere.
@@ -4119,7 +4460,22 @@ unsafe fn open_file(hwnd: HWND, row: usize, folder: bool) {
 
 unsafe fn on_command(hwnd: HWND, id: u16) {
     unsafe {
+        // locked (D69): only what the locked tray menu offers; a posted command or a stray
+        // shortcut does nothing
+        if !matches!(id, cmd::TRAY_TOGGLE | cmd::EXIT) && is_locked() {
+            return;
+        }
         match id {
+            cmd::LOCK => lock_command(hwnd),
+            cmd::SET_PIN => {
+                pin_dialog(hwnd, Form::Set);
+            }
+            cmd::CHANGE_PIN => {
+                pin_dialog(hwnd, Form::Change);
+            }
+            cmd::REMOVE_PIN => {
+                pin_dialog(hwnd, Form::Remove);
+            }
             cmd::ADD => {
                 let files = dialogs::open_torrents(hwnd);
                 add_sources(hwnd, &files);
@@ -4177,6 +4533,8 @@ unsafe fn on_command(hwnd: HWND, id: u16) {
                 show_rss(hwnd, feed);
             }
             cmd::EXIT => {
+                // from the tray while the PIN prompt is open: the prompt goes first
+                dialogs::close_pin_prompt();
                 with_app(|a| a.quitting = true);
                 DestroyWindow(hwnd);
             }
@@ -4601,9 +4959,24 @@ unsafe fn remove_selected(hwnd: HWND, delete_data: bool) {
     });
 }
 
-/// Adds `.torrent` paths, `magnet:` links and `http(s)://` URLs.
+/// Adds `.torrent` paths, `magnet:` links and `http(s)://` URLs. Locked (D69), they wait for the
+/// PIN, which is asked for; one locked meanwhile (from the tray, during an Add dialog) holds
+/// the rest without asking.
 unsafe fn add_sources(hwnd: HWND, sources: &[String]) {
-    for s in sources {
+    for (i, s) in sources.iter().enumerate() {
+        let held = with_app(|a| {
+            let locked = ui_lock::is_locked(&a.prefs);
+            if locked {
+                a.lock.held.hold_sources(sources[i..].iter().cloned());
+            }
+            locked
+        });
+        if held == Some(true) {
+            if i == 0 {
+                unsafe { PostMessageW(hwnd, WM_APP_UNLOCK, 0, 0) };
+            }
+            return;
+        }
         let s = s.trim().trim_matches('"');
         if s.is_empty() {
             continue;
@@ -4674,6 +5047,11 @@ unsafe fn magnet_dialogs(hwnd: HWND) {
     loop {
         let next = with_app(|a| {
             if a.awaiting_dialog {
+                return None;
+            }
+            // locked during the last dialog (D69): the next ones wait for the PIN
+            if ui_lock::is_locked(&a.prefs) {
+                a.lock.held.push(Popup::Magnet);
                 return None;
             }
             let key = a.awaiting.ready().into_iter().next()?;
@@ -5058,7 +5436,8 @@ fn stop_web(a: &mut App) {
 /// alert batch.
 fn sync_web(a: &mut App) {
     let Some(w) = &a.web else { return };
-    let changes = a.prefs.take_changes();
+    // the lock's keys are the window's own (D69): the Web UI has its own login
+    let changes = ui_lock::without_lock_keys(a.prefs.take_changes());
     if !changes.is_empty() {
         w.options_changed(&changes);
     }
@@ -5071,6 +5450,8 @@ fn sync_web(a: &mut App) {
 /// sight.
 fn on_web_changes() {
     let Some(changes) = with_app(|a| a.web_host.take()) else { return };
+    // a browser never sets or removes the windows' PIN (D69)
+    let changes = ui_lock::without_lock_keys(changes);
     if changes.is_empty() {
         return;
     }
@@ -6093,18 +6474,21 @@ unsafe fn update_done(hwnd: HWND, result: Result<Manifest, String>) {
     }) else {
         return;
     };
-    match (f.kind, f.answer) {
-        (Kind::Automatic, Ok(Some(v))) => {
-            unsafe { show_update_notice(hwnd) };
-            if f.announce {
-                unsafe { offer_update(hwnd, &v) };
+    // the boxes wait for the PIN while locked (D69)
+    unsafe {
+        match (f.kind, f.answer) {
+            (Kind::Automatic, Ok(Some(v))) => {
+                show_update_notice(hwnd);
+                if f.announce {
+                    show_or_hold(hwnd, Popup::Update(v));
+                }
             }
+            (Kind::Automatic, Ok(None)) => show_update_notice(hwnd),
+            (Kind::Automatic, Err(_)) => {}
+            (Kind::Manual, Ok(Some(v))) => show_or_hold(hwnd, Popup::Update(v)),
+            (Kind::Manual, Ok(None)) => show_or_hold(hwnd, Popup::Info(tr!(UpdateNewest, version = current))),
+            (Kind::Manual, Err(e)) => show_or_hold(hwnd, Popup::Error(tr!(UpdateFailed, error = e))),
         }
-        (Kind::Automatic, Ok(None)) => unsafe { show_update_notice(hwnd) },
-        (Kind::Automatic, Err(_)) => {}
-        (Kind::Manual, Ok(Some(v))) => unsafe { offer_update(hwnd, &v) },
-        (Kind::Manual, Ok(None)) => dialogs::info(hwnd, &tr!(UpdateNewest, version = current)),
-        (Kind::Manual, Err(e)) => dialogs::error(hwnd, &tr!(UpdateFailed, error = e)),
     }
 }
 
@@ -7562,6 +7946,72 @@ mod tests {
         );
         assert!(!a.minimized && !a.remote);
         assert_eq!(a.sources, ["magnet:?xt=urn:btih:y"]);
+        assert_eq!(a.reset, None);
+    }
+
+    /// `--reset-lock` (any case) asks to remove the PIN (D69); after `--shell` it is part of a
+    /// link, not a switch (SEC-18).
+    #[test]
+    fn the_command_line_takes_the_lock_reset() {
+        let a = parse_args(&["--minimized", "--Reset-Lock", r"C:\a.torrent"].map(String::from));
+        assert_eq!(a.reset, Some(ResetBy::Switch));
+        assert!(a.minimized);
+        assert_eq!(a.sources, [r"C:\a.torrent"]);
+        assert_eq!(parse_args(&["--reset-lock".to_owned()]).reset, Some(ResetBy::Switch));
+        assert_eq!(parse_args(&["--reset".to_owned(), "--lock".to_owned()]).reset, None);
+        let a = parse_args(&["--shell", "magnet:?xt=urn:btih:y", "--reset-lock"].map(String::from));
+        assert_eq!(a.reset, None);
+        // Ctrl held (`main`) joins the switch
+        assert_eq!(lock::reset_by(true, parse_args(&[]).reset.is_some()), Some(ResetBy::Key));
+        assert_eq!(lock::reset_by(true, a.reset.is_some()), Some(ResetBy::Key));
+    }
+
+    /// The tray menu while locked offers only Show (which asks for the PIN) and Exit; unlocked,
+    /// Lock comes above Exit once there is a PIN (D69).
+    #[test]
+    fn the_locked_tray_menu_offers_show_and_exit() {
+        let ids = |items: Vec<Option<(u16, &str)>>| {
+            items.into_iter().map(|i| i.map(|(id, _)| id)).collect::<Vec<_>>()
+        };
+        let locked = tray_items(false, true, true);
+        assert_eq!(ids(locked.clone()), [Some(cmd::TRAY_TOGGLE), None, Some(cmd::EXIT)]);
+        assert_eq!(locked[0].unwrap().1, tr!(MenuShow));
+        assert_eq!(ids(tray_items(true, true, true)), ids(locked), "Show even if the window was shown");
+        let open = tray_items(true, false, false);
+        assert_eq!(open[0].unwrap().1, tr!(MenuHide));
+        assert!(!ids(open.clone()).contains(&Some(cmd::LOCK)), "no Lock without a PIN");
+        let with_pin = ids(tray_items(false, false, true));
+        assert_eq!(with_pin[with_pin.len() - 2..], [Some(cmd::LOCK), Some(cmd::EXIT)]);
+        assert_eq!(with_pin.len(), ids(open).len() + 1);
+        for id in [cmd::ADD, cmd::ADD_URL, cmd::START_ALL, cmd::STOP_ALL] {
+            assert!(with_pin.contains(&Some(id)));
+        }
+    }
+
+    /// File > Lock Rookparcel with its shortcut above Exit, and Options > Lock PIN's items
+    /// greyed by whether a PIN is set (D69).
+    #[test]
+    fn the_lock_menu_items() {
+        unsafe {
+            let bar = main_menu();
+            let file = GetSubMenu(bar, 0);
+            let n = GetMenuItemCount(file);
+            assert_eq!(GetMenuItemID(file, n - 1), cmd::EXIT as u32);
+            assert_eq!(GetMenuItemID(file, n - 2), cmd::LOCK as u32);
+            let mut buf = [0u16; 128];
+            let len =
+                GetMenuStringW(file, cmd::LOCK as u32, buf.as_mut_ptr(), buf.len() as i32, MF_BYCOMMAND);
+            assert_eq!(
+                String::from_utf16_lossy(&buf[..len as usize]),
+                shortcut(tr!(MenuLock), Hotkey::Ctrl('L'))
+            );
+            let greyed = |id: u16| GetMenuState(bar, id as u32, MF_BYCOMMAND) & MF_GRAYED != 0;
+            grey_pin_items(bar, false);
+            assert!(!greyed(cmd::SET_PIN) && greyed(cmd::CHANGE_PIN) && greyed(cmd::REMOVE_PIN));
+            grey_pin_items(bar, true);
+            assert!(greyed(cmd::SET_PIN) && !greyed(cmd::CHANGE_PIN) && !greyed(cmd::REMOVE_PIN));
+            DestroyMenu(bar);
+        }
     }
 
     #[test]
