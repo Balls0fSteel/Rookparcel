@@ -35,6 +35,8 @@ mod icons;
 #[cfg(windows)]
 mod integration;
 #[cfg(windows)]
+mod lock;
+#[cfg(windows)]
 mod notices;
 #[cfg(windows)]
 mod preferences;
@@ -69,6 +71,9 @@ mod webui_host;
 
 #[cfg(windows)]
 fn main() {
+    // Ctrl held while Rookparcel starts asks to remove a forgotten lock PIN (D69): read first,
+    // while the key is still down
+    let ctrl_held = ctrl_held();
     let args: Vec<String> = std::env::args().skip(1).collect();
     // first: every folder below depends on it (D42); never a source
     let args = match rookparcel_frontend::profile::split_args(&args) {
@@ -89,12 +94,27 @@ fn main() {
         app::folder_in_use(&old);
         std::process::exit(1);
     }
-    let parsed = app::parse_args(&args);
+    let mut parsed = app::parse_args(&args);
+    parsed.reset = lock::reset_by(ctrl_held, parsed.reset.is_some());
     // a remote window is not the single local instance, and takes no forwarded torrents
-    if parsed.demo.is_none() && !parsed.remote && instance::forward(&parsed.sources) {
+    if parsed.demo.is_none() && !parsed.remote && instance::forward(&parsed.sources, parsed.reset) {
         return;
     }
     std::process::exit(app::run(parsed));
+}
+
+/// Whether Ctrl is down now (`GetAsyncKeyState`'s high bit).
+#[cfg(windows)]
+fn ctrl_held() -> bool {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_CONTROL};
+    key_down(unsafe { GetAsyncKeyState(VK_CONTROL as i32) })
+}
+
+/// `GetAsyncKeyState`'s answer says the key is down: its high bit (the low one only says it
+/// was pressed since an earlier call).
+#[cfg(windows)]
+fn key_down(state: i16) -> bool {
+    state as u16 & 0x8000 != 0
 }
 
 #[cfg(windows)]
@@ -105,6 +125,7 @@ mod instance {
     //! for that and then runs as the first, instead of handing its torrents to a window that
     //! takes none any more.
 
+    use std::mem::size_of;
     use std::path::Path;
     use std::ptr::{null, null_mut};
 
@@ -121,10 +142,12 @@ mod instance {
     };
 
     use crate::app::{COPYDATA_ARGS, EXITING_PROP, data_dir, main_class, waiting_class};
+    use crate::lock::{COPYDATA_RESET_LOCK, ResetBy};
     use crate::util::wide;
 
-    /// Returns true if another instance took the arguments.
-    pub fn forward(sources: &[String]) -> bool {
+    /// Returns true if another instance took the arguments. A reset of the lock's PIN (D69) goes
+    /// first, so the running copy asks it before it shows anything for the arguments.
+    pub fn forward(sources: &[String], reset: Option<ResetBy>) -> bool {
         // One instance per settings directory, so a portable copy can run beside an installed one.
         let key: String = data_dir()
             .to_string_lossy()
@@ -172,6 +195,9 @@ mod instance {
                     if pid != 0 {
                         AllowSetForegroundWindow(pid);
                     }
+                }
+                if let Some(by) = reset {
+                    send_reset(hwnd, by);
                 }
                 let cds = COPYDATASTRUCT {
                     dwData: COPYDATA_ARGS,
@@ -222,6 +248,39 @@ mod instance {
             }
         }
         true
+    }
+
+    /// Hands the running copy's window the reset request (`lock::COPYDATA_RESET_LOCK`), again
+    /// while its thread is too busy to pick it up, as the arguments are; it only posts itself
+    /// the question. A build from before the lock answers it without acting.
+    fn send_reset(hwnd: HWND, by: ResetBy) {
+        let code = by.code();
+        let cds = COPYDATASTRUCT {
+            dwData: COPYDATA_RESET_LOCK,
+            cbData: size_of::<u32>() as u32,
+            lpData: &code as *const u32 as *mut _,
+        };
+        for _ in 0..20 {
+            let mut result = 0usize;
+            let sent = unsafe {
+                SendMessageTimeoutW(
+                    hwnd,
+                    WM_COPYDATA,
+                    0,
+                    &cds as *const _ as isize,
+                    SMTO_ABORTIFHUNG,
+                    5000,
+                    &mut result,
+                )
+            };
+            if outcome(sent, unsafe { GetLastError() }) != Outcome::Unanswered
+                || unsafe { IsWindow(hwnd) } == 0
+                || exiting(hwnd)
+            {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
 
     /// What `SendMessageTimeoutW` made of the arguments.
@@ -358,6 +417,15 @@ mod tests {
         assert_eq!(outcome(0, ERROR_TIMEOUT), Outcome::Unanswered);
         assert_eq!(outcome(0, ERROR_INVALID_WINDOW_HANDLE), Outcome::Unanswered, "the window went");
         assert_eq!(outcome(0, 0), Outcome::Unanswered, "a hung thread with no error code");
+    }
+
+    /// Ctrl counts as held only while it is down, not for having been pressed before (D69).
+    #[test]
+    fn the_held_key_is_the_high_bit() {
+        assert!(super::key_down(i16::MIN));
+        assert!(super::key_down(0x8001u16 as i16));
+        assert!(!super::key_down(1), "pressed since the last call, not down now");
+        assert!(!super::key_down(0));
     }
 
     #[test]

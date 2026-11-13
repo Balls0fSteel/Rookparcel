@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex};
 use rookparcel_core::{SessionHandle, Settings};
 use rookparcel_frontend::prefs::{Change, Prefs};
 use rookparcel_frontend::rss::AddRequest;
-use rookparcel_frontend::tr;
+use rookparcel_frontend::{tr, ui_lock};
 use rookparcel_nox::webui::auth::{DEFAULT_ITERATIONS, PasswordHash};
 use rookparcel_nox::webui::https::{Certificate, default_names};
 use rookparcel_nox::webui::{self, Config, Host, Hosted, Rss, WebUi};
@@ -280,8 +280,19 @@ impl Host for WindowHost {
     }
 }
 
+/// The preferences the Web UI mirrors: the window's, without the windows' lock (D69: the PIN's
+/// hash and the locked mark are the window's own; the Web UI has its own login). Removed with
+/// tracking off, so that no removal is recorded to be handed back and delete the window's PIN.
+pub fn web_options(prefs: &Prefs) -> Prefs {
+    let mut options = prefs.clone();
+    options.stop_tracking();
+    options.remove(ui_lock::PIN_KEY);
+    options.remove(ui_lock::LOCKED_KEY);
+    options
+}
+
 /// Starts the server for `setup` over `handle`: `prefs` is mirrored into it (the login hash
-/// included), `settings` and `save_path` are this window's, `dir` the settings folder (the
+/// included, the lock's keys left out, [`web_options`]), `settings` and `save_path` are this window's, `dir` the settings folder (the
 /// certificate, `ipfilter.dat`), `rss` the window's RSS Downloader, which the server's RSS
 /// endpoints edit.
 #[allow(clippy::too_many_arguments)]
@@ -305,7 +316,7 @@ pub fn start(
     if setup.https {
         c.https = Some(Certificate::Generated { dir: Some(dir.to_path_buf()), names: default_names(addr) });
     }
-    c.hosted = Some(Hosted { host, options: prefs.clone(), rss });
+    c.hosted = Some(Hosted { host, options: web_options(prefs), rss });
     // the search helper (D51): the window's own (`Host::helper` in app.rs), so a browser and
     // Options > Search Sources act on one helper
     c.helper_dir = Some(crate::app::base_data_dir());
@@ -424,5 +435,26 @@ mod tests {
         assert_eq!(s.text(), tr!(WebUiRunning, url = "http://127.0.0.1:8080/"));
         assert_eq!(Status::Failed("x".into()).text(), tr!(WebUiFailed, error = "x"));
         assert!(!Status::Unavailable.running() && Status::Unavailable.url().is_none());
+    }
+
+    /// The Web UI never sees the windows' PIN or lock (D69), and taking them out of its copy
+    /// records nothing that could be handed back and remove the window's own.
+    #[test]
+    fn the_web_ui_gets_no_lock_keys() {
+        let mut p = Prefs::default();
+        ui_lock::set_pin_with(&mut p, "1234", 10);
+        ui_lock::lock(&mut p);
+        p.set("ui.balloons", "0");
+        p.track_changes();
+        let mut options = web_options(&p);
+        assert!(options.get(ui_lock::PIN_KEY).is_none() && options.get(ui_lock::LOCKED_KEY).is_none());
+        assert_eq!(options.get("ui.balloons"), Some("0"));
+        assert!(options.take_changes().is_empty(), "nothing recorded");
+        // as the Web UI tracks its copy, its removals never name the lock's keys
+        options.track_changes();
+        options.set("ui.balloons", "1");
+        assert!(options.take_changes().iter().all(|(k, _)| !ui_lock::is_lock_key(k)));
+        assert!(ui_lock::is_locked(&p) && ui_lock::verify(&p, "1234"), "the window's own stay");
+        assert!(p.take_changes().is_empty());
     }
 }
