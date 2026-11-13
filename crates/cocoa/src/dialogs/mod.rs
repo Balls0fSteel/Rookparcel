@@ -1,6 +1,6 @@
 //! Torrent dialogs (slice F, docs/MACOS_GUI.md): Add New Torrent ([`add`]), Add Torrent from URL
 //! ([`add_url`]), Create New Torrent ([`create`]), Properties ([`properties`]) and the one-line
-//! input ([`input`]).
+//! input ([`input`]); the lock's PIN dialogs ([`pin`], D69).
 //!
 //! Their controls run through `RPTarget` like every other control (convention 2): an open dialog
 //! takes a number ([`new_id`]) and a handler ([`set_handler`]), and its controls carry
@@ -23,6 +23,7 @@ pub mod add;
 pub mod add_url;
 pub mod create;
 pub mod input;
+pub mod pin;
 pub mod properties;
 
 use std::cell::{Cell, RefCell};

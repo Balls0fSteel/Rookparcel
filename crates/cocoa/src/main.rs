@@ -3,7 +3,8 @@
 //! GTK clients. Its library is `~/Library/Application Support/Rookparcel/mac` (`paths`).
 //!
 //! `--demo N` runs the simulated engine with N torrents (screenshots, scale tests); `--version`
-//! prints the build and exits; `--profile NAME` runs a profile of its own (D42).
+//! prints the build and exits; `--profile NAME` runs a profile of its own (D42); `--reset-lock`
+//! (or Option held at the start) asks to remove the windows' lock PIN (D69, `lock`).
 //!
 //! On other systems this is a stub that says so and exits 1, so the workspace builds and lints
 //! everywhere.
@@ -27,6 +28,7 @@ mod images;
 mod import;
 #[cfg(target_os = "macos")]
 mod list;
+mod lock;
 #[cfg(target_os = "macos")]
 mod mac;
 #[cfg(target_os = "macos")]
@@ -121,7 +123,9 @@ fn main() -> std::process::ExitCode {
     }
     // slice J: `--remote` makes this process a remote window
     let remote = remote::requested(&args);
-    let delegate = app::RPAppDelegate::new(app::Args { demo: demo_arg(&args), started, remote }, mtm);
+    // D69: Option held now (as early as can be: the key is let go soon), or `--reset-lock`
+    let reset = lock::Reset::at_start(lock::option_held(), &args);
+    let delegate = app::RPAppDelegate::new(app::Args { demo: demo_arg(&args), started, remote, reset }, mtm);
     app.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
     app.run();
     ExitCode::SUCCESS

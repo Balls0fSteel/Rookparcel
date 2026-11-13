@@ -87,7 +87,13 @@ fn answered(via: Via, why: String) {
         if via == Via::User { "UNUserNotificationCenter" } else { "NSUserNotificationCenter" }
     );
     VIA.with(|v| v.set(via));
-    for n in QUEUE.with(|q| q.take()) {
+    let queued = QUEUE.with(|q| q.take());
+    // D69: names queued before the windows were locked are not shown while they are
+    // (`app::apply` drops the later ones)
+    if crate::lock::is_locked() {
+        return;
+    }
+    for n in queued {
         if via == Via::User { post_user(&n) } else { post_legacy(&n) }
     }
 }
