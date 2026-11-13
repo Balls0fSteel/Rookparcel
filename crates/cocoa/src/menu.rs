@@ -1,8 +1,9 @@
 //! The menus (docs/MACOS_GUI.md "Menus and shortcuts"): the main menu bar, the Dock menu, the
 //! status item's menu and the Torrent menu, which is also the list's context menu.
 //!
-//! The trees are plain data ([`tree`], [`dock`], [`status_item`], [`torrent`]), built and tested
-//! on every system; [`build_main`] and [`build`] turn them into `NSMenu`s on macOS. Our items run
+//! The trees are plain data ([`tree`], [`dock`], [`status_item`], [`torrent`], and
+//! [`locked_tree`], the menu bar while the windows are locked, D69), built and tested on every
+//! system; [`build_main`] and [`build`] turn them into `NSMenu`s on macOS. Our items run
 //! a [`Command`] through `RPTarget`; AppKit's own (Hide, Minimize, Cut, Full Screen, ...) send
 //! their standard action to the first responder (nil target), so they work wherever the focus
 //! is: Edit's items in the search field, Minimize on any window. The lists that change (File >
@@ -130,20 +131,12 @@ pub fn tree() -> Vec<Item> {
         sub(tr!(MenuProfiles), profiles(&[]), Role::Profiles),
         c(ConnectRemote, tr!(MenuConnectRemote), None),
         Item::Sep,
+        // D69: just above Close Window
+        c(Lock, tr!(MenuLock), cmd("l")),
         sys(c"performClose:", tr!(MacCloseWindow), cmd("w")),
     ];
-    let edit = vec![
-        sys(c"undo:", tr!(MacUndo), cmd("z")),
-        sys(c"redo:", tr!(MacRedo), shift_cmd("z")),
-        Item::Sep,
-        sys(c"cut:", tr!(MacCut), cmd("x")),
-        sys(c"copy:", tr!(MacCopy), cmd("c")),
-        sys(c"paste:", tr!(MacPaste), cmd("v")),
-        sys(c"delete:", tr!(MacDelete), None),
-        sys(c"selectAll:", tr!(MenuSelectAll), cmd("a")),
-        Item::Sep,
-        c(Find, tr!(MacFind), cmd("f")),
-    ];
+    let mut edit = edit_items();
+    edit.extend([Item::Sep, c(Find, tr!(MacFind), cmd("f"))]);
     let view = vec![
         c(ToggleToolbar, tr!(MenuShowToolbar), option_cmd("t")),
         sys(c"runToolbarCustomizationPalette:", tr!(MacCustomizeToolbar), None),
@@ -154,8 +147,18 @@ pub fn tree() -> Vec<Item> {
         Item::Sep,
         sys(c"toggleFullScreen:", tr!(MacEnterFullScreen), control_cmd("f")),
     ];
-    let options =
-        vec![c(Rss, tr!(MenuRss), None), Item::Sep, sub(tr!(MenuAutoShutdown), auto_shutdown(), Role::Plain)];
+    let lock_pin = vec![
+        c(SetPin, tr!(MenuSetPin), None),
+        c(ChangePin, tr!(MenuChangePin), None),
+        c(RemovePin, tr!(MenuRemovePin), None),
+    ];
+    let options = vec![
+        c(Rss, tr!(MenuRss), None),
+        Item::Sep,
+        sub(tr!(MenuAutoShutdown), auto_shutdown(), Role::Plain),
+        Item::Sep,
+        sub(tr!(MenuLockPin), lock_pin, Role::Plain),
+    ];
     let window = vec![
         sys(c"performMiniaturize:", tr!(MacMinimize), cmd("m")),
         sys(c"performZoom:", tr!(MacZoom), None),
@@ -179,6 +182,34 @@ pub fn tree() -> Vec<Item> {
         sub(tr!(MacMenuWindow), window, Role::Window),
         sub(tr!(MenuHelp), help, Role::Help),
     ]
+}
+
+/// The Edit menu's standard items (AppKit's own actions), without Find.
+fn edit_items() -> Vec<Item> {
+    vec![
+        sys(c"undo:", tr!(MacUndo), cmd("z")),
+        sys(c"redo:", tr!(MacRedo), shift_cmd("z")),
+        Item::Sep,
+        sys(c"cut:", tr!(MacCut), cmd("x")),
+        sys(c"copy:", tr!(MacCopy), cmd("c")),
+        sys(c"paste:", tr!(MacPaste), cmd("v")),
+        sys(c"delete:", tr!(MacDelete), None),
+        sys(c"selectAll:", tr!(MenuSelectAll), cmd("a")),
+    ]
+}
+
+/// The menu bar while the windows are locked (D69): the application menu with only Show
+/// Rookparcel (which asks for the PIN), Hide and Quit, and Edit, so ⌘V and ⌘A work in the PIN
+/// box.
+pub fn locked_tree() -> Vec<Item> {
+    let app = vec![
+        c(Command::ToggleWindow, tr!(MenuShow), None),
+        Item::Sep,
+        sys(c"hide:", tr!(MenuHide), cmd("h")),
+        Item::Sep,
+        c(Command::Quit, tr!(MacQuit), cmd("q")),
+    ];
+    vec![sub("Rookparcel", app, Role::App), sub(tr!(MacMenuEdit), edit_items(), Role::Plain)]
 }
 
 /// The Torrent menu, and the list's context menu (`shortcuts` off: a context menu shows none).
@@ -280,23 +311,32 @@ fn auto_shutdown() -> Vec<Item> {
     items
 }
 
-/// The Dock menu (AppKit adds the windows, Options and Quit).
-pub fn dock(window_visible: bool) -> Vec<Item> {
+/// The Dock menu (AppKit adds the windows, Options and Quit). While the windows are `locked`
+/// (D69) only Show Rookparcel, which asks for the PIN; with a PIN set, Lock Rookparcel follows
+/// Show / Hide.
+pub fn dock(window_visible: bool, locked: bool, has_pin: bool) -> Vec<Item> {
     use Command::*;
-    vec![
-        c(ToggleWindow, if window_visible { tr!(MenuHide) } else { tr!(MenuShow) }, None),
+    if locked {
+        return vec![c(ToggleWindow, tr!(MenuShow), None)];
+    }
+    let mut items = vec![c(ToggleWindow, if window_visible { tr!(MenuHide) } else { tr!(MenuShow) }, None)];
+    if has_pin {
+        items.push(c(Lock, tr!(MenuLock), None));
+    }
+    items.extend([
         Item::Sep,
         c(AddTorrent, tr!(MenuAddTorrent), None),
         c(AddUrl, tr!(MenuAddUrl), None),
         Item::Sep,
         c(StartAll, tr!(MenuStartAll), None),
         c(StopAll, tr!(MenuStopAll), None),
-    ]
+    ]);
+    items
 }
 
-/// The status item's menu: the Dock menu's, and Quit.
-pub fn status_item(window_visible: bool) -> Vec<Item> {
-    let mut items = dock(window_visible);
+/// The status item's menu: the Dock menu's, and Quit (locked: Show Rookparcel and Quit).
+pub fn status_item(window_visible: bool, locked: bool, has_pin: bool) -> Vec<Item> {
+    let mut items = dock(window_visible, locked, has_pin);
     items.push(Item::Sep);
     items.push(c(Command::Quit, tr!(MacQuit), None));
     items
@@ -332,6 +372,8 @@ mod sys {
     thread_local! {
         /// The menus rebuilt when they open, with what they are.
         static LIVE: RefCell<Vec<(Retained<NSMenu>, Role)>> = const { RefCell::new(Vec::new()) };
+        /// The full menu bar while the locked one is shown ([`locked_bar`]).
+        static FULL: RefCell<Option<Retained<NSMenu>>> = const { RefCell::new(None) };
     }
 
     fn mask(k: &Key) -> NSEventModifierFlags {
@@ -430,6 +472,28 @@ mod sys {
         NSApplication::sharedApplication(mtm).setMainMenu(Some(&bar));
     }
 
+    /// The windows were locked (D69): the menu bar becomes [`super::locked_tree`], the full
+    /// one is kept for [`unlocked_bar`].
+    pub fn locked_bar(mtm: MainThreadMarker) {
+        let app = NSApplication::sharedApplication(mtm);
+        FULL.with(|f| {
+            let mut f = f.borrow_mut();
+            if f.is_none() {
+                *f = app.mainMenu();
+            }
+        });
+        app.setMainMenu(Some(&build("", &super::locked_tree(), mtm)));
+    }
+
+    /// The windows were unlocked: the full menu bar comes back (the same menus, so the live
+    /// lists are not registered again and AppKit's own additions stay).
+    pub fn unlocked_bar(mtm: MainThreadMarker) {
+        match FULL.with(|f| f.borrow_mut().take()) {
+            Some(bar) => NSApplication::sharedApplication(mtm).setMainMenu(Some(&bar)),
+            None => build_main(mtm),
+        }
+    }
+
     /// `menuNeedsUpdate:` from `RPTarget`: rebuilds a live list (profiles, labels).
     pub fn needs_update(menu: &NSMenu) {
         let Some(role) =
@@ -456,7 +520,7 @@ mod tests {
     fn every_command_is_somewhere_and_keys_are_unique() {
         let mut all = Vec::new();
         commands(&tree(), &mut all);
-        commands(&status_item(true), &mut all);
+        commands(&status_item(true, false, true), &mut all);
         let have: std::collections::HashSet<Command> = all.iter().map(|(c, _)| *c).collect();
         // the search field's own, and the lists filled at run time
         let elsewhere = |c: Command| {
@@ -520,6 +584,79 @@ mod tests {
             }
         }
         walk(&tree());
-        walk(&dock(false));
+        walk(&dock(false, false, true));
+        walk(&locked_tree());
+    }
+
+    fn cmds(items: &[Item]) -> Vec<Command> {
+        let mut out = Vec::new();
+        commands(items, &mut out);
+        out.into_iter().map(|(c, _)| c).collect()
+    }
+
+    /// Every standard action's key in a tree.
+    fn sys_keys(items: &[Item], out: &mut Vec<(&'static CStr, Option<Key>)>) {
+        for i in items {
+            match i {
+                Item::Sys { action, key, .. } => out.push((*action, *key)),
+                Item::Sub { items, .. } => sys_keys(items, out),
+                Item::Cmd { .. } | Item::Sep => {}
+            }
+        }
+    }
+
+    #[test]
+    fn the_lock_is_in_file_and_the_pin_in_options() {
+        let t = tree();
+        let mut keys = Vec::new();
+        commands(&t, &mut keys);
+        assert!(keys.contains(&(Command::Lock, cmd("l"))));
+        // just above Close Window, at the File menu's end
+        let Item::Sub { items: file, .. } = &t[1] else { panic!("File is the second menu") };
+        assert!(matches!(&file[file.len() - 2], Item::Cmd { cmd: Command::Lock, .. }));
+        assert!(matches!(&file[file.len() - 1], Item::Sys { action, .. } if *action == c"performClose:"));
+        let Item::Sub { items: options, .. } = &t[5] else { panic!("Options is the sixth menu") };
+        let Some(Item::Sub { title, items: pin, .. }) = options.last() else { panic!("Lock PIN is last") };
+        assert_eq!(title, &text(tr!(MenuLockPin)));
+        assert_eq!(cmds(pin), [Command::SetPin, Command::ChangePin, Command::RemovePin]);
+    }
+
+    #[test]
+    fn the_locked_menus_offer_show_and_quit() {
+        let locked = locked_tree();
+        assert_eq!(locked.len(), 2, "the application menu and Edit");
+        let mut keys = Vec::new();
+        commands(&locked, &mut keys);
+        assert_eq!(keys, [(Command::ToggleWindow, None), (Command::Quit, cmd("q"))]);
+        let mut standard = Vec::new();
+        sys_keys(&locked, &mut standard);
+        for (action, key) in [(c"hide:", "h"), (c"paste:", "v"), (c"selectAll:", "a"), (c"copy:", "c")] {
+            assert!(standard.contains(&(action, cmd(key))), "{action:?}");
+        }
+        assert!(!standard.iter().any(|(a, _)| *a == c"performClose:" || *a == c"hideOtherApplications:"));
+        for visible in [false, true] {
+            for pin in [false, true] {
+                assert_eq!(cmds(&dock(visible, true, pin)), [Command::ToggleWindow]);
+                assert_eq!(cmds(&status_item(visible, true, pin)), [Command::ToggleWindow, Command::Quit]);
+            }
+        }
+        for c in cmds(&locked).into_iter().chain(cmds(&status_item(false, true, true))) {
+            assert!(c.works_locked(), "{c:?} is in a locked menu but refused");
+        }
+        // Show Rookparcel, whatever the window was
+        let Item::Cmd { title, .. } = &dock(true, true, true)[0] else { panic!() };
+        assert_eq!(title, &text(tr!(MenuShow)));
+    }
+
+    #[test]
+    fn lock_rookparcel_is_in_the_unlocked_menus_with_a_pin() {
+        for visible in [false, true] {
+            assert!(!cmds(&dock(visible, false, false)).contains(&Command::Lock));
+            assert!(!cmds(&status_item(visible, false, false)).contains(&Command::Lock));
+            assert_eq!(cmds(&dock(visible, false, true))[..2], [Command::ToggleWindow, Command::Lock]);
+            let s = cmds(&status_item(visible, false, true));
+            assert_eq!(s[..2], [Command::ToggleWindow, Command::Lock]);
+            assert_eq!(s.last(), Some(&Command::Quit));
+        }
     }
 }

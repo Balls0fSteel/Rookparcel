@@ -13,6 +13,11 @@
 //! A file is read and given to `Core::add_file`, a link to `Core::add_link`; what comes of it
 //! goes to `dialogs::add::handle` (the Add New Torrent dialog, or a message). The window comes to
 //! the front unless Preferences' "Activate the program window" (`ui.activate_on_add`) is off.
+//!
+//! D69: while the windows are locked, what comes waits for the PIN, which is asked for
+//! (`lock::hold_targets`); a cancelled prompt drops it. A second start with Option held or with
+//! `--reset-lock` adds `reset` to the user info, and the running copy asks the lock's reset
+//! question (`lock::reset`) before it opens anything (older copies ignore the key).
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
@@ -36,6 +41,8 @@ const NOTIFICATION: &str = "io.github.balls0fsteel.Rookparcel.open";
 /// Its user info's keys: the library folder, and the files and links.
 const KEY_LIBRARY: &str = "library";
 const KEY_ARGS: &str = "args";
+/// D69: the lock's reset was asked for (`lock::Reset::name`).
+const KEY_RESET: &str = "reset";
 
 thread_local! {
     /// What came before `Core` (opened by [`started`]).
@@ -80,11 +87,16 @@ fn open_targets(targets: Vec<Target>) {
         return;
     }
     if let Some(library) = FORWARDING.with(|f| f.borrow().clone()) {
-        post(&library, &targets);
+        post(&library, &targets, None);
         return;
     }
     if !STARTED.with(Cell::get) {
         PENDING.with(|p| p.borrow_mut().extend(targets));
+        return;
+    }
+    // D69: they wait for the PIN
+    if crate::lock::is_locked() {
+        crate::lock::hold_targets(targets);
         return;
     }
     let front = peek(|c| c.gui_options().activate_on_add).unwrap_or(true);
@@ -116,25 +128,35 @@ fn open_one(t: Target) {
     crate::app::apply(with_core(|c| c.events()));
 }
 
+/// What waited for the lock's PIN (`lock`), after the right one: opened as if just handed over.
+pub fn open_held(targets: Vec<Target>) {
+    open_targets(targets);
+}
+
 /// The window and `Core` are there: what came before is opened (the command line's first), and
-/// later starts are listened to.
+/// later starts are listened to. A locked start (D69) keeps it for after the PIN.
 pub fn started(_mtm: MainThreadMarker) {
     STARTED.with(|s| s.set(true));
     listen();
     let mut first = command_line();
     first.extend(PENDING.with(|p| p.take()));
-    if !first.is_empty() {
-        for t in first {
-            open_one(t);
-        }
+    if first.is_empty() {
+        return;
+    }
+    if crate::lock::is_locked() {
+        crate::lock::hold_targets(first);
+        return;
+    }
+    for t in first {
+        open_one(t);
     }
 }
 
 /// The library `data` is locked by another process: when a Rookparcel of this profile runs
 /// there, everything to open goes to it and this process ends (status 0) half a second later,
 /// so files the system opens with it right after the start follow too. False when nobody holds
-/// the lock (another error).
-pub fn forward_to_running(data: &Path, mtm: MainThreadMarker) -> bool {
+/// the lock (another error). D69: a `reset` of the lock's PIN is asked there too.
+pub fn forward_to_running(data: &Path, reset: Option<crate::lock::Reset>, mtm: MainThreadMarker) -> bool {
     if !lockfile::is_held(&data.join(lockfile::FILE_NAME)) {
         return false;
     }
@@ -142,7 +164,7 @@ pub fn forward_to_running(data: &Path, mtm: MainThreadMarker) -> bool {
     let mut all = command_line();
     all.extend(PENDING.with(|p| p.take()));
     // even with nothing to open: the running one comes to the front
-    post(data, &all);
+    post(data, &all, reset);
     let _ = mtm;
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_millis(500));
@@ -159,7 +181,7 @@ fn profile_name() -> String {
     profile::current().name.clone().unwrap_or_default()
 }
 
-fn post(library: &Path, targets: &[Target]) {
+fn post(library: &Path, targets: &[Target], reset: Option<crate::lock::Reset>) {
     let args: Vec<Retained<NSString>> = targets
         .iter()
         .map(|t| match t {
@@ -169,8 +191,17 @@ fn post(library: &Path, targets: &[Target]) {
         .collect();
     let args = NSArray::from_retained_slice(&args);
     let lib = NSString::from_str(&library.to_string_lossy());
-    let keys = [&*NSString::from_str(KEY_LIBRARY), &*NSString::from_str(KEY_ARGS)];
-    let values: [&AnyObject; 2] = [&lib, &args];
+    let (key_library, key_args, key_reset) =
+        (NSString::from_str(KEY_LIBRARY), NSString::from_str(KEY_ARGS), NSString::from_str(KEY_RESET));
+    let mut keys: Vec<&NSString> = vec![&key_library, &key_args];
+    let mut values: Vec<&AnyObject> = Vec::new();
+    values.push(&lib);
+    values.push(&args);
+    let reset = reset.map(|r| NSString::from_str(r.name()));
+    if let Some(r) = &reset {
+        keys.push(&key_reset);
+        values.push(r);
+    }
     let info = NSDictionary::from_slices(&keys, &values);
     // SAFETY: a dictionary of strings to objects is a dictionary of objects to objects.
     let info: Retained<NSDictionary> = unsafe { Retained::cast_unchecked(info) };
@@ -225,6 +256,23 @@ fn received(n: &NSNotification) {
         })
         .unwrap_or_default();
     let targets: Vec<Target> = args.iter().filter_map(|a| target(a, Path::new("/"))).collect();
+    // D69: Option held or `--reset-lock` at that start: the reset question first, outside the
+    // notification's block (it is modal)
+    let reset = get(KEY_RESET)
+        .and_then(|o| o.downcast_ref::<NSString>().map(|s| s.to_string()))
+        .and_then(|s| crate::lock::Reset::from_name(&s));
+    match reset {
+        Some(how) => mainq::on_main(move || {
+            crate::lock::reset(how);
+            show_or_open(targets);
+        }),
+        None => show_or_open(targets),
+    }
+}
+
+/// A second start's files and links are opened; without any, the window comes to the front (or,
+/// while locked, the PIN is asked for).
+fn show_or_open(targets: Vec<Target>) {
     if targets.is_empty() {
         super::lifecycle::show_window();
     } else {

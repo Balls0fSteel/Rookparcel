@@ -3,8 +3,9 @@
 //! into the command and runs it through `app::run`. `validateMenuItem:` and
 //! `validateToolbarItem:` ask `app::state` whether the command is enabled (and checked), and
 //! `app::title` for the items whose text follows the state (Show / Hide). It is also the menus'
-//! delegate (`menuNeedsUpdate:` rebuilds the lists in File > Profiles and Torrent > Label) and
-//! the timers' target (`tick:`, `snapshot:`).
+//! delegate (`menuNeedsUpdate:` rebuilds the lists in File > Profiles and Torrent > Label), the
+//! timers' target (`tick:`, `snapshot:`) and the delegate of text fields that act as they are
+//! typed in (`controlTextDidChange:` runs the field's tag's command: the lock's PIN boxes).
 
 use std::cell::OnceCell;
 
@@ -12,11 +13,11 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, Sel};
 use objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSMenu, NSMenuDelegate,
-    NSMenuItem, NSMenuItemValidation, NSTextDelegate, NSTextView, NSTextViewDelegate, NSToolbarItem,
-    NSToolbarItemValidation,
+    NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSControlTextEditingDelegate,
+    NSMenu, NSMenuDelegate, NSMenuItem, NSMenuItemValidation, NSTextDelegate, NSTextFieldDelegate,
+    NSTextView, NSTextViewDelegate, NSToolbarItem, NSToolbarItemValidation,
 };
-use objc2_foundation::{NSString, NSTimer};
+use objc2_foundation::{NSNotification, NSString, NSTimer};
 
 use crate::commands::Command;
 
@@ -73,6 +74,20 @@ define_class!(
     }
 
     unsafe impl NSTextDelegate for RPTarget {}
+
+    // A text field whose delegate this is runs its tag's command each time its text changes
+    // (the lock's PIN boxes keep to digits, `dialogs::pin`); it has no action, so Return stays
+    // the default button's.
+    unsafe impl NSControlTextEditingDelegate for RPTarget {
+        #[unsafe(method(controlTextDidChange:))]
+        fn control_text_did_change(&self, n: &NSNotification) {
+            if let Some(cmd) = n.object().and_then(|o| command_of(&o)) {
+                crate::app::run(cmd);
+            }
+        }
+    }
+
+    unsafe impl NSTextFieldDelegate for RPTarget {}
 
     // The multi-line boxes (`dialogs::properties::text_box`: Preferences, Create Torrent,
     // Properties): Tab and Shift-Tab leave them, as they leave a text field (a text view would

@@ -11,6 +11,7 @@
 //!   the window hides and the Dock icon or the status item brings it back; off, closing quits.
 //!   "Minimize to tray" (`ui.minimize_to_tray`) hides a minimized window from the Dock.
 //! - `--minimized` (the LaunchAgent's "Start minimized") starts with the window hidden.
+//! - While the windows are locked (D69, `crate::lock`), showing the window asks for the PIN.
 
 use std::cell::{Cell, RefCell};
 use std::ptr::NonNull;
@@ -51,27 +52,40 @@ pub fn demo_slow_exit() -> Option<std::time::Duration> {
 }
 
 /// The window and `Core` are there (`mac::started`): power-off, the translocation notice,
-/// `--minimized` or the startup association check.
+/// `--minimized` or the startup association check. A locked start (D69) takes the
+/// `--minimized` way, and without `--minimized` asks for the PIN at once.
 pub fn started(mtm: MainThreadMarker) {
     watch_power_off();
     keep_awake();
     let window = ui().map(|u| u.window.clone());
+    let locked = crate::lock::is_locked();
     // macOS runs a quarantined app from a random read-only copy, where a portable marker beside
     // Rookparcel.app is not seen (D42): say how to get it run from where it is
     let translocated = std::env::current_exe().ok().and_then(|e| e.parent().map(profile::translocated));
     if translocated == Some(true) {
-        crate::ui::sheet(
-            window.as_deref(),
-            crate::ui::Style::Info,
-            tr!(MacTranslocated),
-            "",
-            &[],
-            |_| {},
-            mtm,
-        );
+        if locked {
+            // (after the PIN, with the other messages)
+            crate::lock::hold_info(tr!(MacTranslocated));
+        } else {
+            crate::ui::sheet(
+                window.as_deref(),
+                crate::ui::Style::Info,
+                tr!(MacTranslocated),
+                "",
+                &[],
+                |_| {},
+                mtm,
+            );
+        }
     }
-    if std::env::args().any(|a| a == MINIMIZED) {
+    let minimized = std::env::args().any(|a| a == MINIMIZED);
+    if minimized || locked {
         hide_window();
+        // started by hand: the PIN prompt; Cancel leaves Rookparcel in the menu bar
+        // (autostart's `--minimized` stays silent)
+        if locked && !minimized {
+            crate::lock::request();
+        }
         return;
     }
     let check = peek(|c| c.gui_options().check_association && !c.is_remote()).unwrap_or(false);
@@ -94,8 +108,12 @@ pub fn activate(mtm: MainThreadMarker) {
 /// The main window to the front (restored if it was minimized), the application with it. Our
 /// windows that were in front of it (Add New Torrent, Preferences, the RSS Downloader; every one
 /// that is open while it is hidden) stay in front, in their order, the front one with the
-/// keyboard: a click on the status item must not cover an unanswered dialog.
+/// keyboard: a click on the status item must not cover an unanswered dialog. While the windows
+/// are locked (D69), it asks for the PIN instead.
 pub fn show_window() {
+    if crate::lock::is_locked() {
+        return crate::lock::request();
+    }
     let (Some(u), Some(mtm)) = (ui(), MainThreadMarker::new()) else { return };
     let ahead = in_front_of(&u.window, mtm);
     if u.window.isMiniaturized() {
@@ -129,11 +147,17 @@ fn in_front_of(main: &NSWindow, mtm: MainThreadMarker) -> Vec<Retained<NSWindow>
             break;
         }
         let Some(w) = app.windowWithWindowNumber(n) else { continue };
-        if w.isVisible() && !w.isSheet() && w.level() == NSNormalWindowLevel && w.canBecomeKeyWindow() {
+        if w.isVisible() && ordinary(&w) && w.canBecomeKeyWindow() {
             ahead.push(w);
         }
     }
     ahead
+}
+
+/// One of our ordinary windows: not a sheet (it goes with its window) and at the normal level
+/// (not the status item's, nor the floating Auto Shutdown countdown).
+pub fn ordinary(w: &NSWindow) -> bool {
+    !w.isSheet() && w.level() == NSNormalWindowLevel
 }
 
 /// The main window into the status item (off screen and out of the Dock's window list).
@@ -144,8 +168,11 @@ pub fn hide_window() {
 }
 
 /// A click on the status item, its Show / Hide and the Dock menu's: the window comes to the
-/// front, or goes when it is in front already.
+/// front, or goes when it is in front already. While locked (D69): the PIN prompt.
 pub fn toggle_window() {
+    if crate::lock::is_locked() {
+        return crate::lock::request();
+    }
     let (Some(u), Some(mtm)) = (ui(), MainThreadMarker::new()) else { return };
     let active = NSApplication::sharedApplication(mtm).isActive();
     if u.window.isVisible() && !u.window.isMiniaturized() && active {
@@ -212,6 +239,11 @@ pub fn quitting() -> bool {
 /// cancelled (`NSModalResponseAbort`: no button), then the application ends.
 pub fn quit() {
     let Some(mtm) = MainThreadMarker::new() else { return };
+    // D69: nor while a PIN dialog runs (Auto Shutdown's Quit comes from the timer): it ends as
+    // if cancelled, then this again
+    if crate::dialogs::pin::abort(mtm, Some(quit)) {
+        return;
+    }
     let app = NSApplication::sharedApplication(mtm);
     for w in app.windows().iter() {
         if let Some(sheet) = w.attachedSheet() {
@@ -248,6 +280,10 @@ fn watch_power_off() {
         LOGOUT.with(|l| l.set(true));
         if super::closing::running() {
             super::closing::show_now();
+        }
+        // D69: a PIN dialog up must not hold the logout
+        if let Some(mtm) = MainThreadMarker::new() {
+            crate::dialogs::pin::abort(mtm, None);
         }
     });
     // SAFETY: the name is AppKit's constant; with no queue the block runs on the posting thread,

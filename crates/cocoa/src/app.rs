@@ -35,7 +35,7 @@ use rookparcel_core::util::lockfile::Lock;
 use rookparcel_core::{MockConfig, Session, SessionParams, TorrentId};
 use rookparcel_frontend::app::{self as fapp, Core, Events, Layout, Start, Wakeup};
 use rookparcel_frontend::prefs::Prefs;
-use rookparcel_frontend::{profile, tr};
+use rookparcel_frontend::{profile, tr, ui_lock};
 
 use crate::commands::Command;
 use crate::window::{self, Ui};
@@ -49,6 +49,8 @@ pub struct Args {
     pub started: Instant,
     /// Slice J: `--remote`, a remote window (`remote`).
     pub remote: bool,
+    /// D69: Option held at the start or `--reset-lock`: remove the lock's PIN (`lock`).
+    pub reset: Option<crate::lock::Reset>,
 }
 
 /// The application: the controller, and what `--demo` measures.
@@ -153,7 +155,8 @@ define_class!(
         #[unsafe(method_id(applicationDockMenu:))]
         fn dock_menu(&self, _app: &NSApplication) -> Option<Retained<NSMenu>> {
             let visible = ui().is_some_and(|u| u.window.isVisible());
-            Some(menu::build("", &menu::dock(visible), MainThreadMarker::from(self)))
+            let items = menu::dock(visible, crate::lock::is_locked(), crate::lock::has_pin());
+            Some(menu::build("", &items, MainThreadMarker::from(self)))
         }
 
         #[unsafe(method(application:openURLs:))]
@@ -237,7 +240,8 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
                 match fapp::lock_library(&dirs.data) {
                     Ok(lock) => LOCK.with(|k| *k.borrow_mut() = lock),
                     // slice G: a Rookparcel of this profile runs: it gets what this start opens
-                    Err(_) if crate::mac::open::forward_to_running(&dirs.data, mtm) => return,
+                    // (D69: and asks the lock's reset question)
+                    Err(_) if crate::mac::open::forward_to_running(&dirs.data, args.reset, mtm) => return,
                     Err((heading, text)) => return give_up(&heading, &text, mtm),
                 }
             }
@@ -251,6 +255,10 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
             (dirs, prefs, opts, None, None)
         }
     };
+    // D69: Option held at the start or `--reset-lock` asks to remove the lock's PIN, before the
+    // window (the Logger's line once there is a Logger)
+    let mut prefs = prefs;
+    let pin_removed = args.reset.is_some_and(|how| crate::lock::reset_at_start(how, &mut prefs, mtm));
     let session = match (session, args.demo) {
         (Some(s), _) => s,
         (None, Some(n)) => Session::start_mock(
@@ -297,9 +305,14 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
     core.set_files_tree(layout.files_tree);
     let sort = core.list().sort();
     let alternate_rows = core.gui_options().alternate_rows;
+    // D69: a locked Rookparcel starts locked
+    let locked = ui_lock::is_locked(core.prefs());
     APP.with(|a| {
         *a.borrow_mut() = Some(App { core, demo: args.demo, started: args.started, reported: false })
     });
+    if pin_removed {
+        log_line(tr!(LogLockPinRemoved));
+    }
 
     let list = crate::list::build(&columns, sort, alternate_rows, mtm);
     let ui = Rc::new(window::build(crate::sidebar::build(mtm), list, mtm));
@@ -307,9 +320,21 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
     crate::detail::install(&ui);
     ui.apply_layout(&layout);
     crate::sidebar::select_all_torrents();
-    ui.window.makeKeyAndOrderFront(None);
-    ui.apply_sizes(&layout);
-    NSApplication::sharedApplication(mtm).activate();
+    if locked {
+        // never seen: on screen only fully transparent, for the split views' sizes (they need a
+        // laid-out window), then out; the application is not brought forward
+        ui.window.setAlphaValue(0.0);
+        ui.window.orderFront(None);
+        ui.apply_sizes(&layout);
+        ui.window.orderOut(None);
+        ui.window.setAlphaValue(1.0);
+        // (before the first events: their messages wait for the PIN)
+        crate::lock::start_locked(mtm);
+    } else {
+        ui.window.makeKeyAndOrderFront(None);
+        ui.apply_sizes(&layout);
+        NSApplication::sharedApplication(mtm).activate();
+    }
     // what the first drain inside `Core::start` found
     apply(with_core(|c| c.events()));
 
@@ -363,7 +388,9 @@ fn on_wake(w: Wakeup) {
 /// Does what `Core`'s events ask, with no borrow held: the window redraws what changed and
 /// shows the messages. The parts later slices build log "not yet" until then.
 pub fn apply(ev: Option<Events>) {
-    let Some(ev) = ev else { return };
+    let Some(mut ev) = ev else { return };
+    // D69: while locked, messages and dialogs wait for the PIN, completions are not announced
+    crate::lock::hold(&mut ev);
     let Some(ui) = ui() else { return };
     if ev.view {
         ui.list.reload_keep_selection();
@@ -459,6 +486,10 @@ pub fn run(cmd: Command) {
     if cmd.needs_selection() && feed_items_shown() {
         return;
     }
+    // D69: while locked only what the locked menus offer (a second guard beside them)
+    if crate::lock::is_locked() && !cmd.works_locked() {
+        return;
+    }
     use Command::*;
     match cmd {
         // slice G: sheets that would hold the quit up go first
@@ -542,6 +573,11 @@ pub fn run(cmd: Command) {
         FeedAdd | FeedEdit | FeedToggle | FeedUpdate | FeedDelete | FeedRss | FeedDownload => {
             crate::rss::run(cmd)
         }
+        // D69: the windows' lock
+        Lock => crate::lock::lock_command(),
+        SetPin => crate::lock::pin_command(ui_lock::Form::Set),
+        ChangePin => crate::lock::pin_command(ui_lock::Form::Change),
+        RemovePin => crate::lock::pin_command(ui_lock::Form::Remove),
     }
 }
 
@@ -557,6 +593,10 @@ fn feed_items_shown() -> bool {
 
 /// Whether a command is enabled now, and whether it shows a check mark.
 pub fn state(cmd: Command) -> (bool, Option<bool>) {
+    // D69: while locked only what the locked menus offer
+    if crate::lock::is_locked() && !cmd.works_locked() {
+        return (false, None);
+    }
     if let Some(s) = crate::detail::state(cmd) {
         return s;
     }
@@ -590,6 +630,9 @@ pub fn state(cmd: Command) -> (bool, Option<bool>) {
         Command::StartAll | Command::StopAll => peek(|c| !c.list().is_empty()).unwrap_or(false),
         // slice J: the client's files are on this Mac, not a remote server
         Command::ImportQbt | Command::ImportUt => crate::import::enabled(),
+        // D69: Set PIN without a PIN, Change and Remove with one
+        Command::SetPin => !crate::lock::has_pin(),
+        Command::ChangePin | Command::RemovePin => crate::lock::has_pin(),
         _ => true,
     };
     (enabled, checked)

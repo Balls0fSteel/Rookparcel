@@ -134,6 +134,16 @@ pub enum Command {
     FeedRss,
     /// The feed items in the list: download the selected ones (also a double click, Return).
     FeedDownload,
+    // the windows' lock (D69, `crate::lock`)
+    /// File > Lock Rookparcel (⌘L; with a PIN also in the Dock and status-item menus): every
+    /// window hides until the PIN is entered. Without a PIN, Set PIN comes first.
+    Lock,
+    /// Options > Lock PIN > Set PIN (greyed while a PIN is set).
+    SetPin,
+    /// Options > Lock PIN > Change PIN (only with a PIN).
+    ChangePin,
+    /// Options > Lock PIN > Remove PIN (only with a PIN).
+    RemovePin,
 }
 
 /// The Files tab's commands (slice D), apart from [`ALL`], whose menus they are not in.
@@ -148,7 +158,7 @@ pub const FILES: [Command; 7] = [
 ];
 
 /// Every command: those without a value, then those with one (at index 0).
-pub const ALL: [Command; 66] = [
+pub const ALL: [Command; 70] = [
     Command::About,
     Command::CheckUpdates,
     Command::Preferences,
@@ -207,6 +217,10 @@ pub const ALL: [Command; 66] = [
     Command::FeedDelete,
     Command::FeedRss,
     Command::FeedDownload,
+    Command::Lock,
+    Command::SetPin,
+    Command::ChangePin,
+    Command::RemovePin,
     Command::Profile(0),
     Command::DownLimit(0),
     Command::UpLimit(0),
@@ -309,6 +323,11 @@ impl Command {
             FeedDelete => (74, 0),
             FeedRss => (75, 0),
             FeedDownload => (76, 0),
+            // the windows' lock (D69: kinds 80-83, after slice H's 70-79)
+            Lock => (80, 0),
+            SetPin => (81, 0),
+            ChangePin => (82, 0),
+            RemovePin => (83, 0),
         }
     }
 
@@ -397,6 +416,11 @@ impl Command {
             74 => plain(FeedDelete),
             75 => plain(FeedRss),
             76 => plain(FeedDownload),
+            // the windows' lock
+            80 => plain(Lock),
+            81 => plain(SetPin),
+            82 => plain(ChangePin),
+            83 => plain(RemovePin),
             _ => None,
         }
     }
@@ -440,6 +464,16 @@ impl Command {
                 | Label(_)
                 | Properties
         )
+    }
+
+    /// Whether it runs while the windows are locked (D69): what the locked menus offer (Show
+    /// Rookparcel, which asks for the PIN, and Quit), the status item's button, the closing
+    /// window's and the Auto Shutdown countdown's buttons (those windows stay), and the controls
+    /// of a dialog (the PIN prompt's boxes; the other dialogs are hidden). `app::run` refuses
+    /// the rest and `app::state` greys it, should a key equivalent still reach it.
+    pub fn works_locked(self) -> bool {
+        use Command::*;
+        matches!(self, Quit | ToggleWindow | StatusItem | QuitNow | CancelShutdown | Dialog(_))
     }
 }
 
@@ -490,6 +524,29 @@ mod tests {
             assert!((70..80).contains(&(c.tag() >> SHIFT)), "{c:?}");
             assert!(ALL.contains(&c));
             assert!(!c.needs_selection(), "the feed menus act on a feed, not on the torrents");
+        }
+    }
+
+    #[test]
+    fn the_locks_kinds_are_its_own() {
+        use Command::*;
+        for (c, kind) in [(Lock, 80), (SetPin, 81), (ChangePin, 82), (RemovePin, 83)] {
+            assert_eq!(c.tag() >> SHIFT, kind, "{c:?}");
+            assert_eq!(Command::from_tag(c.tag()), Some(c));
+            assert!(ALL.contains(&c));
+            assert!(!c.needs_selection() && !c.works_locked(), "{c:?}");
+        }
+        assert_eq!(Command::from_tag((80 << SHIFT) + 1), None, "a plain command takes no value");
+    }
+
+    #[test]
+    fn little_works_while_locked() {
+        use Command::*;
+        let works: Vec<Command> = ALL.into_iter().filter(|c| c.works_locked()).collect();
+        assert_eq!(works, [Quit, ToggleWindow, StatusItem, QuitNow, CancelShutdown, Dialog(0)]);
+        // nothing that shows a window or acts on the torrents
+        for c in [AddTorrent, Preferences, Find, Properties, StartAll, Rss, Statistics, Pref(0), FileOpen] {
+            assert!(!c.works_locked(), "{c:?}");
         }
     }
 }

@@ -2,8 +2,10 @@
 //! in the menu bar showing the colour application icon at 18 points (there is no monochrome
 //! rook), the rates as its tooltip (`Core::tray_tip`). A left click shows the window or hides it
 //! into the item (`lifecycle::toggle_window`); a right click or a Control-click opens
-//! `menu::status_item` (Show / Hide following the window, Add Torrent, Add Torrent from URL,
-//! Start All, Stop All, Quit). The button runs `Command::StatusItem` through `RPTarget`.
+//! `menu::status_item` (Show / Hide following the window, Lock Rookparcel with a PIN set, Add
+//! Torrent, Add Torrent from URL, Start All, Stop All, Quit; while locked, D69, only Show
+//! Rookparcel and Quit, and a click asks for the PIN). The button runs `Command::StatusItem`
+//! through `RPTarget`.
 
 use std::cell::RefCell;
 
@@ -84,7 +86,9 @@ pub fn clicked() {
 pub fn open_menu(mtm: MainThreadMarker) {
     let Some(item) = item() else { return };
     let visible = crate::app::ui().is_some_and(|u| u.window.isVisible());
-    let m = menu::build("", &menu::status_item(visible), mtm);
+    // D69: locked, only Show Rookparcel and Quit; with a PIN, Lock Rookparcel
+    let items = menu::status_item(visible, crate::lock::is_locked(), crate::lock::has_pin());
+    let m = menu::build("", &items, mtm);
     item.setMenu(Some(&m));
     if let Some(b) = item.button(mtm) {
         // SAFETY: the button is the item's own; a nil sender is allowed.
