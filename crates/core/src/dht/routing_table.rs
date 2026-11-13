@@ -832,11 +832,11 @@ impl RoutingTable {
             false
         };
         let mut unsorted = 0;
-        for j in i..self.buckets.len() {
+        for bucket in self.buckets.iter().skip(i) {
             if l.len() >= count {
                 break;
             }
-            push(&mut l, &self.buckets[j].live_nodes);
+            push(&mut l, &bucket.live_nodes);
             if finish(&mut l, unsorted) {
                 return l;
             }

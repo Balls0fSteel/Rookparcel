@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-13_220304_1794603784
+Last updated: 2026-11-13_230133_1794607293
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D69](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -27,8 +27,8 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 - **Releases:** 1.0.1 to 1.2.46 ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes.
 - **Version texts:** the README, `docs/wiki` and `site/faq.html` are at 1.2.46, pushed 2026-11-11 (`main` and the GitHub wiki). **Open, small:** nox answers a repeated add from its torrent list, which learns of a new torrent at its first status; a second add inside that gap gets 200 instead of 409 (`webui/search.rs`, `commands::add`, `rss.rs`); the engine still holds one torrent. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`.
-- **UI lock (D69, 1.2.47-1.2.50, 2026-11-13):** a PIN of 4 to 6 digits hides the windows of all three GUIs in the tray; Ctrl or Option held at start, or `--reset-lock`, removes a forgotten one. Run on the hidden desktop, the Xubuntu VM and the macOS VM; wiki page `Locking-Rookparcel` in `docs/wiki` only. **Not released, not pushed.** Hand checks and what was left: BACKLOG "UI lock".
-- **Benchmarks:** [2026-11-11 results](docs/BENCHMARKS.md) for the published 1.2.46 with 1.0.1, 1.1.40 and 1.2.29 in the same rounds (`tools/bench`, 88 runs good): 10,000 torrents after restart use 67 MB (qBittorrent 612 MB) and idle at 0.07 % of a core; Win32 at 100,000 lists in 1.37-1.49 s and idles at 0.21-0.42 %; the Mac GUI shows 100,000 demo rows in 0.50-0.57 s. `site/benchmarks.html` is filled with this run in the working tree's commit, **not pushed** (the owner's call).
+- **UI lock (D69, 1.2.47-1.2.50, 2026-11-13):** a PIN of 4 to 6 digits hides the windows of all three GUIs in the tray; Ctrl or Option held at start, or `--reset-lock`, removes a forgotten one. Run on the hidden desktop, the Xubuntu VM and the macOS VM; wiki page `Locking-Rookparcel`. **Pushed** (`main` and the GitHub wiki, 2026-11-13; 1.2.51 fixes Rust 1.100's new clippy lints, which failed CI), **not released.** Hand checks and what was left: BACKLOG "UI lock".
+- **Benchmarks:** [2026-11-11 results](docs/BENCHMARKS.md) for the published 1.2.46 with 1.0.1, 1.1.40 and 1.2.29 in the same rounds (`tools/bench`, 88 runs good): 10,000 torrents after restart use 67 MB (qBittorrent 612 MB) and idle at 0.07 % of a core; Win32 at 100,000 lists in 1.37-1.49 s and idles at 0.21-0.42 %; the Mac GUI shows 100,000 demo rows in 0.50-0.57 s. `site/benchmarks.html` is filled with this run (`05f93fdd`, on `main` since the 2026-11-11 push).
 - CI, FreeBSD, Fuzz and the Release run were green for `v1.2.44` (recorded 2026-11-10, not a live check).
 - Scale baselines on this PC (2026-10-23 and 2026-11-10) are in the [plan snapshot](docs/archive/PLAN-2026-11-13.md) and [BENCHMARKS.md](docs/BENCHMARKS.md); the low-end-machine gate remains open.
 - The app icon is the Postal Rook (D60): drawn marks below 48 px, the generated stamp from 48 px (`assets/rookparcel-icons`).

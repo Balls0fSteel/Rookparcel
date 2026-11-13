@@ -316,9 +316,9 @@ fn construct(h: &mut Huffman, length: &[u16]) -> i32 {
         return 0;
     }
     let mut left = 1i32;
-    for len in 1..=MAXBITS {
+    for &count in &h.count[1..=MAXBITS] {
         left <<= 1;
-        left -= h.count[len] as i32;
+        left -= count as i32;
         if left < 0 {
             return left;
         }

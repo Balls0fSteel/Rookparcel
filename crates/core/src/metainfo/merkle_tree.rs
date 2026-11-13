@@ -227,6 +227,7 @@ impl MerkleTree {
 
         self.allocate_full();
         let mut cursor = 0;
+        #[allow(clippy::needless_range_loop)] // `i` is the node index of the mask too
         for i in 0..mask.len() {
             if !mask.get(i) {
                 continue;

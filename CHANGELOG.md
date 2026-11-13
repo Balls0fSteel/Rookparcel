@@ -4,6 +4,12 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-13_230133_1794607293: Version 1.2.51: clippy 1.100's range loops; the UI lock pushed
+
+- **Pushed on the owner's word ("Push both"):** `main` up to `1f4ccedb` (the eight UI lock commits, nothing else waiting), and the GitHub wiki: the six changed pages, compared page by page first (the wiki's copies matched the repository before these edits), including the new [Locking Rookparcel](https://github.com/Balls0fSteel/Rookparcel/wiki/Locking-Rookparcel), which answers.
+- **CI for `1f4ccedb`:** FreeBSD and Fuzz green; CI failed on macOS, Ubuntu and Windows at clippy, not on this work: Rust 1.100.0 (released 2026-11-13; the run before it was green) extends `needless_range_loop` to six loops in core. **Fixed:** `dht/routing_table.rs`, `util/puff.rs` and `metainfo/file_storage.rs` iterate (the same steps); `disk/mod.rs`, `engine/v2.rs` and `metainfo/merkle_tree.rs` keep their index, which names a file or a node to other structures too, with an `allow` and its reason (as `crypto/mse.rs` does).
+- **Validation:** 1.100.0 installed beside the default toolchain (not replacing it; rustup updated itself to 1.29.3 on the way): its clippy with `-D warnings` is clean for the workspace on Windows, for Linux (the GTK crate through the stand-in pkg-config) and for the Mac crates; its rustfmt finds nothing; core tests 935.
+
 ## 2026-11-13_220737_1794604057: Docs: the UI lock's wiki page, D69, the plan and the backlog
 
 - **Wiki (`docs/wiki`, not copied to the GitHub wiki):** new `Locking-Rookparcel` (setting a PIN, locking, opening a locked Rookparcel, what still works while locked, the Web UI not covered, removing a forgotten PIN with Ctrl, Option, `--reset-lock` per package or by hand in `rookparcel.ini`, profiles and remote windows, the GTK no-tray and macOS differences), linked from the sidebar, Home, Keyboard shortcuts (Ctrl+L, ⌘L), Tray and startup (the Lock item, the locked menu, no notification) and Troubleshooting's "Resetting settings". BRIEF.md lists the page and says the code is at 1.2.50.

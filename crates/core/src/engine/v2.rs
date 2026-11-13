@@ -54,6 +54,7 @@ impl LayerFetch {
     pub fn bencoded(&self, ti: &TorrentInfo) -> Vec<u8> {
         let fs = ti.orig_files();
         let mut layers = crate::bencode::Entry::new_dict();
+        #[allow(clippy::needless_range_loop)] // `f` is the file index of the file storage too
         for f in 0..fs.num_files() {
             if fs.pad_file_at(f) || fs.file_size(f) <= fs.piece_length() as u64 {
                 continue;

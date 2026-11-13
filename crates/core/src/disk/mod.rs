@@ -1770,6 +1770,7 @@ fn export_unskipped(storage: &Storage, ctx: &Ctx) -> Result<(), (String, Error)>
     if part.is_empty() {
         return Ok(());
     }
+    #[allow(clippy::needless_range_loop)] // `f` is the file index of the storage calls too
     for f in 0..fs.num_files() {
         // the part file keeps what was not exported yet; the next check goes on
         if aborted(storage) {

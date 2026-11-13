@@ -684,8 +684,7 @@ impl FileStorage {
         let last = self.files.len() - 1;
         let mut bytes = 0u64;
         let first = self.files.partition_point(|f| f.offset + f.size <= start);
-        for i in first..self.files.len() {
-            let f = &self.files[i];
+        for (i, f) in self.files.iter().enumerate().skip(first) {
             if f.offset >= end {
                 break;
             }
