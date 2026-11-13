@@ -1163,6 +1163,22 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
 - **Statistics, ideas not built:** a reset; all-time waste; the read queue (`disk_read_queue`
   is never filled); a Close button in the Mac window (it closes by the title bar or Cmd+W).
 
+## UI lock (D69; built 2026-11-13, 1.2.47-1.2.50)
+
+Checked so far: Windows on the hidden desktop (lock, prompt from a second start, wrong PINs and the wait, Exit while the prompt is open, locked and `--minimized` starts, `--reset-lock` at start and forwarded, Set PIN from Lock, light and dark pictures); GTK under Xvfb on the Xubuntu VM with and without a tray (the Xfce panel); the Mac app on the macOS VM through System Events (2026-11-13_220304_1794603784 changelog entry).
+
+Hand checks still open:
+- **Windows:** <kbd>Ctrl</kbd> held at start from the Start menu, a pinned taskbar icon and a double-clicked `.torrent` (the key reads 0 on a hidden desktop); a `.torrent` or magnet opened while locked; the tray after an Explorer restart while locked; the dialogs in German and at 125/150 % DPI; a remote window's own lock.
+- **GTK:** a real KDE and GNOME (Wayland) session, plain GNOME without AppIndicator (the prompt standing in for the window), the digit filter with an input method; a countdown opened before the lock stays modal to the hidden main window (check under a window manager); the portal's file chooser stays on screen through a lock (another process).
+- **macOS:** <kbd>⌥</kbd> held at launch and <kbd>⌥</kbd> with a Dock click on a real Mac (keys cannot be held over SSH); the status item's and the Dock's menus while locked; a minimized or full-screen window at lock time; sheets coming back attached; Auto Shutdown's Quit or a logout while the prompt is up; arm64.
+
+Found and left:
+- **macOS, a second copy:** started with `open -n` or from Terminal (only `--reset-lock` from Terminal needs one), it reaches the running copy, but on macOS 15 that copy stays behind the front app, as an unlocked one did before, so its prompt or question has no keyboard until clicked. Yielding activation to it (by bundle identifier or to each running copy) changed nothing on the VM. Opening the app again from Finder or the Dock starts no second copy and works.
+- **macOS:** Quit is greyed while the PIN prompt is up (app-modal); Escape first.
+- **All:** Exit while locked with moves under way shows the closing window (D47) with the moves' destinations.
+- **Windows:** the reset question and "No lock PIN is set." have no owner, so they get a taskbar button; a locked start forgets the maximized state, as `--minimized` does; the Logger line after a reset was not read in the hidden run.
+- **Text:** the English wait message says "1 seconds" in its last second.
+
 ## Validation and development environment
 
 - The remaining 100k measurements are a low-end 2-core/4 GB/HDD machine on

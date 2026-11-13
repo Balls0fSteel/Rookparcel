@@ -11,6 +11,7 @@ This page lists the keyboard shortcuts of the Windows version of Rookparcel, the
 | <kbd>Ctrl</kbd>+<kbd>N</kbd> | **File > Create New Torrent...** |
 | <kbd>Ctrl</kbd>+<kbd>P</kbd> | **Options > Preferences** |
 | <kbd>Ctrl</kbd>+<kbd>G</kbd> | **Options > Setup Guide** |
+| <kbd>Ctrl</kbd>+<kbd>L</kbd> | **File > Lock Rookparcel**: hides every Rookparcel window until the lock PIN is typed (see [Locking Rookparcel](Locking-Rookparcel)) |
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> | Moves to the search box on the toolbar (when the toolbar is shown). In the Files tab, moves to the Files tab's filter box instead. |
 | <kbd>Ctrl</kbd>+<kbd>A</kbd> | Selects every torrent in the list. In the Files tab, selects the files the filter shows. |
 | <kbd>Ctrl</kbd>+<kbd>S</kbd> | **Start** the selected torrents |
@@ -24,7 +25,7 @@ This page lists the keyboard shortcuts of the Windows version of Rookparcel, the
 
 With **Confirm when deleting torrents** on in Preferences, <kbd>Del</kbd> and <kbd>Shift</kbd>+<kbd>Del</kbd> ask first. **File > Exit** has no shortcut; see [Tray, notifications and startup](Tray-notifications-and-startup).
 
-*<kbd>Ctrl</kbd>+<kbd>G</kbd> and the Setup Guide are new in 1.1.62, and the Files tab's filter box in 1.1.56.*
+*<kbd>Ctrl</kbd>+<kbd>G</kbd> and the Setup Guide are new in 1.1.62, the Files tab's filter box in 1.1.56, and <kbd>Ctrl</kbd>+<kbd>L</kbd> in 1.2.50 (not in a published release yet).*
 
 Mouse shortcuts that go with them:
 
@@ -83,6 +84,7 @@ The GTK version has these shortcuts:
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> | Moves to the search box |
 | <kbd>Ctrl</kbd>+<kbd>P</kbd> | **Preferences** |
 | <kbd>Ctrl</kbd>+<kbd>G</kbd> | **Setup Guide** |
+| <kbd>Ctrl</kbd>+<kbd>L</kbd> | **Lock Rookparcel** |
 | <kbd>Ctrl</kbd>+<kbd>Q</kbd> | **Exit**: quits Rookparcel, also when the window would close to the tray |
 | <kbd>Delete</kbd> | **Remove** |
 | <kbd>Shift</kbd>+<kbd>Delete</kbd> | Remove and delete the data |
@@ -110,6 +112,7 @@ The macOS app uses <kbd>⌘</kbd> (Command) where Windows uses <kbd>Ctrl</kbd>, 
 | <kbd>⌘</kbd>+<kbd>O</kbd> | **File > Add Torrent...** |
 | <kbd>⌘</kbd>+<kbd>U</kbd> | **File > Add Torrent from URL...** |
 | <kbd>⌘</kbd>+<kbd>N</kbd> | **File > Create New Torrent...** |
+| <kbd>⌘</kbd>+<kbd>L</kbd> | **File > Lock Rookparcel** |
 | <kbd>⌘</kbd>+<kbd>W</kbd> | **File > Close Window**: with **Close to tray** on, Rookparcel keeps running in the menu bar |
 | <kbd>⌘</kbd>+<kbd>A</kbd> | **Edit > Select All**: every torrent in the list, or the text in a box |
 | <kbd>⌘</kbd>+<kbd>F</kbd> | **Edit > Find...**: moves to the search box on the toolbar; in the Files tab, to its filter box |

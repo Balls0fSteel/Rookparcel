@@ -56,6 +56,7 @@ Most pages describe the Windows window and then say what differs in the GTK wind
 - [Preferences reference](Preferences-reference)
 - [Keyboard shortcuts](Keyboard-shortcuts)
 - [Tray, notifications and startup](Tray-notifications-and-startup)
+- [Locking Rookparcel](Locking-Rookparcel): hide the windows behind a PIN, and remove a forgotten one
 - [Troubleshooting and FAQ](Troubleshooting-and-FAQ)
 
 ## More

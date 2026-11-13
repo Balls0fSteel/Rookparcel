@@ -116,6 +116,7 @@ See [Running rookparcel-nox](Running-rookparcel-nox).
 ## Resetting settings
 
 - **One setting:** in **Preferences > Advanced**, select it and click **Reset**, then **OK**. Rows marked `*` differ from the default.
+- **A forgotten lock PIN:** hold <kbd>Ctrl</kbd> (Windows) or <kbd>⌥</kbd> (macOS) while you start Rookparcel, or start it with `--reset-lock`, and confirm. See [Locking Rookparcel](Locking-Rookparcel#forgot-the-pin).
 - **The first-start questions:** **Options > Setup Guide** (<kbd>Ctrl</kbd>+<kbd>G</kbd>) asks them again. *New in 1.1.62.*
 - **Everything:** exit Rookparcel (**File > Exit**), then rename the folder where it keeps its settings and torrents (on Linux and BSD, the settings folder and the data folder); Rookparcel then starts as new, with an empty torrent list. On Windows **Help > About Rookparcel** shows the folder. Renaming it back restores everything. See [Where Rookparcel keeps its files](Where-Rookparcel-keeps-its-files).
 

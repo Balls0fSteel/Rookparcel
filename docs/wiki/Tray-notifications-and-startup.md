@@ -16,7 +16,10 @@ While Rookparcel runs, its icon is in the notification area of the taskbar. Poin
 | **Add Torrent from URL...** | Adds a magnet link or a web address |
 | **Start All Torrents** | Starts every torrent in the list |
 | **Stop All Torrents** | Stops every torrent in the list |
+| **Lock Rookparcel** | Hides every Rookparcel window until the lock PIN is typed; shown once a PIN is set |
 | **Exit** | Quits Rookparcel |
+
+While Rookparcel is locked, the menu has only **Show Rookparcel**, which asks for the PIN, and **Exit**. See [Locking Rookparcel](Locking-Rookparcel).
 
 ## Close and minimize to the tray
 
@@ -35,7 +38,7 @@ The Web UI that the Windows window serves runs only while Rookparcel runs, so cl
 
 ## Notification when a download completes
 
-With **Show balloon notifications in tray** on (the default), Rookparcel shows a "Download Complete" notification with the torrent's name each time a download finishes. Turn it off in **Options > Preferences > UI Settings**.
+With **Show balloon notifications in tray** on (the default), Rookparcel shows a "Download Complete" notification with the torrent's name each time a download finishes. Turn it off in **Options > Preferences > UI Settings**. While Rookparcel is [locked](Locking-Rookparcel), the notification does not appear.
 
 When an update is available, Rookparcel says so in the status bar instead; see [Updating Rookparcel](Updating-Rookparcel).
 

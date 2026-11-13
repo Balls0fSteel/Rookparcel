@@ -17,8 +17,8 @@ End users of Rookparcel, not developers. Task-oriented: "how do I...". Cover the
   (and `help_en.rs` / `docs/HELP_TEXTS.md` for what a setting does). Do not guess a name.
 - Where a behaviour is only in the code, read the code (`crates/win32/src`, `crates/gtk/src`,
   `crates/cocoa/src`, `crates/frontend/src`, `crates/nox/src`). If you cannot confirm something, leave it out.
-- The wiki describes the current code, version 1.2.46, which is also the latest published
-  release. When a feature is newer than 1.1.40, say so in one line, e.g. "*New in 1.1.59.*";
+- The wiki describes the current code, version 1.2.50; the latest published release is
+  1.2.46. When a feature is newer than 1.1.40, say so in one line, e.g. "*New in 1.1.59.*";
   when it is newer than the latest published release, add "not in a published release yet"
   (and take that out at the next release). No release was published between 1.1.40 and
   1.2.0, so 1.1.41-1.1.63 features first shipped in 1.2.0. Find the version in CHANGELOG.md or
@@ -74,6 +74,7 @@ End users of Rookparcel, not developers. Task-oriented: "how do I...". Cover the
 | Preferences-reference.md | F | every Preferences page with a table of its settings and one-line meanings (from HELP_TEXTS.md), plus the Advanced table summary; GTK/Web UI differences |
 | Keyboard-shortcuts.md | F | every shortcut in the Windows GUI (and GTK where different), plus F1 help |
 | Tray-notifications-and-startup.md | F | tray icon and its menu, close/minimize to tray, notifications, start with the computer, start minimized, file associations |
+| Locking-Rookparcel.md | F | the windows' PIN lock: setting a PIN, locking, opening a locked Rookparcel, what still works, removing a forgotten PIN on each platform |
 | Troubleshooting-and-FAQ.md | F | slow or no downloads, port not reachable, firewall, SmartScreen, private trackers (client ID not whitelisted), where logs are, resetting settings, reporting a bug, getting help |
 
 Existing page, do not edit: `Searching-for-torrents-on-Windows` (source `docs/SEARCH_ON_WINDOWS.md`).

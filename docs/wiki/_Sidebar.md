@@ -38,4 +38,5 @@
 - [Dark mode](Dark-mode)
 - [Keyboard shortcuts](Keyboard-shortcuts)
 - [Tray and startup](Tray-notifications-and-startup)
+- [Locking Rookparcel](Locking-Rookparcel)
 - [Troubleshooting, FAQ](Troubleshooting-and-FAQ)
