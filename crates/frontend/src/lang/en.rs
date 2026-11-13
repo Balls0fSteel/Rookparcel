@@ -1536,4 +1536,39 @@ strings! {
     /// Preferences > Advanced in the macOS GUI, under the table: there a value applies as soon as it is
     /// entered (no OK or Apply).
     MacPrefAdvancedNote = "libtorrent setting names; * marks a changed value. Double-click a value to change it; it applies at once.";
+
+    // ---- The windows' lock (D69): a PIN of 4 to 6 digits hides Rookparcel's windows in the tray
+
+    /// File menu and the tray menu: hides every Rookparcel window; showing them again asks for the PIN.
+    MenuLock = "&Lock Rookparcel";
+    /// Options menu: the submenu with the three items below.
+    MenuLockPin = "&Lock PIN";
+    MenuSetPin = "&Set PIN...";
+    MenuChangePin = "&Change PIN...";
+    MenuRemovePin = "&Remove PIN...";
+    /// The title of the window that asks for the PIN while Rookparcel is locked.
+    LockTitle = "Rookparcel is locked";
+    /// Above the PIN box of that window.
+    LockPrompt = "Enter the PIN to show Rookparcel:";
+    /// Under the PIN box after a wrong PIN.
+    LockWrong = "Wrong PIN.";
+    /// Under the PIN box after five wrong PINs; {secs} is a number.
+    LockWait = "Too many wrong PINs. Try again in {secs} seconds.";
+    /// Window titles; without the & they are the Lock PIN submenu's items.
+    PinSetTitle = "Set PIN";
+    PinChangeTitle = "Change PIN";
+    PinRemoveTitle = "Remove PIN";
+    /// Box labels in those windows.
+    PinCurrent = "Current PIN:";
+    PinNew = "New PIN (4 to 6 digits):";
+    PinRepeat = "Repeat the new PIN:";
+    /// Under the boxes when the new PIN is too short, too long or not all digits.
+    PinBadLength = "A PIN has 4 to 6 digits.";
+    PinMismatch = "The two PINs are not the same.";
+    /// Asked when Rookparcel starts with --reset-lock (or with Ctrl or Option held), for a forgotten PIN.
+    LockResetAsk = "Remove the lock PIN? Rookparcel will open without asking for it.";
+    /// The answer to --reset-lock when there is nothing to remove.
+    LockResetNone = "No lock PIN is set.";
+    /// A Logger line after the reset removed the PIN.
+    LogLockPinRemoved = "The lock PIN was removed.";
 }

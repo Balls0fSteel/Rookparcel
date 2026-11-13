@@ -214,6 +214,22 @@ impl Events {
         self.update_notice |= other.update_notice;
         self.alternate_rows = other.alternate_rows.or(self.alternate_rows);
     }
+
+    /// While the windows are locked (D69, [`crate::ui_lock`]): takes out what would open a
+    /// window by itself (errors, infos, Add New Torrent dialogs, a magnet's dialog, an update
+    /// offer), to be [merged](Events::merge) back and shown after the unlock, and drops the
+    /// completion notifications, which name torrents. The flags and the rest stay here.
+    pub fn take_popups(&mut self) -> Events {
+        self.completed.clear();
+        Events {
+            errors: std::mem::take(&mut self.errors),
+            infos: std::mem::take(&mut self.infos),
+            adds: std::mem::take(&mut self.adds),
+            magnet_ready: std::mem::take(&mut self.magnet_ready),
+            update: self.update.take(),
+            ..Events::default()
+        }
+    }
 }
 
 /// A finished `.torrent` download: its URL, and the file or why not.

@@ -642,3 +642,26 @@ fn the_files_tree_acts_on_nodes() {
     assert!(core.set_files_tree(false));
     assert_eq!(core.file_node_path(e02), None);
 }
+
+#[test]
+fn a_locked_window_holds_its_popups_and_drops_completions() {
+    let mut ev = Events {
+        rows: true,
+        errors: vec![("error".into(), "detail".into())],
+        infos: vec!["info".into()],
+        completed: vec!["A torrent".into()],
+        magnet_ready: true,
+        ..Events::default()
+    };
+    let held = ev.take_popups();
+    // the redraws stay; nothing that opens a window or names a torrent does
+    assert!(ev.rows && ev.errors.is_empty() && ev.infos.is_empty() && !ev.magnet_ready);
+    assert!(ev.completed.is_empty() && held.completed.is_empty());
+    assert_eq!(held.errors, [("error".to_owned(), "detail".to_owned())]);
+    assert_eq!(held.infos, ["info"]);
+    assert!(held.magnet_ready && !held.rows);
+    // what was held comes back with a later batch
+    let mut later = Events::default();
+    later.merge(held);
+    assert!(later.magnet_ready && later.errors.len() == 1);
+}

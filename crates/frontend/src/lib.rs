@@ -79,4 +79,5 @@ pub mod status;
 pub mod torrent_folders;
 pub mod tracker_list;
 pub mod typeahead;
+pub mod ui_lock;
 pub mod update;

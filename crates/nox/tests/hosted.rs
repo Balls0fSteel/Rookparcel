@@ -1088,6 +1088,41 @@ fn search_sources_are_the_hosts_and_results_go_to_its_engine() {
 /// refused even from this computer with the password; the shim's keys are ignored; and what a
 /// browser does change never touches the host's lines.
 #[test]
+fn lock_keys_are_the_hosts_own() {
+    // the desktop window's lock (D69): the Web UI it hosts never shows the PIN's hash or the
+    // locked mark, and nothing a browser sends changes them
+    const SALT: &str = "00112233445566778899aabbccddeeff";
+    let hash = format!("pbkdf2-sha256:10:{SALT}:{}", "ab".repeat(32));
+    let mut options = Prefs::default();
+    options.set("ui.lock_pin", &hash);
+    options.set_bool("ui.locked", true);
+    let t = Harness::start("lock-keys", options, Some(PASS));
+    let sid = t.login();
+    for path in ["/pa/prefs", "/api/v2/app/preferences"] {
+        let text = t.get(&sid, path).text();
+        assert!(
+            !text.contains(SALT) && !text.contains("lock_pin") && !text.contains("ui.locked"),
+            "{path}: {text}"
+        );
+    }
+    for body in [
+        format!(r#"{{"ui.lock_pin":"","webui.current_password":"{PASS}"}}"#),
+        format!(r#"{{"ui.locked":false,"webui.current_password":"{PASS}"}}"#),
+        r#"{"ui.lock_pin":"x","ui.locked":"0"}"#.to_owned(),
+    ] {
+        let r = t.pa(&sid, "/pa/prefs", &body);
+        assert_ne!(r.status, 204, "{body}: {}", r.text());
+    }
+    let set = "json=%7B%22ui.lock_pin%22%3A%22%22%2C%22ui.locked%22%3A%220%22%7D";
+    t.post(&sid, "/api/v2/app/setPreferences", set);
+    // another preference goes to the host; the journal never carries the lock's keys
+    assert_eq!(t.pa(&sid, "/pa/prefs", r#"{"ui.add_stopped":true}"#).status, 204);
+    assert_eq!(t.host.value_of("ui.add_stopped"), Some(Some("1".to_owned())));
+    let journal = t.host.changes();
+    assert!(!journal.iter().any(|(k, _)| k.starts_with("ui.lock")), "{journal:?}");
+}
+
+#[test]
 fn run_program_is_the_hosts_own() {
     // a program that does not exist: nothing could start even if this server tried
     const LINE: &str = "/nonexistent/rookparcel-test/none %N";
