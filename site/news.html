@@ -45,6 +45,23 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.54" data-date="2026-11-14" aria-labelledby="v1.2.54-h">
+      <h2 id="v1.2.54-h"><a href="#v1.2.54"><time datetime="2026-11-14">Sat 14 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.54</span></a></h2>
+      <p class="news-lede">Rookparcel can lock its windows with a PIN, so that someone else at your computer cannot see your torrent list. Also a fix for web seeds of one kind of v2 torrent, and for a Linux window that a second stop signal could kill while it saved.</p>
+      <ul class="changes">
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>File &gt; Lock Rookparcel (<kbd>Ctrl</kbd>+<kbd>L</kbd>, <kbd>⌘</kbd>+<kbd>L</kbd> on a Mac) hides every window in the tray after you set a PIN of 4 to 6 digits in Options &gt; Lock PIN. Torrents keep running.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Showing the windows again asks for the PIN. Rookparcel stays locked across restarts; "Download Complete" is not shown, and messages and Add dialogs wait until you unlock.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>A forgotten PIN is removed at start: hold <kbd>Ctrl</kbd> (Windows) or <kbd>⌥</kbd> Option (Mac), or start with <code>--reset-lock</code>. The <a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Locking-Rookparcel">wiki page</a> has the steps.</span></li>
+        <li><span class="tag tag-area">Web UI</span><span class="vh">:</span> <span>The lock is a privacy screen for the windows, not encryption. The Web UI is not locked; it has its own password.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>Web seeds of a v2-only torrent with one file whose size is not a multiple of the piece size: the file was asked for at a wrong address and never downloaded from them.</span></li>
+        <li><span class="tag tag-plat">Linux</span><span class="vh">:</span> <span>A second <code>SIGTERM</code> or <kbd>Ctrl</kbd>+<kbd>C</kbd> while Rookparcel is closing no longer ends it mid-copy without saving. Quit Now still stops it at once.</span></li>
+        <li><span class="tag tag-plat">Linux</span><span class="vh">:</span> <span>Minimize to tray also works for a window first shown after the tray started.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>An interval of 0 for Local Peer Discovery in Preferences &gt; Advanced counts as 1 second, instead of sending packets every millisecond.</span></li>
+      </ul>
+      <p class="news-note">This release covers the development versions 1.2.47 to 1.2.53. The lock's texts are machine translations in every language but English. 1.2.46 and older ignore the lock if you go back to one.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.54">Download 1.2.54 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.54.md">Full release notes</a></p>
+    </article>
+
     <article class="news-entry" id="v1.2.46" data-date="2026-11-11" aria-labelledby="v1.2.46-h">
       <h2 id="v1.2.46-h"><a href="#v1.2.46"><time datetime="2026-11-11">Wed 11 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.46</span></a></h2>
       <p class="news-lede">A file that is gone no longer makes Rookparcel hash the whole torrent at every start: only that file is downloaded again. The Logger loses its most frequent line.</p>
