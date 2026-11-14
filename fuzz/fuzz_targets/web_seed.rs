@@ -47,7 +47,7 @@ fuzz_target!(|data: &[u8]| {
     let fs = storage(mode & 1 != 0);
     let kind = if mode & 2 != 0 { WebSeedKind::HttpSeed } else { WebSeedKind::UrlSeed };
     let mut p =
-        WebPeer::new("http://a.example/x/", kind, Sha1Hash([1; 20]), "", &[], &fs, "f", false).unwrap();
+        WebPeer::new("http://a.example/x/", kind, Sha1Hash([1; 20]), "", &[], &fs, true, "f", false).unwrap();
     // requests: whole pieces from `mode >> 2`, each one piece long (BEP 17 needs that)
     let mut want = Vec::new();
     let first = (mode >> 2) as u32 % fs.num_pieces();

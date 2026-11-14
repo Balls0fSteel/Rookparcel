@@ -286,3 +286,51 @@ only show a lower round trip, with the same effect as a zero delay.
   honest replies must verify, altered ones must not); `import.rs`'s `qbittorrent_goal` /
   `qbittorrent_flags` are private behind a file-based entry. The new runs are one short local
   run each.
+
+## Release 1.2.54 (since v1.2.46)
+
+Date: 2026-11-14_163756_1794670676. Scope: `git diff v1.2.46..HEAD` without the translations
+and window layouts: the UI lock (D69: `core::crypto::password`, moved from nox's `webui::auth`;
+`frontend::ui_lock`; the three GUIs' prompts, menus and the forwarding of `--reset-lock` and of
+torrents between instances; the Web UI host's filter of the lock keys), the JSON `\u` check of
+the Web UI and the search helper, the web seed URL of a v2-only single file, the LSD interval
+floor and the GTK quit signals. Method as above, code read only; the releases between v1.1.32
+and v1.2.46 have no section here (the 2026-11-05 bug hunt and the 1.2.44 bug review read their code for bugs).
+
+### Found and fixed
+
+| Severity | Where | Problem | Fix | Test |
+|---|---|---|---|---|
+| Low (hardening) | `frontend/ui_lock.rs` `submit`, `win32/app.rs` `on_command` | Set PIN never asked for the current PIN, so it replaced an existing one; on Windows only the greyed menu item stood in the way, and any process on the desktop could post its `WM_COMMAND` while the windows were unlocked and set a new PIN. The Mac already refused it (`pin_command`); GTK greys the action. The lock is privacy, not security (the hash is in `rookparcel.ini`), so this changes no claim. | `submit` treats Set with a PIN as needing the current PIN, which its form has no box for: "Wrong PIN.", counted by the guard. `on_command` opens Set, Change and Remove only in the state their menu items are enabled in, as on the Mac. | `ui_lock::tests::the_forms_do_what_their_ok_does` (Set over a PIN fails, the old PIN still verifies) |
+| Low (regression, not security) | `proto/web_peer.rs` `serves_one_file`, `WebPeer::new`, `engine/web_seed.rs` | 1.2.52's rule (a file and its tail pad are one file) applied to v1 and hybrid torrents too: a `files` list of one file and a BEP 47 pad (libtorrent never makes one; other tools or a crafted torrent can) became a single file, its seed was asked for the directory URL itself, and a bad piece banned the seed at once. | The rule holds only for v2-only torrents (`ti.v1()` passed in). | `proto::web_peer::tests::a_tail_pad_is_a_second_file_only_with_v1_metadata` (with the 1.2.52 rule: "unknown path /web_seed") |
+
+### Reviewed and judged fine
+
+- **`crypto::password`:** a byte-for-byte move (100,000 PBKDF2 rounds, a 16-byte OS-random
+  salt, a 32-byte hash, constant-time compare); `parse` refuses 0 rounds, odd hex and hashes over
+  64 bytes; every nox caller unchanged.
+- **`ui_lock`:** 4 to 6 ASCII digits checked before hashing; a hash that does not parse is no
+  PIN; the wrong-PIN guard lives as long as the app (closing the prompt does not reset it, a
+  restart does, as documented); masked boxes in all three GUIs; logs only say a PIN was removed.
+  The unsealed hash allows an offline search of 10^6 PINs, which the wiki's warning covers.
+- **Web UI:** the hosted Web UI starts without the lock keys and `sync_web` / `on_web_changes`
+  filter them both ways; nox writes only fixed keys, `torrent.<hash>.*` and
+  `webui.category.<name>` (control characters refused), so no route reads or writes
+  `ui.lock_pin` or `ui.locked`; the remote protocol carries engine calls only.
+- **Forwarding:** Win32 `copydata_reset` checks `dwData`, the size and the pointer and only
+  asks; torrents arriving while locked are held, posted commands refused; GTK and the Mac ask
+  first as well.
+- **JSON `\u`:** four ASCII hex digits checked before `from_str_radix`; byte indexing, no slicing
+  on non-ASCII input; nox refuses lone surrogates, the helper maps them to U+FFFD.
+- **Web seeds, LSD, GTK signals:** v2-only requests end at the file's end; paths go through
+  `escape_file_path`; `interval.max(1)` before the multiply; the GTK handlers stay installed and
+  `quit_app` returns early while closing.
+
+### Open
+
+- **GTK window actions while locked:** they have no central `locked()` check (Win32's
+  `on_command` and the Mac's `works_locked` have one). GtkApplication exports window actions on
+  the session bus, so another process of the user could probably open a dialog while locked.
+  Not checked at run time; within the privacy-only claim. BACKLOG "UI lock".
+- **The search helper's surrogates:** a high surrogate followed by an escape that is not a low
+  one drops the second escape (older than v1.2.46; one character lost).

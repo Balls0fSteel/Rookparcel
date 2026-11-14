@@ -80,11 +80,13 @@ pub fn escape_file_path(fs: &FileStorage, file: usize) -> String {
     escape_path(fs.file_path(file, "").as_bytes())
 }
 
-/// Whether a server holds just one file of the torrent, file 0: a v2 file's tail pad (always
-/// the last file) is no second one. libtorrent counts it (`num_files() == 1`), so a v2-only
-/// single file's seed URL gets a '/' and the file is asked for at `<url>/<name>`.
-pub fn serves_one_file(fs: &FileStorage) -> bool {
-    fs.num_files() == 1 || (fs.num_files() == 2 && fs.pad_file_at(1))
+/// Whether a server holds just one file of the torrent, file 0. In a v2-only torrent (`v1`
+/// false) a file's tail pad (always the last file) is no second one: libtorrent counts it
+/// (`num_files() == 1`), so a v2-only single file's seed URL gets a '/' and the file is asked
+/// for at `<url>/<name>`. A v1 or hybrid torrent's pad is an entry of its `files` list, which
+/// makes it a multi-file torrent whose URLs name the file, as in libtorrent.
+pub fn serves_one_file(fs: &FileStorage, v1: bool) -> bool {
+    fs.num_files() == 1 || (!v1 && fs.num_files() == 2 && fs.pad_file_at(1))
 }
 
 /// The HTTP side of one web seed connection.
@@ -140,7 +142,8 @@ pub struct WebPeer {
 
 impl WebPeer {
     /// libtorrent `web_connection_base` and `web_peer_connection` (or `http_seed_connection`)
-    /// constructors. `info_hash` is only used by BEP 17 seeds.
+    /// constructors. `info_hash` is only used by BEP 17 seeds; `v1` says whether the torrent
+    /// has v1 metadata ([`serves_one_file`]).
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         url: &str,
@@ -149,6 +152,7 @@ impl WebPeer {
         external_auth: &str,
         extra_headers: &[(String, String)],
         fs: &FileStorage,
+        v1: bool,
         user_agent: &str,
         always_send_user_agent: bool,
     ) -> Result<WebPeer, UrlError> {
@@ -158,7 +162,7 @@ impl WebPeer {
         let bracket = if u.host.contains(':') { format!("[{}]", u.host) } else { u.host.clone() };
         let default_port = port == if https { 443 } else { 80 };
         let host_header = if default_port { bracket } else { format!("{bracket}:{port}") };
-        let single_file = serves_one_file(fs);
+        let single_file = serves_one_file(fs, v1);
         let mut path = u.path;
         let mut url = url.to_owned();
         let http_seed = (kind == WebSeedKind::HttpSeed).then_some(info_hash);
@@ -686,7 +690,7 @@ mod tests {
         ua: &str,
         always_ua: bool,
     ) -> Result<WebPeer, UrlError> {
-        WebPeer::new(url, WebSeedKind::UrlSeed, Sha1Hash([0; 20]), auth, headers, fs, ua, always_ua)
+        WebPeer::new(url, WebSeedKind::UrlSeed, Sha1Hash([0; 20]), auth, headers, fs, true, ua, always_ua)
     }
 
     /// A file storage like libtorrent's `torrent_args().file(..)`: sizes, `pad` marks pad files.
@@ -1163,6 +1167,21 @@ mod tests {
     }
 
     #[test]
+    fn a_tail_pad_is_a_second_file_only_with_v1_metadata() {
+        // one real file of unaligned size and its tail pad
+        let fs = storage(&[(5 * 16384 + 1234, false), (16384 - 1234, true)], 16 * 1024);
+        assert!(!serves_one_file(&fs, true), "a v1 or hybrid `files` list with two entries");
+        assert!(serves_one_file(&fs, false), "a v2-only file and the pad its tree implies");
+        assert!(serves_one_file(&single(1000, 16 * 1024), true));
+        // the v1 torrent downloads from a directory URL, the file named after it (1.2.52 took it
+        // for a single file and asked for the directory itself)
+        let want = content(&fs);
+        for (run, step, chunked) in [(1, 7, false), (64, 100_000, false), (3, 333, true)] {
+            assert!(download(&fs, run, step, chunked) == want, "run {run} step {step} chunked {chunked}");
+        }
+    }
+
+    #[test]
     fn only_pad_files() {
         // libtorrent test case 4: piece 0 and 1 are one pad file; their zeros come without a
         // request, but only once the responses queued before them are in
@@ -1190,7 +1209,7 @@ mod tests {
         let fs = single(100_000, 32 * 1024);
         let ih = Sha1Hash([0xab; 20]);
         let mut p =
-            WebPeer::new("http://h.example/seed", WebSeedKind::HttpSeed, ih, "", &[], &fs, "UA", false)
+            WebPeer::new("http://h.example/seed", WebSeedKind::HttpSeed, ih, "", &[], &fs, true, "UA", false)
                 .unwrap();
         assert_eq!(p.url(), "http://h.example/seed");
         // a whole piece, then a range of the short last piece
@@ -1236,7 +1255,7 @@ mod tests {
         p.feed(&fs, b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n12345");
         assert_eq!(p.take_events(), [WebEvent::Disable("invalid range in HTTP response")]);
         let mut p =
-            WebPeer::new("http://h.example/seed", WebSeedKind::HttpSeed, ih, "", &[], &fs, "UA", false)
+            WebPeer::new("http://h.example/seed", WebSeedKind::HttpSeed, ih, "", &[], &fs, true, "UA", false)
                 .unwrap();
         p.write_request(&fs, 2, 0, 32768, &HashMap::new(), &mut None);
         p.feed(&fs, b"HTTP/1.1 503 Busy\r\nRetry-After: 9\r\n\r\n");
@@ -1245,7 +1264,7 @@ mod tests {
             [WebEvent::HttpError { status: 503, message: "Busy".into(), retry_after: Some(9), file: None }]
         );
         let mut p =
-            WebPeer::new("http://h.example/seed", WebSeedKind::HttpSeed, ih, "", &[], &fs, "UA", false)
+            WebPeer::new("http://h.example/seed", WebSeedKind::HttpSeed, ih, "", &[], &fs, true, "UA", false)
                 .unwrap();
         p.write_request(&fs, 2, 0, 32768, &HashMap::new(), &mut None);
         p.feed(&fs, b"HTTP/1.1 302 Found\r\nLocation: /other\r\n\r\n");

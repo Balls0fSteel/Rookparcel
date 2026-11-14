@@ -1192,6 +1192,13 @@ Found and left:
 - **All:** Exit while locked with moves under way shows the closing window (D47) with the moves' destinations.
 - **Windows:** the reset question and "No lock PIN is set." have no owner, so they get a taskbar button; a locked start forgets the maximized state, as `--minimized` does; the Logger line after a reset was not read in the hidden run.
 - **Text:** the English wait message says "1 seconds" in its last second.
+- **GTK, from the 1.2.54 review (SECURITY-REVIEW.md):** window actions have no central `locked()`
+  check, unlike Win32's `on_command` and the Mac's `works_locked`; GtkApplication exports them on
+  the session bus, so another process could probably open a dialog while locked (not run).
+- **Windows:** a second forwarded `--reset-lock` while the question is open stacks another
+  question and clears `asking_reset` early; only the order of the dialogs changes.
+- **Fixed in 1.2.54:** Set PIN no longer replaces an existing PIN (`ui_lock::submit`, and
+  `on_command` checks the menu state for a posted command, as the Mac did).
 
 ## Validation and development environment
 

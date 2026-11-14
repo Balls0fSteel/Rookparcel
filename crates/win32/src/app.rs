@@ -4467,14 +4467,18 @@ unsafe fn on_command(hwnd: HWND, id: u16) {
         }
         match id {
             cmd::LOCK => lock_command(hwnd),
-            cmd::SET_PIN => {
-                pin_dialog(hwnd, Form::Set);
-            }
-            cmd::CHANGE_PIN => {
-                pin_dialog(hwnd, Form::Change);
-            }
-            cmd::REMOVE_PIN => {
-                pin_dialog(hwnd, Form::Remove);
+            // as `grey_pin_items` greys them, also for a posted command: Set while there is no
+            // PIN, Change and Remove once there is (the Mac's `pin_command` does the same)
+            cmd::SET_PIN | cmd::CHANGE_PIN | cmd::REMOVE_PIN => {
+                let form = match id {
+                    cmd::SET_PIN => Form::Set,
+                    cmd::CHANGE_PIN => Form::Change,
+                    _ => Form::Remove,
+                };
+                let has_pin = with_app(|a| ui_lock::has_pin(&a.prefs)).unwrap_or(false);
+                if has_pin == (form != Form::Set) {
+                    pin_dialog(hwnd, form);
+                }
             }
             cmd::ADD => {
                 let files = dialogs::open_torrents(hwnd);

@@ -212,6 +212,10 @@ impl Form {
 /// Does what `form`'s OK does, with what was typed in its boxes (an empty string for a box it
 /// does not have): unlocks, sets or changes the PIN, or removes it. The `Err` is the message
 /// the dialog shows under its boxes, staying open. The caller saves after an `Ok`.
+///
+/// Set never replaces a PIN: with one already set (a Set dialog reached past the greyed menu
+/// item, such as a posted command), it needs the current PIN like Change, and its form has no
+/// box for it, so it fails as a wrong PIN.
 pub fn submit(
     form: Form,
     prefs: &mut Prefs,
@@ -221,7 +225,7 @@ pub fn submit(
     repeat: &str,
     now: Instant,
 ) -> Result<(), String> {
-    if form.asks_current() {
+    if form.asks_current() || (form == Form::Set && has_pin(prefs)) {
         match guard.check(prefs, current, now) {
             Check::Right => {}
             Check::Wrong => return Err(tr!(LockWrong).to_owned()),
@@ -352,6 +356,10 @@ mod tests {
         assert!(!has_pin(&p));
         assert_eq!(submit(Form::Set, &mut p, &mut g, "", "1234", "1234", t), Ok(()));
         assert!(verify(&p, "1234"));
+        // Set never replaces a PIN (a Set dialog reached past its greyed menu item)
+        assert_eq!(submit(Form::Set, &mut p, &mut g, "", "9999", "9999", t), Err(tr!(LockWrong).into()));
+        assert!(verify(&p, "1234") && !verify(&p, "9999"));
+        g = Guard::default();
 
         // Unlock
         lock(&mut p);

@@ -70,7 +70,7 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
-    <release version="1.2.53" date="2026-11-14" type="stable">
+    <release version="1.2.54" date="2026-11-14" type="stable">
       <description>
         <p>Lock Rookparcel: a PIN of 4 to 6 digits hides its windows in the tray until the PIN is typed, also across restarts; --reset-lock removes a forgotten PIN. Web seeds work for a v2-only torrent with one file. A second stop signal no longer ends the app while it saves.</p>
       </description>

@@ -76,7 +76,7 @@ See [Web UI](Web-UI) and [Sonarr, Radarr and Prowlarr](Sonarr-Radarr-and-Prowlar
 
 Rookparcel saves the torrent list and progress, tells the trackers it stopped and waits for files that are still moving. When that takes more than a moment, the "Rookparcel is closing" window shows what it is waiting for. **Quit Now** stops waiting; it asks first and lists what it gives up. The torrent list and progress are saved first in any case.
 
-On Linux, the GTK window closes the same way when it gets <kbd>Ctrl</kbd>+<kbd>C</kbd> in its terminal or a `SIGTERM`, for example from `kill`. Sending the signal again does not cut the close short. To stop at once, use **Quit Now**, or `kill -KILL` with the process ID. *Since 1.2.53, not in a published release yet; before, a second signal quit at once without saving.*
+On Linux, the GTK window closes the same way when it gets <kbd>Ctrl</kbd>+<kbd>C</kbd> in its terminal or a `SIGTERM`, for example from `kill`. Sending the signal again does not cut the close short. To stop at once, use **Quit Now**, or `kill -KILL` with the process ID. *Since 1.2.54, not in a published release yet; before, a second signal quit at once without saving.*
 
 ## A portable copy cannot write to its folder
 

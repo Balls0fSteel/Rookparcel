@@ -659,7 +659,8 @@ impl Engine {
         let ih = t.info_hashes.best_v1_compatible();
         // web seeds serve the torrent's own file names, not the renamed or deduplicated ones
         let fs = ti.orig_files();
-        let proto = WebPeer::new(&url, w.kind, ih, &w.auth, &w.extra_headers, fs, &user_agent, always_ua);
+        let proto =
+            WebPeer::new(&url, w.kind, ih, &w.auth, &w.extra_headers, fs, ti.v1(), &user_agent, always_ua);
         let mut proto = match proto {
             Ok(p) => p,
             Err(_) => {
@@ -1443,7 +1444,7 @@ impl Engine {
         };
         let Some(ti) = t.ti.clone() else { return true };
         let fs = ti.files();
-        if crate::proto::web_peer::serves_one_file(fs) {
+        if crate::proto::web_peer::serves_one_file(fs, ti.v1()) {
             return true;
         }
         let files = fs.map_block(piece, 0, ti.piece_size(piece) as u64);
