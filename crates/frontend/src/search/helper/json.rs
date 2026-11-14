@@ -272,8 +272,9 @@ impl Parser<'_> {
     }
 
     fn hex4(&mut self) -> Result<u32, String> {
-        let h = self.s.get(self.i..self.i + 4).and_then(|h| std::str::from_utf8(h).ok());
-        let Some(v) = h.and_then(|h| u32::from_str_radix(h, 16).ok()) else {
+        // four hex digits: `from_str_radix` alone would take a leading '+' (`\u+041`)
+        let h = self.s.get(self.i..self.i + 4).filter(|h| h.iter().all(u8::is_ascii_hexdigit));
+        let Some(v) = h.and_then(|h| u32::from_str_radix(std::str::from_utf8(h).ok()?, 16).ok()) else {
             return self.err("bad \\u escape");
         };
         self.i += 4;
@@ -341,7 +342,9 @@ mod tests {
         o.set("New", Json::Bool(false));
         assert_eq!(o.to_pretty(), "{\n  \"Port\": 5000,\n  \"Other\": \"kept\",\n  \"New\": false\n}");
         assert_eq!(parse(&o.to_pretty()).unwrap(), o);
-        for bad in ["", "{", "[1,]", "{\"a\" 1}", "tru", "\"x", "1 2", "{\"a\":1,}"] {
+        for bad in
+            ["", "{", "[1,]", "{\"a\" 1}", "tru", "\"x", "1 2", "{\"a\":1,}", "\"\\u+041\"", "\"\\u-041\""]
+        {
             assert!(parse(bad).is_err(), "{bad}");
         }
         assert!(parse(&"[".repeat(100)).is_err());

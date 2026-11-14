@@ -1443,7 +1443,7 @@ impl Engine {
         };
         let Some(ti) = t.ti.clone() else { return true };
         let fs = ti.files();
-        if fs.num_files() == 1 {
+        if crate::proto::web_peer::serves_one_file(fs) {
             return true;
         }
         let files = fs.map_block(piece, 0, ti.piece_size(piece) as u64);

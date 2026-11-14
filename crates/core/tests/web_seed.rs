@@ -498,6 +498,44 @@ fn v2_only_torrent_from_its_url_list() {
     finish(w, &f, dir);
 }
 
+/// A v2-only single file of unaligned size (the file plus its tail pad here) from a url-list
+/// entry that names the file: the entry keeps its form and the file is asked for there, not at
+/// `<url>/<name>` as libtorrent 2.0.11 does once it counts the pad as a second file.
+#[test]
+fn v2_only_single_file_from_its_url_list() {
+    use rookparcel_core::metainfo::{CreateFlags, CreateTorrent, FileStorage, add_files, set_piece_hashes};
+    let src = temp_dir("v2-single-src");
+    let d = data(7, 5 * PIECE + 1234);
+    std::fs::write(src.join("one.bin"), &d).unwrap();
+    let file = d.clone();
+    let srv =
+        server(
+            Mode::Plain,
+            move |r| {
+                if r.path == "/files/one.bin" { Reply::File(file.clone()) } else { not_found() }
+            },
+        );
+    let mut fs = FileStorage::new();
+    add_files(&mut fs, &src.join("one.bin"), &mut |_| true, CreateFlags::empty()).unwrap();
+    let mut t = CreateTorrent::new(fs, PIECE as u32, CreateFlags::V2_ONLY).unwrap();
+    set_piece_hashes(&mut t, &src, &mut |_| true).unwrap();
+    t.add_url_seed(&srv.url("/files/one.bin"));
+    let f = Fixture {
+        torrent: t.generate_buf().unwrap(),
+        files: vec![("one.bin".into(), d)],
+        info_hash: [0; 20],
+    };
+    let _ = std::fs::remove_dir_all(src);
+
+    let (mut w, id, dir, st) = download(&f, &[], 60);
+    assert_eq!(st.total_payload_download, f.files[0].1.len() as u64, "the file data and no padding");
+    let log = srv.log.lock().unwrap().clone();
+    assert!(log.iter().all(|l| l.starts_with("/files/one.bin ")), "{log:?}");
+    let (urls, _) = w.web_seeds(id);
+    assert_eq!(urls, vec![srv.url("/files/one.bin")]);
+    finish(w, &f, dir);
+}
+
 #[test]
 fn single_file_with_the_name_left_out_of_the_url() {
     let f = fixture("single.iso", &[("single.iso", 500_000)], &[], &[]);

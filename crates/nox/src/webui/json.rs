@@ -392,6 +392,10 @@ impl Parser<'_> {
 
     fn hex4(&mut self) -> Result<u32, String> {
         let Some(h) = self.b.get(self.i..self.i + 4) else { return self.err("short escape") };
+        // four hex digits: `from_str_radix` alone would take a leading '+' (`\u+041`)
+        if !h.iter().all(u8::is_ascii_hexdigit) {
+            return self.err("bad escape");
+        }
         let h = std::str::from_utf8(h).map_err(|e| e.to_string())?;
         let v = u32::from_str_radix(h, 16).map_err(|_| format!("bad escape at {}", self.i))?;
         self.i += 4;
@@ -483,6 +487,8 @@ mod tests {
             "\"\u{1}\"",
             "1e999",
             "-1e400",
+            "\"\\u+041\"",
+            "\"\\u-041\"",
         ] {
             assert!(parse(bad).is_err(), "{bad:?}");
         }

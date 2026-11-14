@@ -100,13 +100,15 @@ impl LsdSession {
 
     /// libtorrent `update_lsd_announce_interval`: `interval` (seconds) spread over the
     /// `running` torrents, in milliseconds; at most 4 s while torrents wait for their first
-    /// announce.
+    /// announce. An interval below 1 s counts as 1 s: 2.1.0's millisecond spread takes 0 as a
+    /// 1 ms period (three multicast packets per socket every millisecond), 2.0.11 never went
+    /// below a second.
     fn update_interval(&mut self, interval: u32, running: usize, now: Instant) {
         if self.socks.is_empty() {
             return;
         }
         self.interval_torrents = running;
-        let mut delay = (1000 * interval as u64 / running.max(1) as u64).max(1);
+        let mut delay = (1000 * interval.max(1) as u64 / running.max(1) as u64).max(1);
         if !self.prioritized.is_empty() {
             delay = delay.min(4000);
         }
@@ -595,6 +597,10 @@ mod tests {
         l.update_interval(300, 2, now);
         assert_eq!(delay(&l), Duration::from_secs(150));
         assert_eq!(l.interval_torrents, 2);
+        // an interval of 0 counts as 1 s, not a 1 ms period
+        l.update_interval(0, 1, now);
+        assert_eq!(delay(&l), Duration::from_secs(1));
+        l.update_interval(300, 2, now);
         // a torrent waiting for its first announce: right away, then at most 4 s
         l.prioritize(TorrentId::new(1, 1), now);
         assert_eq!(delay(&l), Duration::ZERO);

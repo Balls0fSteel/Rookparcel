@@ -80,6 +80,13 @@ pub fn escape_file_path(fs: &FileStorage, file: usize) -> String {
     escape_path(fs.file_path(file, "").as_bytes())
 }
 
+/// Whether a server holds just one file of the torrent, file 0: a v2 file's tail pad (always
+/// the last file) is no second one. libtorrent counts it (`num_files() == 1`), so a v2-only
+/// single file's seed URL gets a '/' and the file is asked for at `<url>/<name>`.
+pub fn serves_one_file(fs: &FileStorage) -> bool {
+    fs.num_files() == 1 || (fs.num_files() == 2 && fs.pad_file_at(1))
+}
+
 /// The HTTP side of one web seed connection.
 pub struct WebPeer {
     host: String,
@@ -151,7 +158,7 @@ impl WebPeer {
         let bracket = if u.host.contains(':') { format!("[{}]", u.host) } else { u.host.clone() };
         let default_port = port == if https { 443 } else { 80 };
         let host_header = if default_port { bracket } else { format!("{bracket}:{port}") };
-        let single_file = fs.num_files() == 1;
+        let single_file = serves_one_file(fs);
         let mut path = u.path;
         let mut url = url.to_owned();
         let http_seed = (kind == WebSeedKind::HttpSeed).then_some(info_hash);

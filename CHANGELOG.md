@@ -4,6 +4,16 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-14_150056_1794664856: Version 1.2.52: the bug hunt's inherited quirks; hand check 26
+
+- **Asked by the owner:** what is left of [BUGHUNT-2026-11-05.md](docs/BUGHUNT-2026-11-05.md). Every finding was already closed. What remained: its three "inherited quirks" and two hand checks (26, 30).
+- **A v2-only single file from a web seed:** a v2 file is padded to the piece size, so a v2-only single file of unaligned size is two files here, the file and its tail pad. `parse_info_section` counted the pad and called the torrent multi-file, so its `url-list` entries got a '/'. `WebPeer::new` (`num_files() == 1`) did the same again at connect time. The file was then asked for at `<url>/<name>` and got a 404 (libtorrent 2.0.11 and RC_2_0 do this too). **Fixed:** the torrent is multi-file only when its tree has more than one top-level file. `web_peer::serves_one_file` counts a file plus its tail pad as one file, both for the URL and for banning a seed that sends bad data. Recorded as a divergence in PORTING. Tests: `a_padded_v2_only_single_file_keeps_its_url_list_entry`, and `v2_only_single_file_from_its_url_list`, which still failed after the parser fix alone (two 404s at `one.bin/`) and drove the connection-side fix.
+- **LSD at interval 0:** 2.1.0's millisecond spread turns `local_service_announce_interval` 0 into a 1 ms period, three multicast packets per socket every millisecond, and the Advanced page accepts 0. **Fixed:** an interval under 1 s now counts as 1 s, which is 2.0.11's floor. The read loop's `Err(_) => continue`, also named in the hunt, was already a `break`.
+- **JSON `\u` escapes:** both parsers (Web UI and search helper) accepted `\u+041`, because `from_str_radix` takes a leading '+'. **Fixed:** they now require four hex digits. The other `from_str_radix` sites are client-side chunk sizes and hex test helpers; they were left as they are.
+- **Hand check 26 (hidden desktop, two monitors: 3840×2160 primary, 1920×1080 at its right):** `window.rect` was set to 5000,5000,5900,5620, which lies on no monitor; the window came up at 2940,1492-3840,2112, inside the primary's work area. A 3000×4200 rectangle left of the screen came back as 0,25-3000,2112, shrunk to the work area. Hand check 30 (GTK Create's Cancel during the last piece) has still not been run.
+- **Validation:** core lib 936 passed; web_seed 22 of 22; both JSON test sets; clippy `-D warnings` on the workspace clean; rustfmt clean. `PEER_ID_PREFIX` is unchanged, because nothing changed on the peer wire.
+- **Changelog:** the three entries of 2026-11-11 were moved to the archive.
+
 ## 2026-11-13_230133_1794607293: Version 1.2.51: clippy 1.100's range loops; the UI lock pushed
 
 - **Pushed on the owner's word ("Push both"):** `main` up to `1f4ccedb` (the eight UI lock commits, nothing else waiting), and the GitHub wiki: the six changed pages, compared page by page first (the wiki's copies matched the repository before these edits), including the new [Locking Rookparcel](https://github.com/Balls0fSteel/Rookparcel/wiki/Locking-Rookparcel), which answers.
@@ -49,23 +59,3 @@ Earlier history: [archive index](docs/archive/README.md), including all 148 orig
 - **New `frontend::ui_lock`:** the keys `ui.lock_pin` (a salted hash in the Web UI password's format) and `ui.locked`, outside `GuiOptions` so Preferences never writes them; PIN rules; lock, unlock and remove; `Guard` (from the fifth wrong PIN on, each one starts a 30 s wait, in memory); `Form` and `submit` for the four PIN dialogs, so each GUI only lays out boxes; `--reset-lock`; `without_lock_keys` for the Web UI a Windows window hosts. `Events::take_popups` lets the Mac hold its popups while locked.
 - **Strings:** 20 new keys (menus, the prompt, the PIN dialogs, the reset question) in all 35 tables; the 34 translations are machine-made.
 - **Validation:** tests on Windows: core lib (935, 4 new), frontend (390 + 4, 9 new), nox (all suites, a new hosted test that the Web UI never shows or changes the lock keys); workspace fmt and clippy clean; the GTK and Mac crates lint from Windows (stand-in pkg-config, the 1.90 toolchain's targets). No GUI uses the lock yet.
-
-## 2026-11-11_085623_1794383783: The nox search test no longer races the torrent list
-
-- **Failure:** CI for `05f93fdd` (no code changed), Windows only: `sources_search_and_add` got 200 where it expects 409 for a second add of the same magnet.
-- **Cause (read from the code, not reproduced here):** `/pa/search/add` answers 409 from `by_hash`, which is filled when a torrent's first status arrives. The test added a `.torrent` and a magnet, waited only for the `.torrent` to be listed, then added the magnet again; on a slow runner the magnet's status had not come yet.
-- **Fix (test only, no version bump):** the test waits until both torrents are listed. `cargo test -p rookparcel-nox --test search`: 3 passed, and the test alone passed 8 more times.
-- **Left:** the gap itself (PLAN "Current status"): a real second add inside it returns 200.
-
-## 2026-11-11_085223_1794383543: Wiki source and the FAQ's client ID brought up to 1.2.46
-
-- **Wiki (`docs/wiki`, 20 pages):** every "not in a published release yet" mark is gone (all of it shipped by 1.2.46; the "New in x" versions stay); the macOS notes say "new in 1.2.19"; Home and Installing name 1.2.46, with 1.2.46 file names in the examples; Profiles says "New in 1.2.0". BRIEF.md now tells writers to add the mark only for unreleased features and remove it at the release.
-- **Site:** `site/faq.html` gives the client ID as `RP` (peer ID `-RP1014-`), was `PA`. Site tests 37 of 37.
-- **Pushed (2026-11-11_085425_1794383665, the owner said so):** `main`, and the 19 changed pages to the GitHub wiki (compared page by page first; only these differed). Checked live: the site FAQ says `RP`, the wiki's Home names 1.2.46.
-- **Seen on the way:** CI for `05f93fdd` (documentation and benchmark files only) failed on Windows, `sources_search_and_add` at `crates/nox/tests/search.rs:341`; Linux, macOS and FreeBSD passed. Not looked into.
-
-## 2026-11-11_085003_1794383403: README brought up to 1.2.46
-
-- **Asked by the owner:** the README still named 1.1.40 as the latest stable release.
-- **Changed (documentation only, no version bump):** the note box and the Download link say 1.2.46 (`gh release view`: `v1.2.46`, not a pre-release); Status says 1.2 and lists what 1.2 added (profiles, the Files tab folder tree, Web UI themes, Statistics, trackers for new downloads, Run Program, the Mac app, the Docker image, Win32 dark mode) plus 1.1.40's keep-ping-low and smart disk I/O; search is "in every interface"; the old arm64 dmg is dated "before 1.2.19"; the GTK row no longer says "not yet used on a desktop" (checked by hand on the Xubuntu VM; GNOME and KDE still open).
-- **Found and left:** `docs/wiki/Home.md` and `docs/wiki/Installing-Rookparcel.md` still say 1.1.63 / 1.1.40, and `site/faq.html` gives the client ID as `PA` (it is `RP` since 1.2.2). PLAN "Current status".

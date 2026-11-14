@@ -18,8 +18,12 @@ belong in [PORTING.md](PORTING.md); document deliberate setting-default changes.
   and stalling every peer, and `/pa/remote` skipping the path policy: all five fixed in 1.1.69 with tests.
   The twelve medium ones (6-17) were fixed in 1.1.70 with tests (2026-11-05). The 21 low ones were
   closed in 1.1.71-1.1.74 (2026-11-05_102610_1793870770): 20 fixed, 35 ruled out. Nothing from the
-  hunt is open. Hand checks worth doing once: the Win32 window after unplugging a monitor (26), and GTK
-  Create's Cancel during the last piece (30, compiled but not run).
+  hunt is open. 1.2.52 (2026-11-14) also fixed its three "inherited quirks": a v2-only single file's
+  web seed URL, LSD at interval 0 (the read loop's `Err(_) => continue` was already a `break`), and
+  the JSON `\u+041` escape. 26 was hand-checked on the
+  hidden desktop (a saved rectangle on neither of two monitors came back inside the primary's work
+  area). Still worth doing once by hand: GTK Create's Cancel during the last piece (30, compiled but
+  not run; timing-dependent).
 
 ## Security and TLS
 

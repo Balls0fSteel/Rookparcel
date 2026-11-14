@@ -443,7 +443,14 @@ impl TorrentInfo {
             let Some(tree) = file_tree else { return Err(MetainfoError::TorrentMissingFileTree) };
             extract_files2(tree, &mut files, &name, files_node.is_some(), 0, &ctx)?;
             files.sanitize_symlinks();
-            multifile = files.num_files() > 1;
+            // A v2 file is padded to the piece size, so a v2-only single file of unaligned size
+            // is two files here. libtorrent (2.0.11, RC_2_0) counts the tail pad and calls it
+            // multi-file, so its url-list entries get a '/' and the file is asked for at
+            // `<url>/<name>`; the tree's one top-level file is what makes it a single file.
+            let single = files_node.is_none()
+                && tree.dict_size() == 1
+                && tree.dict_at(0).is_some_and(|(_, v)| is_file_leaf(v));
+            multifile = !single && files.num_files() > 1;
         } else if file_tree.is_some() {
             return Err(MetainfoError::TorrentMissingMetaVersion);
         }
@@ -1199,6 +1206,11 @@ fn extract_single_file2(
     Ok(())
 }
 
+/// Whether a "file tree" entry is a file: a dict whose one key is empty.
+fn is_file_leaf(v: Node<'_>) -> bool {
+    v.dict_size() == 1 && v.dict_at(0).is_some_and(|(k, _)| k.is_empty())
+}
+
 /// Walks the v2 "file tree" recursively (at most `max_directory_depth` levels deep, which also
 /// bounds the stack; the bdecode depth limit bounds it further).
 fn extract_files2(
@@ -1220,7 +1232,7 @@ fn extract_files2(
         if !value.is_dict() || key.string_length() == 0 {
             return Err(MetainfoError::TorrentFileParseFailed);
         }
-        let leaf = value.dict_size() == 1 && value.dict_at(0).is_some_and(|(k, _)| k.is_empty());
+        let leaf = is_file_leaf(value);
         let single_file = leaf && !has_files && size == 1;
         let mut path = if single_file { String::new() } else { root_dir.to_owned() };
         sanitize_append_forced_path_element(
@@ -1712,6 +1724,46 @@ mod tests {
         let ti = build(true).unwrap();
         assert!(ti.v1() && ti.v2());
         assert!(ti.hash_for_piece(0).is_some());
+    }
+
+    /// A v2-only single file of unaligned size is the file plus its tail pad, yet it stays a
+    /// single-file torrent: its url-list entry names the file and gets no '/' (libtorrent adds
+    /// one, then asks for `<url>/<name>`). One file inside a directory is still multi-file.
+    #[test]
+    fn a_padded_v2_only_single_file_keeps_its_url_list_entry() {
+        let build = |in_dir: bool| {
+            let mut leaf = Entry::new_dict();
+            *leaf.key("length") = 100.into();
+            *leaf.key("pieces root") = Entry::from(vec![7u8; 32]);
+            let mut file = Entry::new_dict();
+            *file.key("") = leaf;
+            let mut tree = Entry::new_dict();
+            if in_dir {
+                let mut dir = Entry::new_dict();
+                *dir.key("x") = file;
+                *tree.key("sub") = dir;
+            } else {
+                *tree.key("x") = file;
+            }
+            let mut info = Entry::new_dict();
+            *info.key("file tree") = tree;
+            *info.key("meta version") = 2.into();
+            *info.key("name") = "x".into();
+            *info.key("piece length") = 16384.into();
+            let mut t = Entry::new_dict();
+            *t.key("info") = info;
+            *t.key("url-list") = "http://h/files/x".into();
+            TorrentInfo::from_bytes(&t.bencode()).unwrap()
+        };
+        let ti = build(false);
+        assert!(ti.v2() && !ti.v1());
+        assert_eq!(ti.num_files(), 2, "the file and its tail pad");
+        assert!(!ti.flags.contains(TorrentInfoFlags::MULTIFILE));
+        assert_eq!(ti.web_seeds()[0].url, "http://h/files/x");
+        let ti = build(true);
+        assert_eq!(ti.num_files(), 2);
+        assert!(ti.flags.contains(TorrentInfoFlags::MULTIFILE));
+        assert_eq!(ti.web_seeds()[0].url, "http://h/files/x/");
     }
 
     /// SEC-09: a v2 torrent whose Merkle trees would take more than MAX_MERKLE_TREE_BYTES once

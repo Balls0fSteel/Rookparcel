@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-13_230133_1794607293
+Last updated: 2026-11-14_150056_1794664856
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D69](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -44,7 +44,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 - **F.** Microsoft Store release: D46 approved 2026-11-04 (free MSIX, individual account, settings shared with the setup copy, all markets and 34 languages, the Postal Rook icon, D60); build per [STORE.md](docs/STORE.md).
 - **G.** Smart disk I/O (D48, [DISKIO.md](docs/DISKIO.md)) and **Keep ping low** (D49, [LOWPING.md](docs/LOWPING.md)) shipped in 1.1.29-1.1.40. Open: real-disk busy-throttle measurements (BACKLOG "Disk and storage"), the owner's gaming line, a Mac run, 2.2.1's "Stop transfers on user interaction".
 - **H.** D56 (2.2.1's web search engines, icon skins, dark mode; research in [BACKLOG](docs/BACKLOG.md#themes-researched-2026-11-02_110639_1793613999-theme-pass-2026-11-09_152030_1794234030)): the theme pass (D63) and Win32 dark mode (D64, [DARKMODE.md](docs/DARKMODE.md)) shipped by 1.2.29, hand checks in BACKLOG "Themes". Icon skins and web search engines remain, each designed before code.
-- **I.** The owner's six points ([PROPOSALS.md](docs/PROPOSALS.md)): D50-D55 shipped (D52 as the Mac GUI in 1.2.19); [BUGHUNT-2026-11-05.md](docs/BUGHUNT-2026-11-05.md) has the 38 findings. **Open:** a real VPN run, a real first start through the guide, the GUI looks; the Win32 test binary's rare heap fault under parallel load (BACKLOG "Validation"; run its tests on one thread meanwhile).
+- **I.** The owner's six points ([PROPOSALS.md](docs/PROPOSALS.md)): D50-D55 shipped (D52 as the Mac GUI in 1.2.19); [BUGHUNT-2026-11-05.md](docs/BUGHUNT-2026-11-05.md) has the 38 findings, all closed; 1.2.52 fixed its inherited quirks and 26 was hand-checked, 30 (GTK Create's Cancel) is still to run by hand. **Open:** a real VPN run, a real first start through the guide, the GUI looks; the Win32 test binary's rare heap fault under parallel load (BACKLOG "Validation"; run its tests on one thread meanwhile).
 
 0. **Owner hand-test findings (2026-10-27):** fixed in 1.0.2-1.0.8; re-test on a fresh Win32 build ([BACKLOG](docs/BACKLOG.md#owner-hand-test-findings-2026-10-27_225501_1793138101)).
 1. Run the installer's wizard and the all-users UAC path once on a real PC, and register `RP` with the client-ID lists (item 14).
