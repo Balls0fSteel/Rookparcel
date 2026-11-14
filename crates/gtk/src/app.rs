@@ -297,15 +297,7 @@ pub fn run() -> ExitCode {
         LOGOUT.with(|l| l.set(true));
         quit_app();
     });
-    // A plain SIGTERM (systemd ending the session or the unit, `kill`) or Ctrl+C in a terminal
-    // quits the same way instead of dying with the resume data unsaved. 15 and 2 on Linux and
-    // the BSDs.
-    for signal in [15, 2] {
-        glib::unix_signal_add_local(signal, || {
-            quit_app();
-            glib::ControlFlow::Break
-        });
-    }
+    watch_quit_signals(quit_app);
     app.connect_activate(move |app| {
         if locked() {
             // another start, or the desktop's launcher: the PIN first (D69). (The active window
@@ -1730,6 +1722,20 @@ fn quit_app() {
     };
     for w in app.windows() {
         close_window(&w);
+    }
+}
+
+/// A plain SIGTERM (systemd ending the session or the unit, `kill`) or Ctrl+C in a terminal
+/// quits the same way (`on_quit`) instead of dying with the resume data unsaved. 15 and 2 on
+/// Linux and the BSDs. Every one of them, not only the first: GLib puts the default action back
+/// once a signal's last handler is removed, so a second SIGTERM in the closing window would
+/// kill the process mid-save.
+fn watch_quit_signals(on_quit: fn()) {
+    for signal in [15, 2] {
+        glib::unix_signal_add_local(signal, move || {
+            on_quit();
+            glib::ControlFlow::Continue
+        });
     }
 }
 
@@ -4238,4 +4244,34 @@ fn about() {
         .website("https://github.com/Balls0fSteel/Rookparcel")
         .build()
         .present();
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::*;
+
+    /// Bug hunt 14, once more: a SIGTERM while the closing window waits for a SIGTERM-started
+    /// close quits again (and `quit_app` then leaves the closing window to end the application)
+    /// instead of killing the process. Without the handler the test run itself would end here.
+    #[test]
+    fn every_quit_signal_is_handled() {
+        static QUITS: AtomicUsize = AtomicUsize::new(0);
+        // the `_local` sources go to the global default context, as the application's do
+        let context = glib::MainContext::default();
+        let _owner = context.acquire().unwrap();
+        watch_quit_signals(|| {
+            QUITS.fetch_add(1, Ordering::SeqCst);
+        });
+        let pid = std::process::id().to_string();
+        for n in 1..=3 {
+            // to the whole process, as `kill` and systemd send it
+            let sent = std::process::Command::new("kill").args(["-s", "TERM", &pid]).status();
+            assert!(sent.is_ok_and(|s| s.success()));
+            while QUITS.load(Ordering::SeqCst) < n {
+                context.iteration(true);
+            }
+        }
+    }
 }

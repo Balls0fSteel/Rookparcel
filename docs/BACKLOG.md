@@ -22,8 +22,12 @@ belong in [PORTING.md](PORTING.md); document deliberate setting-default changes.
   web seed URL, LSD at interval 0 (the read loop's `Err(_) => continue` was already a `break`), and
   the JSON `\u+041` escape. 26 was hand-checked on the
   hidden desktop (a saved rectangle on neither of two monitors came back inside the primary's work
-  area). Still worth doing once by hand: GTK Create's Cancel during the last piece (30, compiled but
-  not run; timing-dependent).
+  area). 30 and 14, the GTK fixes never run, passed on the Xubuntu VM on 2026-11-14, each also run
+  against a build with its fix disabled, which showed the fault (CHANGELOG 1.2.53). That run found a
+  second SIGTERM or Ctrl+C during a close started by the first still killing the GTK GUI mid-save,
+  fixed in 1.2.53. Not run: the GTK tray's Exit during the closing window (it calls the same
+  `quit_app`; a private bus has no tray). Driving GTK's save dialog under Xvfb: a close is ignored
+  while that modal dialog is up, and it hands the file over about 0.5 s after Return.
 
 ## Security and TLS
 
