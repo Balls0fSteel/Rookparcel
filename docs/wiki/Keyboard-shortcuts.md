@@ -25,7 +25,7 @@ This page lists the keyboard shortcuts of the Windows version of Rookparcel, the
 
 With **Confirm when deleting torrents** on in Preferences, <kbd>Del</kbd> and <kbd>Shift</kbd>+<kbd>Del</kbd> ask first. **File > Exit** has no shortcut; see [Tray, notifications and startup](Tray-notifications-and-startup).
 
-*<kbd>Ctrl</kbd>+<kbd>G</kbd> and the Setup Guide are new in 1.1.62, the Files tab's filter box in 1.1.56, and <kbd>Ctrl</kbd>+<kbd>L</kbd> in 1.2.50 (not in a published release yet).*
+*<kbd>Ctrl</kbd>+<kbd>G</kbd> and the Setup Guide are new in 1.1.62, the Files tab's filter box in 1.1.56, and <kbd>Ctrl</kbd>+<kbd>L</kbd> in 1.2.53 (not in a published release yet).*
 
 Mouse shortcuts that go with them:
 

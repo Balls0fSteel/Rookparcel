@@ -164,6 +164,12 @@ mirror the bitmaps) and the tray menu on screen; the Web UI (`nox`) was not audi
   targets needing to be reached, default 150%, and unchecked upload-limit action.
   Properties > Advanced and frontend-only `rss.*` Advanced rows still need a
   design based on the reference client in `z_exclude_uTorrent/`.
+- Compare with the owner's real µTorrent 2.2.1 in `z_exclude_uTorrent/` (gitignored; moved
+  from PLAN.md 2026-11-14): its Add dialog was inspected via scripted captures and control
+  dumps, the remaining wording and behaviour need comparison. The owner captured all 15
+  Preferences pages (General through Advanced > Run Program) as
+  `z_exclude_uTorrent/screenshots/*.webp` on 2026-10-26: compare each page of our
+  Preferences against them (Road to 1.0 item 9).
 - Seeding goals lack an end-to-end app-loop check and a real Logger check of
   `seeding goal reached`. A goal's upload cap persists as the torrent's own limit
   after raising the goal; the upload-slot override has no separate stored flag.

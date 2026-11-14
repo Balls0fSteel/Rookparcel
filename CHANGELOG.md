@@ -4,6 +4,15 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-14_162415_1794669855: Release 1.2.53 prepared (documentation only)
+
+- **Asked for:** write the docs and prepare the release. 1.2.53 is the next release: the UI lock (D69, 1.2.47-1.2.50), clippy 1.100 (1.2.51), the bug hunt's inherited quirks (1.2.52) and the GTK quit signals (1.2.53). No version bump: nothing in the programs changed.
+- **Written:** `docs/releases/1.2.53.md` (the lock, the v2-only web seed fix, the second SIGTERM, Minimize to tray for a window shown late, the LSD floor, the stricter `\u`; the remote protocol is still 18; an older version ignores the lock; the hand checks not done and the lock's known faults from BACKLOG "UI lock"); the Flatpak metainfo's first `<release>` (1.2.53, 2026-11-14); the wiki's lock marks name 1.2.53 instead of 1.2.50, which was never published; Troubleshooting's "Closing Rookparcel takes a long time" says what a second signal does on Linux now.
+- **Branch `publish-1.2.53`** (not on `main`; fast-forward `main` to it after publishing, RELEASING.md step 2): the site news entry dated 2026-11-14, the README's and the wiki's version lines at 1.2.53 and the "not in a published release yet" marks dropped. If the release goes out on another day, change the entry's date and the metainfo's.
+- **Pre-flight on this PC with Rust 1.100 (CI's stable):** rustfmt and clippy `--workspace --all-targets -D warnings` clean, also for the fuzz workspace; `cargo test --workspace` 1,873 passed, none failed (the Win32 crate on one thread). CI has not run 1.2.52-1.2.53 yet (not pushed); `9fb7e42d` (1.2.51) was green on CI, FreeBSD and Fuzz.
+- **Not done:** `tools/bench` (no hot-path change since 1.2.46's run), an interop rerun (no peer-wire change), RELEASING.md step 5 (needs the draft).
+- **Plan and backlog:** the release's status in PLAN; the µTorrent 2.2.1 comparison's detail moved to BACKLOG "Win32 layout and dialogs" (PLAN 17.5 KB to 16.9 KB).
+
 ## 2026-11-14_154940_1794667780: Version 1.2.53: GTK hand checks 30 and 14; a second SIGTERM while closing
 
 - **Asked for:** run the two GTK fixes of [BUGHUNT-2026-11-05.md](docs/BUGHUNT-2026-11-05.md) that were compiled but never run (30 and 14). Both were run on the Xubuntu VM (1.2.52 debug build, Xvfb with no window manager, a private D-Bus, scratch settings and library), each also against a build with its fix disabled.

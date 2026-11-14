@@ -1,6 +1,6 @@
 # Locking Rookparcel
 
-This page explains how to lock Rookparcel's windows with a PIN, so that someone else at your computer cannot see your torrent list, and how to remove a PIN you have forgotten. *New in 1.2.50, not in a published release yet.*
+This page explains how to lock Rookparcel's windows with a PIN, so that someone else at your computer cannot see your torrent list, and how to remove a PIN you have forgotten. *New in 1.2.53, not in a published release yet.*
 
 The lock is for privacy, not security. It hides the windows; it does not encrypt anything. Anyone who can edit Rookparcel's settings file, or open your download folder, can get past it. Do not use your bank card's PIN for it.
 
