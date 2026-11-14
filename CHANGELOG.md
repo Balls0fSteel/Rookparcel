@@ -4,6 +4,13 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-14_235326_1794696806: Release 1.2.54 tagged; the draft is built, not published
+
+- **On the owner's word ("Push and tag"):** `main` pushed (`9fb7e42d..03c6f3ed`); CI, FreeBSD and Fuzz green on `03c6f3ed`; tag `v1.2.54` pushed.
+- **Release run [43649073477](https://github.com/Balls0fSteel/Rookparcel/actions/runs/43649073477):** the first attempt failed in `flatpak (x86_64)` only: inside Flathub's `gnome-51` builder container, flatpak-builder's update of `org.gnome.Sdk` (and the GL and locale extensions) failed with "Invalid cross-device link", then `xvfb-run` segfaulted (exit 139). The aarch64 leg passed. Rerunning the failed job passed (attempt 2), so it was the runner, not the build; if it comes back, look at the builder image and the restored flatpak-builder cache.
+- **Draft:** the same 14 files as 1.2.46 under the new version; its text is `docs/releases/1.2.54.md`. `ghcr.io/balls0fsteel/rookparcel-nox:1.2.54` and `:latest` are pushed (they exist before publishing, RELEASING.md "Container image").
+- **Not done:** RELEASING.md step 5 (no file of the draft was downloaded or started), publishing, and afterwards `main` fast-forwarded to `publish-1.2.54` with the wiki pushed.
+
 ## 2026-11-14_163756_1794670676: Version 1.2.54: the release review's two findings; release 1.2.54 prepared
 
 - **Asked for:** write the docs and prepare the release. The next release covers the UI lock (D69, 1.2.47-1.2.50), clippy 1.100 (1.2.51), the bug hunt's inherited quirks (1.2.52) and the GTK quit signals (1.2.53). The security review of `v1.2.46..HEAD` (Road to 1.0 item 14; [SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) "Release 1.2.54", code read by a subagent, both findings checked here) found two things, fixed here, so the release is **1.2.54**:
