@@ -29,7 +29,7 @@ Please donate - if you can. Your support means the world to us, but only give if
 [Donate with PayPal](https://www.paypal.com/ncp/payment/2UDQNM8TGRUA4) or [sponsor on GitHub](https://github.com/sponsors/Balls0fSteel) (both also on the website's [donation page](https://balls0fsteel.github.io/Rookparcel/donate.html), which Help > Donate opens).
 
 > [!NOTE]
-> **Rookparcel 1.2.46 is the latest stable release.** It has been used mostly by its author so far, and nothing is code-signed. Do not use it on private trackers yet: its client ID is not whitelisted anywhere.
+> **Rookparcel 1.2.54 is the latest stable release.** It has been used mostly by its author so far, and nothing is code-signed. Do not use it on private trackers yet: its client ID is not whitelisted anywhere.
 >
 > Feedback and [bug reports](https://github.com/Balls0fSteel/Rookparcel/issues) are welcome.
 
@@ -60,13 +60,13 @@ User guide: the [wiki](https://github.com/Balls0fSteel/Rookparcel/wiki): install
 - themes for the Web UI: nine built in, plus your own CSS files (1.2.29);
 - Help > Statistics with all-time totals, trackers for new downloads, and Run Program on torrent events (1.2.44).
 
-1.2.19 brought the native Mac app and 1.2.21 the Docker image of `rookparcel-nox`. From 1.1.40 there are also a mode that keeps your ping low while Rookparcel downloads and smart disk I/O.
+1.2.54 locks the Windows, Linux and Mac windows behind a PIN (File > Lock Rookparcel), a privacy screen that hides them in the tray. 1.2.19 brought the native Mac app and 1.2.21 the Docker image of `rookparcel-nox`. From 1.1.40 there are also a mode that keeps your ping low while Rookparcel downloads and smart disk I/O.
 
 1.1 added a search box for the torrent list and importers for µTorrent and qBittorrent torrents. 1.1.17 adds torrent search through your own Prowlarr or Jackett (Torznab), in every interface, with no search plugins or scrapers of our own; from 1.1.59 the search helper downloads Jackett for you at a click ([docs/SEARCH_ON_WINDOWS.md](docs/SEARCH_ON_WINDOWS.md), the step-by-step guide with screenshots, also on the [wiki](https://github.com/Balls0fSteel/Rookparcel/wiki/Searching-for-torrents-on-Windows)). Validation on more machines continues. See [PLAN.md](PLAN.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PORTING.md](docs/PORTING.md).
 
 ## Download
 
-Release builds are on the [Releases page](https://github.com/Balls0fSteel/Rookparcel/releases); the newest is [1.2.46](https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.46). What changed in each release: the website's [News](https://balls0fsteel.github.io/Rookparcel/news.html) page, or the release notes in [docs/releases](docs/releases). The archives need no installation: unpack and run; Windows also has an installer (from 1.0.1 on). Each release has `SHA256SUMS` and notes with the first-run steps per platform.
+Release builds are on the [Releases page](https://github.com/Balls0fSteel/Rookparcel/releases); the newest is [1.2.54](https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.54). What changed in each release: the website's [News](https://balls0fsteel.github.io/Rookparcel/news.html) page, or the release notes in [docs/releases](docs/releases). The archives need no installation: unpack and run; Windows also has an installer (from 1.0.1 on). Each release has `SHA256SUMS` and notes with the first-run steps per platform.
 
 | Platform | File | What is inside |
 |---|---|---|
