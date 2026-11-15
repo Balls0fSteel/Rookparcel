@@ -9,7 +9,7 @@ About ten seconds after Rookparcel starts, and then every 12 hours while it runs
 When a newer version is out:
 
 - A question box appears, once for each new version.
-- After that, a notice stays in the status bar until you click it: "Rookparcel 1.2.54 is available - click here to download it".
+- After that, a notice stays in the status bar until you click it: "Rookparcel 1.2.57 is available - click here to download it".
 - The Logger tab has a line with the link too.
 
 To check at once, choose **Help > Check for Updates**. It answers either way, with the newer version or with "You have the newest version".
@@ -18,7 +18,7 @@ To check at once, choose **Help > Check for Updates**. It answers either way, wi
 
 A Rookparcel installed by the Windows setup can install the new version itself. *New in 1.1.40.*
 
-1. The question reads "Rookparcel 1.2.54 is available. You have 1.2.46. Download and install it now?". Click **Download and install**. (**Open download page** opens the release page in your browser instead; **Cancel** does nothing.)
+1. The question reads "Rookparcel 1.2.57 is available. You have 1.2.54. Download and install it now?". Click **Download and install**. (**Open download page** opens the release page in your browser instead; **Cancel** does nothing.)
 2. A small window shows the download's progress. Rookparcel checks the downloaded setup against the release's `SHA256SUMS` before it uses it.
 3. Rookparcel asks: "To install it, Rookparcel closes now and starts again when Setup is done. Close and install now?". Click **Yes**.
 4. Rookparcel saves everything and closes. The setup installs the new version silently into the same folder and starts Rookparcel again.
@@ -87,7 +87,7 @@ To update the daemon, stop it, replace `rookparcel-nox` with the new one and sta
 
 ## When a version reads your settings differently
 
-*New in 1.2.55 and 1.2.56, not in a published release yet.*
+*New in 1.2.57.*
 
 Each time Rookparcel saves its settings, it also notes its version and how it read the settings that decide where your traffic goes: the proxy, **Use only this network**, the listen interfaces, encryption and the IP filter. When another version starts, it compares that note with its own reading of the same file:
 

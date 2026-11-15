@@ -45,6 +45,22 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.57" data-date="2026-11-15" aria-labelledby="v1.2.57-h">
+      <h2 id="v1.2.57-h"><a href="#v1.2.57"><time datetime="2026-11-15">Sun 15 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.57</span></a></h2>
+      <p class="news-lede">Rookparcel looks after your settings across updates. If a new version reads your proxy or your network binding differently from the version that saved them, it stops all transfers and asks you to check, instead of quietly connecting without them.</p>
+      <ul class="changes">
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Each save notes how this version read the proxy, Use only this network, the listen interfaces, encryption and the IP filter. The next version compares, and lists any difference in the Logger.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>If the proxy or the network binding would be lost, nothing connects: the status bar says "Transfers held: confirm the settings" until you press OK in Preferences.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>After an update the old settings file is kept beside the new one as <code>rookparcel.ini.&lt;version&gt;.bak</code>, the last three of them.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>While held, RSS feeds, <code>.torrent</code> links and the update check wait too, so nothing goes out without the proxy.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>A proxy type written by a newer version no longer reads as "no proxy" and is no longer erased at the next save.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>A settings file that cannot be read is never overwritten; one in another encoding is read and its original kept.</span></li>
+        <li><span class="tag tag-area">Web UI</span><span class="vh">:</span> <span><code>rookparcel-nox</code> stops on a damaged <code>webui.json</code> instead of replacing it with defaults, and keeps a network rule set with <code>--network</code>.</span></li>
+      </ul>
+      <p class="news-note">The remote protocol is now 19: a window and the <code>rookparcel-nox</code> it drives must both be updated. The new texts are machine translations in every language but English.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.57">Download 1.2.57 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.57.md">Full release notes</a></p>
+    </article>
+
     <article class="news-entry" id="v1.2.54" data-date="2026-11-15" aria-labelledby="v1.2.54-h">
       <h2 id="v1.2.54-h"><a href="#v1.2.54"><time datetime="2026-11-15">Sun 15 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.54</span></a></h2>
       <p class="news-lede">Rookparcel can lock its windows with a PIN, so that someone else at your computer cannot see your torrent list. Also a fix for web seeds of one kind of v2 torrent, and for a Linux window that a second stop signal could kill while it saved.</p>

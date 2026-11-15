@@ -44,7 +44,7 @@ A new profile starts empty, like a new installation, and opens with the [Setup G
 
 ## Telling the windows apart
 
-A named profile's window shows its name in the title bar and in the tray icon's tooltip: `Rookparcel 1.2.54 [work]`. The default profile shows no name. On Windows each profile has its own taskbar button group, so you can pin them apart.
+A named profile's window shows its name in the title bar and in the tray icon's tooltip: `Rookparcel 1.2.57 [work]`. The default profile shows no name. On Windows each profile has its own taskbar button group, so you can pin them apart.
 
 ## What each profile keeps apart
 
