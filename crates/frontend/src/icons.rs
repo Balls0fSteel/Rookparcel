@@ -211,6 +211,8 @@ small_icons! {
     Edit => "edit",
     FeedDisabled => "feed-disabled",
     NoLabel => "no-label",
+    // the UI Lock page (D71), from the bold set's lock
+    Lock => "lock",
     }
 }
 
@@ -259,6 +261,7 @@ pub fn page_icon(title: S) -> Option<UiIcon> {
         S::PageDiskCache | S::PageDiskIo => UiIcon::DiskCache,
         S::PageTrackers => UiIcon::Trackers,
         S::PageRunProgram => UiIcon::Advanced,
+        S::PageUiLock => UiIcon::Lock,
         _ => return None,
     })
 }

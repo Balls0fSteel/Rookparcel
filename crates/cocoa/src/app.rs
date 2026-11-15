@@ -155,7 +155,7 @@ define_class!(
         #[unsafe(method_id(applicationDockMenu:))]
         fn dock_menu(&self, _app: &NSApplication) -> Option<Retained<NSMenu>> {
             let visible = ui().is_some_and(|u| u.window.isVisible());
-            let items = menu::dock(visible, crate::lock::is_locked(), crate::lock::has_pin());
+            let items = menu::dock(visible, crate::lock::is_locked(), crate::lock::can_lock());
             Some(menu::build("", &items, MainThreadMarker::from(self)))
         }
 
@@ -314,9 +314,13 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
     let alternate_rows = core.gui_options().alternate_rows;
     // D69: a locked Rookparcel starts locked
     let locked = ui_lock::is_locked(core.prefs());
+    // D71: switched off, File > Lock Rookparcel is hidden (the menu bar was built before the
+    // settings were read)
+    let lock_on = ui_lock::enabled(core.prefs());
     APP.with(|a| {
         *a.borrow_mut() = Some(App { core, demo: args.demo, started: args.started, reported: false })
     });
+    menu::show_lock_item(lock_on, mtm);
     if pin_removed {
         log_line(tr!(LogLockPinRemoved));
     }
@@ -583,11 +587,8 @@ pub fn run(cmd: Command) {
         FeedAdd | FeedEdit | FeedToggle | FeedUpdate | FeedDelete | FeedRss | FeedDownload => {
             crate::rss::run(cmd)
         }
-        // D69: the windows' lock
+        // D69: the windows' lock (D71: its PIN is set in Preferences, `prefs::run`)
         Lock => crate::lock::lock_command(),
-        SetPin => crate::lock::pin_command(ui_lock::Form::Set),
-        ChangePin => crate::lock::pin_command(ui_lock::Form::Change),
-        RemovePin => crate::lock::pin_command(ui_lock::Form::Remove),
     }
 }
 
@@ -640,12 +641,20 @@ pub fn state(cmd: Command) -> (bool, Option<bool>) {
         Command::StartAll | Command::StopAll => peek(|c| !c.list().is_empty()).unwrap_or(false),
         // slice J: the client's files are on this Mac, not a remote server
         Command::ImportQbt | Command::ImportUt => crate::import::enabled(),
-        // D69: Set PIN without a PIN, Change and Remove with one
-        Command::SetPin => !crate::lock::has_pin(),
-        Command::ChangePin | Command::RemovePin => crate::lock::has_pin(),
+        // D71: no Lock while the lock is switched off (the item is hidden too, `hidden`)
+        Command::Lock => crate::lock::enabled() == Some(true),
         _ => true,
     };
     (enabled, checked)
+}
+
+/// Whether a menu item is hidden now, `None` for those that are never hidden: File > Lock
+/// Rookparcel while the lock is switched off (D71; left as it is before the start).
+pub fn hidden(cmd: Command) -> Option<bool> {
+    match cmd {
+        Command::Lock => crate::lock::enabled().map(|on| !on),
+        _ => None,
+    }
 }
 
 /// The text of an item that follows the state (Show or Hide), `None` for the others.

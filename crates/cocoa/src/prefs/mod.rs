@@ -54,6 +54,7 @@ use rookparcel_frontend::pref_pages::{
 };
 use rookparcel_frontend::scheduler::{CELLS, Mode};
 use rookparcel_frontend::tr;
+use rookparcel_frontend::ui_lock::{self, Form};
 
 use crate::app::{peek, with_core};
 use crate::canvas::RPCanvas;
@@ -69,6 +70,8 @@ pub(crate) enum Act {
     Browse(&'static str),
     /// A page's button.
     Button(Action),
+    /// Advanced > UI Lock's switch (D71).
+    LockSwitch,
     /// The Advanced table's filter changed.
     AdvFilter,
     /// The Advanced table's value editor committed.
@@ -141,6 +144,15 @@ pub(crate) struct FieldUi {
     pub error: Option<(Retained<NSTextField>, Retained<NSGridRow>)>,
 }
 
+/// Advanced > UI Lock's controls (D71): not fields, they act on the lock's keys at once.
+#[derive(Default)]
+pub(crate) struct LockUi {
+    pub switch: Option<Retained<NSButton>>,
+    /// Set, Change and Remove PIN, with the PIN dialog each opens.
+    pub buttons: Vec<(Form, Retained<NSButton>)>,
+    pub status: Option<Retained<NSTextField>>,
+}
+
 /// The open window.
 pub(crate) struct State {
     window: Retained<NSWindow>,
@@ -163,6 +175,8 @@ pub(crate) struct State {
     ip_status: Option<Retained<NSTextField>>,
     /// Advanced > Trackers' status line for the list from the web.
     tracker_status: Option<Retained<NSTextField>>,
+    /// Advanced > UI Lock's controls.
+    lock: LockUi,
     pub(crate) advanced: Option<advanced::Advanced>,
     sched: Option<Retained<RPCanvas>>,
     live: RefCell<Live>,
@@ -365,7 +379,16 @@ fn build(mtm: MainThreadMarker) -> State {
     };
 
     let controls::Builder {
-        acts, fields, helps, ip_status, tracker_status, advanced, sched, observers, ..
+        acts,
+        fields,
+        helps,
+        ip_status,
+        tracker_status,
+        lock,
+        advanced,
+        sched,
+        observers,
+        ..
     } = b;
     State {
         window,
@@ -384,6 +407,7 @@ fn build(mtm: MainThreadMarker) -> State {
         help_shown: Cell::new(None),
         ip_status,
         tracker_status,
+        lock,
         advanced,
         sched,
         live: RefCell::new(Live::default()),
@@ -483,6 +507,7 @@ fn refresh(st: &State) {
     show_errors(st, &[]);
     update_ip_status(st, None);
     update_tracker_status(st);
+    update_lock(st);
 }
 
 /// Whether `view` has the window's focus (a multi-line box being typed in).
@@ -583,6 +608,13 @@ pub fn run(i: u16) {
         }
         Act::Button(Action::ReloadIpFilter) => reload_ip_filter(&st),
         Act::Button(Action::UpdateTrackerList) => update_tracker_list(&st),
+        // D71: the PIN dialogs, out of this action (`lock::pin_dialog`); saved on their OK
+        Act::Button(action @ (Action::SetPin | Action::ChangePin | Action::RemovePin)) => {
+            if let Some(form) = action.pin_form() {
+                crate::lock::pin_dialog(form, lock_changed);
+            }
+        }
+        Act::LockSwitch => lock_switch(&st),
         Act::AdvFilter => advanced::filter_changed(&st),
         Act::AdvEditor => advanced::end_edit(&st),
         Act::AdvReset => advanced::reset(&st),
@@ -753,11 +785,66 @@ fn update_tracker_status(st: &State) {
     }
 }
 
+/// Advanced > UI Lock's switch was clicked (D71). Ticked, the lock is on; unticked without a
+/// PIN, off; unticked with one, its PIN is asked first (`Form::Off`, whose OK turns it off) and
+/// Cancel ticks it again. Saved at once.
+fn lock_switch(st: &State) {
+    let Some(switch) = &st.lock.switch else { return };
+    let on = ui::checked(switch);
+    let Some(now) = peek(|c| ui_lock::State::of(c.prefs())) else { return };
+    if !on && now == ui_lock::State::Pin {
+        return crate::lock::pin_dialog(Form::Off, lock_changed);
+    }
+    if on != (now != ui_lock::State::Off) {
+        with_core(|c| {
+            ui_lock::set_enabled(c.prefs_mut(), on);
+            c.save_prefs();
+        });
+    }
+    lock_changed();
+}
+
+/// The lock's settings changed: the UI Lock page and File > Lock Rookparcel follow them.
+fn lock_changed() {
+    if let Some(st) = state() {
+        update_lock(&st);
+    }
+    if let (Some(on), Some(mtm)) = (crate::lock::enabled(), MainThreadMarker::new()) {
+        crate::menu::show_lock_item(on, mtm);
+    }
+}
+
+/// Advanced > UI Lock from the settings (D71): the switch, which PIN buttons work, the status
+/// line. Also on the timer: a reset of the PIN (Option at the Dock icon, a second start with
+/// `--reset-lock`) can come while the window is open.
+fn update_lock(st: &State) {
+    let Some(now) = peek(|c| ui_lock::State::of(c.prefs())) else { return };
+    if let Some(s) = &st.lock.switch {
+        let on = now != ui_lock::State::Off;
+        if ui::checked(s) != on {
+            ui::set_checked(s, on);
+        }
+    }
+    for (form, b) in &st.lock.buttons {
+        let works = now.allows(*form);
+        if b.isEnabled() != works {
+            b.setEnabled(works);
+        }
+    }
+    if let Some(l) = &st.lock.status {
+        let text = ui::text(now.text());
+        if l.stringValue().to_string() != text {
+            l.setStringValue(&NSString::from_str(&text));
+        }
+    }
+}
+
 /// The application's 1 s timer: what the open window shows of the engine's doings (the
-/// tracker list's status).
+/// tracker list's status) and of the lock's state.
 pub fn tick() {
     if let Some(st) = state().filter(|st| st.window.isVisible()) {
         update_tracker_status(&st);
+        update_lock(&st);
     }
 }
 

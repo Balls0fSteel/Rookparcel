@@ -1564,11 +1564,10 @@ strings! {
 
     /// File menu and the tray menu: hides every Rookparcel window; showing them again asks for the PIN.
     MenuLock = "&Lock Rookparcel";
-    /// Options menu: the submenu with the three items below.
-    MenuLockPin = "&Lock PIN";
-    MenuSetPin = "&Set PIN...";
-    MenuChangePin = "&Change PIN...";
-    MenuRemovePin = "&Remove PIN...";
+    /// Buttons on Preferences > Advanced > UI Lock (they were the Options menu's Lock PIN items).
+    PrefLockSetPin = "&Set PIN...";
+    PrefLockChangePin = "&Change PIN...";
+    PrefLockRemovePin = "&Remove PIN...";
     /// The title of the window that asks for the PIN while Rookparcel is locked.
     LockTitle = "Rookparcel is locked";
     /// Above the PIN box of that window.
@@ -1594,4 +1593,21 @@ strings! {
     LockResetNone = "No lock PIN is set.";
     /// A Logger line after the reset removed the PIN.
     LogLockPinRemoved = "The lock PIN was removed.";
+
+    // ---- Preferences > Advanced > UI Lock (D71): the lock's PIN and its off switch
+
+    /// The page's name in the Preferences tree, under Advanced.
+    PageUiLock = "UI Lock";
+    /// The group box on that page.
+    PrefLockGroup = "Lock Rookparcel's Windows";
+    /// Check box. Off, there is no Lock Rookparcel command anywhere, and the PIN is removed.
+    PrefLockEnable = "Allow locking Rookparcel with a PIN";
+    /// The status line on that page, one of the three.
+    PrefLockHasPin = "A PIN is set. File > Lock Rookparcel hides the windows in the tray.";
+    PrefLockNoPin = "No PIN is set yet: Lock Rookparcel asks for one first.";
+    PrefLockOff = "The lock is off: Rookparcel has no Lock command.";
+    /// Under the group box.
+    PrefLockNote = "The lock keeps your torrent list from others at this computer. It is for privacy, not security: it encrypts nothing, and the Web UI is not locked. This page acts at once, without OK. A forgotten PIN is removed by starting Rookparcel with --reset-lock (on Windows with Ctrl held, on a Mac with Option held).";
+    /// The title of the window that asks for the PIN when the box above is unticked.
+    PinOffTitle = "Turn Off the Lock";
 }

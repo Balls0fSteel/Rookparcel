@@ -147,18 +147,9 @@ pub fn tree() -> Vec<Item> {
         Item::Sep,
         sys(c"toggleFullScreen:", tr!(MacEnterFullScreen), control_cmd("f")),
     ];
-    let lock_pin = vec![
-        c(SetPin, tr!(MenuSetPin), None),
-        c(ChangePin, tr!(MenuChangePin), None),
-        c(RemovePin, tr!(MenuRemovePin), None),
-    ];
-    let options = vec![
-        c(Rss, tr!(MenuRss), None),
-        Item::Sep,
-        sub(tr!(MenuAutoShutdown), auto_shutdown(), Role::Plain),
-        Item::Sep,
-        sub(tr!(MenuLockPin), lock_pin, Role::Plain),
-    ];
+    // (D71: the lock's PIN is in Preferences > Advanced > UI Lock, no Lock PIN submenu here)
+    let options =
+        vec![c(Rss, tr!(MenuRss), None), Item::Sep, sub(tr!(MenuAutoShutdown), auto_shutdown(), Role::Plain)];
     let window = vec![
         sys(c"performMiniaturize:", tr!(MacMinimize), cmd("m")),
         sys(c"performZoom:", tr!(MacZoom), None),
@@ -312,15 +303,15 @@ fn auto_shutdown() -> Vec<Item> {
 }
 
 /// The Dock menu (AppKit adds the windows, Options and Quit). While the windows are `locked`
-/// (D69) only Show Rookparcel, which asks for the PIN; with a PIN set, Lock Rookparcel follows
-/// Show / Hide.
-pub fn dock(window_visible: bool, locked: bool, has_pin: bool) -> Vec<Item> {
+/// (D69) only Show Rookparcel, which asks for the PIN; when `can_lock` (the lock is switched on,
+/// D71, and a PIN is set), Lock Rookparcel follows Show / Hide.
+pub fn dock(window_visible: bool, locked: bool, can_lock: bool) -> Vec<Item> {
     use Command::*;
     if locked {
         return vec![c(ToggleWindow, tr!(MenuShow), None)];
     }
     let mut items = vec![c(ToggleWindow, if window_visible { tr!(MenuHide) } else { tr!(MenuShow) }, None)];
-    if has_pin {
+    if can_lock {
         items.push(c(Lock, tr!(MenuLock), None));
     }
     items.extend([
@@ -335,8 +326,8 @@ pub fn dock(window_visible: bool, locked: bool, has_pin: bool) -> Vec<Item> {
 }
 
 /// The status item's menu: the Dock menu's, and Quit (locked: Show Rookparcel and Quit).
-pub fn status_item(window_visible: bool, locked: bool, has_pin: bool) -> Vec<Item> {
-    let mut items = dock(window_visible, locked, has_pin);
+pub fn status_item(window_visible: bool, locked: bool, can_lock: bool) -> Vec<Item> {
+    let mut items = dock(window_visible, locked, can_lock);
     items.push(Item::Sep);
     items.push(c(Command::Quit, tr!(MacQuit), None));
     items
@@ -494,6 +485,30 @@ mod sys {
         }
     }
 
+    /// File > Lock Rookparcel is shown only while the lock is switched on (D71), in the menu bar
+    /// and in the full one kept while the locked one is up. (`app::hidden` does it again when a
+    /// menu is validated; its ⌘L is refused while off, as a hidden item's key may still work.)
+    pub fn show_lock_item(on: bool, mtm: MainThreadMarker) {
+        fn walk(menu: &NSMenu, tag: isize, on: bool) {
+            for item in menu.itemArray().iter() {
+                if item.tag() == tag {
+                    item.setHidden(!on);
+                }
+                if let Some(sub) = item.submenu() {
+                    walk(&sub, tag, on);
+                }
+            }
+        }
+        let tag = crate::commands::Command::Lock.tag();
+        if let Some(bar) = NSApplication::sharedApplication(mtm).mainMenu() {
+            walk(&bar, tag, on);
+        }
+        let full = FULL.with(|f| f.borrow().clone());
+        if let Some(bar) = full {
+            walk(&bar, tag, on);
+        }
+    }
+
     /// `menuNeedsUpdate:` from `RPTarget`: rebuilds a live list (profiles, labels).
     pub fn needs_update(menu: &NSMenu) {
         let Some(role) =
@@ -606,7 +621,7 @@ mod tests {
     }
 
     #[test]
-    fn the_lock_is_in_file_and_the_pin_in_options() {
+    fn the_lock_is_in_file_and_the_pin_in_preferences() {
         let t = tree();
         let mut keys = Vec::new();
         commands(&t, &mut keys);
@@ -615,10 +630,12 @@ mod tests {
         let Item::Sub { items: file, .. } = &t[1] else { panic!("File is the second menu") };
         assert!(matches!(&file[file.len() - 2], Item::Cmd { cmd: Command::Lock, .. }));
         assert!(matches!(&file[file.len() - 1], Item::Sys { action, .. } if *action == c"performClose:"));
+        // D71: no Lock PIN submenu in Options, Auto Shutdown is its last item
         let Item::Sub { items: options, .. } = &t[5] else { panic!("Options is the sixth menu") };
-        let Some(Item::Sub { title, items: pin, .. }) = options.last() else { panic!("Lock PIN is last") };
-        assert_eq!(title, &text(tr!(MenuLockPin)));
-        assert_eq!(cmds(pin), [Command::SetPin, Command::ChangePin, Command::RemovePin]);
+        let Some(Item::Sub { title, .. }) = options.last() else { panic!("Auto Shutdown is last") };
+        assert_eq!(title, &text(tr!(MenuAutoShutdown)));
+        assert_eq!(cmds(options).iter().filter(|c| **c == Command::Lock).count(), 0);
+        assert_eq!(cmds(&t).iter().filter(|c| **c == Command::Lock).count(), 1, "only in File");
     }
 
     #[test]
@@ -649,6 +666,7 @@ mod tests {
     }
 
     #[test]
+    /// `can_lock`: the lock is switched on (D71) and a PIN is set.
     fn lock_rookparcel_is_in_the_unlocked_menus_with_a_pin() {
         for visible in [false, true] {
             assert!(!cmds(&dock(visible, false, false)).contains(&Command::Lock));

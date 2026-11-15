@@ -1187,6 +1187,11 @@ Hand checks still open:
 - **GTK:** a real KDE and GNOME (Wayland) session, plain GNOME without AppIndicator (the prompt standing in for the window), the digit filter with an input method; a countdown opened before the lock stays modal to the hidden main window (check under a window manager); the portal's file chooser stays on screen through a lock (another process).
 - **macOS:** <kbd>⌥</kbd> held at launch and <kbd>⌥</kbd> with a Dock click on a real Mac (keys cannot be held over SSH); the status item's and the Dock's menus while locked; a minimized or full-screen window at lock time; sheets coming back attached; Auto Shutdown's Quit or a logout while the prompt is up; arm64.
 
+Preferences > Advanced > UI Lock (D71, 1.2.58): Win32 driven on the hidden desktop, light and dark. Open:
+- **GTK:** the page on a real session (three buttons on one row, the switch re-ticked after a cancelled Turn Off), File > Lock hidden by `hidden-when=action-disabled` in the popover menu bar, Ctrl+L doing nothing while off, the tray's Lock.
+- **macOS:** the page in the sidebar, File > Lock hidden while off and ⌘L refused, the status item's and the Dock's menus; the 1 s refresh re-ticks the switch while the Turn Off dialog is up (cosmetic, check it is not visible).
+- **Windows:** the page and the narrower PIN dialog at 125/150 % DPI and in a long language (German, Finnish).
+
 Found and left:
 - **macOS, a second copy:** started with `open -n` or from Terminal (only `--reset-lock` from Terminal needs one), it reaches the running copy, but on macOS 15 that copy stays behind the front app, as an unlocked one did before, so its prompt or question has no keyboard until clicked. Yielding activation to it (by bundle identifier or to each running copy) changed nothing on the VM. Opening the app again from Finder or the Dock starts no second copy and works.
 - **macOS:** Quit is greyed while the PIN prompt is up (app-modal); Escape first.

@@ -5,10 +5,11 @@
 //!
 //! What is kept, in the window's own settings file (`rookparcel.ini`, so each profile and each
 //! remote window has its own): `ui.lock_pin`, the PIN as a salted PBKDF2 hash
-//! ([`PasswordHash`], the Web UI password's format), and `ui.locked`, set while the windows are
-//! locked, so a locked Rookparcel starts locked. Neither is a [`crate::options::GuiOptions`]
-//! field: Preferences never shows or writes them, and the Web UI a Windows window hosts never
-//! gets them ([`without_lock_keys`]).
+//! ([`PasswordHash`], the Web UI password's format), `ui.locked`, set while the windows are
+//! locked, so a locked Rookparcel starts locked, and `ui.lock_enabled=0` while the lock is
+//! switched off (D71: no Lock command anywhere). None is a [`crate::options::GuiOptions`]
+//! field: Preferences > Advanced > UI Lock changes them at once, through the PIN dialogs, never
+//! on OK, and the Web UI a Windows window hosts never gets them ([`without_lock_keys`]).
 //!
 //! A forgotten PIN is removed by starting the program with [`RESET_SWITCH`] or, on Windows and
 //! macOS, with Ctrl or Option held; each GUI asks first.
@@ -24,6 +25,10 @@ use crate::tr;
 pub const PIN_KEY: &str = "ui.lock_pin";
 /// `1` while the windows are locked (no key otherwise).
 pub const LOCKED_KEY: &str = "ui.locked";
+/// `0` while the lock is switched off (D71); no key, the default, while it is on.
+pub const ENABLED_KEY: &str = "ui.lock_enabled";
+/// Every key of the lock: the window's own, never the Web UI's.
+pub const KEYS: [&str; 3] = [PIN_KEY, LOCKED_KEY, ENABLED_KEY];
 /// The command-line switch that asks to remove the PIN.
 pub const RESET_SWITCH: &str = "--reset-lock";
 
@@ -89,10 +94,27 @@ pub fn remove(prefs: &mut Prefs) -> bool {
     had
 }
 
-/// Whether the windows are locked: the mark is set and there is a PIN to unlock with (a mark
-/// without one, from a settings file edited by hand, does not lock).
+/// Whether the lock is switched on (D71): the Lock commands are there, and a PIN can be set.
+pub fn enabled(prefs: &Prefs) -> bool {
+    prefs.get_bool(ENABLED_KEY, true)
+}
+
+/// Switches the lock on or off. Off removes the PIN and the locked mark too: the caller asked
+/// for the PIN first ([`Form::Off`]) when there was one. The caller saves.
+pub fn set_enabled(prefs: &mut Prefs, on: bool) {
+    if on {
+        prefs.remove(ENABLED_KEY);
+    } else {
+        remove(prefs);
+        prefs.set_bool(ENABLED_KEY, false);
+    }
+}
+
+/// Whether the windows are locked: the lock is on, the mark is set and there is a PIN to unlock
+/// with (a mark without one, or with the lock off, from a settings file edited by hand, does
+/// not lock).
 pub fn is_locked(prefs: &Prefs) -> bool {
-    prefs.get_bool(LOCKED_KEY, false) && has_pin(prefs)
+    enabled(prefs) && prefs.get_bool(LOCKED_KEY, false) && has_pin(prefs)
 }
 
 /// Sets or clears the locked mark. The caller saves (at once: a lock must survive a crash).
@@ -105,9 +127,9 @@ pub fn set_locked(prefs: &mut Prefs, locked: bool) {
 }
 
 /// Locks if there is a PIN; false (and nothing changed) without one, when the GUI asks for a
-/// PIN first.
+/// PIN first, and while the lock is off.
 pub fn lock(prefs: &mut Prefs) -> bool {
-    let ok = has_pin(prefs);
+    let ok = enabled(prefs) && has_pin(prefs);
     if ok {
         set_locked(prefs, true);
     }
@@ -116,7 +138,49 @@ pub fn lock(prefs: &mut Prefs) -> bool {
 
 /// Whether a preferences key is one of the lock's.
 pub fn is_lock_key(key: &str) -> bool {
-    key == PIN_KEY || key == LOCKED_KEY
+    KEYS.contains(&key)
+}
+
+/// What Preferences > Advanced > UI Lock shows (D71): the status line and which of its
+/// buttons work.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum State {
+    /// Switched off: no Lock command, all three buttons greyed.
+    Off,
+    /// On without a PIN: Lock asks for one first; Set PIN works.
+    NoPin,
+    /// On with a PIN: Change and Remove PIN work.
+    Pin,
+}
+
+impl State {
+    pub fn of(prefs: &Prefs) -> State {
+        if !enabled(prefs) {
+            State::Off
+        } else if has_pin(prefs) {
+            State::Pin
+        } else {
+            State::NoPin
+        }
+    }
+
+    /// The status line under the buttons.
+    pub fn text(self) -> &'static str {
+        match self {
+            State::Off => tr!(PrefLockOff),
+            State::NoPin => tr!(PrefLockNoPin),
+            State::Pin => tr!(PrefLockHasPin),
+        }
+    }
+
+    /// Whether the button for `form` (Set, Change or Remove PIN) works.
+    pub fn allows(self, form: Form) -> bool {
+        match form {
+            Form::Set => self == State::NoPin,
+            Form::Change | Form::Remove => self == State::Pin,
+            Form::Unlock | Form::Off => false,
+        }
+    }
 }
 
 /// `changes` without the lock's keys: what may pass between the window's preferences and the
@@ -173,13 +237,16 @@ impl Guard {
 pub enum Form {
     /// "Rookparcel is locked": the PIN, to show the windows again.
     Unlock,
-    /// Options > Lock PIN > Set PIN... (or File > Lock Rookparcel without a PIN): the new PIN
-    /// twice.
+    /// Preferences > Advanced > UI Lock > Set PIN... (or File > Lock Rookparcel without a PIN):
+    /// the new PIN twice.
     Set,
     /// Change PIN...: the current PIN, then the new one twice.
     Change,
     /// Remove PIN...: the current PIN.
     Remove,
+    /// The UI Lock page's switch turned off while a PIN is set (D71): the current PIN, then the
+    /// PIN goes and the lock is off.
+    Off,
 }
 
 impl Form {
@@ -190,6 +257,7 @@ impl Form {
             Form::Set => tr!(PinSetTitle),
             Form::Change => tr!(PinChangeTitle),
             Form::Remove => tr!(PinRemoveTitle),
+            Form::Off => tr!(PinOffTitle),
         }
     }
 
@@ -246,6 +314,7 @@ pub fn submit(
         Form::Remove => {
             remove(prefs);
         }
+        Form::Off => set_enabled(prefs, false),
     }
     Ok(())
 }
@@ -404,6 +473,48 @@ mod tests {
     }
 
     #[test]
+    fn the_switch_turns_the_lock_off_with_its_pin() {
+        let t = Instant::now();
+        let mut g = Guard::default();
+        let mut p = Prefs::default();
+        // on by default, with no key
+        assert!(enabled(&p) && p.get(ENABLED_KEY).is_none());
+        assert_eq!(State::of(&p), State::NoPin);
+        set_pin_with(&mut p, "1234", ROUNDS);
+        assert_eq!(State::of(&p), State::Pin);
+        assert!(State::Pin.allows(Form::Change) && State::Pin.allows(Form::Remove));
+        assert!(!State::Pin.allows(Form::Set) && State::NoPin.allows(Form::Set));
+        // off asks for the PIN, then removes it and the lock
+        lock(&mut p);
+        assert_eq!(submit(Form::Off, &mut p, &mut g, "9999", "", "", t), Err(tr!(LockWrong).into()));
+        assert!(enabled(&p) && is_locked(&p));
+        assert_eq!(submit(Form::Off, &mut p, &mut g, "1234", "", "", t), Ok(()));
+        assert!(!enabled(&p) && !has_pin(&p) && !is_locked(&p));
+        assert_eq!(p.get(ENABLED_KEY), Some("0"));
+        assert_eq!(State::of(&p), State::Off);
+        for form in [Form::Set, Form::Change, Form::Remove] {
+            assert!(!State::Off.allows(form), "{form:?}");
+        }
+        // off, nothing locks, not even a PIN and a mark written by hand
+        assert!(!lock(&mut p));
+        set_pin_with(&mut p, "1234", ROUNDS);
+        p.set_bool(LOCKED_KEY, true);
+        assert!(!is_locked(&p));
+        assert!(!lock(&mut p));
+        // on again: the key goes, a PIN can be set
+        set_enabled(&mut p, true);
+        assert!(enabled(&p) && p.get(ENABLED_KEY).is_none());
+        // the switch survives a save and a load
+        let mut q = Prefs::default();
+        set_enabled(&mut q, false);
+        assert!(!enabled(&Prefs::from_text(&q.to_text())));
+        // the form
+        assert!(Form::Off.asks_current() && !Form::Off.asks_new());
+        assert_eq!(Form::Off.title(), tr!(PinOffTitle));
+        assert_eq!(Form::Off.current_label(), tr!(PinCurrent));
+    }
+
+    #[test]
     fn the_reset_switch() {
         assert!(reset_requested(&["--reset-lock"]));
         assert!(reset_requested(&["x.torrent", "--RESET-LOCK"]));
@@ -418,6 +529,7 @@ mod tests {
             (PIN_KEY.to_owned(), Some("pbkdf2-sha256:1:00:00".to_owned())),
             ("ui.balloons".to_owned(), Some("0".to_owned())),
             (LOCKED_KEY.to_owned(), None),
+            (ENABLED_KEY.to_owned(), Some("0".to_owned())),
             ("torrent.abc.label".to_owned(), Some("x".to_owned())),
         ];
         let kept = without_lock_keys(changes);
@@ -426,5 +538,6 @@ mod tests {
             ["ui.balloons", "torrent.abc.label"]
         );
         assert!(is_lock_key("ui.lock_pin") && is_lock_key("ui.locked") && !is_lock_key("ui.lock"));
+        assert!(is_lock_key("ui.lock_enabled"));
     }
 }

@@ -126,6 +126,10 @@ fn validate_menu_item(item: &NSMenuItem) -> bool {
     if let Some(title) = crate::app::title(cmd) {
         item.setTitle(&NSString::from_str(&title));
     }
+    // D71: File > Lock Rookparcel while the lock is switched off
+    if let Some(hidden) = crate::app::hidden(cmd).filter(|h| *h != item.isHidden()) {
+        item.setHidden(hidden);
+    }
     enabled
 }
 

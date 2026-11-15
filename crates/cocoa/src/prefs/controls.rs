@@ -22,7 +22,7 @@ use rookparcel_frontend::lang::{self, H};
 use rookparcel_frontend::options::Options;
 use rookparcel_frontend::pref_pages::{self, Control, Field, Item, Page, TextKind};
 
-use super::{Act, Ctl, FieldUi, advanced, sched_grid};
+use super::{Act, Ctl, FieldUi, LockUi, advanced, sched_grid};
 use crate::canvas::RPCanvas;
 use crate::commands::Command;
 use crate::ui::{self, layout};
@@ -55,6 +55,8 @@ pub(crate) struct Builder {
     pub helps: Vec<(Retained<NSView>, H)>,
     pub ip_status: Option<Retained<NSTextField>>,
     pub tracker_status: Option<Retained<NSTextField>>,
+    /// Advanced > UI Lock's switch, PIN buttons and status line (D71).
+    pub lock: LockUi,
     pub advanced: Option<advanced::Advanced>,
     pub sched: Option<Retained<RPCanvas>>,
     /// The multi-line boxes' end-of-editing observers, kept with the window.
@@ -72,6 +74,7 @@ impl Builder {
             helps: Vec::new(),
             ip_status: None,
             tracker_status: None,
+            lock: LockUi::default(),
             advanced: None,
             sched: None,
             observers: Vec::new(),
@@ -118,6 +121,10 @@ impl Builder {
                     let cmd = self.act(Act::Button(*action));
                     let b = ui::button_tr(lang::text(*label), cmd, mtm);
                     self.help(&b, pref_pages::item_help(item));
+                    // UI Lock's Set, Change and Remove PIN, on one row after the switch
+                    if let Some(form) = action.pin_form() {
+                        self.lock.buttons.push((form, b.clone()));
+                    }
                     match &last {
                         Some(row) => row.addArrangedSubview(&b),
                         None => {
@@ -140,6 +147,22 @@ impl Builder {
                     l.setSelectable(true);
                     rows.push(Row::Pair(None, into_view(&l)));
                     self.tracker_status = Some(l);
+                    last = None;
+                }
+                Item::LockSwitch => {
+                    // (ticked or not as the settings say: `prefs::update_lock`)
+                    let cmd = self.act(Act::LockSwitch);
+                    let b = ui::check(&ui::text(lang::text(lang::S::PrefLockEnable)), true, cmd, mtm);
+                    self.help(&b, pref_pages::item_help(item));
+                    rows.push(Row::Pair(None, into_view(&b)));
+                    self.lock.switch = Some(b);
+                    last = None;
+                }
+                Item::LockStatus => {
+                    let l = ui::wrapping_label("", mtm);
+                    l.setPreferredMaxLayoutWidth(NOTE_WIDTH);
+                    rows.push(Row::Pair(None, into_view(&l)));
+                    self.lock.status = Some(l);
                     last = None;
                 }
                 Item::AdvancedTable => {

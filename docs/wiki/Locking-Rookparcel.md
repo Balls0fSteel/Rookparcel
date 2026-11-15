@@ -6,15 +6,22 @@ The lock is for privacy, not security. It hides the windows; it does not encrypt
 
 ## Set a PIN and lock
 
-1. Choose **Options > Lock PIN > Set PIN...**.
-2. Type a PIN of 4 to 6 digits in **New PIN (4 to 6 digits)**, and again in **Repeat the new PIN**.
-3. Click **OK**.
+1. Open **Options > Preferences** and choose **Advanced > UI Lock** (on a Mac: **Rookparcel > Preferences**, then **UI Lock**).
+2. Click **Set PIN...**.
+3. Type a PIN of 4 to 6 digits in **New PIN (4 to 6 digits)**, and again in **Repeat the new PIN**.
+4. Click **OK**. The PIN is saved at once; you do not need to click **OK** in Preferences.
+
+*Before 1.2.58, the PIN was set in **Options > Lock PIN**.*
 
 To lock, choose **File > Lock Rookparcel** or press <kbd>Ctrl</kbd>+<kbd>L</kbd>. Once a PIN is set, the tray menu has **Lock Rookparcel** too. If no PIN is set yet, **Lock Rookparcel** asks for one first, then locks.
 
 Locking hides every Rookparcel window in the tray: the main window and any dialog that was open. Your torrents keep downloading and seeding.
 
-To change the PIN, choose **Options > Lock PIN > Change PIN...**, type the current PIN, then the new one twice. To stop using the lock, choose **Remove PIN...** and type the current PIN.
+To change the PIN, click **Change PIN...** on the same page, type the current PIN, then the new one twice. **Remove PIN...** asks for the current PIN and removes it; **Lock Rookparcel** then asks for a new one before it locks.
+
+## Turn the lock off
+
+If you never want the lock, untick **Allow locking Rookparcel with a PIN** on the **UI Lock** page. If a PIN is set, Rookparcel asks for it first, then removes it. While the lock is off, **File > Lock Rookparcel**, its shortcut and the tray menu's **Lock Rookparcel** are gone. Tick the box again to bring them back.
 
 ## Open a locked Rookparcel
 

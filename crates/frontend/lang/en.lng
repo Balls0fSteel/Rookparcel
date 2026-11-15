@@ -1770,11 +1770,10 @@ MacPrefAdvancedNote=libtorrent setting names; * marks a changed value. Double-cl
 # File menu and the tray menu: hides every Rookparcel window; showing them again asks for the PIN.
 MenuLock=&Lock Rookparcel
 
-# Options menu: the submenu with the three items below.
-MenuLockPin=&Lock PIN
-MenuSetPin=&Set PIN...
-MenuChangePin=&Change PIN...
-MenuRemovePin=&Remove PIN...
+# Buttons on Preferences > Advanced > UI Lock (they were the Options menu's Lock PIN items).
+PrefLockSetPin=&Set PIN...
+PrefLockChangePin=&Change PIN...
+PrefLockRemovePin=&Remove PIN...
 
 # The title of the window that asks for the PIN while Rookparcel is locked.
 LockTitle=Rookparcel is locked
@@ -1810,6 +1809,26 @@ LockResetNone=No lock PIN is set.
 
 # A Logger line after the reset removed the PIN.
 LogLockPinRemoved=The lock PIN was removed.
+
+# The page's name in the Preferences tree, under Advanced.
+PageUiLock=UI Lock
+
+# The group box on that page.
+PrefLockGroup=Lock Rookparcel's Windows
+
+# Check box. Off, there is no Lock Rookparcel command anywhere, and the PIN is removed.
+PrefLockEnable=Allow locking Rookparcel with a PIN
+
+# The status line on that page, one of the three.
+PrefLockHasPin=A PIN is set. File > Lock Rookparcel hides the windows in the tray.
+PrefLockNoPin=No PIN is set yet: Lock Rookparcel asks for one first.
+PrefLockOff=The lock is off: Rookparcel has no Lock command.
+
+# Under the group box.
+PrefLockNote=The lock keeps your torrent list from others at this computer. It is for privacy, not security: it encrypts nothing, and the Web UI is not locked. This page acts at once, without OK. A forgotten PIN is removed by starting Rookparcel with --reset-lock (on Windows with Ctrl held, on a Mac with Option held).
+
+# The title of the window that asks for the PIN when the box above is unticked.
+PinOffTitle=Turn Off the Lock
 
 # ---- Help texts (D55): tooltips, the Preferences description pane and F1, one to three
 # sentences each. Optional in a translation: a missing one shows in English.
@@ -1935,6 +1954,10 @@ help.PrefActiveChecking=How many drives are checked at the same time, one torren
 help.PrefTuneForDrive=Detects whether each save folder is on an SSD, a hard disk, a removable drive or a network share, and lets a hard disk or removable drive do two disk jobs at once, a network server four. drive_overrides on the Advanced page corrects a wrong guess.
 help.PrefDiskSlowDownloads=While a drive answers writes clearly slower than usual, halves the download rate step by step, never below 50 kB/s, and lets it grow again once the disk is quiet. It never raises your own limits.
 help.PrefDiskSlowUploads=While a drive answers reads clearly slower than usual, halves the upload rate step by step, never below 50 kB/s, and lets it grow again once the disk is quiet. Seeding then uploads less.
+help.PrefLockEnable=Offers File > Lock Rookparcel, its shortcut and the tray's Lock. Unticking asks for the PIN, removes it and takes the Lock command away until the box is ticked again. Changes at once, without OK.
+help.PrefLockSetPin=Asks for a new lock PIN of 4 to 6 digits, twice. Only while no PIN is set; saved at once.
+help.PrefLockChangePin=Asks for the current lock PIN, then a new one twice. Saved at once.
+help.PrefLockRemovePin=Asks for the current lock PIN, then removes it. Lock Rookparcel then asks for a new PIN before it locks.
 help.GuideRouter=The older choice lowers the connections to 100 in all, 40 per new torrent and 8 new connection attempts a second, so a small router keeps up. The modern choice keeps the defaults: 200, no limit per torrent and 30 a second.
 help.GuideSmartDisk=Turns on gentle checks, per-drive tuning and the slow-down of downloads and uploads while a disk answers slowly. It shows ticked only while all four are on; unticking it then turns them off.
 help.AdvUserAgent=The program name sent to HTTP trackers, web seeds and UPnP routers. Routers also show it as the description of the port mapping, except in a named profile, whose mapping is described as Rookparcel (profile name). Some private trackers only accept certain clients; otherwise it rarely needs changing.
@@ -2088,11 +2111,7 @@ help.MenuAbout=Shows Rookparcel's version, copyright and licence, and where its 
 help.MenuNotices=Shows the licence texts of the third-party code Rookparcel is built on.
 help.MenuDonate=Says how to support Rookparcel and offers to open its donation page in your web browser.
 help.MenuStatistics=Shows how much Rookparcel uploaded and downloaded in all its sessions and in this one, the share ratio, the data thrown away, and the disk queue and read cache. The all-time totals stay when torrents are removed.
-help.MenuLock=Hides every Rookparcel window in the tray; showing them again asks for the lock PIN. The torrents keep running. Without a PIN, asks for one first.
-help.MenuLockPin=Sets, changes or removes the PIN of 4 to 6 digits that Lock Rookparcel asks for.
-help.MenuSetPin=Asks for a new lock PIN of 4 to 6 digits, twice.
-help.MenuChangePin=Asks for the current lock PIN, then a new one twice.
-help.MenuRemovePin=Asks for the current lock PIN, then removes it: Rookparcel can no longer be locked until a new PIN is set.
+help.MenuLock=Hides every Rookparcel window in the tray; showing them again asks for the lock PIN. The torrents keep running. Without a PIN, asks for one first. Preferences > Advanced > UI Lock changes the PIN or turns the lock off.
 help.MenuOpenFolder=Opens the folder that holds the selected item in the file manager, with the item selected where the file manager can.
 help.MenuOpenFolderMany=Opens the first selected torrent's download folder in the file manager, with its data selected once it exists.
 help.MenuForceStart=Starts the selected torrents now, outside the queue: they run even when the queue's limits on active torrents are reached.

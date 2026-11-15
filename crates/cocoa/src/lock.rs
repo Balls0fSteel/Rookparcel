@@ -2,6 +2,9 @@
 //! is entered again. It keeps the transfer list from someone at the same Mac; it is not a
 //! password for the data.
 //!
+//! - **The PIN and the switch** (D71): Preferences > Advanced > UI Lock sets, changes and
+//!   removes the PIN ([`pin_dialog`]) and switches the lock off and on; while it is off there is
+//!   no Lock command (File > Lock Rookparcel hidden, `menu::show_lock_item`).
 //! - **Locking** (File > Lock Rookparcel ⌘L, the Dock and status-item menus; Set PIN first
 //!   without a PIN): every window that is on screen or in the Dock, not a sheet (it goes with
 //!   its window) and at the normal level (the status item's and the floating Auto Shutdown
@@ -196,12 +199,25 @@ mod sys {
         eprintln!("lock: started locked");
     }
 
-    /// `Command::Lock`: without a PIN, Set PIN first.
+    /// Whether the lock is switched on (D71); `None` before the start or while the app is
+    /// borrowed.
+    pub fn enabled() -> Option<bool> {
+        peek(|c| ui_lock::enabled(c.prefs()))
+    }
+
+    /// Whether the Dock and status-item menus offer Lock Rookparcel: the lock is switched on
+    /// (D71) and a PIN is set.
+    pub fn can_lock() -> bool {
+        peek(|c| ui_lock::enabled(c.prefs()) && ui_lock::has_pin(c.prefs())).unwrap_or(false)
+    }
+
+    /// `Command::Lock`: without a PIN, Set PIN first. Nothing while the lock is switched off
+    /// (D71: the item is hidden, but its ⌘L may still come).
     pub fn lock_command() {
         // (a modal prompt is never run inside a menu's action, the status item's click among them)
         mainq::on_main(|| {
             let Some(mtm) = MainThreadMarker::new() else { return };
-            if is_locked() {
+            if is_locked() || enabled() != Some(true) {
                 return;
             }
             if !has_pin() && !crate::dialogs::pin::run(Form::Set, mtm) {
@@ -211,15 +227,23 @@ mod sys {
         });
     }
 
-    /// Options > Lock PIN's items: Set (without a PIN), Change and Remove (with one).
-    pub fn pin_command(form: Form) {
+    /// Preferences > Advanced > UI Lock (D71): `form`'s PIN dialog (Set, Change or Remove PIN,
+    /// or Off for the switch unticked with a PIN) when the lock's state allows it, then `done`
+    /// (after OK or Cancel: the page shows the state again).
+    pub fn pin_dialog(form: Form, done: fn()) {
+        // (a modal prompt is never run inside a control's action)
         mainq::on_main(move || {
             let Some(mtm) = MainThreadMarker::new() else { return };
-            // as `app::state` greys them: Set never replaces a PIN without asking for it
-            let fits = if form == Form::Set { !has_pin() } else { has_pin() };
+            let state = peek(|c| ui_lock::State::of(c.prefs()));
+            // as the page greys them: Set never replaces a PIN without asking for it
+            let fits = match form {
+                Form::Off => state == Some(ui_lock::State::Pin),
+                _ => state.is_some_and(|s| s.allows(form)),
+            };
             if fits && !is_locked() {
                 crate::dialogs::pin::run(form, mtm);
             }
+            done();
         });
     }
 

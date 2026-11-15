@@ -136,14 +136,10 @@ pub enum Command {
     FeedDownload,
     // the windows' lock (D69, `crate::lock`)
     /// File > Lock Rookparcel (⌘L; with a PIN also in the Dock and status-item menus): every
-    /// window hides until the PIN is entered. Without a PIN, Set PIN comes first.
+    /// window hides until the PIN is entered. Without a PIN, Set PIN comes first. Hidden, and
+    /// refused, while the lock is switched off (D71); the PIN itself is set in Preferences >
+    /// Advanced > UI Lock.
     Lock,
-    /// Options > Lock PIN > Set PIN (greyed while a PIN is set).
-    SetPin,
-    /// Options > Lock PIN > Change PIN (only with a PIN).
-    ChangePin,
-    /// Options > Lock PIN > Remove PIN (only with a PIN).
-    RemovePin,
 }
 
 /// The Files tab's commands (slice D), apart from [`ALL`], whose menus they are not in.
@@ -158,7 +154,7 @@ pub const FILES: [Command; 7] = [
 ];
 
 /// Every command: those without a value, then those with one (at index 0).
-pub const ALL: [Command; 70] = [
+pub const ALL: [Command; 67] = [
     Command::About,
     Command::CheckUpdates,
     Command::Preferences,
@@ -218,9 +214,6 @@ pub const ALL: [Command; 70] = [
     Command::FeedRss,
     Command::FeedDownload,
     Command::Lock,
-    Command::SetPin,
-    Command::ChangePin,
-    Command::RemovePin,
     Command::Profile(0),
     Command::DownLimit(0),
     Command::UpLimit(0),
@@ -323,11 +316,9 @@ impl Command {
             FeedDelete => (74, 0),
             FeedRss => (75, 0),
             FeedDownload => (76, 0),
-            // the windows' lock (D69: kinds 80-83, after slice H's 70-79)
+            // the windows' lock (D69: kind 80, after slice H's 70-79; 81-83 were the Lock PIN
+            // submenu's, gone with D71)
             Lock => (80, 0),
-            SetPin => (81, 0),
-            ChangePin => (82, 0),
-            RemovePin => (83, 0),
         }
     }
 
@@ -418,9 +409,6 @@ impl Command {
             76 => plain(FeedDownload),
             // the windows' lock
             80 => plain(Lock),
-            81 => plain(SetPin),
-            82 => plain(ChangePin),
-            83 => plain(RemovePin),
             _ => None,
         }
     }
@@ -530,13 +518,15 @@ mod tests {
     #[test]
     fn the_locks_kinds_are_its_own() {
         use Command::*;
-        for (c, kind) in [(Lock, 80), (SetPin, 81), (ChangePin, 82), (RemovePin, 83)] {
-            assert_eq!(c.tag() >> SHIFT, kind, "{c:?}");
-            assert_eq!(Command::from_tag(c.tag()), Some(c));
-            assert!(ALL.contains(&c));
-            assert!(!c.needs_selection() && !c.works_locked(), "{c:?}");
-        }
+        assert_eq!(Lock.tag() >> SHIFT, 80);
+        assert_eq!(Command::from_tag(Lock.tag()), Some(Lock));
+        assert!(ALL.contains(&Lock));
+        assert!(!Lock.needs_selection() && !Lock.works_locked());
         assert_eq!(Command::from_tag((80 << SHIFT) + 1), None, "a plain command takes no value");
+        // D71: the Lock PIN submenu's kinds are no commands any more
+        for kind in 81..=83 {
+            assert_eq!(Command::from_tag(kind << SHIFT), None, "{kind}");
+        }
     }
 
     #[test]

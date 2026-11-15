@@ -563,7 +563,11 @@ fn startup(app: &gtk::Application) {
     item(&remote_section, tr!(MenuConnectRemote), "app.connect-remote");
     file.append_section(None, &remote_section);
     let quit_section = gio::Menu::new();
-    item(&quit_section, tr!(MenuLock), "win.lock");
+    // Lock Rookparcel (D69) is not there while the lock is off (D71): `pin_changed` disables
+    // its action then, which hides the item
+    let lock = gio::MenuItem::new(Some(&gtk_mnemonic(tr!(MenuLock))), Some("win.lock"));
+    lock.set_attribute_value("hidden-when", Some(&"action-disabled".to_variant()));
+    quit_section.append_item(&lock);
     item(&quit_section, tr!(MenuExit), "app.quit");
     file.append_section(None, &quit_section);
     menubar.append_submenu(Some(&gtk_mnemonic(tr!(MenuFile))), &file);
@@ -583,12 +587,6 @@ fn startup(app: &gtk::Application) {
     }
     let auto_section = gio::Menu::new();
     auto_section.append_submenu(Some(&gtk_mnemonic(tr!(MenuAutoShutdown))), &auto);
-    // Lock PIN (D69): each item greyed by whether a PIN is set (`pin_changed`)
-    let pin = gio::Menu::new();
-    item(&pin, tr!(MenuSetPin), "win.pin-set");
-    item(&pin, tr!(MenuChangePin), "win.pin-change");
-    item(&pin, tr!(MenuRemovePin), "win.pin-remove");
-    auto_section.append_submenu(Some(&gtk_mnemonic(tr!(MenuLockPin))), &pin);
     options.append_section(None, &auto_section);
     menubar.append_submenu(Some(&gtk_mnemonic(tr!(MenuOptions))), &options);
     let help = gio::Menu::new();
@@ -1487,7 +1485,7 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
     });
     // the Files tab's view as last left (D62): the toggle button and the menu's check mark
     show_files_tree(files_tree);
-    // the Lock PIN items' greying (D69), and what `--reset-lock` did before the Logger was there
+    // File > Lock Rookparcel only while the lock is on (D71), and what `--reset-lock` did before the Logger was there
     pin_changed();
     if PIN_RESET.with(|r| r.replace(false)) {
         log_line(tr!(LogLockPinRemoved));
@@ -1610,8 +1608,11 @@ fn start_tray(window: &gtk::ApplicationWindow) {
         activate: Box::new(toggle_window),
         command: Box::new(tray_command),
         state: Box::new(|| {
-            let (window_visible, has_pin) =
-                with_app(|a| (a.window.is_visible(), ui_lock::has_pin(&a.prefs))).unwrap_or((true, false));
+            // Lock is offered with a PIN, and never while the lock is off (D71)
+            let (window_visible, has_pin) = with_app(|a| {
+                (a.window.is_visible(), ui_lock::enabled(&a.prefs) && ui_lock::has_pin(&a.prefs))
+            })
+            .unwrap_or((true, false));
             crate::tray::State { window_visible, locked: locked(), has_pin }
         }),
         shown: Box::new(|on| {
@@ -1785,9 +1786,10 @@ fn when_unlocked(f: impl FnOnce() + 'static) {
 
 /// File > Lock Rookparcel (Ctrl+L) and the tray's Lock: the lock is saved at once and every
 /// window on screen hides but the Auto Shutdown countdown. Without a PIN, Set PIN comes first,
-/// and its OK locks.
+/// and its OK locks. Nothing while the lock is off (D71; a command the hidden item's action
+/// or a stale tray menu still brought).
 fn lock_windows() {
-    if locked() {
+    if locked() || !with_app(|a| ui_lock::enabled(&a.prefs)).unwrap_or(false) {
         return;
     }
     let Some(has_pin) = with_app(|a| {
@@ -1800,7 +1802,11 @@ fn lock_windows() {
         return;
     };
     if !has_pin {
-        return pin_form(Form::Set, true);
+        return pin_form(Form::Set, None, |ok| {
+            if ok {
+                lock_windows();
+            }
+        });
     }
     LOCKED.with(|l| l.set(true));
     let countdown = shutdown::window();
@@ -1916,38 +1922,40 @@ fn prompt_follows_tray(on: bool, start: bool) {
     }
 }
 
-/// Options > Lock PIN > Set PIN..., Change PIN... and Remove PIN..., over the main window; with
-/// `then_lock`, Set PIN for File > Lock Rookparcel, which locks after its OK.
-fn pin_form(form: Form, then_lock: bool) {
+/// A PIN dialog over `parent`, modal (the main window for `None`): Preferences > Advanced >
+/// UI Lock's Set, Change and Remove PIN and its switch turned off (D71, over Preferences), and
+/// Set PIN for File > Lock Rookparcel without a PIN. Its OK is saved at once and the menu and
+/// the tray follow (`pin_changed`), then `done(true)`; Cancel or a close runs `done(false)`.
+fn pin_form(form: Form, parent: Option<gtk::Window>, done: impl Fn(bool) + 'static) {
     let Some((window, Some(app))) = with_app(|a| (a.window.clone(), a.window.application())) else {
         return;
     };
+    let parent = parent.unwrap_or_else(|| window.upcast());
+    let done = Rc::new(done);
+    let cancelled = done.clone();
     let pin = crate::lock::dialog(
         &app,
         form,
-        Some(window.upcast_ref()),
+        Some(&parent),
         move |current, new, repeat| submit_pin(form, current, new, repeat),
         move || {
             pin_changed();
-            if then_lock {
-                lock_windows();
-            }
+            done(true);
         },
-        || {},
+        move || cancelled(false),
     );
     pin.window.present();
 }
 
-/// The Lock PIN items' greying (Set PIN without a PIN, Change and Remove with one) and the
-/// tray's Lock follow whether a PIN is set.
+/// File > Lock Rookparcel (Ctrl+L) is there only while the lock is on (D71): its action is
+/// disabled while off, which hides the item (`hidden-when`) and takes the shortcut. The tray's
+/// Lock follows whether a PIN is set and the lock is on.
 fn pin_changed() {
-    let Some((window, has_pin)) = with_app(|a| (a.window.clone(), ui_lock::has_pin(&a.prefs))) else {
+    let Some((window, on)) = with_app(|a| (a.window.clone(), ui_lock::enabled(&a.prefs))) else {
         return;
     };
-    for (name, on) in [("pin-set", !has_pin), ("pin-change", has_pin), ("pin-remove", has_pin)] {
-        if let Some(a) = window.lookup_action(name).and_downcast::<gio::SimpleAction>() {
-            a.set_enabled(on);
-        }
+    if let Some(a) = window.lookup_action("lock").and_downcast::<gio::SimpleAction>() {
+        a.set_enabled(on);
     }
     if let Some(t) = tray() {
         t.menu_changed();
@@ -2556,11 +2564,8 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     });
     simple("preferences", preferences);
     simple("setup-guide", setup_guide_later);
-    // File > Lock Rookparcel and Options > Lock PIN (D69)
+    // File > Lock Rookparcel (D69); the PIN is managed in Preferences > Advanced > UI Lock (D71)
     simple("lock", lock_windows);
-    simple("pin-set", || pin_form(Form::Set, false));
-    simple("pin-change", || pin_form(Form::Change, false));
-    simple("pin-remove", || pin_form(Form::Remove, false));
     simple("properties", show_properties);
     simple("set-location", set_download_location);
     simple("label-new", || {
@@ -3636,6 +3641,16 @@ fn preferences_at(page: Option<&str>) {
         }),
         settings_dir: paths::settings_dir(),
         tray: tray_shown(),
+        // Advanced > UI Lock (D71): acts at once, never on OK
+        lock_state: Box::new(|| with_app(|a| ui_lock::State::of(&a.prefs)).unwrap_or(ui_lock::State::Off)),
+        lock_enable: Box::new(|on| {
+            with_app(|a| {
+                ui_lock::set_enabled(&mut a.prefs, on);
+                save_prefs(a);
+            });
+            pin_changed();
+        }),
+        pin_form: Box::new(|form, parent, then| pin_form(form, Some(parent.clone()), move |_| then())),
     };
     crate::preferences::show(&window, options, hooks, page);
 }

@@ -59,7 +59,7 @@ pub struct State {
     pub window_visible: bool,
     /// The windows are locked (D69): only Show, which asks for the PIN, and Exit.
     pub locked: bool,
-    /// A lock PIN is set: Lock Rookparcel is offered.
+    /// A lock PIN is set and the lock is on (D71): Lock Rookparcel is offered.
     pub has_pin: bool,
 }
 

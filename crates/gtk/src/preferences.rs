@@ -12,7 +12,7 @@
 //! help of the control under the pointer, else of the focused one (the Advanced table's: the
 //! selected row's); F1 pops the focused control's help up beside it.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -30,6 +30,7 @@ use rookparcel_frontend::pref_pages::{
 use rookparcel_frontend::scheduler::{CELLS, Mode};
 use rookparcel_frontend::settings::{Entry, Kind, Value};
 use rookparcel_frontend::tr;
+use rookparcel_frontend::ui_lock::{self, Form as LockForm};
 
 use crate::sched_grid::SchedGrid;
 use crate::table::Table;
@@ -55,6 +56,28 @@ pub struct Hooks {
     pub settings_dir: PathBuf,
     /// A tray is on screen: UI Settings shows the tray and notification boxes.
     pub tray: bool,
+    /// Advanced > UI Lock (D71), none of it an [`Options`] value: it acts at once. The lock's
+    /// state as stored, which the page's switch, buttons and status line follow.
+    pub lock_state: Box<dyn Fn() -> ui_lock::State>,
+    /// The switch: turn the lock on, or off without a PIN set; saved at once.
+    pub lock_enable: Box<dyn Fn(bool)>,
+    /// A PIN dialog over the Preferences window: Set, Change or Remove PIN, or [`LockForm::Off`]
+    /// for the switch turned off with a PIN set. Its OK does it and saves; the last closure runs
+    /// once the dialog is gone, after an OK or a Cancel.
+    pub pin_form: PinForm,
+}
+
+/// [`Hooks::pin_form`]: the form, the Preferences window, and what runs once the dialog is gone.
+pub type PinForm = Box<dyn Fn(LockForm, &gtk::Window, Box<dyn Fn()>)>;
+
+/// Advanced > UI Lock's controls (D71).
+struct LockPage {
+    switch: gtk::CheckButton,
+    /// Set, Change and Remove PIN, each with the PIN dialog it opens.
+    buttons: Vec<(gtk::Button, LockForm)>,
+    status: gtk::Label,
+    /// The switch is being set to the stored state: its `toggled` is no click.
+    quiet: Cell<bool>,
 }
 
 /// A field's control.
@@ -147,6 +170,8 @@ struct Dialog {
     /// the stored one.
     sched: Option<SchedGrid>,
     sched_shown: RefCell<[Mode; CELLS]>,
+    /// Advanced > UI Lock's switch, buttons and status line.
+    lock: Option<LockPage>,
     /// The Advanced table's rows.
     rows: RefCell<Vec<&'static Entry>>,
     /// The controls with a help text (D55); the Advanced table's is its selected row's.
@@ -297,8 +322,26 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
     window.add_controller(keys);
 
     let Builder {
-        controls, needs, ip_status, tracker_status, advanced, sched, browse, actions, helps, ..
+        controls,
+        needs,
+        ip_status,
+        tracker_status,
+        advanced,
+        sched,
+        browse,
+        actions,
+        helps,
+        lock_switch,
+        lock_buttons,
+        lock_status,
+        ..
     } = b;
+    let lock = match (lock_switch, lock_status) {
+        (Some(switch), Some(status)) => {
+            Some(LockPage { switch, buttons: lock_buttons, status, quiet: Cell::new(false) })
+        }
+        _ => None,
+    };
     let d = Rc::new(Dialog {
         page: RefCell::new(pages.first().map(|p| p.key.to_owned()).unwrap_or_default()),
         pages,
@@ -312,6 +355,7 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
         advanced,
         sched,
         sched_shown: RefCell::new([Mode::Full; CELLS]),
+        lock,
         rows: RefCell::default(),
         helps,
         pane,
@@ -422,10 +466,20 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
         });
     }
     for (button, action) in actions {
-        let w = Rc::downgrade(&d);
+        let (w, window) = (Rc::downgrade(&d), window.downgrade());
         button.connect_clicked(move |_| {
-            if let Some(d) = w.upgrade() {
-                d.act(action);
+            if let (Some(d), Some(window)) = (w.upgrade(), window.upgrade()) {
+                d.act(action, &window);
+            }
+        });
+    }
+    // Advanced > UI Lock's switch (D71): it acts at once
+    if let Some(l) = &d.lock {
+        let (w, window) = (Rc::downgrade(&d), window.downgrade());
+        l.switch.connect_toggled(move |c| {
+            let (Some(d), Some(window)) = (w.upgrade(), window.upgrade()) else { return };
+            if d.lock.as_ref().is_some_and(|l| !l.quiet.get()) {
+                d.lock_switched(c.is_active(), &window);
             }
         });
     }
@@ -515,6 +569,7 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
     d.write_controls();
     d.update_ip_status(None);
     d.update_tracker_status();
+    d.update_lock();
     if d.tracker_status.is_some() {
         // the list is fetched on its own time: the line follows while its page is on screen,
         // until the dialog is gone
@@ -694,8 +749,14 @@ impl Dialog {
         true
     }
 
-    fn act(&self, action: Action) {
+    /// A page's button; `window` is the Preferences window.
+    fn act(self: &Rc<Self>, action: Action, window: &gtk::Window) {
         match action {
+            Action::SetPin | Action::ChangePin | Action::RemovePin => {
+                if let Some(form) = action.pin_form() {
+                    self.pin_form(form, window);
+                }
+            }
             Action::RandomPort => {
                 if let Some(c) = self.controls.get("port") {
                     c.set(&options::random_port().to_string());
@@ -717,6 +778,45 @@ impl Dialog {
             }
             Action::UpdateTrackerList => self.update_tracker_list(),
         }
+    }
+
+    /// The PIN dialog `form` over the Preferences window, modal on it (D71); the page follows
+    /// what it did once it is gone (a Cancel of [`LockForm::Off`] ticks the switch again).
+    fn pin_form(self: &Rc<Self>, form: LockForm, window: &gtk::Window) {
+        let w = Rc::downgrade(self);
+        (self.hooks.pin_form)(
+            form,
+            window,
+            Box::new(move || {
+                if let Some(d) = w.upgrade() {
+                    d.update_lock();
+                }
+            }),
+        );
+    }
+
+    /// UI Lock's switch clicked (D71). Off with a PIN set asks for it first; otherwise the
+    /// lock goes on or off at once.
+    fn lock_switched(self: &Rc<Self>, on: bool, window: &gtk::Window) {
+        if !on && (self.hooks.lock_state)() == ui_lock::State::Pin {
+            self.pin_form(LockForm::Off, window);
+        } else {
+            (self.hooks.lock_enable)(on);
+            self.update_lock();
+        }
+    }
+
+    /// UI Lock's switch, buttons and status line from the lock's state as stored.
+    fn update_lock(&self) {
+        let Some(l) = &self.lock else { return };
+        let state = (self.hooks.lock_state)();
+        l.quiet.set(true);
+        l.switch.set_active(state != ui_lock::State::Off);
+        l.quiet.set(false);
+        for (button, form) in &l.buttons {
+            button.set_sensitive(state.allows(*form));
+        }
+        l.status.set_text(state.text());
     }
 
     /// Trackers > Update Now: the page's four values are stored and put into effect (as Apply
@@ -915,6 +1015,10 @@ pub(crate) struct Builder {
     /// "..." buttons: the button, its field and the picker.
     pub(crate) browse: Vec<(gtk::Button, &'static str, TextKind)>,
     actions: Vec<(gtk::Button, Action)>,
+    /// Advanced > UI Lock (D71): the switch, the PIN buttons (on one row) and the status line.
+    lock_switch: Option<gtk::CheckButton>,
+    lock_buttons: Vec<(gtk::Button, LockForm)>,
+    lock_status: Option<gtk::Label>,
     /// The row the next `beside` field or button joins.
     last_row: Option<gtk::Box>,
     /// The controls with a help text, which is also their tooltip.
@@ -960,11 +1064,35 @@ impl Builder {
                 Item::Button { action, label } => {
                     let b = gtk::Button::with_mnemonic(&gtk_mnemonic(lang::text(*label)));
                     self.help(&b, pref_pages::item_help(item));
+                    if let Some(form) = action.pin_form() {
+                        // UI Lock's Set, Change and Remove PIN share a row
+                        if self.lock_buttons.is_empty() {
+                            let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+                            target.append(&row);
+                            self.last_row = Some(row);
+                        }
+                        self.lock_buttons.push((b.clone(), form));
+                    }
                     match &self.last_row {
                         Some(row) => row.append(&b),
                         None => target.append(&b),
                     }
                     self.actions.push((b, *action));
+                }
+                Item::LockSwitch => {
+                    let c = gtk::CheckButton::with_mnemonic(&gtk_mnemonic(tr!(PrefLockEnable)));
+                    self.help(&c, pref_pages::item_help(item));
+                    target.append(&c);
+                    self.last_row = None;
+                    self.lock_switch = Some(c);
+                }
+                Item::LockStatus => {
+                    let l = gtk::Label::new(None);
+                    l.set_xalign(0.0);
+                    l.set_wrap(true);
+                    target.append(&l);
+                    self.last_row = None;
+                    self.lock_status = Some(l);
                 }
                 Item::IpFilterStatus => {
                     let l = gtk::Label::new(None);

@@ -25,6 +25,7 @@ use rookparcel_frontend::scheduler::{self, Mode};
 use rookparcel_frontend::settings::{self, Entry, Kind, Value};
 use rookparcel_frontend::tr;
 use rookparcel_frontend::tracker_list;
+use rookparcel_frontend::ui_lock::{self, Form};
 use rookparcel_nox::webui::auth;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -58,9 +59,9 @@ use crate::sched_grid;
 use crate::util::{hiword, loword, scale, send, wide, window_text};
 use crate::webui_host::{Edit, Setup as WebSetup, Status as WebStatus, View as WebView};
 
-/// The tree, in µTorrent 2.2.1's order; Disk Cache and Rookparcel's Disk I/O, Trackers and Run
-/// Program sit under Advanced.
-pub const PAGES: [S; 14] = [
+/// The tree, in µTorrent 2.2.1's order; Disk Cache and Rookparcel's Disk I/O, Trackers, Run
+/// Program and UI Lock sit under Advanced.
+pub const PAGES: [S; 15] = [
     S::PageGeneral,
     S::PageUi,
     S::PageDirectories,
@@ -75,6 +76,7 @@ pub const PAGES: [S; 14] = [
     S::PageDiskIo,
     S::PageTrackers,
     S::PageRunProgram,
+    S::PageUiLock,
 ];
 /// Connection: where a listen failure in the status bar leads.
 pub const PAGE_CONNECTION: usize = 3;
@@ -84,6 +86,7 @@ const PAGE_DISK_CACHE: usize = 10;
 const PAGE_DISK_IO: usize = 11;
 const PAGE_TRACKERS: usize = 12;
 const PAGE_RUN_PROGRAM: usize = 13;
+const PAGE_UI_LOCK: usize = 14;
 
 const fn id(page: u16, n: u16) -> u16 {
     1000 + page * 100 + n
@@ -260,6 +263,16 @@ const ID_RUN_FINISHED_ON: u16 = id(13, 3);
 const ID_RUN_FINISHED: u16 = id(13, 4);
 const ID_RUN_NOTE: u16 = id(13, 5);
 const ID_RUN_SAFETY_NOTE: u16 = id(13, 6);
+// UI Lock (D71): none of these is an option; each acts at once through `Hooks::ui_lock`
+const ID_LOCK_ON: u16 = id(14, 1);
+const ID_LOCK_SET: u16 = id(14, 2);
+const ID_LOCK_CHANGE: u16 = id(14, 3);
+const ID_LOCK_REMOVE: u16 = id(14, 4);
+const ID_LOCK_STATUS: u16 = id(14, 5);
+const ID_LOCK_NOTE: u16 = id(14, 6);
+/// The page's buttons and the PIN dialog each opens.
+const LOCK_BUTTONS: [(u16, Form); 3] =
+    [(ID_LOCK_SET, Form::Set), (ID_LOCK_CHANGE, Form::Change), (ID_LOCK_REMOVE, Form::Remove)];
 
 /// "Outgoing" encryption, in the combo's order.
 const ENC_OUT: [(S, EncPolicy); 3] = [
@@ -394,6 +407,10 @@ const EXTRA_HELP: &[(u16, H)] = &[
     (ID_RANDOM_PORT, H::PrefRandomPort),
     (ID_IPF_RELOAD, H::PrefReload),
     (ID_TRK_UPDATE, H::PrefTrackersUpdate),
+    (ID_LOCK_ON, H::PrefLockEnable),
+    (ID_LOCK_SET, H::PrefLockSetPin),
+    (ID_LOCK_CHANGE, H::PrefLockChangePin),
+    (ID_LOCK_REMOVE, H::PrefLockRemovePin),
     (ID_SCHED_GRID, H::PrefSchedTable),
     (ID_WEBUI, H::PrefWebUi),
     (ID_WEBUI_USER, H::PrefWebUiUsername),
@@ -903,6 +920,18 @@ pub type WebUiHook<'a> = Box<dyn FnMut(Option<&Edit>) -> WebView + 'a>;
 /// now ("Update Now"); either way the status line afterwards.
 pub type TrackerListHook<'a> = Box<dyn FnMut(Option<&tracker_list::Config>) -> String + 'a>;
 
+/// What the UI Lock page (D71) does: a PIN dialog (Set, Change or Remove PIN), or the switch
+/// turned on or off.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LockAct {
+    Pin(Form),
+    Enable(bool),
+}
+
+/// The UI Lock page: `None` reads the lock's state, `Some(act)` does it at once, any PIN dialog
+/// modal on the given window (this dialog); either way the state afterwards.
+pub type LockHook<'a> = Box<dyn FnMut(HWND, Option<LockAct>) -> ui_lock::State + 'a>;
+
 /// What the dialog asks of its owner.
 pub struct Hooks<'a> {
     /// OK and Apply: store the options and hand them to the engine.
@@ -915,6 +944,8 @@ pub struct Hooks<'a> {
     pub webui: WebUiHook<'a>,
     /// The Trackers page's status line and its "Update Now".
     pub tracker_list: TrackerListHook<'a>,
+    /// The UI Lock page: the lock's PIN and its switch, saved at once, never on OK.
+    pub ui_lock: LockHook<'a>,
 }
 
 struct State<'a> {
@@ -1328,6 +1359,19 @@ fn build() -> (Vec<u16>, Vec<(u16, u16)>) {
     b.ctl(STATIC, ID_RUN_NOTE, C | SS_NOPREFIX, [0, 86, W, 45], tr!(PrefRunNote));
     b.ctl(STATIC, ID_RUN_SAFETY_NOTE, C | SS_NOPREFIX, [0, 135, W, 27], tr!(PrefRunSafetyNote));
 
+    // the windows' lock (D69) managed here (D71): the switch, the three PIN buttons on one row
+    // (`fit` widens them for their texts), the status line and the note, which take the lines
+    // their texts need (`fit_lock_notes`)
+    b.page(PAGE_UI_LOCK);
+    b.group([0, 0, W, 62], tr!(PrefLockGroup));
+    b.ctl(BUTTON, ID_LOCK_ON, CHECK, [8, 13, 294, 10], tr!(PrefLockEnable));
+    b.ctl(BUTTON, ID_LOCK_SET, PUSH, [8, 29, 70, 14], tr!(PrefLockSetPin));
+    b.ctl(BUTTON, ID_LOCK_CHANGE, PUSH, [82, 29, 70, 14], tr!(PrefLockChangePin));
+    b.ctl(BUTTON, ID_LOCK_REMOVE, PUSH, [156, 29, 70, 14], tr!(PrefLockRemovePin));
+    b.ctl(STATIC, ID_LOCK_STATUS, C | SS_NOPREFIX, [8, 48, 294, 9], "");
+    // the --reset-lock switch is no access key
+    b.ctl(STATIC, ID_LOCK_NOTE, C | SS_NOPREFIX, [0, 70, W, 36], tr!(PrefLockNote));
+
     let labels = b.labels;
     let mut t = b.t;
     let vis = windows_sys::Win32::UI::WindowsAndMessaging::WS_VISIBLE;
@@ -1395,8 +1439,10 @@ unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
             fit_integration_note(dlg);
             fit_tracker_notes(dlg);
             fit_run_notes(dlg);
-            // the greyed controls' tooltips where `fit` left the controls
             let st = &mut *(lp as *mut State<'_>);
+            // the UI Lock page as the lock stands (it fits its status line)
+            lock_action(dlg, st, None);
+            // the greyed controls' tooltips where `fit` left the controls
             place_tips(dlg, st);
             return 1;
         }
@@ -1456,7 +1502,8 @@ unsafe fn init(dlg: HWND, st: &mut State<'_>) {
         send(tree, TVM_SETIMAGELIST, TVSIL_NORMAL as usize, st.images);
         let mut parent = TVI_ROOT;
         for (i, title) in PAGES.iter().enumerate() {
-            let nested = matches!(i, PAGE_DISK_CACHE | PAGE_DISK_IO | PAGE_TRACKERS | PAGE_RUN_PROGRAM);
+            let nested =
+                matches!(i, PAGE_DISK_CACHE | PAGE_DISK_IO | PAGE_TRACKERS | PAGE_RUN_PROGRAM | PAGE_UI_LOCK);
             let under = if nested { parent } else { TVI_ROOT };
             let h = insert_tree(tree, under, lang::text(*title), i, page_icon(*title));
             if i == PAGE_ADVANCED {
@@ -1662,6 +1709,10 @@ unsafe fn show_page(dlg: HWND, st: &mut State<'_>, page: usize) {
         }
         if page == PAGE_TRACKERS {
             update_tracker_status(dlg, st);
+        }
+        // a lock from the tray or a reset may have changed it meanwhile
+        if page == PAGE_UI_LOCK {
+            lock_action(dlg, st, None);
         }
         place_tips(dlg, st);
     }
@@ -2269,6 +2320,18 @@ unsafe fn command(dlg: HWND, st: &mut State<'_>, id: u16, code: u32) -> bool {
             ID_TRK_APPEND | ID_TRK_FROM_URL if code == BN_CLICKED => update_tracker_controls(dlg),
             ID_TRK_UPDATE if code == BN_CLICKED => update_tracker_list(dlg, st),
             ID_RUN_ADDED_ON | ID_RUN_FINISHED_ON if code == BN_CLICKED => update_run_controls(dlg, st),
+            // the box has already changed: on asks nothing, off asks for the PIN if there is one
+            ID_LOCK_ON if code == BN_CLICKED => {
+                let on = checked(dlg, ID_LOCK_ON);
+                lock_action(dlg, st, Some(LockAct::Enable(on)));
+                place_tips(dlg, st);
+            }
+            ID_LOCK_SET | ID_LOCK_CHANGE | ID_LOCK_REMOVE if code == BN_CLICKED => {
+                if let Some(&(_, form)) = LOCK_BUTTONS.iter().find(|(b, _)| *b == id) {
+                    lock_action(dlg, st, Some(LockAct::Pin(form)));
+                    place_tips(dlg, st);
+                }
+            }
             ID_STORE | ID_MOVE_TORRENTS | ID_AUTOLOAD if code == BN_CLICKED => {
                 update_torrent_folder_controls(dlg)
             }
@@ -2560,6 +2623,35 @@ unsafe fn update_run_controls(dlg: HWND, st: &State<'_>) {
     }
 }
 
+/// The UI Lock page (D71): does `act` through the owner, then shows the lock as it stands
+/// afterwards: the switch (ticked again after a cancelled or wrong PIN), the buttons its state
+/// allows and the status line.
+unsafe fn lock_action(dlg: HWND, st: &mut State<'_>, act: Option<LockAct>) {
+    let state = (st.hooks.ui_lock)(dlg, act);
+    unsafe {
+        set_check(dlg, ID_LOCK_ON, state != ui_lock::State::Off);
+        for (id, form) in LOCK_BUTTONS {
+            EnableWindow(item(dlg, id), state.allows(form) as i32);
+        }
+        if window_text(item(dlg, ID_LOCK_STATUS)) != state.text() {
+            set_text(item(dlg, ID_LOCK_STATUS), state.text());
+            fit_lock_notes(dlg);
+        }
+    }
+}
+
+/// The UI Lock page's status line and note take the lines their texts need, at least one each;
+/// the box and the note follow the status line.
+unsafe fn fit_lock_notes(dlg: HWND) {
+    unsafe {
+        let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 9 };
+        MapDialogRect(dlg, &mut rc);
+        for id in [ID_LOCK_STATUS, ID_LOCK_NOTE] {
+            crate::fit::fit_note_height(dlg, id, rc.bottom, |id| page_of(id).map(|p| p as i32));
+        }
+    }
+}
+
 /// The two notes of the Run Program page take the lines their texts need (the list of % codes
 /// is long in any language), at least one each; the second follows the first.
 unsafe fn fit_run_notes(dlg: HWND) {
@@ -2609,6 +2701,14 @@ mod tests {
         /// The fake tracker list: its status line, and the fields each Update Now came with.
         tracker_status: Rc<RefCell<String>>,
         tracker_updates: Rc<RefCell<Vec<tracker_list::Config>>>,
+        /// The fake lock: its state, whether a PIN dialog's OK goes through, and what was asked.
+        lock: Rc<RefCell<FakeLock>>,
+    }
+
+    struct FakeLock {
+        state: ui_lock::State,
+        pin_ok: bool,
+        asked: Vec<LockAct>,
     }
 
     impl Fixture {
@@ -2636,7 +2736,31 @@ mod tests {
             let tracker_status: Rc<RefCell<String>> = Rc::default();
             let tracker_updates: Rc<RefCell<Vec<tracker_list::Config>>> = Rc::default();
             let (status, updates) = (tracker_status.clone(), tracker_updates.clone());
+            let lock = Rc::new(RefCell::new(FakeLock {
+                state: ui_lock::State::NoPin,
+                pin_ok: true,
+                asked: Vec::new(),
+            }));
+            let l = lock.clone();
             let hooks = Hooks {
+                // the fake lock: a PIN dialog's OK goes through when `pin_ok` says so
+                ui_lock: Box::new(move |_, act| {
+                    use ui_lock::State::{NoPin, Off, Pin};
+                    let mut l = l.borrow_mut();
+                    if let Some(a) = act {
+                        l.asked.push(a);
+                        let ok = l.pin_ok;
+                        l.state = match (a, l.state) {
+                            (LockAct::Pin(Form::Set | Form::Change), _) if ok => Pin,
+                            (LockAct::Pin(Form::Remove), _) if ok => NoPin,
+                            (LockAct::Enable(true), Off) => NoPin,
+                            (LockAct::Enable(false), Pin) if ok => Off,
+                            (LockAct::Enable(false), NoPin) => Off,
+                            (_, s) => s,
+                        };
+                    }
+                    l.state
+                }),
                 integration: Box::new(move |change| {
                     if let Some((old, new)) = change {
                         ints.borrow_mut().push((*old, *new));
@@ -2697,6 +2821,7 @@ mod tests {
                 web_edits,
                 tracker_status,
                 tracker_updates,
+                lock,
             }
         }
 
@@ -3823,6 +3948,89 @@ mod tests {
         assert_eq!(f.tracker_updates.borrow().len(), 1);
     }
 
+    /// Advanced > UI Lock (D71): the switch, the PIN buttons its state allows and the status
+    /// line, each acting at once through the hook (never on OK); a cancelled PIN ticks the switch
+    /// again, and the page reads the lock again when shown.
+    #[test]
+    fn the_ui_lock_page_acts_at_once() {
+        use ui_lock::State::{NoPin, Off, Pin};
+        use windows_sys::Win32::UI::Controls::{TVGN_PARENT, TVM_GETNEXTITEM};
+        let mut f = Fixture::new(defaults());
+        f.page(PAGE_UI_LOCK);
+        let enabled = |f: &Fixture, id| unsafe { IsWindowEnabled(item(f.dlg, id)) != 0 };
+        let buttons = |f: &Fixture| LOCK_BUTTONS.map(|(id, _)| enabled(f, id));
+        let on = |f: &Fixture| unsafe { checked(f.dlg, ID_LOCK_ON) };
+        unsafe {
+            for id in [ID_LOCK_ON, ID_LOCK_SET, ID_LOCK_CHANGE, ID_LOCK_REMOVE, ID_LOCK_STATUS, ID_LOCK_NOTE]
+            {
+                assert!(!item(f.dlg, id).is_null() && shown(item(f.dlg, id)), "control {id}");
+                assert_eq!(page_of(id), Some(PAGE_UI_LOCK));
+            }
+            assert_eq!(PAGE_UI_LOCK, PAGES.len() - 1);
+            let tree = item(f.dlg, ID_TREE);
+            let parent = send(tree, TVM_GETNEXTITEM, TVGN_PARENT as usize, f.st.tree_items[PAGE_UI_LOCK]);
+            assert_eq!(parent, f.st.tree_items[PAGE_ADVANCED]);
+            assert_eq!(page_icon(PAGES[PAGE_UI_LOCK]), Some(UiIcon::Lock));
+        }
+        assert_eq!(f.text(ID_LOCK_ON), tr!(PrefLockEnable));
+        assert_eq!(f.text(ID_LOCK_NOTE), tr!(PrefLockNote));
+        // on without a PIN: Set only
+        assert!(on(&f) && f.text(ID_LOCK_STATUS) == NoPin.text());
+        assert_eq!(buttons(&f), [true, false, false]);
+
+        // Set PIN: Change and Remove
+        f.click(ID_LOCK_SET);
+        assert_eq!(f.text(ID_LOCK_STATUS), Pin.text());
+        assert_eq!(buttons(&f), [false, true, true]);
+        // a cancelled Change leaves it
+        f.lock.borrow_mut().pin_ok = false;
+        f.click(ID_LOCK_CHANGE);
+        assert_eq!(buttons(&f), [false, true, true]);
+        // off with a PIN asks for it; Cancel ticks the box again
+        f.check(ID_LOCK_ON, false);
+        f.click(ID_LOCK_ON);
+        assert!(on(&f) && f.text(ID_LOCK_STATUS) == Pin.text());
+        // with the PIN, off: everything greyed
+        f.lock.borrow_mut().pin_ok = true;
+        f.check(ID_LOCK_ON, false);
+        f.click(ID_LOCK_ON);
+        assert!(!on(&f) && f.text(ID_LOCK_STATUS) == Off.text());
+        assert_eq!(buttons(&f), [false, false, false]);
+        // on again: Set
+        f.check(ID_LOCK_ON, true);
+        f.click(ID_LOCK_ON);
+        assert!(on(&f) && f.text(ID_LOCK_STATUS) == NoPin.text());
+        assert_eq!(buttons(&f), [true, false, false]);
+        assert_eq!(
+            f.lock.borrow().asked,
+            [
+                LockAct::Pin(Form::Set),
+                LockAct::Pin(Form::Change),
+                LockAct::Enable(false),
+                LockAct::Enable(false),
+                LockAct::Enable(true),
+            ]
+        );
+        // changed elsewhere (a reset, the tray): read again when the page is shown
+        f.lock.borrow_mut().state = Pin;
+        f.page(0);
+        f.page(PAGE_UI_LOCK);
+        assert_eq!(f.text(ID_LOCK_STATUS), Pin.text());
+        // none of it is applied as an option
+        assert!(f.applied.borrow().is_empty());
+        // the status line and the note fit their texts, the note under the box
+        let rect = |id: u16| unsafe {
+            let mut r: RECT = std::mem::zeroed();
+            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect(item(f.dlg, id), &mut r);
+            r
+        };
+        assert!(rect(ID_LOCK_NOTE).top >= rect(ID_LOCK_STATUS).bottom);
+        assert!(rect(ID_LOCK_NOTE).bottom <= rect(ID_HELP_FRAME).top);
+        let (set, change, remove) = (rect(ID_LOCK_SET), rect(ID_LOCK_CHANGE), rect(ID_LOCK_REMOVE));
+        assert!(set.right <= change.left && change.right <= remove.left, "one row, no overlap");
+        assert_eq!((set.top, change.top), (remove.top, remove.top));
+    }
+
     /// The note under the Trackers box is as tall as its text, whatever the language's length.
     #[test]
     fn the_trackers_note_is_as_tall_as_its_text() {
@@ -3872,7 +4080,7 @@ mod tests {
                 assert!(!item(f.dlg, id).is_null() && shown(item(f.dlg, id)), "control {id}");
                 assert_eq!(page_of(id), Some(PAGE_RUN_PROGRAM));
             }
-            assert_eq!(PAGE_RUN_PROGRAM, PAGES.len() - 1);
+            assert_eq!(PAGE_RUN_PROGRAM, PAGES.len() - 2);
             let tree = item(f.dlg, ID_TREE);
             let parent = send(tree, TVM_GETNEXTITEM, TVGN_PARENT as usize, f.st.tree_items[PAGE_RUN_PROGRAM]);
             assert_eq!(parent, f.st.tree_items[PAGE_ADVANCED]);

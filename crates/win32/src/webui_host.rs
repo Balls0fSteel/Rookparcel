@@ -281,13 +281,15 @@ impl Host for WindowHost {
 }
 
 /// The preferences the Web UI mirrors: the window's, without the windows' lock (D69: the PIN's
-/// hash and the locked mark are the window's own; the Web UI has its own login). Removed with
-/// tracking off, so that no removal is recorded to be handed back and delete the window's PIN.
+/// hash, the locked mark and the lock's switch, D71, are the window's own; the Web UI has its
+/// own login). Removed with tracking off, so that no removal is recorded to be handed back and
+/// delete the window's PIN.
 pub fn web_options(prefs: &Prefs) -> Prefs {
     let mut options = prefs.clone();
     options.stop_tracking();
-    options.remove(ui_lock::PIN_KEY);
-    options.remove(ui_lock::LOCKED_KEY);
+    for key in ui_lock::KEYS {
+        options.remove(key);
+    }
     options
 }
 
@@ -444,10 +446,11 @@ mod tests {
         let mut p = Prefs::default();
         ui_lock::set_pin_with(&mut p, "1234", 10);
         ui_lock::lock(&mut p);
+        p.set_bool(ui_lock::ENABLED_KEY, true);
         p.set("ui.balloons", "0");
         p.track_changes();
         let mut options = web_options(&p);
-        assert!(options.get(ui_lock::PIN_KEY).is_none() && options.get(ui_lock::LOCKED_KEY).is_none());
+        assert!(ui_lock::KEYS.iter().all(|k| options.get(k).is_none()));
         assert_eq!(options.get("ui.balloons"), Some("0"));
         assert!(options.take_changes().is_empty(), "nothing recorded");
         // as the Web UI tracks its copy, its removals never name the lock's keys

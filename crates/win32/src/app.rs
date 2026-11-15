@@ -336,12 +336,9 @@ mod cmd {
     pub const DONATE: u16 = 156;
     /// Help > Statistics (D65).
     pub const STATISTICS: u16 = 157;
-    /// File > Lock Rookparcel (D69), Ctrl+L, and the tray menu's.
+    /// File > Lock Rookparcel (D69), Ctrl+L, and the tray menu's; not there while the lock is
+    /// off (D71). (159-161 were Options > Lock PIN's items, now Preferences > UI Lock's buttons.)
     pub const LOCK: u16 = 158;
-    /// Options > Lock PIN: Set PIN, Change PIN, Remove PIN.
-    pub const SET_PIN: u16 = 159;
-    pub const CHANGE_PIN: u16 = 160;
-    pub const REMOVE_PIN: u16 = 161;
     /// File > Profiles' list, by `profile::menu` index (at most 256 entries).
     pub const PROFILE_BASE: u16 = 3700;
     pub const LABEL_BASE: u16 = 1000;
@@ -1072,13 +1069,6 @@ unsafe fn main_menu() -> HMENU {
         separator(options);
         append(options, cmd::CLOSE_TO_TRAY, tr!(MenuCloseToTray));
         append(options, cmd::MIN_TO_TRAY, tr!(MenuMinimizeToTray));
-        separator(options);
-        // greyed by `update_menu` as a PIN is set or not (D69)
-        let pin = CreatePopupMenu();
-        append(pin, cmd::SET_PIN, tr!(MenuSetPin));
-        append(pin, cmd::CHANGE_PIN, tr!(MenuChangePin));
-        append(pin, cmd::REMOVE_PIN, tr!(MenuRemovePin));
-        submenu(options, pin, tr!(MenuLockPin));
         let help = CreatePopupMenu();
         append(help, cmd::WEBSITE, tr!(MenuWebsite));
         if update::AVAILABLE {
@@ -2038,16 +2028,26 @@ unsafe fn update_menu(hwnd: HWND) {
         if let Some(mode) = with_app(|a| a.auto_shutdown.mode()) {
             check_auto_shutdown(menu, mode);
         }
-        if let Some(has_pin) = with_app(|a| ui_lock::has_pin(&a.prefs)) {
-            grey_pin_items(menu, has_pin);
+        if let Some(on) = with_app(|a| ui_lock::enabled(&a.prefs)) {
+            show_lock_item(menu, on);
         }
     }
 }
 
-/// Options > Lock PIN (D69): Set PIN while there is none, Change and Remove PIN once there is.
-unsafe fn grey_pin_items(menu: HMENU, has_pin: bool) {
-    for (id, off) in [(cmd::SET_PIN, has_pin), (cmd::CHANGE_PIN, !has_pin), (cmd::REMOVE_PIN, !has_pin)] {
-        unsafe { EnableMenuItem(menu, id as u32, MF_BYCOMMAND | if off { MF_GRAYED } else { MF_ENABLED }) };
+/// File > Lock Rookparcel is there, above Exit, only while the lock is on (D71).
+unsafe fn show_lock_item(menu: HMENU, on: bool) {
+    unsafe {
+        let file = GetSubMenu(menu, 0);
+        if file.is_null() {
+            return;
+        }
+        let there = GetMenuState(file, cmd::LOCK as u32, MF_BYCOMMAND) != u32::MAX;
+        if on && !there {
+            let t = wide(&shortcut(tr!(MenuLock), Hotkey::Ctrl('L')));
+            InsertMenuW(file, cmd::EXIT as u32, MF_BYCOMMAND | MF_STRING, cmd::LOCK as usize, t.as_ptr());
+        } else if !on && there {
+            DeleteMenu(file, cmd::LOCK as u32, MF_BYCOMMAND);
+        }
     }
 }
 
@@ -3860,9 +3860,10 @@ fn save_prefs_now(a: &mut App) {
     }
 }
 
-/// The PIN dialog for `form` on the main window: Set, Change or Remove PIN, or Set before the
-/// first lock. True when its OK went through (saved).
-unsafe fn pin_dialog(hwnd: HWND, form: Form) -> bool {
+/// The PIN dialog for `form`, modal on `owner` (the main window, or Preferences for the UI Lock
+/// page's buttons and switch): Set, Change or Remove PIN, Set before the first lock, or turning
+/// the lock off (D71). True when its OK went through (saved). The menu follows on `hwnd`.
+unsafe fn pin_dialog(hwnd: HWND, owner: HWND, form: Form) -> bool {
     let mut submit = |current: &str, new: &str, repeat: &str| {
         with_app(|a| {
             let now = std::time::Instant::now();
@@ -3874,15 +3875,51 @@ unsafe fn pin_dialog(hwnd: HWND, form: Form) -> bool {
         })
     };
     // modal; nothing is borrowed across it
-    let done = dialogs::pin(hwnd, form, &mut submit);
+    let done = dialogs::pin(owner, form, &mut submit);
     unsafe { update_menu(hwnd) };
     done
 }
 
-/// File > Lock Rookparcel, Ctrl+L, the tray's Lock: without a PIN, Set PIN first.
+/// Preferences > Advanced > UI Lock (D71): `None` reads the lock's state, `Some` does one of the
+/// page's actions (a PIN dialog modal on the Preferences dialog `owner`, or the switch), saved
+/// at once; either way the state afterwards.
+unsafe fn ui_lock_page(hwnd: HWND, owner: HWND, act: Option<crate::preferences::LockAct>) -> ui_lock::State {
+    use crate::preferences::LockAct;
+    let state = || with_app(|a| ui_lock::State::of(&a.prefs)).unwrap_or(ui_lock::State::Off);
+    match act {
+        None => {}
+        // the page greys what its state does not allow; a stray click does nothing
+        Some(LockAct::Pin(form)) => {
+            if state().allows(form) {
+                unsafe { pin_dialog(hwnd, owner, form) };
+            }
+        }
+        // off with a PIN asks for it first; without one, or on, at once
+        Some(LockAct::Enable(on)) => {
+            if !on && state() == ui_lock::State::Pin {
+                unsafe { pin_dialog(hwnd, owner, Form::Off) };
+            } else {
+                with_app(|a| {
+                    ui_lock::set_enabled(&mut a.prefs, on);
+                    save_prefs_now(a);
+                });
+                unsafe { update_menu(hwnd) };
+            }
+        }
+    }
+    state()
+}
+
+/// File > Lock Rookparcel, Ctrl+L, the tray's Lock: without a PIN, Set PIN first; nothing while
+/// the lock is off (D71: the shortcut, a posted command).
 unsafe fn lock_command(hwnd: HWND) {
-    let Some(has_pin) = with_app(|a| ui_lock::has_pin(&a.prefs)) else { return };
-    if !has_pin && !unsafe { pin_dialog(hwnd, Form::Set) } {
+    let Some((on, has_pin)) = with_app(|a| (ui_lock::enabled(&a.prefs), ui_lock::has_pin(&a.prefs))) else {
+        return;
+    };
+    if !on {
+        return;
+    }
+    if !has_pin && !unsafe { pin_dialog(hwnd, hwnd, Form::Set) } {
         return;
     }
     unsafe { lock_now() };
@@ -4152,8 +4189,11 @@ unsafe fn tray_menu(hwnd: HWND) {
         let menu = CreatePopupMenu();
         // as `toggle_window` acts: a minimized window is shown, not hidden
         let shown = IsWindowVisible(hwnd) != 0 && IsIconic(hwnd) == 0;
-        let (locked, has_pin) =
-            with_app(|a| (ui_lock::is_locked(&a.prefs), ui_lock::has_pin(&a.prefs))).unwrap_or_default();
+        // Lock only while the lock is on (D71) and has a PIN
+        let (locked, has_pin) = with_app(|a| {
+            (ui_lock::is_locked(&a.prefs), ui_lock::enabled(&a.prefs) && ui_lock::has_pin(&a.prefs))
+        })
+        .unwrap_or_default();
         for item in tray_items(shown, locked, has_pin) {
             match item {
                 Some((id, text)) => append(menu, id, text),
@@ -4479,19 +4519,6 @@ unsafe fn on_command(hwnd: HWND, id: u16) {
         }
         match id {
             cmd::LOCK => lock_command(hwnd),
-            // as `grey_pin_items` greys them, also for a posted command: Set while there is no
-            // PIN, Change and Remove once there is (the Mac's `pin_command` does the same)
-            cmd::SET_PIN | cmd::CHANGE_PIN | cmd::REMOVE_PIN => {
-                let form = match id {
-                    cmd::SET_PIN => Form::Set,
-                    cmd::CHANGE_PIN => Form::Change,
-                    _ => Form::Remove,
-                };
-                let has_pin = with_app(|a| ui_lock::has_pin(&a.prefs)).unwrap_or(false);
-                if has_pin == (form != Form::Set) {
-                    pin_dialog(hwnd, form);
-                }
-            }
             cmd::ADD => {
                 let files = dialogs::open_torrents(hwnd);
                 add_sources(hwnd, &files);
@@ -5219,6 +5246,8 @@ unsafe fn show_preferences_at(hwnd: HWND, page: usize) {
             })
             .unwrap_or_default()
         }),
+        // the UI Lock page (D71): saved at once, never on OK
+        ui_lock: Box::new(move |owner, act| unsafe { ui_lock_page(hwnd, owner, act) }),
     };
     if crate::preferences::show_at(hwnd, opts, &dir, hooks, page) {
         unsafe { update_menu(hwnd) };
@@ -8018,8 +8047,8 @@ mod tests {
         }
     }
 
-    /// File > Lock Rookparcel with its shortcut above Exit, and Options > Lock PIN's items
-    /// greyed by whether a PIN is set (D69).
+    /// File > Lock Rookparcel with its shortcut above Exit (D69), gone while the lock is off and
+    /// back above Exit when it is on again (D71); no Lock PIN submenu in Options any more.
     #[test]
     fn the_lock_menu_items() {
         unsafe {
@@ -8035,11 +8064,27 @@ mod tests {
                 String::from_utf16_lossy(&buf[..len as usize]),
                 shortcut(tr!(MenuLock), Hotkey::Ctrl('L'))
             );
-            let greyed = |id: u16| GetMenuState(bar, id as u32, MF_BYCOMMAND) & MF_GRAYED != 0;
-            grey_pin_items(bar, false);
-            assert!(!greyed(cmd::SET_PIN) && greyed(cmd::CHANGE_PIN) && greyed(cmd::REMOVE_PIN));
-            grey_pin_items(bar, true);
-            assert!(greyed(cmd::SET_PIN) && !greyed(cmd::CHANGE_PIN) && !greyed(cmd::REMOVE_PIN));
+            show_lock_item(bar, true);
+            assert_eq!(GetMenuItemCount(file), n, "already there");
+            show_lock_item(bar, false);
+            assert_eq!(GetMenuState(bar, cmd::LOCK as u32, MF_BYCOMMAND), u32::MAX);
+            assert_eq!(GetMenuItemCount(file), n - 1);
+            assert_eq!(GetMenuItemID(file, n - 2), cmd::EXIT as u32);
+            show_lock_item(bar, false);
+            assert_eq!(GetMenuItemCount(file), n - 1);
+            show_lock_item(bar, true);
+            assert_eq!(GetMenuItemID(file, n - 2), cmd::LOCK as u32);
+            assert_eq!(GetMenuItemID(file, n - 1), cmd::EXIT as u32);
+            let len =
+                GetMenuStringW(file, cmd::LOCK as u32, buf.as_mut_ptr(), buf.len() as i32, MF_BYCOMMAND);
+            assert_eq!(
+                String::from_utf16_lossy(&buf[..len as usize]),
+                shortcut(tr!(MenuLock), Hotkey::Ctrl('L'))
+            );
+            // Options ends with the tray items: no Lock PIN submenu
+            let options = GetSubMenu(bar, 1);
+            let last = GetMenuItemCount(options) - 1;
+            assert_eq!(GetMenuItemID(options, last), cmd::MIN_TO_TRAY as u32);
             DestroyMenu(bar);
         }
     }

@@ -4,6 +4,22 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-15_232343_1794781423: Version 1.2.58: Preferences > Advanced > UI Lock, the lock's off switch, a narrower PIN dialog (D71)
+
+- **Asked for:** a place in Advanced for the UI lock, a way to change the PIN and to turn the lock off, and a fix for the oddly sized Set PIN window on Windows. The owner chose an off switch that hides every Lock command and dropping Options > Lock PIN.
+- **Shared:**
+  - `ui_lock` has `ui.lock_enabled` (`enabled`, `set_enabled`; off removes the PIN), `Form::Off` and `State` (the page's status line and buttons).
+  - `pref_pages` has a fifth Advanced page, `ui_lock`, with `Item::LockSwitch`, `Item::LockStatus` and three PIN actions. `UiIcon::Lock` is the bold set's lock.
+  - The menu strings became `PrefLockSetPin`/`ChangePin`/`RemovePin`, renamed in every table so the translations stayed; `MenuLockPin` went. Eight new strings were translated into the 34 tables by a subagent, reusing each table's own words for PIN, File and Lock Rookparcel.
+- **Win32:** the page's controls act through `Hooks::ui_lock`, with the PIN dialog modal on Preferences. `show_lock_item` deletes File > Lock while off and puts it back above Exit. `lock_command` ignores Ctrl+L and posted commands while off, and the tray offers Lock only when the lock is on and a PIN is set.
+- **The PIN dialog:** it is 170 dialog units wide instead of 230, and the message line is one line, growing with the dialog when a message needs more (`fit_pin_message`). Set PIN went from 419×234 to 314×219 px at 100 %.
+- **GTK and Mac:** subagents built them, and both cross-lint clean. GTK hides File > Lock with `hidden-when=action-disabled`. The Mac hides it in validation, refuses ⌘L while off, and drops `Command::SetPin/ChangePin/RemovePin` (kinds 81-83).
+- **Checked:**
+  - frontend 401 tests and Win32 151 tests (one thread), including new ones for the page, the switch and the dialog's growth.
+  - Clippy with `-D warnings` for Win32, frontend and nox; GTK (Linux target) and the Mac (both targets) cross-linted.
+  - The hidden desktop, light and dark: Set → Change with a wrong PIN → lock → wrong and right PIN in the prompt → switch off with the PIN → File > Lock gone and a posted Lock ignored → on again.
+- **Not run:** GTK and the Mac, which were only type-checked; hand checks are in BACKLOG "UI lock".
+
 ## 2026-11-15_180859_1794762539: Release 1.2.57 published; the site's news and the wiki pushed
 
 - **On the owner's "make a release":** CI, FreeBSD and Fuzz green on `b0f3852b`; tag `v1.2.57`; the Release run [43738460424](https://github.com/Balls0fSteel/Rookparcel/actions/runs/43738460424) passed every job on the first attempt (Windows, macOS, both Linux arches, both Flatpaks, both Docker images and the manifest).

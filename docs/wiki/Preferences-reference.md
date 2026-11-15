@@ -4,7 +4,7 @@ This page lists every page of the Preferences window and what each setting on it
 
 ## Opening Preferences
 
-Open **Options > Preferences**, press <kbd>Ctrl</kbd>+<kbd>P</kbd>, or click **Preferences** on the toolbar. The pages are listed on the left; **Disk Cache**, **Disk I/O**, **Trackers** and **Run Program** sit under **Advanced**. **OK** saves and closes, **Apply** saves and keeps the window open, **Cancel** forgets the changes.
+Open **Options > Preferences**, press <kbd>Ctrl</kbd>+<kbd>P</kbd>, or click **Preferences** on the toolbar. The pages are listed on the left; **Disk Cache**, **Disk I/O**, **Trackers**, **Run Program** and **UI Lock** sit under **Advanced**. **OK** saves and closes, **Apply** saves and keeps the window open, **Cancel** forgets the changes.
 
 Help is built in:
 
@@ -293,6 +293,19 @@ Good to know:
 - The program runs on the computer that has the torrents: in a window connected to a remote `rookparcel-nox`, this page's lines do nothing; set them on the server.
 - **Who can change the lines.** Whoever can change them can run programs under your account, so: the desktop programs on their own computer; the Web UI only from a browser on the same computer, with the current password; never the qBittorrent-compatible API, and never a remote connection. A server you can only reach from elsewhere (Docker, for one) needs `--webui-remote-run-program` on its command line: see [Running rookparcel-nox](Running-rookparcel-nox). Think before you give it: with it, the Web UI's password is all that stands between a visitor and running programs on the server.
 - **Behind a reverse proxy.** If the Web UI is reached through a proxy or tunnel on the server itself (nginx, HAProxy, stunnel, an SSH tunnel), the server sees every visitor as a browser on the same computer unless the proxy says otherwise. Make the proxy add the visitor's address (`X-Forwarded-For`; for nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`). Without that header, anyone who reaches the proxy and knows the password can change these lines, exactly as with `--webui-remote-run-program`.
+
+## UI Lock
+
+The PIN that locks Rookparcel's windows, and the switch that turns the lock off. Unlike the rest of Preferences, everything on this page takes effect at once: **OK**, **Apply** and **Cancel** do not change it. *New in 1.2.58; before, the PIN was set in **Options > Lock PIN**.*
+
+| Setting | What it does |
+|---|---|
+| **Allow locking Rookparcel with a PIN** | On by default. Off, there is no **File > Lock Rookparcel**, no <kbd>Ctrl</kbd>+<kbd>L</kbd> and no **Lock** in the tray menu. Turning it off asks for the PIN, if one is set, and removes it. |
+| **Set PIN...** | Asks for a new PIN of 4 to 6 digits, twice. Only while no PIN is set. |
+| **Change PIN...** | Asks for the current PIN, then a new one twice. |
+| **Remove PIN...** | Asks for the current PIN, then removes it. **Lock Rookparcel** then asks for a new PIN before it locks. |
+
+The line under the buttons says whether a PIN is set. More: [Locking Rookparcel](Locking-Rookparcel).
 
 ## Differences in the GTK version
 

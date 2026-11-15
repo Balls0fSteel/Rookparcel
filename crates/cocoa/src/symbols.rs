@@ -78,6 +78,8 @@ pub fn page(title: S) -> &'static str {
         S::PageDiskCache | S::PageDiskIo => "internaldrive",
         S::PageTrackers => "antenna.radiowaves.left.and.right",
         S::PageRunProgram => "terminal",
+        // D71: Advanced > UI Lock
+        S::PageUiLock => "lock",
         _ => "gearshape.2",
     }
 }
@@ -98,6 +100,7 @@ mod tests {
                 page(S::PageAdvanced),
                 page(S::PageTrackers),
                 page(S::PageRunProgram),
+                page(S::PageUiLock),
             ]);
         for n in names {
             assert!(

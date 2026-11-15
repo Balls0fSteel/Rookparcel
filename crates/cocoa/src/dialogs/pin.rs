@@ -1,5 +1,6 @@
 //! The PIN dialogs of the windows' lock (D69, `crate::lock`): "Rookparcel is locked" (the unlock
-//! prompt), Set PIN, Change PIN and Remove PIN. Each is an application-modal alert (`runModal`:
+//! prompt), Set PIN, Change PIN and Remove PIN, and the PIN asked when Preferences > Advanced >
+//! UI Lock's switch is turned off (D71). Each is an application-modal alert (`runModal`:
 //! the windows may all be hidden) with OK and Cancel and the secure boxes its
 //! `ui_lock::Form` asks for: the current PIN, and the new one twice. The boxes keep to six
 //! digits as they are typed in or pasted into (`controlTextDidChange:` through `RPTarget`).

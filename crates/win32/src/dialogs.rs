@@ -479,12 +479,17 @@ fn pin_label(form: Form, id: u16) -> &'static str {
     }
 }
 
+/// The PIN dialog's width in dialog units: the unlock prompt's label on one line in English, the
+/// boxes and OK / Cancel without a blank half beside them.
+const PIN_W: i16 = 170;
+
 /// A label above each box (a line of its own, so a long translation wraps and the dialog
-/// grows), the message line, OK and Cancel.
+/// grows), the message line (one line; it and the dialog grow when a message needs more,
+/// [`fit_pin_message`]), OK and Cancel.
 fn pin_template(form: Form) -> Vec<u16> {
-    const W: i16 = 230;
+    const W: i16 = PIN_W;
     let boxes = pin_boxes(form);
-    let height = 7 + 28 * boxes.len() as i16 + 20 + 14 + 7;
+    let height = 7 + 28 * boxes.len() as i16 + 12 + 14 + 7;
     let mut t = Template::new(W, height);
     let mut y = 7;
     for (i, &id) in boxes.iter().enumerate() {
@@ -505,8 +510,8 @@ fn pin_template(form: Form) -> Vec<u16> {
         t.item(EDIT, id, style, [7, y + 11, 70, 13], "");
         y += 28;
     }
-    t.item(STATIC, ID_PIN_MESSAGE, WS_CHILD | WS_VISIBLE | SS_NOPREFIX, [7, y, W - 14, 18], "");
-    y += 20;
+    t.item(STATIC, ID_PIN_MESSAGE, WS_CHILD | WS_VISIBLE | SS_NOPREFIX, [7, y, W - 14, 9], "");
+    y += 12;
     t.item(
         BUTTON,
         IDOK as u16,
@@ -549,23 +554,12 @@ unsafe extern "system" fn pin_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
                 }
                 crate::fit::fit_texts(dlg, |_| Some(0));
                 // a label longer than the dialog is wide takes more lines, and the dialog grows
-                use windows_sys::Win32::Foundation::RECT;
-                use windows_sys::Win32::UI::WindowsAndMessaging::{
-                    GetWindowRect, MapDialogRect, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos,
-                };
-                let mut line = RECT { left: 0, top: 0, right: 0, bottom: 9 };
-                MapDialogRect(dlg, &mut line);
+                let line = pin_line(dlg);
                 let mut grown = 0;
                 for i in 0..boxes.len() {
-                    grown +=
-                        crate::fit::fit_note_height(dlg, ID_PIN_LABEL + i as u16, line.bottom, |_| Some(0));
+                    grown += crate::fit::fit_note_height(dlg, ID_PIN_LABEL + i as u16, line, |_| Some(0));
                 }
-                if grown > 0 {
-                    let mut r: RECT = zeroed();
-                    GetWindowRect(dlg, &mut r);
-                    let flags = SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE;
-                    SetWindowPos(dlg, null_mut(), 0, 0, r.right - r.left, r.bottom - r.top + grown, flags);
-                }
+                grow_pin_dialog(dlg, grown);
                 if st.form == Form::Unlock {
                     PROMPT.with(|p| p.set(dlg));
                     let dpi = windows_sys::Win32::UI::HiDpi::GetDpiForWindow(dlg);
@@ -609,6 +603,7 @@ unsafe extern "system" fn pin_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
                     Some(Err(message)) => {
                         let m = wide(&message);
                         SetWindowTextW(GetDlgItem(dlg, ID_PIN_MESSAGE as i32), m.as_ptr());
+                        fit_pin_message(dlg);
                         // the boxes the message is about are emptied, the first takes the keys
                         let new_pin = message == tr!(PinBadLength) || message == tr!(PinMismatch);
                         let again: &[u16] =
@@ -626,6 +621,41 @@ unsafe extern "system" fn pin_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             }
             _ => 0,
         }
+    }
+}
+
+/// One line of the PIN dialog's text, in pixels.
+unsafe fn pin_line(dlg: HWND) -> i32 {
+    use windows_sys::Win32::Foundation::RECT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::MapDialogRect;
+    let mut line = RECT { left: 0, top: 0, right: 0, bottom: 9 };
+    unsafe { MapDialogRect(dlg, &mut line) };
+    line.bottom
+}
+
+/// The PIN dialog grows (or shrinks) by `delta` pixels, its top left where it is.
+unsafe fn grow_pin_dialog(dlg: HWND, delta: i32) {
+    use windows_sys::Win32::Foundation::RECT;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowRect, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, SetWindowPos,
+    };
+    if delta == 0 {
+        return;
+    }
+    unsafe {
+        let mut r: RECT = zeroed();
+        GetWindowRect(dlg, &mut r);
+        let flags = SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE;
+        SetWindowPos(dlg, null_mut(), 0, 0, r.right - r.left, r.bottom - r.top + delta, flags);
+    }
+}
+
+/// The message line takes the lines its text needs (one at least), and OK / Cancel and the
+/// dialog's bottom edge move with it.
+unsafe fn fit_pin_message(dlg: HWND) {
+    unsafe {
+        let delta = crate::fit::fit_note_height(dlg, ID_PIN_MESSAGE, pin_line(dlg), |_| Some(0));
+        grow_pin_dialog(dlg, delta);
     }
 }
 
@@ -779,12 +809,15 @@ mod tests {
         assert_eq!(pin_boxes(Form::Set), [ID_PIN_NEW, ID_PIN_REPEAT]);
         assert_eq!(pin_boxes(Form::Change), [ID_PIN_CURRENT, ID_PIN_NEW, ID_PIN_REPEAT]);
         assert_eq!(pin_boxes(Form::Remove), [ID_PIN_CURRENT]);
+        assert_eq!(pin_boxes(Form::Off), [ID_PIN_CURRENT]);
         let seen = std::cell::RefCell::new(Vec::new());
         let mut submit = |c: &str, n: &str, r: &str| {
             seen.borrow_mut().push(format!("{c}|{n}|{r}"));
             Some(match (c, n == r) {
                 ("1234", true) => Ok(()),
                 ("1234", false) => Err(tr!(PinMismatch).to_owned()),
+                // longer than a line (a translation's wait message)
+                ("0000", _) => Err(format!("{0} {0}", tr!(LockWait, secs = 30))),
                 _ => Err(tr!(LockWrong).to_owned()),
             })
         };
@@ -811,11 +844,39 @@ mod tests {
             assert_eq!(text(ID_PIN_LABEL + 2), tr!(PinRepeat));
             assert_eq!(SendMessageW(GetDlgItem(dlg, ID_PIN_CURRENT as i32), EM_GETLIMITTEXT, 0, 0), 6);
             assert!(text(ID_PIN_MESSAGE).is_empty());
+            // the narrow dialog (D71): no blank half beside the boxes; one line for the message
+            let rect = |h: HWND| {
+                let mut r: windows_sys::Win32::Foundation::RECT = zeroed();
+                windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect(h, &mut r);
+                r
+            };
+            let mut unit =
+                windows_sys::Win32::Foundation::RECT { left: 0, top: 0, right: PIN_W as i32, bottom: 9 };
+            windows_sys::Win32::UI::WindowsAndMessaging::MapDialogRect(dlg, &mut unit);
+            let mut client: windows_sys::Win32::Foundation::RECT = zeroed();
+            windows_sys::Win32::UI::WindowsAndMessaging::GetClientRect(dlg, &mut client);
+            assert_eq!(client.right, unit.right);
+            let line = unit.bottom;
+            let message = GetDlgItem(dlg, ID_PIN_MESSAGE as i32);
+            assert_eq!(rect(message).bottom - rect(message).top, line);
+            let (ok_top, dlg_height) = (rect(GetDlgItem(dlg, IDOK)).top, rect(dlg).bottom - rect(dlg).top);
+            // a message of two lines moves OK down and grows the dialog by a line; one line again
+            // shrinks it back
+            set(ID_PIN_CURRENT, "0000");
+            SendMessageW(dlg, WM_COMMAND, IDOK as usize, 0);
+            assert_eq!(text(ID_PIN_MESSAGE), format!("{0} {0}", tr!(LockWait, secs = 30)));
+            let grown = rect(message).bottom - rect(message).top - line;
+            assert!(grown > line / 2, "two lines at least: {grown}");
+            assert_eq!(rect(GetDlgItem(dlg, IDOK)).top, ok_top + grown);
+            assert_eq!(rect(dlg).bottom - rect(dlg).top, dlg_height + grown);
             set(ID_PIN_CURRENT, "1111");
             set(ID_PIN_NEW, "5678");
             set(ID_PIN_REPEAT, "5678");
             SendMessageW(dlg, WM_COMMAND, IDOK as usize, 0);
             assert_eq!(text(ID_PIN_MESSAGE), tr!(LockWrong));
+            assert_eq!(rect(message).bottom - rect(message).top, line);
+            assert_eq!(rect(GetDlgItem(dlg, IDOK)).top, ok_top);
+            assert_eq!(rect(dlg).bottom - rect(dlg).top, dlg_height);
             assert!(text(ID_PIN_CURRENT).is_empty(), "the wrong PIN goes");
             assert_eq!(text(ID_PIN_NEW), "5678", "the new one stays");
             set(ID_PIN_CURRENT, "1234");
@@ -831,7 +892,7 @@ mod tests {
             assert!(state_done(dlg));
             DestroyWindow(dlg);
         }
-        assert_eq!(*seen.borrow(), ["1111|5678|5678", "1234|5678|567", "1234|5678|5678"]);
+        assert_eq!(*seen.borrow(), ["0000||", "1111|5678|5678", "1234|5678|567", "1234|5678|5678"]);
         assert!(pin_prompt().is_null(), "only the unlock prompt is the prompt");
     }
 

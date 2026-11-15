@@ -307,6 +307,16 @@ helps! {
     /// engine: docs/DISKIO.md (part 4, implementation status), crates/core/src/engine/disk_limit.rs
     PrefDiskSlowUploads = "While a drive answers reads clearly slower than usual, halves the upload rate step by step, never below 50 kB/s, and lets it grow again once the disk is quiet. Seeding then uploads less.";
 
+    // ---- Preferences > UI Lock (D71)
+    /// frontend ui_lock::set_enabled (off removes the PIN), Form::Off asks the PIN; win32 app.rs update_menu (File > Lock), tray_items
+    PrefLockEnable = "Offers File > Lock Rookparcel, its shortcut and the tray's Lock. Unticking asks for the PIN, removes it and takes the Lock command away until the box is ticked again. Changes at once, without OK.";
+    /// frontend ui_lock::State::allows, Form::Set -> submit (set_pin)
+    PrefLockSetPin = "Asks for a new lock PIN of 4 to 6 digits, twice. Only while no PIN is set; saved at once.";
+    /// frontend ui_lock::Form::Change -> submit (Guard::check, set_pin)
+    PrefLockChangePin = "Asks for the current lock PIN, then a new one twice. Saved at once.";
+    /// frontend ui_lock::Form::Remove -> submit (remove)
+    PrefLockRemovePin = "Asks for the current lock PIN, then removes it. Lock Rookparcel then asks for a new PIN before it locks.";
+
     // ---- Options > Setup Guide (D53)
     /// frontend setup_guide.rs (router_choice: OLDER_CONNECTIONS, OLDER_PER_TORRENT, OLDER_CONNECTION_SPEED; Settings connections_limit, connection_speed; GuiOptions max_peers_per_torrent)
     GuideRouter = "The older choice lowers the connections to 100 in all, 40 per new torrent and 8 new connection attempts a second, so a small router keeps up. The modern choice keeps the defaults: 200, no limit per torrent and 30 a second.";
@@ -630,16 +640,8 @@ helps! {
     MenuDonate = "Says how to support Rookparcel and offers to open its donation page in your web browser.";
     /// win32 app.rs cmd::STATISTICS -> statistics::show; frontend statistics::rows
     MenuStatistics = "Shows how much Rookparcel uploaded and downloaded in all its sessions and in this one, the share ratio, the data thrown away, and the disk queue and read cache. The all-time totals stay when torrents are removed.";
-    /// win32 app.rs cmd::LOCK -> lock_command (lock::hide_windows; no PIN: pin_dialog(Form::Set) first); frontend ui_lock
-    MenuLock = "Hides every Rookparcel window in the tray; showing them again asks for the lock PIN. The torrents keep running. Without a PIN, asks for one first.";
-    /// win32 app.rs main_menu: the submenu of cmd::SET_PIN, CHANGE_PIN, REMOVE_PIN
-    MenuLockPin = "Sets, changes or removes the PIN of 4 to 6 digits that Lock Rookparcel asks for.";
-    /// win32 app.rs cmd::SET_PIN -> pin_dialog(Form::Set); frontend ui_lock::submit
-    MenuSetPin = "Asks for a new lock PIN of 4 to 6 digits, twice.";
-    /// win32 app.rs cmd::CHANGE_PIN -> pin_dialog(Form::Change); frontend ui_lock::submit
-    MenuChangePin = "Asks for the current lock PIN, then a new one twice.";
-    /// win32 app.rs cmd::REMOVE_PIN -> pin_dialog(Form::Remove); frontend ui_lock::submit (remove)
-    MenuRemovePin = "Asks for the current lock PIN, then removes it: Rookparcel can no longer be locked until a new PIN is set.";
+    /// win32 app.rs cmd::LOCK -> lock_command (lock::hide_windows; no PIN: pin_dialog(Form::Set) first; gone while ui_lock::enabled is false); frontend ui_lock
+    MenuLock = "Hides every Rookparcel window in the tray; showing them again asks for the lock PIN. The torrents keep running. Without a PIN, asks for one first. Preferences > Advanced > UI Lock changes the PIN or turns the lock off.";
 
     // ---- Menu: torrent list
     /// win32 app.rs cmd::OPEN_FOLDER -> torrent_action -> open_folder_target, show_in_explorer (also the Files tab's FILE_OPEN_FOLDER -> open_file)

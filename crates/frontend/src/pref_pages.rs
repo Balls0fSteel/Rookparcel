@@ -92,6 +92,24 @@ pub enum Action {
     /// Fetches the tracker list at the `trackers.url` address now
     /// ([`crate::tracker_list::TrackerList::refresh_now`], after applying the page).
     UpdateTrackerList,
+    /// Advanced > UI Lock (D71): the PIN dialog for Set, Change or Remove PIN ([`Action::pin_form`]),
+    /// saved at once, never on OK. Greyed unless [`crate::ui_lock::State::allows`] its form.
+    SetPin,
+    ChangePin,
+    RemovePin,
+}
+
+impl Action {
+    /// The PIN dialog a UI Lock button opens.
+    pub fn pin_form(self) -> Option<crate::ui_lock::Form> {
+        use crate::ui_lock::Form;
+        match self {
+            Action::SetPin => Some(Form::Set),
+            Action::ChangePin => Some(Form::Change),
+            Action::RemovePin => Some(Form::Remove),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -111,6 +129,12 @@ pub enum Item {
     /// The fetched tracker list's status line, filled by the toolkit with
     /// [`crate::tracker_list::TrackerList::status`].
     TrackerListStatus,
+    /// Advanced > UI Lock's check box (D71, label `PrefLockEnable`): ticked while
+    /// [`crate::ui_lock::enabled`]. Not an [`Options`] value: it acts at once. Unticked with a
+    /// PIN, it asks for it ([`crate::ui_lock::Form::Off`]) and is ticked again on Cancel.
+    LockSwitch,
+    /// Advanced > UI Lock's status line, [`crate::ui_lock::State::text`], filled by the toolkit.
+    LockStatus,
     /// The Advanced page's table of every engine setting ([`advanced_rows`]).
     AdvancedTable,
     /// The Scheduler page's 7 × 24 table (`Options::gui.schedule.table`), which the toolkit
@@ -1306,6 +1330,21 @@ pub fn pages(features: Features) -> Vec<Page> {
                 Note(|| crate::tr!(PrefRunSafetyNote).to_owned()),
             ],
         },
+        // the windows' lock (D69) managed here (D71): nothing on this page waits for OK
+        Page {
+            key: "ui_lock",
+            title: S::PageUiLock,
+            parent: Some("advanced"),
+            items: vec![
+                Group(S::PrefLockGroup),
+                Item::LockSwitch,
+                Item::Button { action: Action::SetPin, label: S::PrefLockSetPin },
+                Item::Button { action: Action::ChangePin, label: S::PrefLockChangePin },
+                Item::Button { action: Action::RemovePin, label: S::PrefLockRemovePin },
+                Item::LockStatus,
+                Note(|| crate::tr!(PrefLockNote).to_owned()),
+            ],
+        },
     ]
 }
 
@@ -1324,6 +1363,7 @@ pub fn item_help(item: &Item) -> Option<H> {
         Item::Field(f) => f.help_key(),
         Item::Button { label, .. } => H::for_label(*label),
         Item::SchedTable => Some(H::PrefSchedTable),
+        Item::LockSwitch => Some(H::PrefLockEnable),
         _ => None,
     }
 }
@@ -1500,8 +1540,18 @@ mod tests {
         let order: Vec<&str> = without.iter().map(|p| p.key).collect();
         assert_eq!(
             order[6..],
-            ["queueing", "scheduler", "advanced", "disk_cache", "disk_io", "trackers", "run_program"]
+            [
+                "queueing",
+                "scheduler",
+                "advanced",
+                "disk_cache",
+                "disk_io",
+                "trackers",
+                "run_program",
+                "ui_lock"
+            ]
         );
+        assert_eq!(without.iter().find(|p| p.key == "ui_lock").unwrap().parent, Some("advanced"));
         assert_eq!(without.iter().find(|p| p.key == "trackers").unwrap().parent, Some("advanced"));
         assert_eq!(page_of(&without, "check_gently").map(|p| p.key), Some("disk_io"));
         assert_eq!(without.iter().find(|p| p.key == "disk_io").unwrap().parent, Some("advanced"));
