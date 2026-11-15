@@ -274,7 +274,11 @@ pub fn current() -> &'static Profile {
 /// rules name it). True when it did.
 pub fn first_run_settings(prefs: &mut crate::prefs::Prefs, s: &mut rookparcel_core::Settings) -> bool {
     let p = current();
-    if (p.is_default() && p.portable_root.is_none()) || prefs.entries().next().is_some() {
+    // a file that could not be read is no first start (D70)
+    if (p.is_default() && p.portable_root.is_none())
+        || prefs.entries().next().is_some()
+        || prefs.problem().is_some()
+    {
         return false;
     }
     crate::settings::set_listen_port(s, crate::options::random_port());

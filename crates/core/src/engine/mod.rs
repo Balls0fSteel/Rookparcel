@@ -470,6 +470,8 @@ pub(crate) struct Start {
     pub state_dir: Option<PathBuf>,
     pub label: Option<String>,
     pub portable_root: Option<PathBuf>,
+    /// `SessionParams::hold_transfers` (D70).
+    pub hold_transfers: bool,
 }
 
 /// The network thread's entry point.
@@ -484,6 +486,10 @@ pub(crate) fn run(
     let mut e = Engine::new(poll, waker, rx, shared, settings);
     e.label = start.label;
     e.portable_root = start.portable_root;
+    if start.hold_transfers {
+        // before the first listen sockets and the restored torrents
+        e.set_held(true);
+    }
     e.start(start.state_dir);
     e.flush_alerts();
     let mut events = Events::with_capacity(1024);
@@ -1757,6 +1763,7 @@ impl Engine {
             Command::SetExtraTrackers(tiers) => self.extra_trackers = tiers,
             Command::PeerClass(c) => self.peer_class_command(c),
             Command::ReopenNetworkSockets => self.on_ip_change(Instant::now(), true),
+            Command::HoldTransfers(held) => self.hold_transfers(held),
             #[cfg(test)]
             Command::SetFakeNetwork(net) => {
                 self.network.fake = net;

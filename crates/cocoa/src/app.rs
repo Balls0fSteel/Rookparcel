@@ -228,10 +228,12 @@ fn start(mtm: MainThreadMarker, args: Args) {
 /// server's (slice J).
 fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connected>) {
     let remote_window = remote.is_some();
-    let (dirs, prefs, opts, remote, session) = match remote {
+    let (dirs, prefs, opts, remote, session, check) = match remote {
         Some(c) => {
             let (dirs, prefs, opts) = crate::remote::prepare(&c);
-            (dirs, prefs, opts, Some(fapp::Remote { label: c.label }), Some(c.session))
+            // the server checks its own settings (D70)
+            let check = rookparcel_frontend::guard::StartCheck::default();
+            (dirs, prefs, opts, Some(fapp::Remote { label: c.label }), Some(c.session), check)
         }
         None => {
             let dirs = paths::dirs();
@@ -246,13 +248,16 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
                 }
             }
             let mut prefs = Prefs::load(dirs.config.join("rookparcel.ini"));
+            // D70: what the file says before anything is written to it; an unreadable file or
+            // proxy type starts the engine with the transfers held
+            let check = rookparcel_frontend::guard::on_start(&prefs);
             let (opts, guide_first) = fapp::prepare_options(&mut prefs, &paths::downloads(), false);
             // slice J: the Setup Guide before a first start (D53; not for a demo), then this
             // again, which finds the file no longer empty
             if guide_first && args.demo.is_none() {
                 return crate::setup_guide::first_start(opts, prefs, move || open(mtm, args, None));
             }
-            (dirs, prefs, opts, None, None)
+            (dirs, prefs, opts, None, None, check)
         }
     };
     // D69: Option held at the start or `--reset-lock` asks to remove the lock's PIN, before the
@@ -278,6 +283,7 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
                 state_dir: Some(dirs.data.clone()),
                 label: p.engine_label(),
                 portable_root: p.portable_root.clone(),
+                hold_transfers: check.hold,
             }) {
                 Ok(s) => s,
                 Err(e) => return give_up(tr!(CannotStartEngine), &e.to_string(), mtm),
@@ -312,6 +318,9 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
     });
     if pin_removed {
         log_line(tr!(LogLockPinRemoved));
+    }
+    for line in &check.log {
+        log_line(line);
     }
 
     let list = crate::list::build(&columns, sort, alternate_rows, mtm);

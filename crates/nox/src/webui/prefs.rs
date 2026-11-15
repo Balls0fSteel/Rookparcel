@@ -1880,6 +1880,12 @@ fn commit_read(
     let changed: Vec<&'static str> =
         TABLE.iter().filter(|e| e.get(&w.settings) != e.get(&old.settings)).map(|e| e.name).collect();
     store(st, &changed);
+    // the user confirmed the settings as shown (D70): the lines this build cannot read go and a
+    // held start goes on (hosted, the host's own Preferences path does both)
+    if !st.hosted {
+        rookparcel_frontend::guard::confirm(&mut st.options);
+        shared.handle.hold_transfers(false);
+    }
     shared.save(st);
     // the trackers added to new downloads (D66) follow at once: the engine has the new list
     // before the next torrent is added, and a new address is fetched (hosted: the host's list)
@@ -1911,24 +1917,31 @@ pub(crate) fn commit_settings(shared: &Shared, st: &mut State, new: &Settings) -
     commit(shared, st, &changes, None)
 }
 
-/// Writes the preferences into `State::options` (the frontend's keys): the engine settings as
-/// `lt.<name>` with the normal rate limits (the ones that differ from the defaults, as the
-/// Win32 client stores them, plus every row `changed` here or stored before, so a value set
-/// back to its default still wins over the command line at the next start), the `GuiOptions`
-/// keys (without the desktop-only tray ones), and the Web UI's own as `webui.<name>`.
+/// Writes the preferences into `State::options` (the frontend's keys): the engine settings
+/// under their keys (`settings::pref_key`: `lt.<name>`, Rookparcel's own `net.` rows by their
+/// names) with the normal rate limits (the ones that differ from the defaults, as the Win32
+/// client stores them, plus every row `changed` here or stored before, so a value set back to
+/// its default still wins over the command line at the next start), the `GuiOptions` keys
+/// (without the desktop-only tray ones), and the Web UI's own as `webui.<name>`. The old
+/// `lt.net.*` keys ([`migrate_keys`]) are dropped.
 fn store(st: &mut State, changed: &[&'static str]) {
     let mut normal = st.settings.clone();
     normal.download_rate_limit = st.prefs.dl_limit;
     normal.upload_rate_limit = st.prefs.up_limit;
-    let kept: Vec<String> = st
-        .options
-        .entries()
-        .filter_map(|(k, _)| k.strip_prefix(settings::PREF_PREFIX).map(str::to_owned))
+    let kept: Vec<&'static str> = TABLE
+        .iter()
+        .filter(|e| !e.name.starts_with("bt.") && st.options.get(&settings::pref_key(e.name)).is_some())
+        .map(|e| e.name)
         .collect();
     settings::store(&mut st.options, &normal);
-    for name in kept.iter().map(String::as_str).chain(changed.iter().copied()) {
+    for name in kept.iter().chain(changed) {
         if let Some(e) = settings::find(name).filter(|e| !e.name.starts_with("bt.")) {
-            st.options.set(&format!("{}{}", settings::PREF_PREFIX, e.name), e.get(&normal));
+            st.options.set(&settings::pref_key(e.name), e.get(&normal));
+        }
+    }
+    for old in TABLE.iter().filter_map(|e| legacy_key(e.name)) {
+        if st.options.get(&old).is_some() {
+            st.options.remove(&old);
         }
     }
     if st.hosted {
@@ -1966,7 +1979,7 @@ fn store(st: &mut State, changed: &[&'static str]) {
 }
 
 /// Reads the stored preferences (`State::options`) back into `st.settings` and `st.prefs`,
-/// applying nothing: the engine settings from the `lt.*` keys, the `GuiOptions` keys and the
+/// applying nothing: the engine settings from their keys, the `GuiOptions` keys and the
 /// Web UI's `webui.*` numbers. nox lays them over the current values (the command line's), so
 /// a value never stored keeps the command line's; hosted, they are the host's whole
 /// configuration, over the defaults (a key the host removed is back at its default). Returns
@@ -1980,7 +1993,7 @@ pub(crate) fn read_back(st: &mut State) -> bool {
     } else {
         let o = &st.options;
         for e in TABLE.iter().filter(|e| !e.name.starts_with("bt.")) {
-            if let Some(v) = o.get(&format!("{}{}", settings::PREF_PREFIX, e.name)) {
+            if let Some(v) = o.get(&settings::pref_key(e.name)) {
                 changed |= e.set(&mut st.settings, v).is_ok();
             }
         }
@@ -2026,10 +2039,6 @@ pub(crate) fn read_back(st: &mut State) -> bool {
     changed
 }
 
-/// At start (nox): [`read_back`], then re-applies the stored preferences onto the settings the
-/// daemon was started with (so a stored value wins over the command line, a value never stored
-/// keeps the command line's), picks a random listen port when asked, and loads the IP filter
-/// unless the daemon loaded that same file already (`loaded_ip_filter`).
 /// The engine settings a state file's `options` hold (what the Web UI's Preferences changed),
 /// put over `s`: the same entries [`read_back`] takes, read before the engine starts, so a
 /// stored "off" (UPnP, NAT-PMP, DHT, LSD, a listen port) holds from its first moment instead of
@@ -2038,13 +2047,43 @@ pub(crate) fn stored_engine_settings(stored: &Json, s: &mut Settings) {
     let Some(o) = stored.get("options") else {
         return;
     };
+    let get = |key: &str| o.get(key).and_then(Json::as_str);
     for e in TABLE.iter().filter(|e| !e.name.starts_with("bt.")) {
-        if let Some(v) = o.get(&format!("{}{}", settings::PREF_PREFIX, e.name)).and_then(Json::as_str) {
+        // the old key when the row's own is not there ([`migrate_keys`])
+        let v = get(&settings::pref_key(e.name)).or_else(|| legacy_key(e.name).and_then(|k| get(&k)));
+        if let Some(v) = v {
             let _ = e.set(s, v);
         }
     }
 }
 
+/// The key nox up to 1.2.54 stored a row under when it is not the row's own: `lt.<name>` for
+/// Rookparcel's own `net.` rows (the network rule, D54), which `settings::pref_key` keeps by
+/// their names.
+fn legacy_key(name: &str) -> Option<String> {
+    let old = format!("{}{name}", settings::PREF_PREFIX);
+    (!name.starts_with("bt.") && old != settings::pref_key(name)).then_some(old)
+}
+
+/// At start (nox): a row stored under its old key ([`legacy_key`]) and not under its own is
+/// taken under its own; [`store`] drops the old keys.
+pub(crate) fn migrate_keys(o: &mut rookparcel_frontend::prefs::Prefs) {
+    for e in TABLE {
+        let Some(old) = legacy_key(e.name) else { continue };
+        let key = settings::pref_key(e.name);
+        if o.get(&key).is_some() {
+            continue;
+        }
+        if let Some(v) = o.get(&old).map(str::to_owned) {
+            o.set(&key, v);
+        }
+    }
+}
+
+/// At start (nox): [`read_back`], then re-applies the stored preferences onto the settings the
+/// daemon was started with (so a stored value wins over the command line, a value never stored
+/// keeps the command line's), picks a random listen port when asked, and loads the IP filter
+/// unless the daemon loaded that same file already (`loaded_ip_filter`).
 pub(crate) fn restore(shared: &Shared, st: &mut State, loaded_ip_filter: Option<&Path>) {
     let mut changed = read_back(st);
     if st.prefs.random_port {
@@ -2091,6 +2130,76 @@ mod tests {
         let mut d = Settings::default();
         stored_engine_settings(&Json::obj(), &mut d);
         assert!(d.enable_upnp && d.enable_dht);
+    }
+
+    /// D70: a stored proxy type this build cannot read (a newer build's) asks for the engine to
+    /// start held, and says why; a readable one does not.
+    #[test]
+    fn an_unreadable_stored_proxy_type_holds_the_start() {
+        let dir = std::env::temp_dir().join(format!("nox-hold-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let check = |options: &str| {
+            std::fs::write(dir.join(super::super::STATE_FILE), format!(r#"{{"options":{options}}}"#)).unwrap();
+            let mut s = Settings::default();
+            let c = super::super::stored_settings(&dir, &mut s).unwrap();
+            (c, s.proxy_type)
+        };
+        let (c, proxy) = check(r#"{"lt.proxy_type":"6","lt.proxy_hostname":"10.8.0.1"}"#);
+        assert!(c.hold, "{c:?}");
+        assert_eq!(proxy, rookparcel_core::ProxyType::None);
+        assert!(c.log.iter().any(|l| l.contains("lt.proxy_type=6")), "{c:?}");
+        let (c, proxy) = check(r#"{"lt.proxy_type":"2","lt.proxy_hostname":"10.8.0.1"}"#);
+        assert!(!c.hold && c.log.is_empty(), "{c:?}");
+        assert_eq!(proxy, rookparcel_core::ProxyType::Socks5);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// The network rule's rows (D54) by their own keys, as `settings::store` writes them; the
+    /// `lt.net.*` keys of nox up to 1.2.54 when the own ones are not there.
+    #[test]
+    fn the_network_rule_is_read_by_its_own_key_and_the_old_one() {
+        let read = |options: &str| {
+            let stored = super::super::json::parse(&format!(r#"{{"options":{options}}}"#)).unwrap();
+            let mut s = Settings::default();
+            stored_engine_settings(&stored, &mut s);
+            (s.network_rule, s.network_pause_when_missing)
+        };
+        let own = r#"{"net.network_rule":"vpn","net.pause_when_missing":"false"}"#;
+        assert_eq!(read(own), ("vpn".to_owned(), false));
+        let old = r#"{"lt.net.network_rule":"vpn","lt.net.pause_when_missing":"false"}"#;
+        assert_eq!(read(old), ("vpn".to_owned(), false));
+        let both = r#"{"net.network_rule":"range:10.0.0.0/8","lt.net.network_rule":"vpn"}"#;
+        assert_eq!(read(both), ("range:10.0.0.0/8".to_owned(), true), "the own key wins");
+        assert_eq!(legacy_key("enable_dht"), None);
+        assert_eq!(legacy_key("bt.max_peers"), None);
+        assert_eq!(legacy_key(settings::NETWORK_RULE).as_deref(), Some("lt.net.network_rule"));
+    }
+
+    /// The old keys are taken at start and dropped at the next store; the rows are then stored
+    /// under their own keys only.
+    #[test]
+    fn old_network_keys_are_migrated_and_dropped() {
+        let mut st = state();
+        st.options.set("lt.net.network_rule", "vpn");
+        st.options.set("lt.net.pause_when_missing", "false");
+        st.options.set("net.pause_when_missing", "true");
+        migrate_keys(&mut st.options);
+        assert_eq!(st.options.get("net.network_rule"), Some("vpn"));
+        assert_eq!(st.options.get("net.pause_when_missing"), Some("true"), "the own key is kept");
+        read_back(&mut st);
+        assert_eq!(st.settings.network_rule, "vpn");
+        assert!(st.settings.network_pause_when_missing);
+        store(&mut st, &[]);
+        assert_eq!(st.options.get("net.network_rule"), Some("vpn"));
+        assert_eq!(st.options.get("net.pause_when_missing"), Some("true"), "stored before, so kept");
+        assert_eq!(st.options.get("lt.net.network_rule"), None);
+        assert_eq!(st.options.get("lt.net.pause_when_missing"), None);
+        // a rule changed to off is stored as off under its own key
+        st.settings.network_rule.clear();
+        store(&mut st, &[settings::NETWORK_RULE]);
+        assert_eq!(st.options.get("net.network_rule"), Some(""));
+        assert!(st.options.entries().all(|(k, _)| !k.starts_with("lt.net.")));
     }
 
     fn state() -> State {

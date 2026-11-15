@@ -16,8 +16,8 @@ use crate::params::{
 use crate::session::SessionParams;
 use crate::settings::{EncLevel, EncPolicy, ProxyType};
 use crate::status::{
-    AnnounceEntry, BlockState, FileEntry, PartialPiece, PeerFlags, PeerInfo, PeerSource, TorrentState,
-    TrackerStatus,
+    AnnounceEntry, BlockState, FileEntry, NetworkStatus, PartialPiece, PeerFlags, PeerInfo, PeerSource,
+    TorrentState, TrackerStatus,
 };
 use crate::types::{InfoHashes, Sha1Hash, Sha256Hash, TorrentId};
 use crate::util::bitfield::Bitfield;
@@ -173,6 +173,7 @@ fn every_alert() -> Vec<Alert> {
             wasted_bytes: 16_384,
             ..Default::default()
         }),
+        Alert::SessionStats(SessionStats { network: NetworkStatus::Held, ..Default::default() }),
         Alert::ResumeDataSaved,
         Alert::PeerInfo {
             id,
@@ -338,6 +339,8 @@ fn commands_round_trip() {
         Command::PauseSession,
         Command::ResumeSession,
         Command::ReopenNetworkSockets,
+        Command::HoldTransfers(true),
+        Command::HoldTransfers(false),
     ];
     for c in commands {
         let mut e = wire::Enc::default();

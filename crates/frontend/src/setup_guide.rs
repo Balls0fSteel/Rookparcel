@@ -47,9 +47,9 @@ pub const SEEN_KEY: &str = "ui.setup_guide_seen";
 
 /// Whether the guide opens at this start: the profile's settings file has no keys yet (the
 /// default profile included). Ask before [`crate::profile::first_run_settings`], which writes
-/// the first keys.
+/// the first keys. A file that is there but could not be read is no first start (D70).
 pub fn should_show(prefs: &Prefs) -> bool {
-    prefs.entries().next().is_none()
+    prefs.entries().next().is_none() && prefs.problem().is_none()
 }
 
 /// Marks the guide as seen in `prefs` (see [`SEEN_KEY`]); the caller saves the file.
@@ -458,5 +458,11 @@ mod tests {
         let mut prefs = Prefs::default();
         prefs.set("net.port", 6881);
         assert!(!should_show(&prefs));
+        // a settings file that is there but cannot be read is no first start (D70)
+        let dir = std::env::temp_dir().join(format!("rp-guide-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("rookparcel.ini")).unwrap();
+        assert!(!should_show(&Prefs::load(dir.join("rookparcel.ini"))));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

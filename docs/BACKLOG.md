@@ -1200,6 +1200,15 @@ Found and left:
 - **Fixed in 1.2.54:** Set PIN no longer replaces an existing PIN (`ui_lock::submit`, and
   `on_command` checks the menu state for a posted command, as the Mac did).
 
+## Settings guard (D70; 2026-11-15, 1.2.55-)
+
+Layer 1 (1.2.55): the loss paths closed and the engine hold. Open:
+
+- **By hand:** the status bar's "Transfers held: confirm the settings" in the Win32, GTK and macOS GUIs, and the Logger's lines. Try a `rookparcel.ini` with `lt.proxy_type=9` in a scratch profile (`--profile`), never on the real HKCU registrations. Preferences' OK lifts the hold.
+- A remote GUI's OK with nothing changed sends `hold_transfers(false)` to nox's engine but does not reach nox's own confirmation: the hold is gone for that run, and the unreadable line stays in `webui.json` until a change is committed. A `Request::HoldTransfers` in the remote server could route it to `prefs::commit`.
+- A GUI-hosted Web UI (D40) confirms through the host's Preferences path, which already lifts the hold when the host applies the Web UI's changes.
+- The auto-rate-limit's ping probes (D49) are not torrent traffic, so the hold does not stop them, just as the network rule does not bind them.
+
 ## Validation and development environment
 
 - The remaining 100k measurements are a low-end 2-core/4 GB/HDD machine on

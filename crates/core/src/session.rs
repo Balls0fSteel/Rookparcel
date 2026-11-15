@@ -74,6 +74,8 @@ pub(crate) enum Command {
     ResumeSession,
     /// libtorrent `reopen_network_sockets`.
     ReopenNetworkSockets,
+    /// [`SessionHandle::hold_transfers`] (D70).
+    HoldTransfers(bool),
     /// Tests: the engine sees these interfaces and routes instead of the OS's (`None`: the
     /// OS's again) and reacts as to a network change.
     #[cfg(test)]
@@ -118,6 +120,9 @@ pub struct SessionParams {
     /// The portable folder this session runs in (D42): `resume.db` keeps the save paths inside
     /// it relative to it, so the folder can move (`util::portable`).
     pub portable_root: Option<std::path::PathBuf>,
+    /// Start with the transfers held ([`SessionHandle::hold_transfers`], D70): set before any
+    /// torrent is restored or a socket opens.
+    pub hold_transfers: bool,
 }
 
 /// Owns the engine thread. Dropping it shuts the engine down and waits for it, like
@@ -138,6 +143,7 @@ impl Session {
             state_dir: params.state_dir,
             label: params.label,
             portable_root: params.portable_root,
+            hold_transfers: params.hold_transfers,
         };
         Ok(Session::spawn(
             params.settings,
@@ -415,6 +421,15 @@ impl SessionHandle {
 
     pub fn resume(&self) {
         self.send(Command::ResumeSession);
+    }
+
+    /// Holds every torrent and binds torrent traffic to nothing while `held` (D70): a setting
+    /// the frontend cannot trust (an unreadable proxy, settings read differently from how the
+    /// previous version saved them) waits for the user's confirmation. Never stored; the
+    /// frontend sets it again at each start. Independent of [`SessionHandle::pause`], which
+    /// the scheduler lifts.
+    pub fn hold_transfers(&self, held: bool) {
+        self.send(Command::HoldTransfers(held));
     }
 
     /// See [`AlertQueue::set_notify`].

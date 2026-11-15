@@ -119,10 +119,15 @@ pub fn rule_choices(rule: &str) -> Vec<(String, String)> {
     out
 }
 
-/// "Waiting for the network" while the rule finds no adapter, for the status bar's network part
-/// (before the rest of its text).
+/// "Waiting for the network" while the rule finds no adapter, or "Transfers held" (D70), for the
+/// status bar's network part (before the rest of its text).
 pub fn status_text(s: &SessionStats) -> Option<String> {
-    matches!(s.network, NetworkStatus::Waiting | NetworkStatus::Missing).then(|| tr!(NetWaiting).to_owned())
+    match s.network {
+        NetworkStatus::Waiting | NetworkStatus::Missing => Some(tr!(NetWaiting).to_owned()),
+        // the transfers wait for the user's confirmation of the settings (D70)
+        NetworkStatus::Held => Some(tr!(NetHeld).to_owned()),
+        NetworkStatus::Any | NetworkStatus::Bound => None,
+    }
 }
 
 /// The status bar's network part: the waiting notice before `rest` while the network is

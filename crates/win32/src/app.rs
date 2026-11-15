@@ -781,6 +781,9 @@ pub fn run(args: Args) -> i32 {
         l => l.and_then(Result::ok).flatten(),
     };
     let mut prefs = Prefs::load(dir.join("rookparcel.ini"));
+    // D70: what the file says before anything is written to it; an unreadable file or proxy
+    // type starts the engine with the transfers held
+    let check = if local { rookparcel_frontend::guard::on_start(&prefs) } else { Default::default() };
     if let Some(r) = crate::remote_ui::get() {
         // the server's engine settings and default folder are this window's
         let _ = std::fs::create_dir_all(&dir);
@@ -866,6 +869,7 @@ pub fn run(args: Args) -> i32 {
                 state_dir: Some(dir.join("state")),
                 label: rookparcel_frontend::profile::current().engine_label(),
                 portable_root: rookparcel_frontend::profile::current().portable_root.clone(),
+                hold_transfers: check.hold,
             }) {
                 Ok(s) => s,
                 Err(e) => {
@@ -932,6 +936,9 @@ pub fn run(args: Args) -> i32 {
         }
         if pin_removed {
             log_line(tr!(LogLockPinRemoved));
+        }
+        for line in &check.log {
+            log_line(line);
         }
         if let Some(r) = crate::remote_ui::get() {
             let title = wide(&tr!(TitleRemote, version = profile::version(), label = r.label));
@@ -5300,6 +5307,9 @@ fn apply_options(a: &mut App, o: &Options) {
 fn apply_options_from(a: &mut App, old: &Options, o: &Options) {
     a.listen.set_configured(settings::listen_port(&o.settings));
     o.store(&mut a.prefs);
+    // the user confirmed the settings as shown: a held start goes on (D70)
+    rookparcel_frontend::guard::confirm(&mut a.prefs);
+    a.handle.hold_transfers(false);
     if let Err(e) = a.prefs.save() {
         a.detail.push_log(format!("{} {}", now_hms(), tr!(LogPrefsNotSaved, error = e)));
     }

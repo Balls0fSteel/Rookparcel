@@ -455,6 +455,9 @@ impl Core {
         let old = self.options();
         self.listen.set_configured(crate::settings::listen_port(&o.settings));
         o.store(&mut self.prefs);
+        // the user confirmed the settings as shown: a held start goes on (D70)
+        crate::guard::confirm(&mut self.prefs);
+        self.handle.hold_transfers(false);
         self.save_prefs();
         if self.is_remote() && o.gui.language != old.gui.language {
             // one language for every window: it lives in the local client's settings

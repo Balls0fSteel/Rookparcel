@@ -449,7 +449,7 @@ pub const NETWORK_PAUSE: &str = "net.pause_when_missing";
 
 /// The preferences key of a row: `lt.<name>` for libtorrent's names, the name itself for
 /// Rookparcel's own `net.` rows.
-fn pref_key(name: &str) -> String {
+pub fn pref_key(name: &str) -> String {
     if name.contains('.') { name.to_owned() } else { format!("{PREF_PREFIX}{name}") }
 }
 
@@ -469,7 +469,8 @@ pub fn set(s: &mut Settings, name: &str, text: &str) -> Result<(), String> {
 pub const PREF_PREFIX: &str = "lt.";
 
 /// The engine settings from the preferences: defaults, then the older `net.port` key, then every
-/// `lt.<name>` line. Unknown or malformed lines are skipped (and kept in the file).
+/// `lt.<name>` line. Unknown or malformed lines are skipped (and kept in the file, [`store`];
+/// [`unreadable`] names the malformed ones).
 pub fn load(prefs: &Prefs) -> Settings {
     let mut s = Settings::default();
     if let Some(port) = prefs.get_i32("net.port").filter(|p| (1..65536).contains(p)) {
@@ -484,16 +485,43 @@ pub fn load(prefs: &Prefs) -> Settings {
 }
 
 /// Writes the settings that differ from the defaults and removes the rest (and `net.port`,
-/// which `lt.listen_interfaces` replaces).
+/// which `lt.listen_interfaces` replaces). A line this build cannot read stays while its
+/// setting is at the default (D70): it may be a newer build's value, and only the user's
+/// confirmation ([`forget_unreadable`]) drops it.
 pub fn store(prefs: &mut Prefs, s: &Settings) {
     prefs.remove("net.port");
     for e in TABLE.iter().filter(|e| !e.name.starts_with(COMPOSED)) {
         let key = pref_key(e.name);
         if e.is_default(s) {
+            if prefs.get(&key).is_some_and(|v| e.parse(v).is_err()) {
+                continue;
+            }
             prefs.remove(&key);
         } else {
             prefs.set(&key, e.get(s));
         }
+    }
+}
+
+/// The rows whose line in the preferences this build cannot read (D70), with that line's
+/// text: a value a newer build wrote, or a hand edit. [`load`] leaves them at their defaults
+/// and [`store`] keeps their lines.
+pub fn unreadable(prefs: &Prefs) -> Vec<(&'static Entry, String)> {
+    TABLE
+        .iter()
+        .filter(|e| !e.name.starts_with(COMPOSED))
+        .filter_map(|e| {
+            let v = prefs.get(&pref_key(e.name))?;
+            e.parse(v).is_err().then(|| (e, v.to_owned()))
+        })
+        .collect()
+}
+
+/// The user confirmed the settings as this build reads them (D70): the lines it cannot read
+/// go, so the defaults it shows are what is kept.
+pub fn forget_unreadable(prefs: &mut Prefs) {
+    for (e, _) in unreadable(prefs) {
+        prefs.remove(&pref_key(e.name));
     }
 }
 
@@ -770,6 +798,34 @@ mod tests {
         again.set("lt.bogus", "1");
         assert_eq!(load(&again), Settings::default());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// D70: a value this build cannot read (a newer build's proxy type) is not erased by the
+    /// next store; a value the user sets replaces it, and the user's confirmation drops it.
+    #[test]
+    fn unreadable_lines_stay_until_the_user_confirms() {
+        let mut prefs =
+            Prefs::from_text("lt.proxy_type=6\nlt.proxy_hostname=10.0.0.1\nlt.connections_limit=lots\n");
+        let s = load(&prefs);
+        assert_eq!(s.proxy_type, ProxyType::None);
+        assert_eq!(s.proxy_hostname, "10.0.0.1");
+        let names: Vec<(&str, String)> = unreadable(&prefs).into_iter().map(|(e, v)| (e.name, v)).collect();
+        assert_eq!(names, [("connections_limit", "lots".to_owned()), ("proxy_type", "6".to_owned())]);
+
+        store(&mut prefs, &s);
+        assert_eq!(prefs.get("lt.proxy_type"), Some("6"), "kept for the build that wrote it");
+        assert_eq!(prefs.get("lt.connections_limit"), Some("lots"));
+        assert_eq!(prefs.get("lt.proxy_hostname"), Some("10.0.0.1"));
+
+        let set = Settings { proxy_type: ProxyType::Socks5, ..s.clone() };
+        store(&mut prefs, &set);
+        assert_eq!(prefs.get("lt.proxy_type"), Some("2"), "the user's own choice replaces it");
+
+        prefs.set("lt.proxy_type", "6");
+        forget_unreadable(&mut prefs);
+        assert_eq!((prefs.get("lt.proxy_type"), prefs.get("lt.connections_limit")), (None, None));
+        assert_eq!(prefs.get("lt.proxy_hostname"), Some("10.0.0.1"));
+        assert!(unreadable(&prefs).is_empty());
     }
 
     #[test]

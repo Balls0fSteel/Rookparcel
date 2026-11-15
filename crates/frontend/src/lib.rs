@@ -51,6 +51,7 @@ pub mod columns;
 pub mod create;
 pub mod detail;
 pub mod fmt;
+pub mod guard;
 pub mod help;
 pub mod icons;
 pub mod import;

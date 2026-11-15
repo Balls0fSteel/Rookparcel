@@ -423,6 +423,30 @@ fn apply_proxy(s: &mut Settings, o: &Opts) {
     }
 }
 
+/// The start's line for the proxy in force: the settings' own, after the Web UI's stored
+/// preferences were laid over the command line (they win over `--proxy`). Nothing when no proxy
+/// is set and none was given.
+fn proxy_line(s: &Settings, given: Option<&Proxy>) -> Option<String> {
+    if s.proxy_type == ProxyType::None {
+        return given
+            .map(|_| "proxy: none: the Web UI's stored preferences turn it off (--proxy not used)".into());
+    }
+    let scope = |on: bool, what: &str| if on { String::new() } else { format!(", {what} direct") };
+    let stored = given.is_some_and(|p| {
+        (p.kind, p.host.as_str(), p.port) != (s.proxy_type, s.proxy_hostname.as_str(), s.proxy_port)
+    });
+    Some(format!(
+        "proxy: {:?} {}:{}{}{}{}{}",
+        s.proxy_type,
+        s.proxy_hostname,
+        s.proxy_port,
+        scope(s.proxy_peer_connections, "peers"),
+        scope(s.proxy_tracker_connections, "trackers"),
+        scope(s.proxy_hostnames, "host names resolved"),
+        if stored { " (the Web UI's stored proxy; --proxy not used)" } else { "" },
+    ))
+}
+
 /// A proxy from `--proxy`.
 #[derive(Debug, PartialEq)]
 struct Proxy {
@@ -734,21 +758,25 @@ fn run(mut o: Opts, mode: Mode) -> ExitCode {
     apply_proxy(&mut settings, &o);
     // what the Web UI's Preferences stored, before the engine starts: a stored "off" for UPnP,
     // NAT-PMP, DHT or LSD must hold from the first moment, not once the Web UI is up (the Web
-    // UI's start applies the same entries, stored over the command line's, as before)
+    // UI's start applies the same entries, stored over the command line's, as before); a
+    // damaged webui.json stops the start, so that it is not saved over
+    let mut check = rookparcel_frontend::guard::StartCheck::default();
     if let (Some(_), Some(dir)) = (o.webui, dirs.config.as_deref()) {
-        webui::stored_settings(dir, &mut settings);
+        match webui::stored_settings(dir, &mut settings) {
+            Ok(c) => check = c,
+            Err(e) => {
+                eprintln!("error: {e}");
+                return ExitCode::FAILURE;
+            }
+        }
     }
-    if let Some(p) = &o.proxy {
-        let scope = |on: bool, what: &str| if on { String::new() } else { format!(", {what} direct") };
-        println!(
-            "* proxy: {:?} {}:{}{}{}{}",
-            p.kind,
-            p.host,
-            p.port,
-            scope(settings.proxy_peer_connections, "peers"),
-            scope(settings.proxy_tracker_connections, "trackers"),
-            scope(settings.proxy_hostnames, "host names resolved"),
-        );
+    // D70: a stored proxy type this build cannot read starts the engine with the transfers
+    // held until a Preferences change in the Web UI confirms the settings
+    for line in &check.log {
+        eprintln!("warning: {line}");
+    }
+    if let Some(line) = proxy_line(&settings, o.proxy.as_ref()) {
+        println!("* {line}");
     }
     if !settings.network_rule.is_empty() {
         let pause = if settings.network_pause_when_missing { "waiting" } else { "idle" };
@@ -784,6 +812,7 @@ fn run(mut o: Opts, mode: Mode) -> ExitCode {
             state_dir: state_dir.clone(),
             label: rookparcel_frontend::profile::current().engine_label(),
             portable_root: rookparcel_frontend::profile::current().portable_root.clone(),
+            hold_transfers: check.hold,
         }) {
             Ok(s) => s,
             Err(e) => {
@@ -1600,5 +1629,42 @@ mod tests {
         assert_eq!(prefs.get("lt.socks5_udp_send_local_ep"), Some("true"));
         assert_eq!(prefs.get("lt.proxy_tracker_connections"), None);
         assert_eq!(rookparcel_frontend::settings::load(&prefs), want);
+    }
+
+    /// The start's proxy line names the proxy in force: the Web UI's stored one wins over
+    /// `--proxy`, and one stored without `--proxy` is shown too.
+    #[test]
+    fn the_proxy_line_shows_the_proxy_in_force() {
+        let o = parse(&args(&["--proxy", "socks5://proxy.example:1080", "--no-proxy-trackers"])).unwrap();
+        let mut s = Settings::default();
+        apply_proxy(&mut s, &o);
+        assert_eq!(
+            proxy_line(&s, o.proxy.as_ref()).as_deref(),
+            Some("proxy: Socks5 proxy.example:1080, trackers direct")
+        );
+        // the Web UI's stored proxy laid over it
+        let stored = Settings {
+            proxy_type: ProxyType::Http,
+            proxy_hostname: "stored.example".into(),
+            proxy_port: 3128,
+            ..s.clone()
+        };
+        assert_eq!(
+            proxy_line(&stored, o.proxy.as_ref()).as_deref(),
+            Some(
+                "proxy: Http stored.example:3128, trackers direct (the Web UI's stored proxy; --proxy not used)"
+            )
+        );
+        assert_eq!(
+            proxy_line(&stored, None).as_deref(),
+            Some("proxy: Http stored.example:3128, trackers direct")
+        );
+        // the stored preferences turn it off
+        let off = Settings { proxy_type: ProxyType::None, ..s };
+        assert_eq!(
+            proxy_line(&off, o.proxy.as_ref()).as_deref(),
+            Some("proxy: none: the Web UI's stored preferences turn it off (--proxy not used)")
+        );
+        assert_eq!(proxy_line(&Settings::default(), None), None);
     }
 }

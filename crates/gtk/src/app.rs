@@ -977,6 +977,10 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
     let data = paths::data_dir();
     let mut prefs = Prefs::load(config.join("rookparcel.ini"));
     let remote = crate::remote::get();
+    // D70: what the file says before anything is written to it; an unreadable file or proxy
+    // type starts the engine with the transfers held
+    let check =
+        if remote.is_none() { rookparcel_frontend::guard::on_start(&prefs) } else { Default::default() };
     if let Some(r) = remote {
         // the server's engine settings and default folder are this window's; the language
         // (picked in `run`) is every window's
@@ -1080,6 +1084,7 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
                 state_dir: Some(data),
                 label: rookparcel_frontend::profile::current().engine_label(),
                 portable_root: rookparcel_frontend::profile::current().portable_root.clone(),
+                hold_transfers: check.hold,
             })
             .map_err(|e| (tr!(CannotStartEngine).to_owned(), e.to_string())),
             // its first paragraph is the dialog's heading, the rest the text below it
@@ -1482,6 +1487,9 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
     pin_changed();
     if PIN_RESET.with(|r| r.replace(false)) {
         log_line(tr!(LogLockPinRemoved));
+    }
+    for line in &check.log {
+        log_line(line);
     }
 
     // the engine host's network adapters, for Preferences > Connection (D54)
@@ -3621,6 +3629,9 @@ fn apply_options(a: &mut App, o: &Options) {
     let old = Options::load(&a.prefs, &a.save_path);
     a.listen.set_configured(settings::listen_port(&o.settings));
     o.store(&mut a.prefs);
+    // the user confirmed the settings as shown: a held start goes on (D70)
+    rookparcel_frontend::guard::confirm(&mut a.prefs);
+    a.handle.hold_transfers(false);
     save_prefs(a);
     if crate::remote::is_remote() && o.gui.language != old.gui.language {
         // one language for every window: it lives in the local client's settings

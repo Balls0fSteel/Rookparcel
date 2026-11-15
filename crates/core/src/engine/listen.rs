@@ -369,7 +369,8 @@ impl Engine {
             want_tcp = false;
         }
         self.network.expanded = plan.expanded;
-        let mut all = if want_tcp || want_udp { plan.bind } else { Vec::new() };
+        // held transfers (D70) open nothing, not even the proxy's UDP socket
+        let mut all = if (want_tcp || want_udp) && !self.rules.held { plan.bind } else { Vec::new() };
         all.truncate(MAX_LISTEN_SOCKETS);
 
         // first remove the sockets that are not needed, so a new one can't fail to bind on a

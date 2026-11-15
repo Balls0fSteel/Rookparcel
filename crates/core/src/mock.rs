@@ -45,6 +45,8 @@ pub struct MockConfig {
     /// A shutdown that takes this long, moving a torrent's files (simulated), for looking at a
     /// GUI's closing window (D47); `None` ends at once.
     pub slow_exit: Option<Duration>,
+    /// Start with the transfers held, as `SessionParams::hold_transfers` (D70).
+    pub hold_transfers: bool,
 }
 
 impl Default for MockConfig {
@@ -56,6 +58,7 @@ impl Default for MockConfig {
             max_rate: 4 << 20,
             save_path: std::env::temp_dir().join("rookparcel-mock").to_string_lossy().into_owned(),
             slow_exit: None,
+            hold_transfers: false,
         }
     }
 }
@@ -136,6 +139,8 @@ struct Mock {
     queue: Vec<TorrentId>,
     out: Vec<Alert>,
     session_paused: bool,
+    /// [`crate::SessionHandle::hold_transfers`] (D70): running torrents wait.
+    held: bool,
     needs_auto_manage: bool,
     ticks: u64,
     stats: SessionStats,
@@ -203,16 +208,17 @@ impl Mock {
         Mock {
             shared,
             settings,
-            config,
             slots: Vec::new(),
             free: Vec::new(),
             by_hash: HashMap::new(),
             queue: Vec::new(),
             out: Vec::new(),
             session_paused: false,
+            held: config.hold_transfers,
             needs_auto_manage: false,
             ticks: 0,
             stats: SessionStats::default(),
+            config,
         }
     }
 
@@ -460,6 +466,9 @@ impl Mock {
             Command::PostSessionStats => {
                 let mut s = self.stats;
                 s.num_torrents = self.by_hash.len() as u32;
+                if self.held {
+                    s.network = crate::status::NetworkStatus::Held;
+                }
                 self.out.push(Alert::SessionStats(s));
             }
             Command::SaveResumeData => self.out.push(Alert::ResumeDataSaved),
@@ -535,6 +544,7 @@ impl Mock {
             }
             Command::PauseSession => self.session_paused = true,
             Command::ResumeSession => self.session_paused = false,
+            Command::HoldTransfers(held) => self.held = held,
             Command::Shutdown => {}
         }
     }
@@ -797,7 +807,12 @@ impl Mock {
                 t.dirty = true;
                 continue;
             }
-            let running = !t.st.flags.contains(TorrentFlags::PAUSED) && !self.session_paused;
+            let waiting = self.held && !t.st.flags.contains(TorrentFlags::PAUSED);
+            if t.st.waiting_for_network != waiting {
+                t.st.waiting_for_network = waiting;
+                t.dirty = true;
+            }
+            let running = !t.st.flags.contains(TorrentFlags::PAUSED) && !self.session_paused && !self.held;
             if !running {
                 if t.st.download_payload_rate != 0 || t.st.upload_payload_rate != 0 || t.st.num_peers != 0 {
                     zero_activity(&mut t.st);
@@ -917,7 +932,7 @@ impl Mock {
         s.has_incoming_connections = self.ticks > 10;
         let (mut peers, mut dl, mut seeding) = (0, 0, 0);
         for t in self.slots.iter().filter_map(|s| s.torrent.as_ref()) {
-            if !t.st.flags.contains(TorrentFlags::PAUSED) && !self.session_paused {
+            if !t.st.flags.contains(TorrentFlags::PAUSED) && !self.session_paused && !self.held {
                 peers += t.st.num_peers;
                 if t.st.is_seeding { seeding += 1 } else { dl += 1 }
             }
@@ -1607,6 +1622,49 @@ mod tests {
             _ => None,
         });
         assert_eq!(n, 2);
+    }
+
+    /// D70: held from the start, nothing moves and the network reads `Held`; let go, it moves.
+    #[test]
+    fn held_transfers_stop_the_simulation() {
+        let config = MockConfig {
+            initial_torrents: 20,
+            active_fraction: 1.0,
+            hold_transfers: true,
+            ..MockConfig::default()
+        };
+        let s = Session::start_mock(Settings { tick_interval: 50, ..Settings::default() }, config);
+        let h = s.handle();
+        let stats = |h: &SessionHandle| {
+            h.post_session_stats();
+            wait_for(h, |a| match a {
+                Alert::SessionStats(s) => Some(*s),
+                _ => None,
+            })
+        };
+        std::thread::sleep(Duration::from_millis(300));
+        let st = stats(&h);
+        assert_eq!(st.network, crate::status::NetworkStatus::Held);
+        assert_eq!((st.download_rate, st.upload_rate, st.num_downloading + st.num_seeding), (0, 0, 0));
+        h.post_torrent_updates();
+        let all = wait_for(&h, |a| match a {
+            Alert::StateUpdate(v) => Some(v.clone()),
+            _ => None,
+        });
+        assert!(all.iter().all(|t| t.download_payload_rate == 0 && t.upload_payload_rate == 0), "{all:?}");
+        let started: Vec<_> = all.iter().filter(|t| !t.flags.contains(TorrentFlags::PAUSED)).collect();
+        assert!(!started.is_empty() && started.iter().all(|t| t.waiting_for_network), "{all:?}");
+
+        h.hold_transfers(false);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let st = stats(&h);
+            if st.network == crate::status::NetworkStatus::Any && st.download_rate + st.upload_rate > 0 {
+                break;
+            }
+            assert!(Instant::now() < deadline, "still not moving: {st:?}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
     }
 
     #[test]

@@ -264,6 +264,9 @@ pub enum NetworkStatus {
     Missing,
     /// The rule matches nothing: running torrents wait for the network.
     Waiting,
+    /// The frontend holds the transfers (D70, [`crate::SessionHandle::hold_transfers`]): a
+    /// setting waits for the user's confirmation. Nothing is bound, running torrents wait.
+    Held,
 }
 
 /// One network adapter of the engine's host, for "Use only this network" (D54).

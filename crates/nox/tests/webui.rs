@@ -3023,6 +3023,200 @@ fn native_prefs_survive_a_restart() {
     assert_eq!(t.get(&sid, "/api/v2/transfer/downloadLimit").text(), "102400");
 }
 
+/// The Connection page's network rule (D54): the drop-down, the range box and "pause while it
+/// matches nothing".
+fn network_fields(t: &Harness, sid: &str) -> (String, String, bool) {
+    let m = t.get(sid, "/pa/prefs").json();
+    let fields = m.get("fields").unwrap();
+    let value = |id: &str| fields.get(id).unwrap().get("value").cloned().unwrap();
+    let text = |id: &str| value(id).as_str().unwrap().to_owned();
+    (
+        text("net.network_choice"),
+        text("net.network_range"),
+        value("net.pause_when_missing") == Json::Bool(true),
+    )
+}
+
+/// The network rule's rows are stored under their own keys (`net.network_rule`,
+/// `net.pause_when_missing`, as the desktop client keeps them) and read back at the next start,
+/// before the engine starts too: given with `--network` (stored with the preferences) or set on
+/// the Connection page. The `lt.net.*` keys of nox up to 1.2.54 are taken, then dropped.
+#[test]
+fn a_network_rule_survives_a_restart() {
+    let dir = temp_dir("network-rule");
+    let state = dir.join("state");
+    let file = state.join(STATE_FILE);
+    let rule = "range:10.99.0.0/16";
+    let ranged = ("range".to_owned(), "10.99.0.0/16".to_owned(), false);
+    let before_engine = || {
+        let mut s = Harness::settings();
+        rookparcel_nox::webui::stored_settings(&state, &mut s).unwrap();
+        (s.network_rule, s.network_pause_when_missing)
+    };
+    // `--network range:10.99.0.0/16 --no-pause-when-missing`, then a change on the pages
+    {
+        let settings =
+            Settings { network_rule: rule.into(), network_pause_when_missing: false, ..Harness::settings() };
+        let t = Harness::start_with(dir.clone(), settings);
+        let sid = t.login();
+        assert_eq!(network_fields(&t, &sid), ranged);
+        assert_eq!(t.pa(&sid, "/pa/prefs", r#"{"connections_limit":77}"#).status, 204);
+        let saved = std::fs::read_to_string(&file).unwrap();
+        assert!(saved.contains(r#""net.network_rule":"range:10.99.0.0/16""#), "{saved}");
+        assert!(
+            saved.contains(r#""net.pause_when_missing":"false""#) && !saved.contains("lt.net."),
+            "{saved}"
+        );
+        let mut t = t;
+        t.dir = temp_dir("network-rule-scratch");
+    }
+    // started again without --network: the stored rule
+    assert_eq!(before_engine(), (rule.to_owned(), false));
+    {
+        let t = Harness::start_in(dir.clone(), None);
+        let sid = t.login();
+        assert_eq!(network_fields(&t, &sid), ranged);
+        // set on the Connection page
+        let r = t.pa(&sid, "/pa/prefs", r#"{"net.network_choice":"vpn","net.pause_when_missing":true}"#);
+        assert_eq!(r.status, 204, "{}", r.text());
+        let saved = std::fs::read_to_string(&file).unwrap();
+        assert!(saved.contains(r#""net.network_rule":"vpn""#), "{saved}");
+        assert!(
+            saved.contains(r#""net.pause_when_missing":"true""#) && !saved.contains("lt.net."),
+            "{saved}"
+        );
+        let mut t = t;
+        t.dir = temp_dir("network-rule-scratch");
+    }
+    assert_eq!(before_engine(), ("vpn".to_owned(), true));
+    {
+        let t = Harness::start_in(dir.clone(), None);
+        let sid = t.login();
+        assert_eq!(network_fields(&t, &sid), ("vpn".to_owned(), String::new(), true));
+        let mut t = t;
+        t.dir = temp_dir("network-rule-scratch");
+    }
+    // the keys nox up to 1.2.54 wrote: taken at start, dropped at the next store
+    std::fs::write(
+        &file,
+        r#"{"options":{"lt.net.network_rule":"range:10.99.0.0/16","lt.net.pause_when_missing":"false"}}"#,
+    )
+    .unwrap();
+    assert_eq!(before_engine(), (rule.to_owned(), false));
+    let t = Harness::start_in(dir, Some(PASS));
+    let sid = t.login();
+    assert_eq!(network_fields(&t, &sid), ranged);
+    assert_eq!(t.pa(&sid, "/pa/prefs", r#"{"connections_limit":78}"#).status, 204);
+    let saved = std::fs::read_to_string(&file).unwrap();
+    assert!(saved.contains(r#""net.network_rule":"range:10.99.0.0/16""#), "{saved}");
+    assert!(saved.contains(r#""net.pause_when_missing":"false""#) && !saved.contains("lt.net."), "{saved}");
+}
+
+/// A `webui.json` that is there but cannot be read stops the start, with a password given or
+/// not (the Docker entrypoint passes `--webui-pass` at every start), naming the file, and is left
+/// as it was; one with a byte order mark is read, and a missing one is a first start.
+#[test]
+fn a_damaged_state_file_stops_the_start_and_is_kept() {
+    let dir = temp_dir("damaged-state");
+    let state = dir.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    let file = state.join(STATE_FILE);
+    let session =
+        Session::start_mock(Harness::settings(), MockConfig { initial_torrents: 0, ..MockConfig::default() });
+    let start = |password: Option<&str>| {
+        let mut c = Config::new(
+            "127.0.0.1:0".parse().unwrap(),
+            Harness::settings(),
+            dir.join("dl").to_string_lossy(),
+        );
+        c.password = password.map(str::to_owned);
+        c.state_dir = Some(state.clone());
+        c.pbkdf2_iterations = 2;
+        WebUi::start(session.handle(), c)
+    };
+    let stored = |s: &mut Settings| rookparcel_nox::webui::stored_settings(&state, s);
+    let named = format!("cannot read {}: ", file.display());
+    // cut short, not an object, empty, not UTF-8
+    let cases: [&[u8]; 4] = [
+        br#"{"username":"admin","options":{"lt.proxy_hostname":"proxy.example""#,
+        b"[1,2]",
+        b"",
+        b"\xff\xfe{}",
+    ];
+    for damaged in cases {
+        std::fs::write(&file, damaged).unwrap();
+        for password in [None, Some(PASS)] {
+            let e = start(password).err().expect("a damaged file is refused");
+            assert_eq!(e.kind(), std::io::ErrorKind::InvalidData);
+            let text = e.to_string();
+            assert!(text.starts_with(&named) && text.contains("Fix the file or move it away"), "{text}");
+        }
+        let e = stored(&mut Settings::default()).unwrap_err();
+        assert!(e.starts_with(&named) && e.ends_with("so that it would not overwrite it."), "{e}");
+        assert_eq!(std::fs::read(&file).unwrap(), damaged, "the file is left as it was");
+    }
+    // one that cannot be opened at all: a folder in its place
+    std::fs::remove_file(&file).unwrap();
+    std::fs::create_dir(&file).unwrap();
+    assert!(start(Some(PASS)).err().expect("refused").to_string().starts_with(&named));
+    assert!(stored(&mut Settings::default()).is_err());
+    std::fs::remove_dir(&file).unwrap();
+    // with a byte order mark, as an editor may save it
+    std::fs::write(&file, "\u{feff}{\"options\":{\"lt.enable_dht\":\"false\"}}").unwrap();
+    let mut s = Settings::default();
+    stored(&mut s).unwrap();
+    assert!(!s.enable_dht);
+    drop(start(Some(PASS)).unwrap());
+    // none: a first start, with a temporary password, and the file made
+    std::fs::remove_file(&file).unwrap();
+    let mut s = Settings::default();
+    stored(&mut s).unwrap();
+    assert_eq!(s, Settings::default());
+    let web = start(None).unwrap();
+    assert!(web.temporary_password().is_some());
+    drop(web);
+    assert!(file.is_file());
+    session.shutdown();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `rookparcel-nox run --webui` with a damaged `webui.json` exits with an error naming the file
+/// before the engine starts, also with `--webui-pass` (as the Docker image starts it), and leaves
+/// the file as it was.
+#[test]
+fn nox_does_not_start_on_a_damaged_state_file() {
+    let dir = temp_dir("nox-damaged-state");
+    let state = dir.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    let file = state.join(STATE_FILE);
+    let damaged = r#"{"username":"admin","options":{"lt.proxy_hostname":"proxy.example""#;
+    std::fs::write(&file, damaged).unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_rookparcel-nox"))
+        .arg("run")
+        .arg("--state-dir")
+        .arg(&state)
+        .args(["--webui", "127.0.0.1:0", "--webui-pass", PASS, "--listen", "127.0.0.1:0"])
+        .args(["--no-update-check", "--seconds", "5"])
+        .current_dir(&dir)
+        .stdin(std::process::Stdio::null())
+        // the user's own folders out of reach (the former name's are moved from there at start)
+        .env("APPDATA", &dir)
+        .env("HOME", &dir)
+        .env("XDG_DATA_HOME", &dir)
+        .env("XDG_CONFIG_HOME", &dir)
+        .env_remove("STATE_DIRECTORY")
+        .env_remove("CONFIGURATION_DIRECTORY")
+        .output()
+        .unwrap();
+    let (stdout, stderr) = (String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert_eq!(out.status.code(), Some(1), "{stdout}\n{stderr}");
+    let named = format!("error: cannot read {}: ", file.display());
+    assert!(stderr.contains(&named) && stderr.contains("nox did not start"), "{stderr}");
+    assert!(!stdout.contains("* Web UI:"), "{stdout}");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), damaged);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Waits until `f` holds (files appearing or going away in the `.torrent` folders).
 fn wait_until(what: &str, f: impl Fn() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(20);

@@ -368,6 +368,9 @@ strings! {
     /// The status bar's network part while "Use only this network" finds no matching network
     /// adapter (the VPN is down); torrents wait until it comes back.
     NetWaiting = "Waiting for the network";
+    /// The status bar's network part while the transfers are held until the user confirms the
+    /// settings (D70: a proxy setting this version cannot read, an unreadable settings file).
+    NetHeld = "Transfers held: confirm the settings";
     /// Before the network part of the status bar at start, until the saved torrents are back in
     /// the list (a settings folder on a slow drive can take a while).
     BarRestoring = "Restoring torrents...";
@@ -396,6 +399,16 @@ strings! {
     ShutdownWhatHibernate = "hibernating";
     ShutdownWhatShutDown = "shutting down";
     LogPrefsNotSaved = "could not save the preferences: {error}";
+    /// D70, at start: {file} is the settings file's path, {error} why it could not be read.
+    LogSettingsUnreadable = "cannot read the preferences file {file}: {error}. Nothing is saved over it in this run.";
+    /// D70, at start: {copy} is the path of the copy kept of the file as it was.
+    LogSettingsDamaged = "the preferences file {file} was not valid text: it was read with the bad characters replaced, and the original is kept as {copy}";
+    LogSettingsNoCopy = "the preferences file {file} was not valid text and no copy of it could be made: nothing is saved over it in this run";
+    /// D70, at start: {name}={value} is the line as the file has it (a newer version may have
+    /// written it).
+    LogSettingUnreadable = "this version cannot read the setting {name}={value}: it is at its default for now and stays in the file";
+    /// D70: after the lines above, when the transfers are held.
+    LogSettingsHeld = "transfers are held until you confirm the settings: check them in Preferences, then press OK";
     /// {file} is a path.
     LogNotSaved = "could not save {file}: {error}";
     LogAutoloadError = "Automatically load .torrents: {error}";

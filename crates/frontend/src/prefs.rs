@@ -7,6 +7,9 @@
 //! value, while [`Prefs::entries`] and the file hold them sealed ([`crate::secret`]: DPAPI on
 //! Windows, plain elsewhere). Every frontend's store (the GUIs' `rookparcel.ini`, nox's
 //! `webui.json` `options`) goes through `set` / `entries`, so each gets the sealed form.
+//!
+//! A file that is there but cannot be read is never taken for a first start (D70): see
+//! [`LoadProblem`].
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -30,6 +33,18 @@ pub fn is_sealed_key(key: &str) -> bool {
             .is_some_and(|n| !n.is_empty() && n.bytes().all(|c| c.is_ascii_digit()))
 }
 
+/// Why the preferences file was not read as it is (D70, [`Prefs::problem`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LoadProblem {
+    /// The file is there but could not be read (the error): the preferences are empty, and
+    /// this run never saves over the file.
+    Unreadable(String),
+    /// The file was not valid text (UTF-8, or UTF-16 with its byte order mark): it was read with
+    /// the bad bytes replaced, after a copy of it was kept at `copy`. Without a copy this run
+    /// never saves over the file.
+    Damaged { copy: Option<PathBuf> },
+}
+
 #[derive(Debug, Default)]
 pub struct Prefs {
     path: Option<PathBuf>,
@@ -44,6 +59,8 @@ pub struct Prefs {
     /// The portable folder (D42): the path keys ([`crate::profile::is_path_key`]) inside it are
     /// written relative to it and read back absolute, so in memory every path is absolute.
     root: Option<PathBuf>,
+    /// How the file was read, when not as it is.
+    problem: Option<LoadProblem>,
 }
 
 /// One recorded change: the key and its new plain value, `None` once removed.
@@ -59,13 +76,15 @@ impl Clone for Prefs {
             sealed: self.sealed.clone(),
             journal: self.journal.as_ref().map(|_| Vec::new()),
             root: self.root.clone(),
+            problem: self.problem.clone(),
         }
     }
 }
 
 impl Prefs {
-    /// Loads `path`; a missing or unreadable file gives empty preferences that save to `path`.
-    /// In portable mode its paths are relative to the portable folder ([`Prefs::in_root`]).
+    /// Loads `path`; a missing file gives empty preferences that save to `path`, and a file
+    /// that cannot be read as it is gives a [`Prefs::problem`]. In portable mode its paths are
+    /// relative to the portable folder ([`Prefs::in_root`]).
     pub fn load(path: impl Into<PathBuf>) -> Prefs {
         Prefs::load_in(path, crate::profile::current().portable_root.as_deref())
     }
@@ -73,8 +92,21 @@ impl Prefs {
     /// [`Prefs::load`] with the paths inside `root` written relative to it (`None`: absolute).
     pub fn load_in(path: impl Into<PathBuf>, root: Option<&Path>) -> Prefs {
         let path = path.into();
-        let text = std::fs::read_to_string(&path).unwrap_or_default();
-        Prefs::from_raw(Some(path), parse(&text), root)
+        let (text, problem) = read(&path);
+        let mut p = Prefs::from_raw(Some(path), parse(&text), root);
+        p.problem = problem;
+        p
+    }
+
+    /// How the file was read, when not as it is (D70).
+    pub fn problem(&self) -> Option<&LoadProblem> {
+        self.problem.as_ref()
+    }
+
+    /// Whether [`Prefs::save`] writes: not over a file this run could not read, nor over a
+    /// damaged one it could not keep a copy of.
+    pub fn may_save(&self) -> bool {
+        !matches!(self.problem, Some(LoadProblem::Unreadable(_) | LoadProblem::Damaged { copy: None }))
     }
 
     /// Preferences from `key=value` text, as [`Prefs::to_text`] writes it, with no file.
@@ -112,9 +144,13 @@ impl Prefs {
     }
 
     /// Writes the file (through a temporary file, so a crash never leaves half of it), readable
-    /// by its owner only on Unix, where the proxy password is plain ([`private_file`]).
+    /// by its owner only on Unix, where the proxy password is plain ([`private_file`]). Nothing
+    /// is written when [`Prefs::may_save`] says no (the start said why).
     pub fn save(&self) -> std::io::Result<()> {
         let Some(path) = &self.path else { return Ok(()) };
+        if !self.may_save() {
+            return Ok(());
+        }
         if let Some(dir) = path.parent() {
             private_file::create_dir_all(dir)?;
         }
@@ -278,6 +314,66 @@ impl Prefs {
             None => self.remove("list.sort"),
         }
     }
+}
+
+/// The file's text and what went wrong reading it: empty and no problem when there is no file.
+/// A file another program holds for a moment (a virus scanner, a sync client) is tried again a
+/// few times.
+fn read(path: &Path) -> (String, Option<LoadProblem>) {
+    let mut tries = 0;
+    let bytes = loop {
+        match std::fs::read(path) {
+            Ok(b) => break b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (String::new(), None),
+            Err(e) => {
+                tries += 1;
+                if tries == 5 {
+                    return (String::new(), Some(LoadProblem::Unreadable(e.to_string())));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+    };
+    if let Some(text) = decode(&bytes) {
+        return (text, None);
+    }
+    let text = match utf16_units(&bytes) {
+        Some((units, _)) => String::from_utf16_lossy(&units),
+        None => String::from_utf8_lossy(&bytes).into_owned(),
+    };
+    let copy = damaged_copy(path);
+    let copy = private_file::write(&copy, &bytes).is_ok().then_some(copy);
+    (text, Some(LoadProblem::Damaged { copy }))
+}
+
+/// `bytes` as text: UTF-8 (`parse` drops a byte order mark), or UTF-16 with its byte order
+/// mark, as Windows Notepad's "Unicode" saves it; `None` when it is neither.
+fn decode(bytes: &[u8]) -> Option<String> {
+    match utf16_units(bytes) {
+        Some((units, false)) => String::from_utf16(&units).ok(),
+        Some((_, true)) => None,
+        None => std::str::from_utf8(bytes).ok().map(str::to_owned),
+    }
+}
+
+/// The UTF-16 units after a UTF-16 byte order mark, and whether a byte was left over; `None`
+/// without the mark.
+fn utf16_units(bytes: &[u8]) -> Option<(Vec<u16>, bool)> {
+    let read: fn([u8; 2]) -> u16 = match bytes {
+        [0xFF, 0xFE, ..] => u16::from_le_bytes,
+        [0xFE, 0xFF, ..] => u16::from_be_bytes,
+        _ => return None,
+    };
+    let rest = &bytes[2..];
+    Some((rest.chunks_exact(2).map(|c| read([c[0], c[1]])).collect(), rest.len() % 2 != 0))
+}
+
+/// Where a damaged file's copy goes: `<name>.damaged-<unix seconds>` beside it.
+fn damaged_copy(path: &Path) -> PathBuf {
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let mut name = path.file_name().unwrap_or_default().to_owned();
+    name.push(format!(".damaged-{secs}"));
+    path.with_file_name(name)
 }
 
 fn parse(text: &str) -> BTreeMap<String, String> {
@@ -509,5 +605,56 @@ x=1
         copy.set("e", "5");
         assert_eq!(copy.take_changes().len(), 1);
         assert_eq!(p.take_changes().len(), 1);
+    }
+
+    fn temp(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("rp-prefs-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// D70: a missing file is a first start; a file that is there is never read as empty
+    /// without saying so.
+    #[test]
+    fn a_file_that_cannot_be_read_as_it_is_says_so() {
+        let dir = temp("problems");
+        let path = dir.join("rookparcel.ini");
+        let missing = Prefs::load(&path);
+        assert_eq!(missing.problem(), None);
+        assert!(missing.may_save() && missing.entries().next().is_none());
+
+        // Notepad's "Unicode": UTF-16 with its byte order mark reads as it is
+        let mut utf16 = vec![0xFF, 0xFE];
+        utf16.extend(
+            "lt.proxy_type=2\r\nlt.proxy_hostname=h\u{e9}t\r\n".encode_utf16().flat_map(u16::to_le_bytes),
+        );
+        std::fs::write(&path, &utf16).unwrap();
+        let p = Prefs::load(&path);
+        assert_eq!(p.problem(), None);
+        assert_eq!((p.get("lt.proxy_type"), p.get("lt.proxy_hostname")), (Some("2"), Some("h\u{e9}t")));
+
+        // an ANSI byte: read with it replaced, the original kept beside it, saving allowed
+        std::fs::write(&path, b"lt.proxy_type=2\ndir.download=C:\\T\xe9l\xe9chargements\n").unwrap();
+        let p = Prefs::load(&path);
+        let Some(LoadProblem::Damaged { copy: Some(copy) }) = p.problem() else {
+            panic!("{:?}", p.problem())
+        };
+        assert_eq!(std::fs::read(copy).unwrap(), std::fs::read(&path).unwrap());
+        assert!(copy.file_name().unwrap().to_string_lossy().starts_with("rookparcel.ini.damaged-"));
+        assert_eq!(p.get("lt.proxy_type"), Some("2"));
+        assert_eq!(p.get("dir.download"), Some("C:\\T\u{fffd}l\u{fffd}chargements"));
+        assert!(p.may_save());
+
+        // a file that cannot be opened (a folder in its place): empty, and never saved over
+        let blocked = dir.join("blocked.ini");
+        std::fs::create_dir_all(&blocked).unwrap();
+        let mut p = Prefs::load(&blocked);
+        assert!(matches!(p.problem(), Some(LoadProblem::Unreadable(_))), "{:?}", p.problem());
+        assert!(!p.may_save());
+        p.set("a", "1");
+        p.save().unwrap();
+        assert!(blocked.is_dir());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

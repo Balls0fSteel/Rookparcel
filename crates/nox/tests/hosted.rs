@@ -147,6 +147,11 @@ impl Harness {
     /// The mock engine with three active torrents, hosted with `options` and the plain
     /// `password` (none: the login must come from the options).
     fn start(name: &str, options: Prefs, password: Option<&str>) -> Harness {
+        Harness::start_in(temp_dir(name), options, password)
+    }
+
+    /// [`Harness::start`] in `dir` (the Web UI's `state_dir` is `dir/state`).
+    fn start_in(dir: PathBuf, options: Prefs, password: Option<&str>) -> Harness {
         let settings = Settings {
             listen_interfaces: "127.0.0.1:0".into(),
             tick_interval: 100,
@@ -160,7 +165,6 @@ impl Harness {
         let mock = MockConfig { initial_torrents: 3, active_fraction: 1.0, ..MockConfig::default() };
         let session = Session::start_mock(settings.clone(), mock);
         let h = session.handle();
-        let dir = temp_dir(name);
         let host = Arc::new(FakeHost::new());
         let mut c = Config::new("127.0.0.1:0".parse().unwrap(), settings, dir.join("dl").to_string_lossy());
         c.password = password.map(str::to_owned);
@@ -847,6 +851,19 @@ fn the_login_and_labels_come_from_the_hosts_options_and_nothing_is_written() {
     // no state file, nothing else on disk
     assert!(!t.dir.join("state").join(STATE_FILE).exists());
     assert!(!t.dir.join("state").exists());
+}
+
+/// Hosted, the Web UI reads no state file: a damaged `webui.json` in its folder (a nox's, run
+/// there before) does not stop the start and is left alone.
+#[test]
+fn a_damaged_state_file_does_not_stop_a_hosted_start() {
+    let dir = temp_dir("damaged-state");
+    std::fs::create_dir_all(dir.join("state")).unwrap();
+    let file = dir.join("state").join(STATE_FILE);
+    std::fs::write(&file, "{ not json").unwrap();
+    let t = Harness::start_in(dir, Prefs::default(), Some(PASS));
+    t.login();
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "{ not json");
 }
 
 /// A category no torrent uses yet (an *arr's Test creates one) is the host's

@@ -356,7 +356,7 @@ wire_unit!(EncPolicy { Forced, Enabled, Disabled });
 wire_unit!(EncLevel { Plaintext, Rc4, Both });
 wire_unit!(MixedModeAlgorithm { PreferTcp, PeerProportional });
 wire_unit!(ProxyType { None, Socks4, Socks5, Socks5Pw, Http, HttpPw });
-wire_unit!(NetworkStatus { Any, Bound, Missing, Waiting });
+wire_unit!(NetworkStatus { Any, Bound, Missing, Waiting, Held });
 
 /// Structs travel as the list of their fields.
 macro_rules! wire_struct {
@@ -822,6 +822,7 @@ pub(crate) fn encode_command(c: &Command, e: &mut Enc) -> bool {
         Command::PauseSession => message!(e, "pause_session"),
         Command::ResumeSession => message!(e, "resume_session"),
         Command::ReopenNetworkSockets => message!(e, "reopen_network_sockets"),
+        Command::HoldTransfers(held) => message!(e, "hold_transfers", held),
         Command::SetIpFilter(_)
         | Command::SetPortFilter(_)
         | Command::SetExtraTrackers(_)
@@ -879,6 +880,7 @@ pub(crate) fn decode_command(frame: &[u8]) -> Option<Command> {
             "pause_session" => Command::PauseSession,
             "resume_session" => Command::ResumeSession,
             "reopen_network_sockets" => Command::ReopenNetworkSockets,
+            "hold_transfers" => Command::HoldTransfers(f.next()?),
             _ => return None,
         })
     })

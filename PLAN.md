@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-14_150056_1794664856
+Last updated: 2026-11-15_140244_1794747764
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D69](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -18,6 +18,8 @@ A lean recreation of µTorrent 2.2.1: native look, small single-file binaries, a
 Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), [WEBUI.md](docs/WEBUI.md), [INTEGRATIONS.md](docs/INTEGRATIONS.md). Release procedure: [RELEASING.md](docs/RELEASING.md).
 
 ## Current status
+
+- **Settings guard (D70, 2026-11-15):** the owner's answer to qBittorrent's lost-proxy update. Layer 1 is in 1.2.55: the loss paths are closed, the engine can hold the transfers, and nox keeps its network rule. Layer 3 (the fixture test) and layer 2 (the start check with backups) follow. Open: BACKLOG "Settings guard".
 
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** shipped since 1.2.19 (2026-11-06), checked on the Intel VM with real input. Open (BACKLOG "macOS"): arm64 and Retina by hand (the owner has only the Intel VM).
 

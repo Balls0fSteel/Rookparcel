@@ -572,7 +572,8 @@ pub(crate) struct State {
     /// Properties visit.
     pub meta_wanted: VecDeque<TorrentId>,
     /// The stored preferences, as the frontend's preferences keys (what the Win32 client keeps
-    /// in `rookparcel.ini`): the engine settings that differ from the defaults as `lt.<name>`,
+    /// in `rookparcel.ini`): the engine settings that differ from the defaults as `lt.<name>`
+    /// (Rookparcel's own `net.` rows by their names, `settings::pref_key`),
     /// the `GuiOptions` keys, the Web UI's own as `webui.<name>`, and the Add dialog's
     /// recent folders (`add.recent_dirs`). Saved as the `options` object of the state file and
     /// re-applied on the next start.
@@ -950,17 +951,51 @@ pub struct HttpsInfo {
 /// The engine settings stored in `state_dir`'s `webui.json`, put over `s`; for nox to call
 /// before it starts the engine, so the engine never runs with defaults the owner switched off
 /// (UPnP and NAT-PMP mapping the router's ports, the DHT bootstrapping). [`WebUi::start`] applies
-/// the same entries again, with everything else it restores.
-pub fn stored_settings(state_dir: &std::path::Path, s: &mut Settings) {
-    let stored = std::fs::read_to_string(state_dir.join(STATE_FILE))
-        .ok()
-        .and_then(|t| json::parse(&t).ok())
-        .unwrap_or_else(Json::obj);
+/// the same entries again, with everything else it restores. Returns what the stored settings
+/// ask for at start (D70: an unreadable proxy type holds the transfers); an error, for nox to
+/// stop on, when the file is there but cannot be read ([`WebUi::start`] refuses it too).
+pub fn stored_settings(
+    state_dir: &std::path::Path,
+    s: &mut Settings,
+) -> Result<rookparcel_frontend::guard::StartCheck, String> {
+    let stored = read_state(&state_dir.join(STATE_FILE))?;
     prefs::stored_engine_settings(&stored, s);
+    let mut options = rookparcel_frontend::prefs::Prefs::default();
+    for (k, v) in stored.get("options").map(Json::entries).unwrap_or_default() {
+        if let Some(v) = v.as_str() {
+            options.set(k, v);
+        }
+    }
+    Ok(rookparcel_frontend::guard::on_start(&options))
+}
+
+/// The state file at `path`: an empty object when there is none. A file that cannot be read or
+/// is not a JSON object is an error naming it, so that the start stops instead of saving over
+/// the settings, labels and login it may still hold.
+fn read_state(path: &std::path::Path) -> Result<Json, String> {
+    let damaged = |why: &dyn std::fmt::Display| {
+        format!(
+            "cannot read {}: {why}. Fix the file or move it away; nox did not start, so that it would not \
+             overwrite it.",
+            path.display()
+        )
+    };
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Json::obj()),
+        Err(e) => return Err(damaged(&e)),
+    };
+    // a byte order mark, as some editors write one
+    match json::parse(text.strip_prefix('\u{feff}').unwrap_or(&text)) {
+        Ok(doc @ Json::Obj(_)) => Ok(doc),
+        Ok(_) => Err(damaged(&"not a JSON object")),
+        Err(e) => Err(damaged(&e)),
+    }
 }
 
 impl WebUi {
-    /// Binds `config.addr` and starts serving.
+    /// Binds `config.addr` and starts serving. A state file that is there but cannot be read is
+    /// an `InvalidData` error naming it, and nothing is written.
     pub fn start(handle: SessionHandle, config: Config) -> std::io::Result<WebUi> {
         // hosted: no state file; the login, labels and pause marks come from the host's
         // preferences (`torrent.<key>.*`, the host's keys)
@@ -969,11 +1004,11 @@ impl WebUi {
             Some(_) => None,
             None => config.state_dir.as_ref().map(|d| d.join(STATE_FILE)),
         };
-        let stored = state_file
-            .as_ref()
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|s| json::parse(&s).ok())
-            .unwrap_or_else(Json::obj);
+        // a damaged file stops the start before anything is saved over it
+        let stored = match &state_file {
+            Some(p) => read_state(p).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?,
+            None => Json::obj(),
+        };
         let stored_login = |key: &str| -> Option<String> {
             match hosted {
                 Some(h) => h.options.get(&format!("webui.{key}")).map(str::to_owned),
@@ -1037,6 +1072,8 @@ impl WebUi {
         if hosted.is_none() {
             // a goal stored before 1.2.45 (the host carries its own over)
             rookparcel_frontend::seeding::migrate(&mut options);
+            // the network rule's rows as nox up to 1.2.54 stored them (`lt.net.*`)
+            prefs::migrate_keys(&mut options);
         }
         if let Some(Json::Arr(v)) = stored.get("recent_dirs") {
             // most recent first in the file; remember_dir puts each first, so go backwards
@@ -1185,6 +1222,11 @@ impl WebUi {
                 // the Web UI's language (Preferences > General); ROOKPARCEL_LANG over it
                 for p in rookparcel_frontend::lang::init(&st.prefs.language) {
                     st.push_log(None, p, unix_now());
+                }
+                // D70: what the stored settings asked for at start (nox started the engine
+                // with the transfers held if so)
+                for line in rookparcel_frontend::guard::on_start(&st.options).log {
+                    st.push_log(None, line, unix_now());
                 }
                 if let Some(legacy @ Json::Obj(_)) = stored.get("preferences") {
                     api::apply_preferences(&shared, &mut st, legacy, None);
