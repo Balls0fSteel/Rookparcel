@@ -783,7 +783,7 @@ pub fn run(args: Args) -> i32 {
     let mut prefs = Prefs::load(dir.join("rookparcel.ini"));
     // D70: what the file says before anything is written to it; an unreadable file or proxy
     // type starts the engine with the transfers held
-    let check = if local { rookparcel_frontend::guard::on_start(&prefs) } else { Default::default() };
+    let check = if local { rookparcel_frontend::guard::on_start(&mut prefs) } else { Default::default() };
     if let Some(r) = crate::remote_ui::get() {
         // the server's engine settings and default folder are this window's
         let _ = std::fs::create_dir_all(&dir);

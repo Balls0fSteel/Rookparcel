@@ -264,6 +264,9 @@ LogSettingsDamaged=fișierul de preferințe {file} nu era text valid: a fost cit
 LogSettingsNoCopy=fișierul de preferințe {file} nu era text valid și nu s-a putut face o copie a lui: în această sesiune nu se salvează nimic peste el
 LogSettingUnreadable=această versiune nu poate citi setarea {name}={value}: deocamdată are valoarea implicită și rămâne în fișier
 LogSettingsHeld=transferurile sunt reținute până când confirmați setările: verificați-le în Preferințe, apoi apăsați OK
+LogSettingsChanged=aceste setări se citesc altfel decât le-a salvat Rookparcel {old}:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=preferințele așa cum le-a lăsat Rookparcel {old} sunt păstrate ca {copy}
 LogNotSaved={file} nu a putut fi salvat: {error}
 LogAutoloadError=Încărcarea automată a fișierelor .torrent: {error}
 LogAlreadyInList={line} (deja în listă)

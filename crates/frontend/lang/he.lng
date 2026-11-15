@@ -264,6 +264,9 @@ LogSettingsDamaged=קובץ ההעדפות {file} לא היה טקסט תקין:
 LogSettingsNoCopy=קובץ ההעדפות {file} לא היה טקסט תקין ולא ניתן היה ליצור ממנו עותק: דבר לא יישמר מעליו בהפעלה זו
 LogSettingUnreadable=גרסה זו אינה יכולה לקרוא את ההגדרה {name}={value}: בינתיים היא בערך ברירת המחדל ונשארת בקובץ
 LogSettingsHeld=ההעברות מוחזקות עד שתאשרו את ההגדרות: בדקו אותן בהעדפות ולחצו על אישור
+LogSettingsChanged=ההגדרות האלה נקראות אחרת מכפי ש-Rookparcel {old} שמר אותן:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=ההעדפות כפי ש-Rookparcel {old} השאיר אותן נשמרו בשם {copy}
 LogNotSaved=לא ניתן לשמור את {file}: {error}
 LogAutoloadError=טעינה אוטומטית של קובצי ‎.torrent: {error}
 LogAlreadyInList={line} (כבר ברשימה)

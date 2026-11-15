@@ -264,6 +264,9 @@ LogSettingsDamaged=o ficheiro de preferências {file} não era texto válido: fo
 LogSettingsNoCopy=o ficheiro de preferências {file} não era texto válido e não foi possível fazer uma cópia dele: nada será guardado por cima dele nesta sessão
 LogSettingUnreadable=esta versão não consegue ler a definição {name}={value}: para já fica no valor predefinido e mantém-se no ficheiro
 LogSettingsHeld=as transferências ficam retidas até confirmar as preferências: verifique-as em Preferências e prima OK
+LogSettingsChanged=estas definições são lidas de forma diferente de como o Rookparcel {old} as guardou:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=as preferências tal como o Rookparcel {old} as deixou foram mantidas como {copy}
 LogNotSaved=não foi possível guardar {file}: {error}
 LogAutoloadError=Carregar .torrents automaticamente: {error}
 LogAlreadyInList={line} (já está na lista)

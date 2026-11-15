@@ -264,6 +264,9 @@ LogSettingsDamaged=偏好設定檔 {file} 不是有效的文字：已取代錯�
 LogSettingsNoCopy=偏好設定檔 {file} 不是有效的文字，且無法建立副本：本次執行不會覆寫儲存它
 LogSettingUnreadable=此版本無法讀取設定 {name}={value}：暫時使用預設值，並保留在檔案中
 LogSettingsHeld=在確認設定之前傳輸會暫停保留：請在「偏好設定」中檢查後按「確定」
+LogSettingsChanged=這些設定的讀取結果與 Rookparcel {old} 儲存時不同：
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=Rookparcel {old} 留下的偏好設定已保留為 {copy}
 LogNotSaved=無法儲存 {file}：{error}
 LogAutoloadError=自動載入 .torrent：{error}
 LogAlreadyInList={line}（已在清單中）

@@ -264,6 +264,9 @@ LogSettingsDamaged=환경 설정 파일 {file}이(가) 올바른 텍스트가 �
 LogSettingsNoCopy=환경 설정 파일 {file}이(가) 올바른 텍스트가 아니며 사본도 만들 수 없었습니다: 이번 세션에서는 그 위에 아무것도 저장하지 않습니다
 LogSettingUnreadable=이 버전은 설정 {name}={value}을(를) 읽을 수 없음: 당분간 기본값을 쓰며 파일에는 그대로 남습니다
 LogSettingsHeld=설정을 확인할 때까지 전송이 보류됩니다: 환경 설정에서 확인한 다음 확인 버튼을 누르세요
+LogSettingsChanged=이 설정은 Rookparcel {old}이(가) 저장했을 때와 다르게 읽힙니다:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=Rookparcel {old}이(가) 남긴 환경 설정을 {copy}(으)로 보관했습니다
 LogNotSaved={file}을(를) 저장할 수 없음: {error}
 LogAutoloadError=.torrent 자동 불러오기: {error}
 LogAlreadyInList={line} (이미 목록에 있음)

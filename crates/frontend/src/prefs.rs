@@ -61,6 +61,21 @@ pub struct Prefs {
     root: Option<PathBuf>,
     /// How the file was read, when not as it is.
     problem: Option<LoadProblem>,
+    /// Whether [`Prefs::save`] stamps the file (D70, [`crate::guard::on_start`] sets it).
+    stamp: Stamp,
+}
+
+/// What [`Prefs::save`] writes of the D70 stamp (`check.version`, `check.guard`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Stamp {
+    /// Nothing: preferences no start check looked at (a remote window's, a helper's file).
+    #[default]
+    Off,
+    /// This version's own reading of the settings, at every save.
+    On,
+    /// The stamp as the file had it: its reading awaits the user's confirmation, so the next
+    /// start compares again.
+    Kept,
 }
 
 /// One recorded change: the key and its new plain value, `None` once removed.
@@ -77,6 +92,7 @@ impl Clone for Prefs {
             journal: self.journal.as_ref().map(|_| Vec::new()),
             root: self.root.clone(),
             problem: self.problem.clone(),
+            stamp: self.stamp,
         }
     }
 }
@@ -154,7 +170,23 @@ impl Prefs {
         if let Some(dir) = path.parent() {
             private_file::create_dir_all(dir)?;
         }
-        private_file::write(path, self.to_text().as_bytes())
+        let stamp = crate::guard::stamp_lines(self);
+        if stamp.is_empty() {
+            return private_file::write(path, self.to_text().as_bytes());
+        }
+        let mut stamped = self.clone();
+        for (k, v) in stamp {
+            stamped.set(k, v);
+        }
+        private_file::write(path, stamped.to_text().as_bytes())
+    }
+
+    pub(crate) fn stamp(&self) -> Stamp {
+        self.stamp
+    }
+
+    pub(crate) fn set_stamp(&mut self, stamp: Stamp) {
+        self.stamp = stamp;
     }
 
     pub fn to_text(&self) -> String {

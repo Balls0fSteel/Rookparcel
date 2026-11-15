@@ -264,6 +264,9 @@ LogSettingsDamaged=datoteka postavki {file} nije bila valjan tekst: pročitana j
 LogSettingsNoCopy=datoteka postavki {file} nije bila valjan tekst i nije se mogla napraviti njezina kopija: u ovoj se sesiji preko nje ništa ne sprema
 LogSettingUnreadable=ova verzija ne može pročitati postavku {name}={value}: zasad ima zadanu vrijednost i ostaje u datoteci
 LogSettingsHeld=prijenosi su zadržani dok ne potvrdite postavke: provjerite ih u Postavkama, a zatim pritisnite U redu
+LogSettingsChanged=ove se postavke čitaju drukčije nego što ih je spremio Rookparcel {old}:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=postavke kakve je ostavio Rookparcel {old} sačuvane su kao {copy}
 LogNotSaved={file} se ne može spremiti: {error}
 LogAutoloadError=Automatsko učitavanje .torrent datoteka: {error}
 LogAlreadyInList={line} (već je na popisu)

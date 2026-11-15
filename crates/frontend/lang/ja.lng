@@ -264,6 +264,9 @@ LogSettingsDamaged=設定ファイル {file} は正しいテキストではあ�
 LogSettingsNoCopy=設定ファイル {file} は正しいテキストではなく、コピーも作成できませんでした: このセッションでは上書き保存しません
 LogSettingUnreadable=このバージョンでは設定 {name}={value} を読み取れません: 当面は既定値を使い、ファイルには残します
 LogSettingsHeld=設定を確認するまで転送を保留します: 設定で内容を確認し、OK を押してください
+LogSettingsChanged=これらの設定は Rookparcel {old} が保存したときとは異なって読み取られます:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=Rookparcel {old} が残した設定を {copy} として保存しました
 LogNotSaved={file} を保存できませんでした: {error}
 LogAutoloadError=.torrent の自動読み込み: {error}
 LogAlreadyInList={line} (すでに一覧にあります)

@@ -84,3 +84,15 @@ To update the daemon, stop it, replace `rookparcel-nox` with the new one and sta
 - **Remote control:** when a release changes the remote protocol, a window and the `rookparcel-nox` it drives must both be on that release. Update both. The release notes say when this applies ([Remote control](Remote-control)).
 - **Going back to an older version:** settings and torrents carry over between 1.1.x versions. 1.1.40 stores resume data in a smaller form, so going back from it to an older version rechecks each torrent once. A [portable folder](Where-Rookparcel-keeps-its-files#portable-mode) used by 1.1.49 or later needs 1.1.49 or later.
 - What changed in each release: the release notes on the [Releases page](https://github.com/Balls0fSteel/Rookparcel/releases), or the website's [News](https://balls0fsteel.github.io/Rookparcel/news.html) page.
+
+## When a version reads your settings differently
+
+*New in 1.2.55 and 1.2.56, not in a published release yet.*
+
+Each time Rookparcel saves its settings, it also notes its version and how it read the settings that decide where your traffic goes: the proxy, **Use only this network**, the listen interfaces, encryption and the IP filter. When another version starts, it compares that note with its own reading of the same file:
+
+- It first keeps a copy of the file as it found it, beside it: `rookparcel.ini.<old version>.bak` (`webui.json.<old version>.bak` for `rookparcel-nox`). The last three are kept.
+- Each setting that reads differently goes to the **Logger** tab, for example `proxy: socks5 10.8.0.1:1080 peers trackers names → none`.
+- If the proxy, the network rule or the listen interfaces would be lost, nothing connects: the status bar says **Transfers held: confirm the settings**, and the torrents wait. Check **Options > Preferences > Connection**, then press **OK**, and the transfers start. In the Web UI, saving any preference does the same. To go back instead, exit Rookparcel and copy the `.bak` file over the settings file.
+
+The transfers are held the same way when the settings file cannot be read at all (it is then never saved over), or when this version cannot read the proxy type a newer version wrote; that line stays in the file for the newer version. A settings file that is not valid text (saved by an editor in another encoding) is read as well as it can be, and the original is kept as `rookparcel.ini.damaged-<number>`. `rookparcel-nox` does not start on a `webui.json` it cannot read; it names the file, so you can fix it or move it away.

@@ -264,6 +264,9 @@ LogSettingsDamaged=berkas preferensi {file} bukan teks yang valid: berkas dibaca
 LogSettingsNoCopy=berkas preferensi {file} bukan teks yang valid dan salinannya tidak dapat dibuat: tidak ada yang disimpan di atasnya selama sesi ini
 LogSettingUnreadable=versi ini tidak dapat membaca pengaturan {name}={value}: untuk sementara memakai nilai bawaan dan tetap ada di berkas
 LogSettingsHeld=transfer ditahan sampai Anda mengonfirmasi pengaturan: periksa di Preferensi, lalu tekan OK
+LogSettingsChanged=pengaturan ini terbaca berbeda dari cara Rookparcel {old} menyimpannya:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=preferensi sebagaimana ditinggalkan Rookparcel {old} disimpan sebagai {copy}
 LogNotSaved=tidak dapat menyimpan {file}: {error}
 LogAutoloadError=Muat .torrent secara otomatis: {error}
 LogAlreadyInList={line} (sudah ada di daftar)

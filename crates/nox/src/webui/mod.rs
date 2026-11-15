@@ -827,6 +827,10 @@ impl Shared {
         for (k, v) in st.options.entries() {
             options.set(k, v);
         }
+        // the version that wrote the file and its reading of the settings (D70)
+        for (k, v) in rookparcel_frontend::guard::stamp_lines(&st.options) {
+            options.set(k, v.as_str());
+        }
         let doc = Json::obj()
             .with("username", st.username.as_str())
             .with("password", st.password.to_string())
@@ -958,7 +962,8 @@ pub fn stored_settings(
     state_dir: &std::path::Path,
     s: &mut Settings,
 ) -> Result<rookparcel_frontend::guard::StartCheck, String> {
-    let stored = read_state(&state_dir.join(STATE_FILE))?;
+    let file = state_dir.join(STATE_FILE);
+    let stored = read_state(&file)?;
     prefs::stored_engine_settings(&stored, s);
     let mut options = rookparcel_frontend::prefs::Prefs::default();
     for (k, v) in stored.get("options").map(Json::entries).unwrap_or_default() {
@@ -966,7 +971,9 @@ pub fn stored_settings(
             options.set(k, v);
         }
     }
-    Ok(rookparcel_frontend::guard::on_start(&options))
+    prefs::migrate_keys(&mut options);
+    // a version change keeps a copy of the file before anything is written to it
+    Ok(rookparcel_frontend::guard::on_start_for(&mut options, Some(&file)))
 }
 
 /// The state file at `path`: an empty object when there is none. A file that cannot be read or
@@ -1225,7 +1232,8 @@ impl WebUi {
                 }
                 // D70: what the stored settings asked for at start (nox started the engine
                 // with the transfers held if so)
-                for line in rookparcel_frontend::guard::on_start(&st.options).log {
+                // (and this file's stamp, written at every save, D70)
+                for line in rookparcel_frontend::guard::on_start_for(&mut st.options, None).log {
                     st.push_log(None, line, unix_now());
                 }
                 if let Some(legacy @ Json::Obj(_)) = stored.get("preferences") {

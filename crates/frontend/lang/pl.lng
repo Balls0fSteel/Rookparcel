@@ -264,6 +264,9 @@ LogSettingsDamaged=plik ustawień {file} nie był poprawnym tekstem: odczytano g
 LogSettingsNoCopy=plik ustawień {file} nie był poprawnym tekstem i nie udało się zrobić jego kopii: w tej sesji nic nie zostanie na nim zapisane
 LogSettingUnreadable=ta wersja nie potrafi odczytać ustawienia {name}={value}: na razie ma wartość domyślną i pozostaje w pliku
 LogSettingsHeld=transfery są wstrzymane do czasu potwierdzenia ustawień: sprawdź je w Ustawieniach, a następnie naciśnij OK
+LogSettingsChanged=te ustawienia są odczytywane inaczej, niż zapisał je Rookparcel {old}:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=ustawienia w stanie pozostawionym przez Rookparcel {old} zachowano jako {copy}
 LogNotSaved=nie można zapisać {file}: {error}
 LogAutoloadError=Automatyczne wczytywanie plików .torrent: {error}
 LogAlreadyInList={line} (już na liście)

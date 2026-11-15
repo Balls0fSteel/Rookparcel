@@ -476,6 +476,7 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
 
 ## Remote mode and Web UI
 
+- **Repeated add race (2026-11-14):** nox answers a repeated add from its torrent list, which learns of a new torrent at its first status; a second add inside that gap gets 200 instead of 409 (`webui/search.rs`, `commands::add`, `rss.rs`); the engine still holds one torrent.
 - Both GUIs need remote hand checks against HTTPS nox: connect dialog focus,
   Enter/Escape, spinner/disabled controls and translated wrapping; bad port,
   password and absent listener; first certificate Cancel/accept, saved pin and
@@ -1202,8 +1203,9 @@ Found and left:
 
 ## Settings guard (D70; 2026-11-15, 1.2.55-)
 
-Layer 1 (1.2.55): the loss paths closed and the engine hold. Open:
+Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/frontend/tests/settings_fixtures.rs`. Layer 2 (1.2.56): the stamp, the start comparison and the backups. Open:
 
+- **By hand, layer 2:** an installed copy updated from 1.2.56 to the next version keeps `rookparcel.ini.1.2.56.bak` and stays quiet. A `check.guard` edited to name a proxy holds the transfers and lists the difference in the Logger.
 - **By hand:** the status bar's "Transfers held: confirm the settings" in the Win32, GTK and macOS GUIs, and the Logger's lines. Try a `rookparcel.ini` with `lt.proxy_type=9` in a scratch profile (`--profile`), never on the real HKCU registrations. Preferences' OK lifts the hold.
 - A remote GUI's OK with nothing changed sends `hold_transfers(false)` to nox's engine but does not reach nox's own confirmation: the hold is gone for that run, and the unreadable line stays in `webui.json` until a change is committed. A `Request::HoldTransfers` in the remote server could route it to `prefs::commit`.
 - A GUI-hosted Web UI (D40) confirms through the host's Preferences path, which already lifts the hold when the host applies the Web UI's changes.

@@ -264,6 +264,9 @@ LogSettingsDamaged=il file delle preferenze {file} non era testo valido: è stat
 LogSettingsNoCopy=il file delle preferenze {file} non era testo valido e non è stato possibile farne una copia: in questa sessione non verrà salvato nulla sopra di esso
 LogSettingUnreadable=questa versione non sa leggere l'impostazione {name}={value}: per ora resta al valore predefinito e rimane nel file
 LogSettingsHeld=i trasferimenti sono trattenuti finché non confermi le impostazioni: controllale in Preferenze, poi premi OK
+LogSettingsChanged=queste impostazioni vengono lette diversamente da come le ha salvate Rookparcel {old}:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=le preferenze come le ha lasciate Rookparcel {old} sono conservate come {copy}
 LogNotSaved=impossibile salvare {file}: {error}
 LogAutoloadError=Caricamento automatico dei .torrent: {error}
 LogAlreadyInList={line} (già nell'elenco)

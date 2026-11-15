@@ -264,6 +264,9 @@ LogSettingsDamaged=ไฟล์การกำหนดลักษณะ {file}
 LogSettingsNoCopy=ไฟล์การกำหนดลักษณะ {file} ไม่ใช่ข้อความที่ถูกต้องและทำสำเนาไม่ได้: จะไม่บันทึกทับไฟล์นี้ในเซสชันนี้
 LogSettingUnreadable=รุ่นนี้อ่านการตั้งค่า {name}={value} ไม่ได้: ตอนนี้ใช้ค่าเริ่มต้นไปก่อน และยังคงอยู่ในไฟล์
 LogSettingsHeld=พักการถ่ายโอนไว้จนกว่าคุณจะยืนยันการตั้งค่า: ตรวจสอบในการกำหนดลักษณะ แล้วกด ตกลง
+LogSettingsChanged=การตั้งค่าเหล่านี้ถูกอ่านต่างจากที่ Rookparcel {old} บันทึกไว้:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=เก็บการกำหนดลักษณะตามที่ Rookparcel {old} ทิ้งไว้เป็น {copy}
 LogNotSaved=บันทึก {file} ไม่ได้: {error}
 LogAutoloadError=โหลด .torrent อัตโนมัติ: {error}
 LogAlreadyInList={line} (มีอยู่ในรายการแล้ว)

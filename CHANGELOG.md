@@ -4,6 +4,25 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-15_141701_1794748621: Version 1.2.56: the start compares the settings with how the last version read them (D70, part 2)
+
+- **The stamp:** every save writes `check.version` and `check.guard` (`guard::summary`). The summary is a frozen `v1` text of the proxy (type, host, port, scopes), the network rule, the listen interfaces, the encryption and the IP filter. It holds no user name or password.
+  - `Prefs::save` adds the stamp once `guard::on_start` has turned it on, so a remote window's file and a helper's file are never stamped. nox adds it to `webui.json` (`guard::stamp_lines`).
+- **At start** (`guard::on_start`, before anything writes):
+  - After a version change, the file is first copied to `<name>.<old>.bak`. One copy per version, the newest three kept, and the version from the file is sanitised so it never names a path.
+  - The stamp is then compared with this build's reading. Each differing field goes to the Logger.
+  - Losing a proxy, a network rule or the listen interfaces holds the transfers. The file then keeps the old stamp until the user confirms, so the next start asks again.
+  - An IP filter or encryption difference is only logged.
+- **nox:** the check runs on `webui.json` before the engine starts (the backup, the hold) and again for the Web UI's Logger. A preference change confirms.
+- 3 new strings in all 35 tables (machine translations). The wiki's Updating page has a section on it ("not in a published release yet").
+- **Validation:**
+  - Tests: frontend 397 (the stamp, the backups, the summary); the fixture tests unchanged; nox and Win32 suites green; clippy `-D warnings` and the GTK and macOS cross-lint clean.
+  - End to end with the real nox in scratch folders:
+    - Run 1 stamped `check.version=1.2.56` with a SOCKS5 proxy.
+    - Run 2, with the stamp made to look written by 1.2.40 and the proxy line read as none, kept `webui.json.1.2.40.bak`, logged `proxy: socks5 10.8.0.1:1080 peers trackers names → none` and started held, with nothing listening. The file kept the old stamp while held.
+    - `setPreferences` lifted the hold and stamped 1.2.56's reading.
+- **Not done:** the GUIs by hand (BACKLOG "Settings guard").
+
 ## 2026-11-15_140719_1794748039: D70 layer 3: the settings fixture test (tests only, no version)
 
 - **`crates/frontend/tests/settings_fixtures.rs`:** builds the preferences with every engine row and GUI key away from its default. Then three tests:

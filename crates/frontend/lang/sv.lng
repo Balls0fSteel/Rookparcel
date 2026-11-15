@@ -264,6 +264,9 @@ LogSettingsDamaged=inställningsfilen {file} var inte giltig text: den lästes m
 LogSettingsNoCopy=inställningsfilen {file} var inte giltig text och ingen kopia av den kunde göras: inget sparas över den under den här sessionen
 LogSettingUnreadable=den här versionen kan inte läsa inställningen {name}={value}: den har sitt standardvärde tills vidare och finns kvar i filen
 LogSettingsHeld=överföringar hålls kvar tills du bekräftar inställningarna: kontrollera dem under Inställningar och tryck sedan på OK
+LogSettingsChanged=de här inställningarna läses annorlunda än Rookparcel {old} sparade dem:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=inställningarna så som Rookparcel {old} lämnade dem finns kvar som {copy}
 LogNotSaved=kunde inte spara {file}: {error}
 LogAutoloadError=Läs in .torrent-filer automatiskt: {error}
 LogAlreadyInList={line} (finns redan i listan)

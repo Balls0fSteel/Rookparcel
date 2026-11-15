@@ -264,6 +264,9 @@ LogSettingsDamaged=súbor predvolieb {file} nebol platný text: načítal sa s n
 LogSettingsNoCopy=súbor predvolieb {file} nebol platný text a nepodarilo sa vytvoriť jeho kópiu: v tejto relácii sa cez neho nič neuloží
 LogSettingUnreadable=táto verzia nedokáže prečítať nastavenie {name}={value}: zatiaľ má predvolenú hodnotu a v súbore zostáva
 LogSettingsHeld=prenosy sú pozdržané, kým nepotvrdíte nastavenia: skontrolujte ich v Predvoľbách a stlačte OK
+LogSettingsChanged=tieto nastavenia sa čítajú inak, než ako ich uložil Rookparcel {old}:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=predvoľby, ako ich zanechal Rookparcel {old}, sú uložené ako {copy}
 LogNotSaved={file} nemožno uložiť: {error}
 LogAutoloadError=Automatické načítanie súborov .torrent: {error}
 LogAlreadyInList={line} (už je v zozname)

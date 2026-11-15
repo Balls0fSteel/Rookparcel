@@ -264,6 +264,9 @@ LogSettingsDamaged=tercihler dosyası {file} geçerli bir metin değildi: hatal�
 LogSettingsNoCopy=tercihler dosyası {file} geçerli bir metin değildi ve kopyası alınamadı: bu oturumda üzerine hiçbir şey kaydedilmez
 LogSettingUnreadable=bu sürüm {name}={value} ayarını okuyamıyor: şimdilik varsayılan değerinde kalır ve dosyada durur
 LogSettingsHeld=ayarları onaylayana kadar aktarımlar bekletiliyor: bunları Tercihler'de denetleyin, ardından Tamam'a basın
+LogSettingsChanged=bu ayarlar, Rookparcel {old} sürümünün kaydettiğinden farklı okunuyor:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=Rookparcel {old} sürümünün bıraktığı haliyle tercihler {copy} olarak saklandı
 LogNotSaved={file} kaydedilemedi: {error}
 LogAutoloadError=.torrent dosyalarını otomatik yükleme: {error}
 LogAlreadyInList={line} (zaten listede)

@@ -2140,7 +2140,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let check = |options: &str| {
-            std::fs::write(dir.join(super::super::STATE_FILE), format!(r#"{{"options":{options}}}"#)).unwrap();
+            std::fs::write(dir.join(super::super::STATE_FILE), format!(r#"{{"options":{options}}}"#))
+                .unwrap();
             let mut s = Settings::default();
             let c = super::super::stored_settings(&dir, &mut s).unwrap();
             (c, s.proxy_type)

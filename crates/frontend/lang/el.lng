@@ -264,6 +264,9 @@ LogSettingsDamaged=το αρχείο προτιμήσεων {file} δεν ήτα
 LogSettingsNoCopy=το αρχείο προτιμήσεων {file} δεν ήταν έγκυρο κείμενο και δεν ήταν δυνατό να γίνει αντίγραφό του: τίποτα δεν αποθηκεύεται πάνω του σε αυτή τη συνεδρία
 LogSettingUnreadable=αυτή η έκδοση δεν μπορεί να διαβάσει τη ρύθμιση {name}={value}: προς το παρόν έχει την προεπιλεγμένη τιμή και παραμένει στο αρχείο
 LogSettingsHeld=οι μεταφορές είναι σε αναμονή μέχρι να επιβεβαιώσετε τις ρυθμίσεις: ελέγξτε τες στις Προτιμήσεις και πατήστε OK
+LogSettingsChanged=αυτές οι ρυθμίσεις διαβάζονται διαφορετικά από ό,τι τις αποθήκευσε το Rookparcel {old}:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=οι προτιμήσεις όπως τις άφησε το Rookparcel {old} φυλάσσονται ως {copy}
 LogNotSaved=δεν ήταν δυνατή η αποθήκευση του {file}: {error}
 LogAutoloadError=Αυτόματη φόρτωση .torrent: {error}
 LogAlreadyInList={line} (ήδη στη λίστα)

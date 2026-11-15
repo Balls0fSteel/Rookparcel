@@ -264,6 +264,9 @@ LogSettingsDamaged=датотека подешавања {file} није бил�
 LogSettingsNoCopy=датотека подешавања {file} није била исправан текст и није могла да се направи њена копија: у овој сесији се преко ње ништа не чува
 LogSettingUnreadable=ова верзија не може да прочита подешавање {name}={value}: засад има подразумевану вредност и остаје у датотеци
 LogSettingsHeld=преноси су задржани док не потврдите подешавања: проверите их у Подешавањима, па притисните У реду
+LogSettingsChanged=ова подешавања се читају другачије него што их је сачувао Rookparcel {old}:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=подешавања каква је оставио Rookparcel {old} сачувана су као {copy}
 LogNotSaved={file} се не може сачувати: {error}
 LogAutoloadError=Аутоматско учитавање .torrent датотека: {error}
 LogAlreadyInList={line} (већ је на листи)

@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-15_140244_1794747764
+Last updated: 2026-11-15_141701_1794748621
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D69](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -19,18 +19,14 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Current status
 
-- **Settings guard (D70, 2026-11-15):** the owner's answer to qBittorrent's lost-proxy update. Layer 1 is in 1.2.55: the loss paths are closed, the engine can hold the transfers, and nox keeps its network rule. Layer 3 (the fixture test) and layer 2 (the start check with backups) follow. Open: BACKLOG "Settings guard".
-
-- **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** shipped since 1.2.19 (2026-11-06), checked on the Intel VM with real input. Open (BACKLOG "macOS"): arm64 and Retina by hand (the owner has only the Intel VM).
-
-- **Renamed PaTorrent to Rookparcel** (D59, first released as 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.
-
-- **Artwork (2026-11-05):** the Postal Rook won ([concepts](docs/art/rookparcel-candidates-2026-11-05/README.md), [small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
-
-- **Releases:** 1.0.1 to 1.2.54 published ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes. **1.2.54** (published 2026-11-15) shipped the UI lock (D69) and the fixes of 1.2.51-1.2.54; its draft was checked by checksum and `rookparcel-nox --version` only, the rest of RELEASING.md step 5 is open.
-- **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.54. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`. **Open, small:** nox answers a repeated add from its torrent list, which learns of a new torrent at its first status; a second add inside that gap gets 200 instead of 409 (`webui/search.rs`, `commands::add`, `rss.rs`); the engine still holds one torrent.
+- **Settings guard (D70, 1.2.55-1.2.56):** loss paths closed, the engine's hold, the fixture test, a stamp compared at each start with backups. Hand checks: BACKLOG "Settings guard".
+- **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
+- **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.
+- **Artwork:** the Postal Rook won ([small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
+- **Releases:** 1.0.1 to 1.2.54 published ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes. **1.2.54** (published 2026-11-15) shipped the UI lock (D69) and the fixes of 1.2.51-1.2.54; RELEASING.md step 5 by hand is open.
+- **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.54. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`. A small nox add race is in BACKLOG "Remote mode and Web UI".
 - **UI lock (D69, 1.2.47-1.2.50, 2026-11-13):** a PIN of 4 to 6 digits hides the windows of all three GUIs in the tray; Ctrl or Option held at start, or `--reset-lock`, removes a forgotten one. Run on the hidden desktop, the Xubuntu VM and the macOS VM; wiki page `Locking-Rookparcel` (pushed 2026-11-13). First released in 1.2.54. Hand checks and what was left: BACKLOG "UI lock".
-- **Benchmarks:** [2026-11-11 results](docs/BENCHMARKS.md) for the published 1.2.46 with 1.0.1, 1.1.40 and 1.2.29 in the same rounds: 10,000 torrents after restart use 67 MB (qBittorrent 612 MB) and idle at 0.07 % of a core; Win32 at 100,000 lists in 1.37-1.49 s; the Mac GUI shows 100,000 demo rows in 0.50-0.57 s. Not rerun for 1.2.54 (no engine hot-path change).
+- **Benchmarks:** [2026-11-11 results](docs/BENCHMARKS.md) for 1.2.46: 10,000 torrents use 67 MB after restart (qBittorrent 612 MB) and idle at 0.07 % of a core; Win32 lists 100,000 in 1.37-1.49 s. Not rerun since (no hot-path change).
 - CI, FreeBSD and Fuzz were green for `03c6f3ed` (1.2.54, 2026-11-14), and the Release run for `v1.2.54`.
 - Scale baselines on this PC: [plan snapshot](docs/archive/PLAN-2026-11-13.md), [BENCHMARKS.md](docs/BENCHMARKS.md); the low-end-machine gate remains open.
 - The app icon is the Postal Rook (D60): drawn marks below 48 px, the generated stamp from 48 px (`assets/rookparcel-icons`).

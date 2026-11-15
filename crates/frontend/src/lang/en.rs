@@ -409,6 +409,14 @@ strings! {
     LogSettingUnreadable = "this version cannot read the setting {name}={value}: it is at its default for now and stays in the file";
     /// D70: after the lines above, when the transfers are held.
     LogSettingsHeld = "transfers are held until you confirm the settings: check them in Preferences, then press OK";
+    /// D70, at start: the settings that decide where traffic goes read differently from how
+    /// {old} (a version number) read them when it saved the file; LogSettingChanged lines follow.
+    LogSettingsChanged = "these settings read differently from how Rookparcel {old} saved them:";
+    /// D70: {field} is a short technical name (proxy, rule, listen, enc, ipfilter) and {before},
+    /// {now} its values then and now, as the program writes them (not translated).
+    LogSettingChanged = "{field}: {before} → {now}";
+    /// D70, at the first start of another version: {copy} is the path of the copy of the file.
+    LogSettingsBackup = "the preferences as Rookparcel {old} left them are kept as {copy}";
     /// {file} is a path.
     LogNotSaved = "could not save {file}: {error}";
     LogAutoloadError = "Automatically load .torrents: {error}";

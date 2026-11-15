@@ -264,6 +264,9 @@ LogSettingsDamaged=el fitxer de preferències {file} no era text vàlid: s'ha ll
 LogSettingsNoCopy=el fitxer de preferències {file} no era text vàlid i no se n'ha pogut fer cap còpia: en aquesta sessió no s'hi desa res al damunt
 LogSettingUnreadable=aquesta versió no pot llegir el paràmetre {name}={value}: de moment té el valor per defecte i es manté al fitxer
 LogSettingsHeld=les transferències estan retingudes fins que confirmeu les preferències: reviseu-les a Preferències i premeu D'acord
+LogSettingsChanged=aquests paràmetres es llegeixen de manera diferent de com els va desar Rookparcel {old}:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=les preferències tal com les va deixar Rookparcel {old} es conserven com a {copy}
 LogNotSaved=no s'ha pogut desar {file}: {error}
 LogAutoloadError=Carrega automàticament els .torrent: {error}
 LogAlreadyInList={line} (ja és a la llista)

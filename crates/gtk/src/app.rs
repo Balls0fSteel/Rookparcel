@@ -980,7 +980,7 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
     // D70: what the file says before anything is written to it; an unreadable file or proxy
     // type starts the engine with the transfers held
     let check =
-        if remote.is_none() { rookparcel_frontend::guard::on_start(&prefs) } else { Default::default() };
+        if remote.is_none() { rookparcel_frontend::guard::on_start(&mut prefs) } else { Default::default() };
     if let Some(r) = remote {
         // the server's engine settings and default folder are this window's; the language
         // (picked in `run`) is every window's

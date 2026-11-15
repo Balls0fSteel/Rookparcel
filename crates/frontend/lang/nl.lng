@@ -264,6 +264,9 @@ LogSettingsDamaged=het voorkeurenbestand {file} was geen geldige tekst: het is g
 LogSettingsNoCopy=het voorkeurenbestand {file} was geen geldige tekst en er kon geen kopie van worden gemaakt: in deze sessie wordt er niets overheen opgeslagen
 LogSettingUnreadable=deze versie kan de instelling {name}={value} niet lezen: die staat voorlopig op de standaardwaarde en blijft in het bestand
 LogSettingsHeld=overdrachten worden vastgehouden tot u de instellingen bevestigt: controleer ze in Voorkeuren en druk dan op OK
+LogSettingsChanged=deze instellingen worden anders gelezen dan Rookparcel {old} ze heeft opgeslagen:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=de voorkeuren zoals Rookparcel {old} ze achterliet, zijn bewaard als {copy}
 LogNotSaved=kon {file} niet opslaan: {error}
 LogAutoloadError=.torrents automatisch laden: {error}
 LogAlreadyInList={line} (al in de lijst)

@@ -264,6 +264,9 @@ LogSettingsDamaged=ملف التفضيلات {file} لم يكن نصًا صال�
 LogSettingsNoCopy=ملف التفضيلات {file} لم يكن نصًا صالحًا وتعذّر عمل نسخة منه: لن يُحفظ شيء فوقه في هذه الجلسة
 LogSettingUnreadable=لا يستطيع هذا الإصدار قراءة الإعداد {name}={value}: يبقى على قيمته الافتراضية الآن ويظل في الملف
 LogSettingsHeld=النقل معلّق حتى تؤكّد الإعدادات: راجعها في التفضيلات ثم اضغط موافق
+LogSettingsChanged=تُقرأ هذه الإعدادات بشكل مختلف عمّا حفظه Rookparcel {old}:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=التفضيلات كما تركها Rookparcel {old} محفوظة باسم {copy}
 LogNotSaved=تعذّر حفظ {file}: {error}
 LogAutoloadError=التحميل التلقائي لملفات ‎.torrent: {error}
 LogAlreadyInList={line} (موجود في القائمة)

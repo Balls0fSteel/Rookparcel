@@ -264,6 +264,9 @@ LogSettingsDamaged=پرونده ترجیحات {file} متن معتبری نبو
 LogSettingsNoCopy=پرونده ترجیحات {file} متن معتبری نبود و ساختن رونوشتی از آن ممکن نشد: در این نشست چیزی روی آن ذخیره نمی‌شود
 LogSettingUnreadable=این نسخه نمی‌تواند تنظیم {name}={value} را بخواند: فعلاً مقدار پیش‌فرض را دارد و در پرونده می‌ماند
 LogSettingsHeld=انتقال‌ها تا تأیید تنظیمات نگه داشته شده‌اند: آن‌ها را در ترجیحات بررسی کنید و سپس تأیید را بزنید
+LogSettingsChanged=این تنظیمات متفاوت از آنچه Rookparcel {old} ذخیره کرده بود خوانده می‌شوند:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=ترجیحات به همان شکلی که Rookparcel {old} گذاشته بود با نام {copy} نگه داشته شد
 LogNotSaved=ذخیره {file} ممکن نشد: {error}
 LogAutoloadError=بارکردن خودکار پرونده‌های ‎.torrent: {error}
 LogAlreadyInList={line} (از پیش در فهرست است)

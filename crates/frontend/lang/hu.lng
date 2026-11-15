@@ -264,6 +264,9 @@ LogSettingsDamaged=a beállításfájl ({file}) nem volt érvényes szöveg: a h
 LogSettingsNoCopy=a beállításfájl ({file}) nem volt érvényes szöveg, és másolat sem készülhetett róla: ebben a munkamenetben semmi sem lesz fölé mentve
 LogSettingUnreadable=ez a verzió nem tudja olvasni a(z) {name}={value} beállítást: egyelőre az alapértéke érvényes, és a fájlban marad
 LogSettingsHeld=az átvitelek visszatartva, amíg meg nem erősíti a beállításokat: ellenőrizze őket a Tulajdonságok ablakban, majd nyomja meg az OK gombot
+LogSettingsChanged=ezek a beállítások másként olvashatók, mint ahogy a Rookparcel {old} mentette őket:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=a beállítások, ahogy a Rookparcel {old} hagyta őket, {copy} néven megmaradtak
 LogNotSaved={file} nem menthető: {error}
 LogAutoloadError=.torrent fájlok automatikus betöltése: {error}
 LogAlreadyInList={line} (már a listában van)

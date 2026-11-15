@@ -264,6 +264,9 @@ LogSettingsDamaged=tệp tùy chỉnh {file} không phải văn bản hợp lệ
 LogSettingsNoCopy=tệp tùy chỉnh {file} không phải văn bản hợp lệ và không tạo được bản sao: trong phiên này sẽ không lưu đè lên tệp đó
 LogSettingUnreadable=phiên bản này không đọc được cài đặt {name}={value}: tạm thời dùng giá trị mặc định và vẫn giữ trong tệp
 LogSettingsHeld=truyền tải đang được giữ cho đến khi bạn xác nhận cài đặt: hãy kiểm tra trong Tùy chỉnh rồi nhấn OK
+LogSettingsChanged=các cài đặt này được đọc khác với cách Rookparcel {old} đã lưu:
+LogSettingChanged={field}: {before} → {now}
+LogSettingsBackup=tùy chỉnh như Rookparcel {old} để lại được giữ thành {copy}
 LogNotSaved=không lưu được {file}: {error}
 LogAutoloadError=Tự động nạp .torrent: {error}
 LogAlreadyInList={line} (đã có trong danh sách)
