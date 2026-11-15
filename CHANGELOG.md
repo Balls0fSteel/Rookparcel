@@ -4,6 +4,13 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-15_132051_1794745251: Release 1.2.54 published; the site's news and the wiki pushed
+
+- **Published by the owner** (`gh release edit v1.2.54 --draft=false --latest`, 2026-11-15 13:18 Budapest; this session's permission check had refused the command). GitHub's latest release is `v1.2.54`.
+- **Then, on the owner's "do the rest":** `main` fast-forwarded to the publish branch and pushed (`03c6f3ed..b7a841fe`: the README and wiki version lines, the news entry dated 2026-11-15); the branch deleted. The GitHub wiki got the seven changed pages (`a244cf5`), after a page-by-page comparison showed every wiki page still equal to the 2026-11-13 sync (`1f4ccedb`).
+- **Checked live:** the three Pages runs green; `update.txt` says `stable=1.2.54`; the news page, `news.atom` and the home page's latest-news line have 1.2.54; the download page links the 1.2.54 setup; the wiki's Home says 1.2.54 and Locking Rookparcel "New in 1.2.54.".
+- **Still open:** the rest of RELEASING.md step 5 by hand (the GUI, the setup and the update from an installed 1.2.46, the Linux and Mac files, the container image) and the UI lock's hand checks (BACKLOG "UI lock").
+
 ## 2026-11-14_235326_1794696806: Release 1.2.54 tagged; the draft is built, not published
 
 - **On the owner's word ("Push and tag"):** `main` pushed (`9fb7e42d..03c6f3ed`); CI, FreeBSD and Fuzz green on `03c6f3ed`; tag `v1.2.54` pushed.
