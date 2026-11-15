@@ -4,6 +4,18 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-15_140719_1794748039: D70 layer 3: the settings fixture test (tests only, no version)
+
+- **`crates/frontend/tests/settings_fixtures.rs`:** builds the preferences with every engine row and GUI key away from its default. Then three tests:
+  - **Every setting survives the file.** A row that comes back at its default fails.
+  - **The newest fixture is this build's format.** A changed format fails until `ROOKPARCEL_WRITE_FIXTURE=1` adds `<version>.ini` with its `.expect`. A version that leaves the settings alone costs nothing.
+  - **Older settings read the same.** Every fixture must read as its own version read it: the rows, the engine's fields by what they mean (`proxy_type=Socks5`) and the GUI keys. Only what that version read away from its defaults is compared, so a later build may still change a default.
+- **Fixtures:** `1.2.55` (147 rows, every GUI key that survives a change, the folders, the IP filter, Run Program) and a hand-written `legacy-keys` for the keys the existing migrations handle (`net.port`, a seeding goal from before 1.2.45, D68).
+- **Shown to catch the bug class** with two scratch edits, reverted afterwards:
+  - SOCKS4 and SOCKS5 renumbered in both directions, so the stored "2" is unchanged but read as SOCKS4: `field proxy_type: then "Socks5", now Some("Socks4")`.
+  - LSD's default changed: the format test asks for a new fixture. A value stored before the change still compares, with no false alarm.
+- **RELEASING.md** step 3 says what to do when the test fails: add the fixture in the change set itself, write a migration, and never edit an old fixture.
+
 ## 2026-11-15_140244_1794747764: Version 1.2.55: settings not taken on trust (D70, part 1)
 
 - **Asked for:** the owner remembered qBittorrent's update that lost users' proxy setting and asked for a smart guard rather than hand tests of every upgrade path. The owner chose all three layers of the plan (close the loss paths, a fixture test, a check after a version change) and holding the transfers when the proxy cannot be trusted (D70). This is layer 1.

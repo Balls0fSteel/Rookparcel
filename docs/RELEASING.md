@@ -167,6 +167,13 @@ Once, before the first tag after the rename:
      the build then updates `news.atom` and the home page's latest-news line.
 3. Check that CI is green on `main` for the commit to be released (Windows, Linux, macOS,
    FreeBSD, MSRV, fuzzing).
+   - **Settings fixtures (D70).** `crates/frontend/tests/settings_fixtures.rs` fails whenever a
+     change writes the settings differently from the newest `tests/fixtures/settings/<version>.ini`
+     (a new setting, a renamed key). Add the version's fixture with
+     `ROOKPARCEL_WRITE_FIXTURE=1 cargo test -p rookparcel-frontend --test settings_fixtures` in
+     the change set itself, not at release time. An older fixture that reads differently means a
+     key was renamed or changed meaning without a migration: write the migration (as
+     `seeding::migrate` does); never edit an old fixture to make it pass.
 4. Tag and push the tag:
 
    ```bash

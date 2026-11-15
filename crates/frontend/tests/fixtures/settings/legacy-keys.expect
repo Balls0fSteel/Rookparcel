@@ -1,0 +1,12 @@
+# What the migrations make of legacy-keys.ini.
+engine listen_interfaces=0.0.0.0:7777,[::]:7777
+engine proxy_hostname=10.8.0.1
+engine proxy_port=1080
+engine proxy_type=2
+gui queue.seed_limit=1
+gui queue.seed_ratio=200
+gui queue.seed_time=90
+field listen_interfaces="0.0.0.0:7777,[::]:7777"
+field proxy_hostname="10.8.0.1"
+field proxy_port=1080
+field proxy_type=Socks5
