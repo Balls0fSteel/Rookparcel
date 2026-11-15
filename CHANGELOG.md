@@ -4,6 +4,20 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-15_180859_1794762539: Release 1.2.57 published; the site's news and the wiki pushed
+
+- **On the owner's "make a release":** CI, FreeBSD and Fuzz green on `b0f3852b`; tag `v1.2.57`; the Release run [43738460424](https://github.com/Balls0fSteel/Rookparcel/actions/runs/43738460424) passed every job on the first attempt (Windows, macOS, both Linux arches, both Flatpaks, both Docker images and the manifest).
+- **Checked on the draft:**
+  - All 13 files' GitHub SHA-256 digests match `SHA256SUMS`, and the downloaded zip matches too.
+  - The zip holds `rookparcel.exe`, `rookparcel-nox.exe`, `LICENSE.md` and `THIRD-PARTY-NOTICES.md`.
+  - Both exes say 1.2.57 in their version resources and the manifest says 1.2.57.0; `rookparcel-nox --version` prints `rookparcel-nox 1.2.57`.
+- **Published** with `gh release edit v1.2.57 --draft=false --latest` (18:07 Budapest).
+- **Then:**
+  - `main` fast-forwarded to the publish commit (`d032d7ed`: the news entry, the README's and the wiki's version lines, the settings check's "new in 1.2.57") and pushed.
+  - The GitHub wiki got the four changed pages (`19a4266`); a page-by-page comparison showed nothing else differing.
+- **Checked live:** `update.txt` says `stable=1.2.57`; the news page and `news.atom` lead with 1.2.57; the download page links the 1.2.57 setup.
+- **Still open:** RELEASING.md step 5 by hand (the GUIs, the setup and the update from an installed 1.2.54, the Linux and Mac files, the image), and the settings guard's hand checks (BACKLOG "Settings guard").
+
 ## 2026-11-15_174308_1794760988: Version 1.2.57: the release review's findings in the settings guard; release 1.2.57 prepared
 
 - **Asked for:** make a release. The security review of `v1.2.54..HEAD` (code read by a subagent, every finding checked here; [SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) "Release 1.2.57") found eleven things in D70, fixed here, so the release is **1.2.57**.

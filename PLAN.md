@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-15_141701_1794748621
+Last updated: 2026-11-15_180859_1794762539
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D69](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -23,11 +23,11 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.
 - **Artwork:** the Postal Rook won ([small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
-- **Releases:** 1.0.1 to 1.2.54 published ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes. **1.2.54** (published 2026-11-15) shipped the UI lock (D69) and the fixes of 1.2.51-1.2.54; RELEASING.md step 5 by hand is open.
-- **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.54. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`. A small nox add race is in BACKLOG "Remote mode and Web UI".
+- **Releases:** 1.0.1 to 1.2.57 published ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes. 1.2.54 shipped the UI lock (D69). **1.2.57** (published 2026-11-15) shipped the settings guard (D70) with the release review's fixes; its draft was checked by checksum, the zip's contents and versions and `rookparcel-nox --version`; RELEASING.md step 5 by hand is open.
+- **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.57. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`. A small nox add race is in BACKLOG "Remote mode and Web UI".
 - **UI lock (D69, 1.2.47-1.2.50, 2026-11-13):** a PIN of 4 to 6 digits hides the windows of all three GUIs in the tray; Ctrl or Option held at start, or `--reset-lock`, removes a forgotten one. Run on the hidden desktop, the Xubuntu VM and the macOS VM; wiki page `Locking-Rookparcel` (pushed 2026-11-13). First released in 1.2.54. Hand checks and what was left: BACKLOG "UI lock".
 - **Benchmarks:** [2026-11-11 results](docs/BENCHMARKS.md) for 1.2.46: 10,000 torrents use 67 MB after restart (qBittorrent 612 MB) and idle at 0.07 % of a core; Win32 lists 100,000 in 1.37-1.49 s. Not rerun since (no hot-path change).
-- CI, FreeBSD and Fuzz were green for `03c6f3ed` (1.2.54, 2026-11-14), and the Release run for `v1.2.54`.
+- CI, FreeBSD and Fuzz were green for `b0f3852b` (1.2.57, 2026-11-15), and the Release run for `v1.2.57` on its first attempt.
 - Scale baselines on this PC: [plan snapshot](docs/archive/PLAN-2026-11-13.md), [BENCHMARKS.md](docs/BENCHMARKS.md); the low-end-machine gate remains open.
 - The app icon is the Postal Rook (D60): drawn marks below 48 px, the generated stamp from 48 px (`assets/rookparcel-icons`).
 
