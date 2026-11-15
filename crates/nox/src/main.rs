@@ -771,7 +771,8 @@ fn run(mut o: Opts, mode: Mode) -> ExitCode {
         }
     }
     // D70: a stored proxy type this build cannot read starts the engine with the transfers
-    // held until a Preferences change in the Web UI confirms the settings
+    // held, the web fetches too, until the Web UI's Preferences page confirms the settings
+    check.hold_fetches();
     for line in &check.log {
         eprintln!("warning: {line}");
     }

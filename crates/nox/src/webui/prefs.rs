@@ -1694,7 +1694,8 @@ pub(crate) fn commit_request(
         let mut st = shared.lock();
         let wanted = ip_filter_to_read(shared, &st, changes);
         if wanted.as_ref() == done.as_ref().map(|(f, _)| f) {
-            return commit_read(shared, &mut st, changes, Some(from), run, done);
+            return commit_read(shared, &mut st, changes, Some(from), run, done)
+                .map(|()| confirm(shared, &mut st));
         }
         drop(st);
         done = wanted.map(|f| {
@@ -1703,7 +1704,23 @@ pub(crate) fn commit_request(
         });
     }
     // still changing: the file is read under the lock
-    commit_read(shared, &mut shared.lock(), changes, Some(from), run, done)
+    let mut st = shared.lock();
+    commit_read(shared, &mut st, changes, Some(from), run, done).map(|()| confirm(shared, &mut st))
+}
+
+/// The Web UI's Preferences page saved, or a remote window's Preferences sent OK or Apply: the
+/// user saw the settings and confirmed them (D70). After the settings reached the engine, so a
+/// held start goes on with them: the lines this build cannot read go, this version's reading is
+/// stamped, the web fetches and then the engine's transfers go on. Nothing else confirms: not
+/// the qBittorrent API (automation calls it), not a remote window's scheduler, not the limits.
+/// Hosted, the host confirms in its own Preferences.
+pub(crate) fn confirm(shared: &Shared, st: &mut State) {
+    if st.hosted {
+        return;
+    }
+    rookparcel_frontend::guard::confirm(&mut st.options);
+    shared.save(st);
+    shared.handle.hold_transfers(false);
 }
 
 /// Applies parsed changes to a working copy of `st`, checks it, and commits: engine settings
@@ -1880,12 +1897,6 @@ fn commit_read(
     let changed: Vec<&'static str> =
         TABLE.iter().filter(|e| e.get(&w.settings) != e.get(&old.settings)).map(|e| e.name).collect();
     store(st, &changed);
-    // the user confirmed the settings as shown (D70): the lines this build cannot read go and a
-    // held start goes on (hosted, the host's own Preferences path does both)
-    if !st.hosted {
-        rookparcel_frontend::guard::confirm(&mut st.options);
-        shared.handle.hold_transfers(false);
-    }
     shared.save(st);
     // the trackers added to new downloads (D66) follow at once: the engine has the new list
     // before the next torrent is added, and a new address is fetched (hosted: the host's list)
@@ -1923,7 +1934,8 @@ pub(crate) fn commit_settings(shared: &Shared, st: &mut State, new: &Settings) -
 /// client stores them, plus every row `changed` here or stored before, so a value set back to
 /// its default still wins over the command line at the next start), the `GuiOptions` keys
 /// (without the desktop-only tray ones), and the Web UI's own as `webui.<name>`. The old
-/// `lt.net.*` keys ([`migrate_keys`]) are dropped.
+/// `lt.net.*` keys ([`migrate_keys`]) are written beside the new ones, so nox 1.2.54 and older,
+/// which read only those, keep the network rule after a downgrade; hosted, they are dropped.
 fn store(st: &mut State, changed: &[&'static str]) {
     let mut normal = st.settings.clone();
     normal.download_rate_limit = st.prefs.dl_limit;
@@ -1936,12 +1948,19 @@ fn store(st: &mut State, changed: &[&'static str]) {
     settings::store(&mut st.options, &normal);
     for name in kept.iter().chain(changed) {
         if let Some(e) = settings::find(name).filter(|e| !e.name.starts_with("bt.")) {
-            st.options.set(&settings::pref_key(e.name), e.get(&normal));
+            let key = settings::pref_key(e.name);
+            // a line this build cannot read stays until the user confirms (D70) or changes it
+            if !changed.contains(name) && st.options.get(&key).is_some_and(|v| e.parse(v).is_err()) {
+                continue;
+            }
+            st.options.set(&key, e.get(&normal));
         }
     }
-    for old in TABLE.iter().filter_map(|e| legacy_key(e.name)) {
-        if st.options.get(&old).is_some() {
-            st.options.remove(&old);
+    for e in TABLE.iter() {
+        let Some(old) = legacy_key(e.name) else { continue };
+        match st.options.get(&settings::pref_key(e.name)).map(str::to_owned) {
+            Some(v) if !st.hosted => st.options.set(&old, v),
+            _ => st.options.remove(&old),
         }
     }
     if st.hosted {
@@ -2156,6 +2175,42 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// D70: only the Preferences page confirms. A commit from the qBittorrent API (automation
+    /// posts `listen_port`) keeps a line this build cannot read and the old stamp; the page's
+    /// save drops the line and stamps this version's reading.
+    #[test]
+    fn only_the_preferences_page_confirms_the_settings() {
+        let dir = std::env::temp_dir().join(format!("nox-prefs-confirm-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let session = rookparcel_core::Session::start_mock(Settings::default(), Default::default());
+        let shared = State::shared_for_tests(session.handle(), dir.clone());
+        *shared.lock() = state();
+        {
+            let mut st = shared.lock();
+            st.options.set("lt.proxy_type", "6");
+            st.options.set("lt.proxy_hostname", "10.8.0.1");
+            let check = rookparcel_frontend::guard::on_start_for(&mut st.options, None);
+            assert!(check.hold, "{check:?}");
+            let changes = parse(&Json::obj().with("listen_port", 51413)).unwrap();
+            commit(&shared, &mut st, &changes, None).unwrap();
+            assert_eq!(st.options.get("lt.proxy_type"), Some("6"), "kept: nobody confirmed");
+            assert_eq!(st.settings.listen_interfaces, "0.0.0.0:51413,[::]:51413");
+        }
+        let read = |_: &Path| -> io::Result<IpFilterLoad> { panic!("no block list here") };
+        shared.lock().sessions.insert(
+            "s".to_owned(),
+            super::super::ClientSession { last_used: std::time::Instant::now(), maindata: None, peers: None },
+        );
+        commit_request(&shared, &parse(&Json::obj()).unwrap(), "s", RunGate::Open, read).unwrap();
+        let st = shared.lock();
+        assert_eq!(st.options.get("lt.proxy_type"), None, "the page's save confirms");
+        assert!(
+            rookparcel_frontend::guard::stamp_lines(&st.options).iter().any(|(k, _)| *k == "check.guard")
+        );
+        drop(st);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// The network rule's rows (D54) by their own keys, as `settings::store` writes them; the
     /// `lt.net.*` keys of nox up to 1.2.54 when the own ones are not there.
     #[test]
@@ -2177,10 +2232,11 @@ mod tests {
         assert_eq!(legacy_key(settings::NETWORK_RULE).as_deref(), Some("lt.net.network_rule"));
     }
 
-    /// The old keys are taken at start and dropped at the next store; the rows are then stored
-    /// under their own keys only.
+    /// The old keys are taken at start; the rows are then stored under their own keys, and the
+    /// old ones are written beside them with the same values, so nox 1.2.54 and older keep the
+    /// rule after a downgrade (D70).
     #[test]
-    fn old_network_keys_are_migrated_and_dropped() {
+    fn old_network_keys_are_migrated_and_kept_for_older_versions() {
         let mut st = state();
         st.options.set("lt.net.network_rule", "vpn");
         st.options.set("lt.net.pause_when_missing", "false");
@@ -2194,12 +2250,16 @@ mod tests {
         store(&mut st, &[]);
         assert_eq!(st.options.get("net.network_rule"), Some("vpn"));
         assert_eq!(st.options.get("net.pause_when_missing"), Some("true"), "stored before, so kept");
-        assert_eq!(st.options.get("lt.net.network_rule"), None);
-        assert_eq!(st.options.get("lt.net.pause_when_missing"), None);
-        // a rule changed to off is stored as off under its own key
+        assert_eq!(st.options.get("lt.net.network_rule"), Some("vpn"));
+        assert_eq!(st.options.get("lt.net.pause_when_missing"), Some("true"));
+        // a rule changed to off is stored as off under both keys
         st.settings.network_rule.clear();
         store(&mut st, &[settings::NETWORK_RULE]);
         assert_eq!(st.options.get("net.network_rule"), Some(""));
+        assert_eq!(st.options.get("lt.net.network_rule"), Some(""));
+        // hosted: the host's file gets no old keys
+        st.hosted = true;
+        store(&mut st, &[]);
         assert!(st.options.entries().all(|(k, _)| !k.starts_with("lt.net.")));
     }
 

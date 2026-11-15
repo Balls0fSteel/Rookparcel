@@ -987,10 +987,21 @@ fn read_state(path: &std::path::Path) -> Result<Json, String> {
             path.display()
         )
     };
-    let text = match std::fs::read_to_string(path) {
-        Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Json::obj()),
-        Err(e) => return Err(damaged(&e)),
+    // a file another program holds for a moment (a virus scanner) is tried again a few times
+    let mut tries = 0;
+    let text = loop {
+        match std::fs::read_to_string(path) {
+            Ok(t) => break t,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Json::obj()),
+            Err(e) if e.kind() == std::io::ErrorKind::InvalidData => return Err(damaged(&e)),
+            Err(e) => {
+                tries += 1;
+                if tries == 5 {
+                    return Err(damaged(&e));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
     };
     // a byte order mark, as some editors write one
     match json::parse(text.strip_prefix('\u{feff}').unwrap_or(&text)) {

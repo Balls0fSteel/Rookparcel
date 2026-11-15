@@ -262,6 +262,7 @@ LogPrefsNotSaved=tercihler kaydedilemedi: {error}
 LogSettingsUnreadable=tercihler dosyası {file} okunamıyor: {error}. Bu oturumda üzerine hiçbir şey kaydedilmez.
 LogSettingsDamaged=tercihler dosyası {file} geçerli bir metin değildi: hatalı karakterler değiştirilerek okundu ve özgün dosya {copy} olarak saklandı
 LogSettingsNoCopy=tercihler dosyası {file} geçerli bir metin değildi ve kopyası alınamadı: bu oturumda üzerine hiçbir şey kaydedilmez
+LogSettingsMissing={file} içinde ayar yok, ancak kayıtlı torrentler var: ayarlar kaybolmuş olabilir, bu yüzden bu ilk başlatma değil
 LogSettingUnreadable=bu sürüm {name}={value} ayarını okuyamıyor: şimdilik varsayılan değerinde kalır ve dosyada durur
 LogSettingsHeld=ayarları onaylayana kadar aktarımlar bekletiliyor: bunları Tercihler'de denetleyin, ardından Tamam'a basın
 LogSettingsChanged=bu ayarlar, Rookparcel {old} sürümünün kaydettiğinden farklı okunuyor:

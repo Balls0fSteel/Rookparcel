@@ -783,7 +783,12 @@ pub fn run(args: Args) -> i32 {
     let mut prefs = Prefs::load(dir.join("rookparcel.ini"));
     // D70: what the file says before anything is written to it; an unreadable file or proxy
     // type starts the engine with the transfers held
-    let check = if local { rookparcel_frontend::guard::on_start(&mut prefs) } else { Default::default() };
+    let check = if local {
+        rookparcel_frontend::guard::on_start(&mut prefs, Some(&dir.join("state")))
+    } else {
+        Default::default()
+    };
+    check.hold_fetches();
     if let Some(r) = crate::remote_ui::get() {
         // the server's engine settings and default folder are this window's
         let _ = std::fs::create_dir_all(&dir);
@@ -5172,7 +5177,10 @@ unsafe fn show_preferences_at(hwnd: HWND, page: usize) {
     // the dialog runs its own message loop; the hooks borrow the app only while they run
     let hooks = crate::preferences::Hooks {
         apply: Box::new(|o: &Options| {
-            with_app(|a| apply_options(a, o));
+            with_app(|a| {
+                apply_options(a, o);
+                confirm_settings(a);
+            });
         }),
         reload_ip_filter: Box::new(|path: &Path| {
             with_app(|a| {
@@ -5297,6 +5305,17 @@ fn theme_controls(a: &App) {
     }
 }
 
+/// Preferences' OK or Apply (D70): the user saw the settings and confirmed them. After
+/// [`apply_options`], so the engine has the new settings and IP filter before a held start goes
+/// on; never the Setup Guide or the hosted Web UI's changes.
+fn confirm_settings(a: &mut App) {
+    rookparcel_frontend::guard::confirm(&mut a.prefs);
+    if let Err(e) = a.prefs.save() {
+        a.detail.push_log(format!("{} {}", now_hms(), tr!(LogPrefsNotSaved, error = e)));
+    }
+    a.handle.hold_transfers(false);
+}
+
 /// Stores `o` and hands it to the engine and the window.
 fn apply_options(a: &mut App, o: &Options) {
     let old = Options::load(&a.prefs, &a.save_path);
@@ -5307,9 +5326,6 @@ fn apply_options(a: &mut App, o: &Options) {
 fn apply_options_from(a: &mut App, old: &Options, o: &Options) {
     a.listen.set_configured(settings::listen_port(&o.settings));
     o.store(&mut a.prefs);
-    // the user confirmed the settings as shown: a held start goes on (D70)
-    rookparcel_frontend::guard::confirm(&mut a.prefs);
-    a.handle.hold_transfers(false);
     if let Err(e) = a.prefs.save() {
         a.detail.push_log(format!("{} {}", now_hms(), tr!(LogPrefsNotSaved, error = e)));
     }

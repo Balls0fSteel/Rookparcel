@@ -19,7 +19,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Current status
 
-- **Settings guard (D70, 1.2.55-1.2.56):** loss paths closed, the engine's hold, the fixture test, a stamp compared at each start with backups. Hand checks: BACKLOG "Settings guard".
+- **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.
 - **Artwork:** the Postal Rook won ([small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.

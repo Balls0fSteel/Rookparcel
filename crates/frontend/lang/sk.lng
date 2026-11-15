@@ -262,6 +262,7 @@ LogPrefsNotSaved=predvoľby nemožno uložiť: {error}
 LogSettingsUnreadable=súbor predvolieb {file} nemožno prečítať: {error}. V tejto relácii sa cez neho nič neuloží.
 LogSettingsDamaged=súbor predvolieb {file} nebol platný text: načítal sa s nahradenými chybnými znakmi a originál je uložený ako {copy}
 LogSettingsNoCopy=súbor predvolieb {file} nebol platný text a nepodarilo sa vytvoriť jeho kópiu: v tejto relácii sa cez neho nič neuloží
+LogSettingsMissing=v {file} nie sú žiadne nastavenia, ale sú tu uložené torrenty: nastavenia sa možno stratili, preto to nie je prvé spustenie
 LogSettingUnreadable=táto verzia nedokáže prečítať nastavenie {name}={value}: zatiaľ má predvolenú hodnotu a v súbore zostáva
 LogSettingsHeld=prenosy sú pozdržané, kým nepotvrdíte nastavenia: skontrolujte ich v Predvoľbách a stlačte OK
 LogSettingsChanged=tieto nastavenia sa čítajú inak, než ako ich uložil Rookparcel {old}:

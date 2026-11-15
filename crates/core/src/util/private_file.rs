@@ -50,6 +50,9 @@ pub fn write(path: &Path, data: &[u8]) -> io::Result<()> {
         f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
     }
     f.write_all(data)?;
+    // on the disk before the rename, so a crash or power loss leaves the old file or the new
+    // one, never an empty one in its place (D70)
+    f.sync_all()?;
     drop(f);
     std::fs::rename(&tmp, path)
 }

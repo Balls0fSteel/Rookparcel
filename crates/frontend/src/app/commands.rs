@@ -447,6 +447,15 @@ impl Core {
 
     // ---- Preferences ------------------------------------------------------------------------
 
+    /// Preferences' OK or Apply (D70): the user saw the settings and confirmed them. After
+    /// [`Core::apply_options`], so the engine has the new settings and IP filter before a held
+    /// start goes on; never the Setup Guide.
+    pub fn confirm_settings(&mut self) {
+        crate::guard::confirm(&mut self.prefs);
+        self.save_prefs();
+        self.handle.hold_transfers(false);
+    }
+
     /// Stores `o` and hands it to the engine and the window, as GTK's OK and Apply do: the
     /// settings through the scheduler, the folders, seeding goal, update check and title, PEX
     /// on every torrent when it changed, the IP filter when it changed. (The GUI applies
@@ -455,9 +464,6 @@ impl Core {
         let old = self.options();
         self.listen.set_configured(crate::settings::listen_port(&o.settings));
         o.store(&mut self.prefs);
-        // the user confirmed the settings as shown: a held start goes on (D70)
-        crate::guard::confirm(&mut self.prefs);
-        self.handle.hold_transfers(false);
         self.save_prefs();
         if self.is_remote() && o.gui.language != old.gui.language {
             // one language for every window: it lives in the local client's settings

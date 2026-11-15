@@ -287,6 +287,54 @@ only show a lower round trip, with the same effect as a zero delay.
   `qbittorrent_flags` are private behind a file-based entry. The new runs are one short local
   run each.
 
+## Release 1.2.57 (since v1.2.54)
+
+Date: 2026-11-15_174308_1794760988. Scope: `git diff v1.2.54..HEAD` without the translations, the fixtures and the
+docs: D70 (`frontend::prefs` reading and copies, `frontend::guard`, `settings::store` keeping
+lines, the engine's hold and `NetworkStatus::Held`, the remote `hold_transfers`, nox's
+`read_state`, `migrate_keys` and confirmation, the GUIs' start check), nox's network rule keys and
+proxy line. Method as above, code read by a subagent, every finding checked here; the fixes have
+tests and two end-to-end runs of the real nox.
+
+### Found and fixed
+
+| Severity | Where | Problem | Fix | Test |
+|---|---|---|---|---|
+| High | Win32 `apply_options_from`, GTK `apply_options`, `Core::apply_options` | OK lifted the hold before the settings just entered reached the engine: `hold_transfers(false)` went first, so listen sockets, the DHT and magnets' peers could start without the proxy until `ApplySettings` came. | The hold is lifted only by `confirm_settings`, after `apply_options` (settings and IP filter sent first); nox already had that order. | the end-to-end run: the new port listens before "held torrents run again" |
+| Medium | `core::fetch` callers (RSS, `.torrent` links, tracker list, update check, search) | The frontends' own fetches ignored the hold and went out directly while the proxy could not be trusted: a private tracker's RSS URL carries its passkey. | `fetch::set_held`: every `http_get` fails at once while held; `StartCheck::hold_fetches` at start, `guard::confirm` lets them go. | |
+| Medium | nox `commit_settings`, `app/setPreferences`, the limit endpoints, the legacy `preferences` object; the Setup Guide; GTK's tracker list update | Anything that committed a preference confirmed: a remote window's scheduler, a VPN port-forward helper posting `listen_port`, a limit change, the Setup Guide (no proxy page) lifted the hold and dropped the unreadable lines. | Only the Preferences dialog (OK, Apply) and the Web UI's Preferences page (`commit_request`) confirm; a remote window's OK reaches nox's own `prefs::confirm` (`Request::HoldTransfers`). nox's `store` keeps a line it cannot read unless the commit changed that row. | `only_the_preferences_page_confirms_the_settings`; the end-to-end run |
+| Medium | `prefs::read`, `setup_guide::should_show` | A file with no settings counted as a first start: zeroes or another encoding after a crash, an empty file beside saved torrents, a link to a missing file. The engine started on defaults, unheld. `private_file::write` did not sync before the rename. | Text without a setting is `Damaged` (copy, held); no settings beside a library with torrents is `NoSettings` (held, no guide); a dangling link is `Unreadable`; `sync_all` before the rename. | `no_settings_beside_saved_torrents_hold_the_transfers`, `a_file_that_cannot_be_read_as_it_is_says_so` |
+| Low | `guard::prune` | Pruned any `<name>.*.bak`, the user's own copies too. | Only a version-shaped middle part (a digit first). | `backups_keep_the_newest_three_and_stay_in_the_folder` |
+| Low | `prefs::read` | Every load of a damaged file made a new `.damaged-` copy, also the loads that never save (remote windows' language). | An identical earlier copy is reused. | `a_file_that_cannot_be_read_as_it_is_says_so` |
+| Low | nox `store` | Dropped the `lt.net.*` keys, so a downgrade to 1.2.54 lost the network rule. | Written beside the new keys (not in a hosted host's file). | `old_network_keys_are_migrated_and_kept_for_older_versions`, `a_network_rule_survives_a_restart` |
+| Low | `guard::on_start_for` | A damaged file never held, even when a bad byte cut a proxy key or no copy could be kept. | Held when the damage touches a key or a proxy, network rule or listen line, and always without a copy. | `damage_near_the_proxy_holds_the_transfers` |
+| Low | `Prefs::save` | A run whose file was unreadable dropped the confirmed settings silently. | `save` is an error then, and the callers' "could not save" line says so. | `a_file_that_cannot_be_read_as_it_is_says_so` |
+| Low | nox `read_state` | No retry: a scanner holding `webui.json` a moment stopped the start. | Five tries, 100 ms apart, as `Prefs` does. | |
+| Info | `guard::on_start_for` | A hand-made stamp's every field was logged, raw (terminal escapes on nox's console). | Only the five known fields are compared; control characters become `?`. | `a_stamp_is_compared_by_its_known_fields_only` |
+
+### Reviewed and judged fine
+
+- **Copies' paths:** the `.bak` name keeps only `[A-Za-z0-9.-]` of the version from the file; the
+  `.damaged-` name is built from the file's own name and the seconds; both go through
+  `private_file::write` (0600, `O_NOFOLLOW` temporary file, rename); `prune` does not follow links.
+- **Secrets:** `check.guard` has no user name or password; `LogSettingUnreadable` cannot print one
+  (the secret rows are text rows, which always parse); nox's proxy line prints host and port.
+- **The engine's hold:** set before the first listen socket and the first restored torrent; while
+  held nothing is bound or listens (no DHT, LSD, uTP, port mapping), trackers' sockets close,
+  direct connections fail, `is_running` stops force-start and resume; settings, network and
+  pause-setting changes keep it; the local scheduler never lifts it.
+- **Authentication:** the remote `hold_transfers` needs the authenticated upgrade like every
+  remote command; protocol 19 shuts out older clients.
+- **Robustness:** the read retry is bounded; no `unwrap` or slicing on file data.
+
+### Open
+
+- A GUI-hosted Web UI cannot confirm (its changes reach the host as a journal); the host window's
+  Preferences confirm. BACKLOG "Settings guard".
+- The `.bak` and `.damaged-` copies keep old secrets (same permissions as the settings file).
+- The search helper process and Keep ping low's probes are not stopped by the hold; a held
+  start's scrapes resolve tracker names through the system DNS before their bound connections fail.
+
 ## Release 1.2.54 (since v1.2.46)
 
 Date: 2026-11-14_163756_1794670676. Scope: `git diff v1.2.46..HEAD` without the translations

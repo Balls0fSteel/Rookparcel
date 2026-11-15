@@ -514,6 +514,7 @@ fn serve(
                     Request::PostTorrentUpdates => engine.post_torrent_updates(),
                     Request::PostSessionStats => engine.post_session_stats(),
                     Request::ApplySettings(st) => engine.apply_settings(*st),
+                    Request::HoldTransfers(held) => engine.hold_transfers(held),
                     Request::Refused(a) => panic!("refused with every path allowed: {a:?}"),
                 }
             }

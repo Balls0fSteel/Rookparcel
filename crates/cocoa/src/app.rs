@@ -250,7 +250,8 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
             let mut prefs = Prefs::load(dirs.config.join("rookparcel.ini"));
             // D70: what the file says before anything is written to it; an unreadable file or
             // proxy type starts the engine with the transfers held
-            let check = rookparcel_frontend::guard::on_start(&mut prefs);
+            let check = rookparcel_frontend::guard::on_start(&mut prefs, Some(&dirs.data));
+            check.hold_fetches();
             let (opts, guide_first) = fapp::prepare_options(&mut prefs, &paths::downloads(), false);
             // slice J: the Setup Guide before a first start (D53; not for a demo), then this
             // again, which finds the file no longer empty

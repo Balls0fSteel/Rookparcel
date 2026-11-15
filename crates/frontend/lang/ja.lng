@@ -262,6 +262,7 @@ LogPrefsNotSaved=設定を保存できませんでした: {error}
 LogSettingsUnreadable=設定ファイル {file} を読み込めません: {error}。このセッションでは上書き保存しません。
 LogSettingsDamaged=設定ファイル {file} は正しいテキストではありませんでした: 不正な文字を置き換えて読み込み、元のファイルを {copy} として残しました
 LogSettingsNoCopy=設定ファイル {file} は正しいテキストではなく、コピーも作成できませんでした: このセッションでは上書き保存しません
+LogSettingsMissing={file} に設定がありませんが、保存済みのトレントがあります: 設定が失われた可能性があるため、初回起動として扱いません
 LogSettingUnreadable=このバージョンでは設定 {name}={value} を読み取れません: 当面は既定値を使い、ファイルには残します
 LogSettingsHeld=設定を確認するまで転送を保留します: 設定で内容を確認し、OK を押してください
 LogSettingsChanged=これらの設定は Rookparcel {old} が保存したときとは異なって読み取られます:

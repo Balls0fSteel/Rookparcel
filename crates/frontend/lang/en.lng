@@ -416,6 +416,9 @@ LogSettingsUnreadable=cannot read the preferences file {file}: {error}. Nothing 
 LogSettingsDamaged=the preferences file {file} was not valid text: it was read with the bad characters replaced, and the original is kept as {copy}
 LogSettingsNoCopy=the preferences file {file} was not valid text and no copy of it could be made: nothing is saved over it in this run
 
+# D70, at start: no settings file (or an empty one) beside saved torrents.
+LogSettingsMissing=there are no settings in {file}, but there are saved torrents: the settings may have been lost, so this is no first start
+
 # D70, at start: {name}={value} is the line as the file has it (a newer version may have
 # written it).
 LogSettingUnreadable=this version cannot read the setting {name}={value}: it is at its default for now and stays in the file

@@ -262,6 +262,7 @@ LogPrefsNotSaved=không lưu được tùy chỉnh: {error}
 LogSettingsUnreadable=không đọc được tệp tùy chỉnh {file}: {error}. Trong phiên này sẽ không lưu đè lên tệp đó.
 LogSettingsDamaged=tệp tùy chỉnh {file} không phải văn bản hợp lệ: đã đọc với các ký tự lỗi được thay thế, và bản gốc được giữ lại thành {copy}
 LogSettingsNoCopy=tệp tùy chỉnh {file} không phải văn bản hợp lệ và không tạo được bản sao: trong phiên này sẽ không lưu đè lên tệp đó
+LogSettingsMissing=không có cài đặt nào trong {file}, nhưng có torrent đã lưu: có thể cài đặt đã bị mất, nên đây không phải lần chạy đầu tiên
 LogSettingUnreadable=phiên bản này không đọc được cài đặt {name}={value}: tạm thời dùng giá trị mặc định và vẫn giữ trong tệp
 LogSettingsHeld=truyền tải đang được giữ cho đến khi bạn xác nhận cài đặt: hãy kiểm tra trong Tùy chỉnh rồi nhấn OK
 LogSettingsChanged=các cài đặt này được đọc khác với cách Rookparcel {old} đã lưu:

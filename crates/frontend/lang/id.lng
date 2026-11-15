@@ -262,6 +262,7 @@ LogPrefsNotSaved=tidak dapat menyimpan preferensi: {error}
 LogSettingsUnreadable=tidak dapat membaca berkas preferensi {file}: {error}. Tidak ada yang disimpan di atasnya selama sesi ini.
 LogSettingsDamaged=berkas preferensi {file} bukan teks yang valid: berkas dibaca dengan karakter rusak diganti, dan aslinya disimpan sebagai {copy}
 LogSettingsNoCopy=berkas preferensi {file} bukan teks yang valid dan salinannya tidak dapat dibuat: tidak ada yang disimpan di atasnya selama sesi ini
+LogSettingsMissing=tidak ada pengaturan di {file}, tetapi ada torrent yang tersimpan: pengaturan mungkin hilang, jadi ini bukan permulaan pertama
 LogSettingUnreadable=versi ini tidak dapat membaca pengaturan {name}={value}: untuk sementara memakai nilai bawaan dan tetap ada di berkas
 LogSettingsHeld=transfer ditahan sampai Anda mengonfirmasi pengaturan: periksa di Preferensi, lalu tekan OK
 LogSettingsChanged=pengaturan ini terbaca berbeda dari cara Rookparcel {old} menyimpannya:

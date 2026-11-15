@@ -21,6 +21,9 @@
 //! server cannot hold the download open forever a byte at a time.
 //!
 //! Call them from a worker thread: they block for up to the timeout.
+//!
+//! While the frontend holds the transfers ([`set_held`], D70: a proxy it cannot trust), every
+//! fetch fails at once instead of going out without the proxy.
 
 use std::fmt;
 use std::io::{self, Read, Write};
@@ -165,6 +168,22 @@ impl FetchOptions {
     }
 }
 
+/// Whether the frontend holds the transfers (D70): set with the engine's hold, cleared when
+/// the user confirms the settings.
+static HELD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Holds or lets go every [`http_get`] and [`http_get_to`] of this process (D70): an RSS feed, a
+/// `.torrent` link, a tracker list or an update check would otherwise leave without the proxy
+/// the settings could not be trusted for.
+pub fn set_held(held: bool) {
+    HELD.store(held, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// [`set_held`].
+pub fn held() -> bool {
+    HELD.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 /// A proxy for [`http_get`], taken from the engine's `proxy_*` settings.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FetchProxy(ProxyConfig);
@@ -303,6 +322,9 @@ fn http_get_inner(
     opts: &FetchOptions,
     mut sink: Option<Sink<'_>>,
 ) -> Result<FetchResponse, FetchError> {
+    if held() {
+        return Err(FetchError::Io(io::Error::other("transfers are held until the settings are confirmed")));
+    }
     let deadline = Instant::now() + opts.timeout;
     let mut url = clean_url(url);
     let mut redirects = 0;

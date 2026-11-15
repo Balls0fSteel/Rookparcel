@@ -979,8 +979,12 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
     let remote = crate::remote::get();
     // D70: what the file says before anything is written to it; an unreadable file or proxy
     // type starts the engine with the transfers held
-    let check =
-        if remote.is_none() { rookparcel_frontend::guard::on_start(&mut prefs) } else { Default::default() };
+    let check = if remote.is_none() {
+        rookparcel_frontend::guard::on_start(&mut prefs, Some(&data))
+    } else {
+        Default::default()
+    };
+    check.hold_fetches();
     if let Some(r) = remote {
         // the server's engine settings and default folder are this window's; the language
         // (picked in `run`) is every window's
@@ -3432,6 +3436,15 @@ fn labels(a: &App) -> Vec<String> {
     a.list.labels().into_iter().map(|(l, _)| l).collect()
 }
 
+/// Preferences' OK or Apply (D70): the user saw the settings and confirmed them. After
+/// [`apply_options`], so the engine has the new settings and IP filter before a held start goes
+/// on; never the Setup Guide or the tracker list's update.
+fn confirm_settings(a: &mut App) {
+    rookparcel_frontend::guard::confirm(&mut a.prefs);
+    save_prefs(a);
+    a.handle.hold_transfers(false);
+}
+
 fn save_prefs(a: &mut App) {
     if let Err(e) = a.prefs.save() {
         a.detail.push_log(format!("{} {}", now_hms(), tr!(LogPrefsNotSaved, error = e)));
@@ -3588,7 +3601,10 @@ fn preferences_at(page: Option<&str>) {
     options.integration = crate::integration::read();
     let hooks = crate::preferences::Hooks {
         apply: Box::new(|o| {
-            with_app(|a| apply_options(a, o));
+            with_app(|a| {
+                apply_options(a, o);
+                confirm_settings(a);
+            });
             apply_integration(o);
         }),
         reload_ip_filter: Box::new(|path| {
@@ -3629,9 +3645,6 @@ fn apply_options(a: &mut App, o: &Options) {
     let old = Options::load(&a.prefs, &a.save_path);
     a.listen.set_configured(settings::listen_port(&o.settings));
     o.store(&mut a.prefs);
-    // the user confirmed the settings as shown: a held start goes on (D70)
-    rookparcel_frontend::guard::confirm(&mut a.prefs);
-    a.handle.hold_transfers(false);
     save_prefs(a);
     if crate::remote::is_remote() && o.gui.language != old.gui.language {
         // one language for every window: it lives in the local client's settings

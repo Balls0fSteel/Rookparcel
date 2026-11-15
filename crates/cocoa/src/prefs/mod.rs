@@ -631,7 +631,11 @@ pub(crate) fn apply(st: &State, o: Options) {
             sheet(st, ui::Style::Error, &e);
         }
     }
-    let ev = with_core(|c| c.apply_options(&o));
+    let ev = with_core(|c| {
+        let ev = c.apply_options(&o);
+        c.confirm_settings();
+        ev
+    });
     let mut now = peek(|c| c.options()).unwrap_or_else(|| o.clone());
     now.integration = crate::mac::integration();
     let values = st.live.borrow_mut().write(&st.pages, &now);

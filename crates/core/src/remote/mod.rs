@@ -179,6 +179,9 @@ pub enum Request {
     PostSessionStats,
     /// New engine settings: the server applies them its own way (and keeps them).
     ApplySettings(Box<Settings>),
+    /// `hold_transfers`: `false` is the client's user confirming the settings (D70), which the
+    /// server takes its own way (its stored settings, then the engine).
+    HoldTransfers(bool),
     /// A command refused by the server's path policy: the alert the engine would have sent
     /// for the failure, for this client alone.
     Refused(Box<Alert>),
@@ -242,6 +245,7 @@ pub fn dispatch(
                 operation: crate::alert::FileOperation::Unknown,
             })),
         },
+        Command::HoldTransfers(held) => Request::HoldTransfers(held),
         cmd => {
             handle.send(cmd);
             Request::Forwarded

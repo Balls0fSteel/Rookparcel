@@ -262,6 +262,7 @@ LogPrefsNotSaved=Die Einstellungen konnten nicht gespeichert werden: {error}
 LogSettingsUnreadable=Die Einstellungsdatei {file} kann nicht gelesen werden: {error}. In dieser Sitzung wird nichts darüber gespeichert.
 LogSettingsDamaged=Die Einstellungsdatei {file} war kein gültiger Text: Sie wurde mit ersetzten fehlerhaften Zeichen gelesen, das Original bleibt als {copy} erhalten
 LogSettingsNoCopy=Die Einstellungsdatei {file} war kein gültiger Text, und es ließ sich keine Kopie anlegen: In dieser Sitzung wird nichts darüber gespeichert
+LogSettingsMissing={file} enthält keine Einstellungen, aber es gibt gespeicherte Torrents: Die Einstellungen sind vielleicht verloren gegangen, daher ist dies kein erster Start
 LogSettingUnreadable=Diese Version kann die Einstellung {name}={value} nicht lesen: Sie hat vorerst ihren Standardwert und bleibt in der Datei
 LogSettingsHeld=Übertragungen sind angehalten, bis Sie die Einstellungen bestätigen: Prüfen Sie sie unter Einstellungen und klicken Sie dann auf OK
 LogSettingsChanged=Diese Einstellungen werden anders gelesen, als Rookparcel {old} sie gespeichert hat:

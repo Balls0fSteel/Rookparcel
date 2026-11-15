@@ -262,6 +262,7 @@ LogPrefsNotSaved=kunne ikke gemme præferencerne: {error}
 LogSettingsUnreadable=kan ikke læse præferencefilen {file}: {error}. Intet gemmes over den i denne session.
 LogSettingsDamaged=præferencefilen {file} var ikke gyldig tekst: den blev læst med de fejlagtige tegn erstattet, og originalen er gemt som {copy}
 LogSettingsNoCopy=præferencefilen {file} var ikke gyldig tekst, og der kunne ikke laves en kopi af den: intet gemmes over den i denne session
+LogSettingsMissing=der er ingen indstillinger i {file}, men der er gemte torrents: indstillingerne kan være gået tabt, så dette er ikke en første start
 LogSettingUnreadable=denne version kan ikke læse indstillingen {name}={value}: den har sin standardværdi indtil videre og bliver i filen
 LogSettingsHeld=overførsler er tilbageholdt, indtil du bekræfter indstillingerne: tjek dem under Præferencer, og tryk derefter på OK
 LogSettingsChanged=disse indstillinger læses anderledes, end Rookparcel {old} gemte dem:

@@ -262,6 +262,7 @@ LogPrefsNotSaved=a beállítások nem menthetők: {error}
 LogSettingsUnreadable=a beállításfájl ({file}) nem olvasható: {error}. Ebben a munkamenetben semmi sem lesz fölé mentve.
 LogSettingsDamaged=a beállításfájl ({file}) nem volt érvényes szöveg: a hibás karakterek cseréjével lett beolvasva, az eredeti {copy} néven megmaradt
 LogSettingsNoCopy=a beállításfájl ({file}) nem volt érvényes szöveg, és másolat sem készülhetett róla: ebben a munkamenetben semmi sem lesz fölé mentve
+LogSettingsMissing=a(z) {file} fájlban nincs beállítás, de vannak mentett torrentek: a beállítások talán elvesztek, ezért ez nem első indítás
 LogSettingUnreadable=ez a verzió nem tudja olvasni a(z) {name}={value} beállítást: egyelőre az alapértéke érvényes, és a fájlban marad
 LogSettingsHeld=az átvitelek visszatartva, amíg meg nem erősíti a beállításokat: ellenőrizze őket a Tulajdonságok ablakban, majd nyomja meg az OK gombot
 LogSettingsChanged=ezek a beállítások másként olvashatók, mint ahogy a Rookparcel {old} mentette őket:

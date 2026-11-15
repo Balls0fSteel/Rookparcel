@@ -1207,8 +1207,10 @@ Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/fr
 
 - **By hand, layer 2:** an installed copy updated from 1.2.56 to the next version keeps `rookparcel.ini.1.2.56.bak` and stays quiet. A `check.guard` edited to name a proxy holds the transfers and lists the difference in the Logger.
 - **By hand:** the status bar's "Transfers held: confirm the settings" in the Win32, GTK and macOS GUIs, and the Logger's lines. Try a `rookparcel.ini` with `lt.proxy_type=9` in a scratch profile (`--profile`), never on the real HKCU registrations. Preferences' OK lifts the hold.
-- A remote GUI's OK with nothing changed sends `hold_transfers(false)` to nox's engine but does not reach nox's own confirmation: the hold is gone for that run, and the unreadable line stays in `webui.json` until a change is committed. A `Request::HoldTransfers` in the remote server could route it to `prefs::commit`.
-- A GUI-hosted Web UI (D40) confirms through the host's Preferences path, which already lifts the hold when the host applies the Web UI's changes.
+- (Fixed in 1.2.57: a remote window's OK reaches nox's own confirmation through `Request::HoldTransfers`.)
+- A GUI-hosted Web UI (D40) cannot confirm: its changes reach the host as a journal, which never confirms (limits and the qBittorrent API go that way too). The host window's Preferences confirm. A confirm message from the hosted page to the host would close it.
+- The `.bak` and `.damaged-` copies keep old secrets (the proxy password, the Web UI's hash), with the settings file's permissions. Pruning them after a password change, or leaving the secrets out of the copies, is open.
+- The search helper process (Jackett, Prowlarr) is not stopped by the hold; searches fail while held, an already running helper keeps running.
 - The auto-rate-limit's ping probes (D49) are not torrent traffic, so the hold does not stop them, just as the network rule does not bind them.
 
 ## Validation and development environment

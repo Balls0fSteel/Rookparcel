@@ -262,6 +262,7 @@ LogPrefsNotSaved=無法儲存偏好設定：{error}
 LogSettingsUnreadable=無法讀取偏好設定檔 {file}：{error}。本次執行不會覆寫儲存它。
 LogSettingsDamaged=偏好設定檔 {file} 不是有效的文字：已取代錯誤字元後讀取，原始檔保留為 {copy}
 LogSettingsNoCopy=偏好設定檔 {file} 不是有效的文字，且無法建立副本：本次執行不會覆寫儲存它
+LogSettingsMissing={file} 中沒有設定，但有已儲存的種子：設定可能已遺失，因此這不是首次啟動
 LogSettingUnreadable=此版本無法讀取設定 {name}={value}：暫時使用預設值，並保留在檔案中
 LogSettingsHeld=在確認設定之前傳輸會暫停保留：請在「偏好設定」中檢查後按「確定」
 LogSettingsChanged=這些設定的讀取結果與 Rookparcel {old} 儲存時不同：

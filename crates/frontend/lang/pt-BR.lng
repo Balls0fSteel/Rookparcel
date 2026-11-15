@@ -262,6 +262,7 @@ LogPrefsNotSaved=não foi possível salvar as preferências: {error}
 LogSettingsUnreadable=não é possível ler o arquivo de preferências {file}: {error}. Nada será salvo por cima dele nesta sessão.
 LogSettingsDamaged=o arquivo de preferências {file} não era um texto válido: foi lido com os caracteres incorretos substituídos, e o original foi mantido como {copy}
 LogSettingsNoCopy=o arquivo de preferências {file} não era um texto válido e não foi possível fazer uma cópia dele: nada será salvo por cima dele nesta sessão
+LogSettingsMissing=não há configurações em {file}, mas há torrents salvos: as configurações podem ter sido perdidas, então esta não é uma primeira execução
 LogSettingUnreadable=esta versão não consegue ler a configuração {name}={value}: por enquanto ela fica no valor padrão e permanece no arquivo
 LogSettingsHeld=as transferências ficam retidas até você confirmar as preferências: verifique-as em Preferências e clique em OK
 LogSettingsChanged=estas configurações são lidas de forma diferente de como o Rookparcel {old} as salvou:

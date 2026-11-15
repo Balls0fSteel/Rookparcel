@@ -262,6 +262,7 @@ LogPrefsNotSaved=asetuksia ei voitu tallentaa: {error}
 LogSettingsUnreadable=asetustiedostoa {file} ei voi lukea: {error}. Sen päälle ei tallenneta mitään tämän istunnon aikana.
 LogSettingsDamaged=asetustiedosto {file} ei ollut kelvollista tekstiä: se luettiin virheelliset merkit korvattuina, ja alkuperäinen on tallessa nimellä {copy}
 LogSettingsNoCopy=asetustiedosto {file} ei ollut kelvollista tekstiä, eikä siitä voitu tehdä kopiota: sen päälle ei tallenneta mitään tämän istunnon aikana
+LogSettingsMissing=tiedostossa {file} ei ole asetuksia, mutta tallennettuja torrentteja on: asetukset ovat ehkä kadonneet, joten tämä ei ole ensimmäinen käynnistys
 LogSettingUnreadable=tämä versio ei osaa lukea asetusta {name}={value}: sillä on toistaiseksi oletusarvo, ja se säilyy tiedostossa
 LogSettingsHeld=siirrot on pidätetty, kunnes vahvistat asetukset: tarkista ne kohdassa Asetukset ja paina sitten OK
 LogSettingsChanged=nämä asetukset luetaan eri tavalla kuin Rookparcel {old} ne tallensi:

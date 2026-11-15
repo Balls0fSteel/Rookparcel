@@ -39,10 +39,13 @@ pub enum LoadProblem {
     /// The file is there but could not be read (the error): the preferences are empty, and
     /// this run never saves over the file.
     Unreadable(String),
-    /// The file was not valid text (UTF-8, or UTF-16 with its byte order mark): it was read with
-    /// the bad bytes replaced, after a copy of it was kept at `copy`. Without a copy this run
-    /// never saves over the file.
+    /// The file was not valid text (UTF-8, or UTF-16 with its byte order mark), or had text but
+    /// no setting in it (zeroes after a crash): it was read with the bad bytes replaced, after a
+    /// copy of it was kept at `copy`. Without a copy this run never saves over the file.
     Damaged { copy: Option<PathBuf> },
+    /// No settings (no file, or an empty one) beside an engine library with torrents in it: the
+    /// settings were lost, so this is no first start ([`crate::guard::on_start`]).
+    NoSettings,
 }
 
 #[derive(Debug, Default)]
@@ -125,6 +128,14 @@ impl Prefs {
         !matches!(self.problem, Some(LoadProblem::Unreadable(_) | LoadProblem::Damaged { copy: None }))
     }
 
+    pub(crate) fn set_problem(&mut self, problem: LoadProblem) {
+        self.problem = Some(problem);
+    }
+
+    pub(crate) fn clear_problem(&mut self) {
+        self.problem = None;
+    }
+
     /// Preferences from `key=value` text, as [`Prefs::to_text`] writes it, with no file.
     pub fn from_text(text: &str) -> Prefs {
         Prefs::from_raw(None, parse(text), None)
@@ -161,11 +172,14 @@ impl Prefs {
 
     /// Writes the file (through a temporary file, so a crash never leaves half of it), readable
     /// by its owner only on Unix, where the proxy password is plain ([`private_file`]). Nothing
-    /// is written when [`Prefs::may_save`] says no (the start said why).
+    /// is written when [`Prefs::may_save`] says no: an error then, so the caller's "could not
+    /// save" line tells the user that the settings of this run are not kept.
     pub fn save(&self) -> std::io::Result<()> {
         let Some(path) = &self.path else { return Ok(()) };
         if !self.may_save() {
-            return Ok(());
+            return Err(std::io::Error::other(
+                "the file could not be read at start, so nothing is saved over it in this run",
+            ));
         }
         if let Some(dir) = path.parent() {
             private_file::create_dir_all(dir)?;
@@ -356,6 +370,10 @@ fn read(path: &Path) -> (String, Option<LoadProblem>) {
     let bytes = loop {
         match std::fs::read(path) {
             Ok(b) => break b,
+            // a link to a file that is gone is no missing file: the first save would replace it
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound && std::fs::symlink_metadata(path).is_ok() => {
+                return (String::new(), Some(LoadProblem::Unreadable(e.to_string())));
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (String::new(), None),
             Err(e) => {
                 tries += 1;
@@ -366,16 +384,50 @@ fn read(path: &Path) -> (String, Option<LoadProblem>) {
             }
         }
     };
-    if let Some(text) = decode(&bytes) {
-        return (text, None);
-    }
-    let text = match utf16_units(&bytes) {
-        Some((units, _)) => String::from_utf16_lossy(&units),
-        None => String::from_utf8_lossy(&bytes).into_owned(),
+    let text = match decode(&bytes) {
+        // text with no setting in it (zeroes or another encoding after a crash) is damage too;
+        // an empty file, or one of comments only, is not (a new portable folder's marker)
+        Some(text) if !has_setting_or_nothing(&text) => text,
+        Some(text) => return (text, None),
+        None => match utf16_units(&bytes) {
+            Some((units, _)) => String::from_utf16_lossy(&units),
+            None => String::from_utf8_lossy(&bytes).into_owned(),
+        },
     };
+    (text, Some(LoadProblem::Damaged { copy: keep_damaged(path, &bytes) }))
+}
+
+/// Whether `text` has a `key=value` line, or nothing but blank and comment lines.
+fn has_setting_or_nothing(text: &str) -> bool {
+    let mut lines = text.lines().map(|l| l.trim_start_matches('\u{feff}').trim()).filter(|l| !l.is_empty());
+    let mut any = false;
+    for l in lines.by_ref() {
+        if l.starts_with('#') {
+            continue;
+        }
+        any = true;
+        if l.contains('=') {
+            return true;
+        }
+    }
+    !any
+}
+
+/// A copy of the damaged file's `bytes` beside it: an earlier copy with the same bytes when there
+/// is one (a file read again and again while it stays damaged makes one copy), else a new one.
+fn keep_damaged(path: &Path, bytes: &[u8]) -> Option<PathBuf> {
+    let name = path.file_name()?.to_string_lossy().into_owned();
+    let prefix = format!("{name}.damaged-");
+    if let Ok(entries) = std::fs::read_dir(path.parent()?) {
+        for e in entries.filter_map(Result::ok) {
+            let same_name = e.file_name().to_string_lossy().starts_with(&prefix);
+            if same_name && std::fs::read(e.path()).is_ok_and(|b| b == bytes) {
+                return Some(e.path());
+            }
+        }
+    }
     let copy = damaged_copy(path);
-    let copy = private_file::write(&copy, &bytes).is_ok().then_some(copy);
-    (text, Some(LoadProblem::Damaged { copy }))
+    private_file::write(&copy, bytes).is_ok().then_some(copy)
 }
 
 /// `bytes` as text: UTF-8 (`parse` drops a byte order mark), or UTF-16 with its byte order
@@ -685,8 +737,22 @@ x=1
         assert!(matches!(p.problem(), Some(LoadProblem::Unreadable(_))), "{:?}", p.problem());
         assert!(!p.may_save());
         p.set("a", "1");
-        p.save().unwrap();
+        assert!(p.save().is_err(), "the caller says the settings are not kept");
         assert!(blocked.is_dir());
+
+        // zeroes after a crash: damaged, not a first start; comments only: a new portable marker
+        let zeroes = dir.join("zeroes.ini");
+        std::fs::write(&zeroes, [0u8; 64]).unwrap();
+        let p = Prefs::load(&zeroes);
+        assert!(matches!(p.problem(), Some(LoadProblem::Damaged { copy: Some(_) })), "{:?}", p.problem());
+        // read again while it stays damaged: the same copy, not a second one
+        let again = Prefs::load(&zeroes);
+        assert_eq!(again.problem(), p.problem());
+        let comments = dir.join("comments.ini");
+        std::fs::write(&comments, "# Rookparcel preferences\n\n").unwrap();
+        assert_eq!(Prefs::load(&comments).problem(), None);
+        std::fs::write(&comments, "").unwrap();
+        assert_eq!(Prefs::load(&comments).problem(), None);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

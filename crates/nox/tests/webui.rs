@@ -3040,7 +3040,8 @@ fn network_fields(t: &Harness, sid: &str) -> (String, String, bool) {
 /// The network rule's rows are stored under their own keys (`net.network_rule`,
 /// `net.pause_when_missing`, as the desktop client keeps them) and read back at the next start,
 /// before the engine starts too: given with `--network` (stored with the preferences) or set on
-/// the Connection page. The `lt.net.*` keys of nox up to 1.2.54 are taken, then dropped.
+/// the Connection page. The `lt.net.*` keys of nox up to 1.2.54 are taken, and written beside
+/// the new ones so those versions keep the rule after a downgrade.
 #[test]
 fn a_network_rule_survives_a_restart() {
     let dir = temp_dir("network-rule");
@@ -3064,7 +3065,8 @@ fn a_network_rule_survives_a_restart() {
         let saved = std::fs::read_to_string(&file).unwrap();
         assert!(saved.contains(r#""net.network_rule":"range:10.99.0.0/16""#), "{saved}");
         assert!(
-            saved.contains(r#""net.pause_when_missing":"false""#) && !saved.contains("lt.net."),
+            saved.contains(r#""net.pause_when_missing":"false""#)
+                && saved.contains(r#""lt.net.network_rule":"range:10.99.0.0/16""#),
             "{saved}"
         );
         let mut t = t;
@@ -3082,7 +3084,8 @@ fn a_network_rule_survives_a_restart() {
         let saved = std::fs::read_to_string(&file).unwrap();
         assert!(saved.contains(r#""net.network_rule":"vpn""#), "{saved}");
         assert!(
-            saved.contains(r#""net.pause_when_missing":"true""#) && !saved.contains("lt.net."),
+            saved.contains(r#""net.pause_when_missing":"true""#)
+                && saved.contains(r#""lt.net.network_rule":"vpn""#),
             "{saved}"
         );
         let mut t = t;
@@ -3096,7 +3099,7 @@ fn a_network_rule_survives_a_restart() {
         let mut t = t;
         t.dir = temp_dir("network-rule-scratch");
     }
-    // the keys nox up to 1.2.54 wrote: taken at start, dropped at the next store
+    // the keys nox up to 1.2.54 wrote: taken at start, and written again beside the new ones
     std::fs::write(
         &file,
         r#"{"options":{"lt.net.network_rule":"range:10.99.0.0/16","lt.net.pause_when_missing":"false"}}"#,
@@ -3109,7 +3112,8 @@ fn a_network_rule_survives_a_restart() {
     assert_eq!(t.pa(&sid, "/pa/prefs", r#"{"connections_limit":78}"#).status, 204);
     let saved = std::fs::read_to_string(&file).unwrap();
     assert!(saved.contains(r#""net.network_rule":"range:10.99.0.0/16""#), "{saved}");
-    assert!(saved.contains(r#""net.pause_when_missing":"false""#) && !saved.contains("lt.net."), "{saved}");
+    assert!(saved.contains(r#""net.pause_when_missing":"false""#), "{saved}");
+    assert!(saved.contains(r#""lt.net.pause_when_missing":"false""#), "{saved}");
 }
 
 /// A `webui.json` that is there but cannot be read stops the start, with a password given or

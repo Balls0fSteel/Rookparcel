@@ -196,6 +196,9 @@ pub(super) fn run(mut stream: Conn, buf: Vec<u8>, shared: &Shared) {
                     let stats = shared.lock().stats;
                     remote::session_stats_frame(stats, &mut out);
                 }
+                // the remote window's Preferences OK or Apply, after its settings (D70)
+                Some(Request::HoldTransfers(false)) => prefs::confirm(shared, &mut shared.lock()),
+                Some(Request::HoldTransfers(true)) => shared.handle.hold_transfers(true),
                 Some(Request::ApplySettings(s)) => {
                     let mut st = shared.lock();
                     if let Err((field, why)) = prefs::commit_settings(shared, &mut st, &s) {

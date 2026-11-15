@@ -262,6 +262,7 @@ LogPrefsNotSaved=no s'han pogut desar les preferències: {error}
 LogSettingsUnreadable=no es pot llegir el fitxer de preferències {file}: {error}. En aquesta sessió no s'hi desa res al damunt.
 LogSettingsDamaged=el fitxer de preferències {file} no era text vàlid: s'ha llegit amb els caràcters erronis substituïts, i l'original es conserva com a {copy}
 LogSettingsNoCopy=el fitxer de preferències {file} no era text vàlid i no se n'ha pogut fer cap còpia: en aquesta sessió no s'hi desa res al damunt
+LogSettingsMissing=no hi ha paràmetres a {file}, però hi ha torrents desats: potser s'han perdut els paràmetres, així que això no és una primera execució
 LogSettingUnreadable=aquesta versió no pot llegir el paràmetre {name}={value}: de moment té el valor per defecte i es manté al fitxer
 LogSettingsHeld=les transferències estan retingudes fins que confirmeu les preferències: reviseu-les a Preferències i premeu D'acord
 LogSettingsChanged=aquests paràmetres es llegeixen de manera diferent de com els va desar Rookparcel {old}:

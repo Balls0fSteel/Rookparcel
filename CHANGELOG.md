@@ -4,6 +4,30 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-15_174308_1794760988: Version 1.2.57: the release review's findings in the settings guard; release 1.2.57 prepared
+
+- **Asked for:** make a release. The security review of `v1.2.54..HEAD` (code read by a subagent, every finding checked here; [SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) "Release 1.2.57") found eleven things in D70, fixed here, so the release is **1.2.57**.
+- **High, the order of OK:**
+  - Preferences' OK used to lift the hold before the settings just entered reached the engine. Now `confirm_settings` runs after `apply_options` in all three GUIs.
+  - The Setup Guide and the hosted Web UI's changes no longer confirm.
+- **Medium:**
+  - **The frontends' own fetches are held too:** RSS, `.torrent` links, the tracker list, search and the update check (`fetch::set_held`).
+  - **Only a person's review confirms.** That means the Preferences dialog or the Web UI's Preferences page; a remote window's OK reaches nox's own confirmation. The scheduler, the qBittorrent API (a VPN port-forward helper posting `listen_port`), the limits and the Setup Guide do not confirm. nox's `store` keeps a line it cannot read.
+  - **A file without settings is no first start.** Text without a setting (zeroes after a crash) counts as damaged; no settings beside saved torrents is `NoSettings`, held with no guide; a dangling link counts as unreadable. `private_file::write` now syncs before the rename.
+- **Low:**
+  - `prune` spares the user's own `.bak` files.
+  - One `.damaged-` copy is kept per content.
+  - The old `lt.net.*` keys are written beside the new ones, so going back to 1.2.54 keeps the network rule.
+  - Damage near the proxy holds, and so does a damaged file whose copy failed.
+  - A blocked save is an error the user sees.
+  - nox's `read_state` retries.
+  - Only the stamp's known fields are compared, and printed without control characters.
+- **Release:** `docs/releases/1.2.57.md` covers 1.2.55-1.2.57. The Flatpak metainfo's first `<release>` is 1.2.57 (2026-11-15). The wiki's Updating page and D70 say what confirms. 1 new string (34 machine translations).
+- **Validation:**
+  - Tests: `cargo test --workspace --no-fail-fast` (40 binaries, run after the bump); clippy `-D warnings`, fmt, and the GTK and macOS cross-lint clean.
+  - End to end, real nox with `lt.proxy_type=7` stored: it started held. `setPreferences` with `listen_port` applied the port, kept the hold and kept the line. The Web UI's `/pa/prefs` lifted the hold after the new port listened, and dropped the line.
+- **Not done:** the GUIs' status bar and Preferences OK by hand. The fetch hold has no test of its own: the flag is process-wide, so a test would race the other fetch tests.
+
 ## 2026-11-15_143820_1794749900: CI red on 1.2.56: two tests depended on the version (tests only)
 
 - **What failed** (CI on all three systems, FreeBSD): `guard::tests::a_different_reading_of_the_stamped_settings_holds_until_confirmed` used `1.2.56` as "an older version", which the bump made the current one. On macOS, which runs with `--no-fail-fast`, `the_newest_fixture_is_this_builds_format` also failed: the fixture generator built text settings from their defaults, and `user_agent`'s default names the version, so every bump looked like a new format.
@@ -68,30 +92,3 @@ Earlier history: [archive index](docs/archive/README.md), including all 148 orig
   - The status bar's look in the GUIs, by hand.
   - A remote GUI's OK without a change lifts nox's hold for that run only.
   - A GUI-hosted Web UI confirms through the host's Preferences path.
-
-## 2026-11-15_132051_1794745251: Release 1.2.54 published; the site's news and the wiki pushed
-
-- **Published by the owner** (`gh release edit v1.2.54 --draft=false --latest`, 2026-11-15 13:18 Budapest; this session's permission check had refused the command). GitHub's latest release is `v1.2.54`.
-- **Then, on the owner's "do the rest":** `main` fast-forwarded to the publish branch and pushed (`03c6f3ed..b7a841fe`: the README and wiki version lines, the news entry dated 2026-11-15); the branch deleted. The GitHub wiki got the seven changed pages (`a244cf5`), after a page-by-page comparison showed every wiki page still equal to the 2026-11-13 sync (`1f4ccedb`).
-- **Checked live:** the three Pages runs green; `update.txt` says `stable=1.2.54`; the news page, `news.atom` and the home page's latest-news line have 1.2.54; the download page links the 1.2.54 setup; the wiki's Home says 1.2.54 and Locking Rookparcel "New in 1.2.54.".
-- **Still open:** the rest of RELEASING.md step 5 by hand (the GUI, the setup and the update from an installed 1.2.46, the Linux and Mac files, the container image) and the UI lock's hand checks (BACKLOG "UI lock").
-
-## 2026-11-14_235326_1794696806: Release 1.2.54 tagged; the draft is built, not published
-
-- **On the owner's word ("Push and tag"):** `main` pushed (`9fb7e42d..03c6f3ed`); CI, FreeBSD and Fuzz green on `03c6f3ed`; tag `v1.2.54` pushed.
-- **Release run [43649073477](https://github.com/Balls0fSteel/Rookparcel/actions/runs/43649073477):** the first attempt failed in `flatpak (x86_64)` only: inside Flathub's `gnome-51` builder container, flatpak-builder's update of `org.gnome.Sdk` (and the GL and locale extensions) failed with "Invalid cross-device link", then `xvfb-run` segfaulted (exit 139). The aarch64 leg passed. Rerunning the failed job passed (attempt 2), so it was the runner, not the build; if it comes back, look at the builder image and the restored flatpak-builder cache.
-- **Draft:** the same 14 files as 1.2.46 under the new version; its text is `docs/releases/1.2.54.md`. `ghcr.io/balls0fsteel/rookparcel-nox:1.2.54` and `:latest` are pushed (they exist before publishing, RELEASING.md "Container image").
-- **Checked on the draft (2026-11-15, on the owner's "Check files first"):** the Windows zip downloaded matches `SHA256SUMS`, and GitHub's own SHA-256 digests of all 13 files match the list; the zip holds `rookparcel.exe`, `rookparcel-nox.exe`, `LICENSE.md` and `THIRD-PARTY-NOTICES.md`; both exes say 1.2.54 in their version resources, the manifest 1.2.54.0; `rookparcel-nox.exe --version` prints `rookparcel-nox 1.2.54` (no `-dev`).
-- **Not done:** the rest of RELEASING.md step 5 (the GUI, the setup, the Linux and Mac files and the image were not started); publishing (the session's permission check refused `gh release edit --draft=false`); then `main` fast-forwarded to `publish-1.2.54` (its news entry now dated 2026-11-15) with the wiki pushed. The tagged Flatpak metainfo says 2026-11-14.
-
-## 2026-11-14_163756_1794670676: Version 1.2.54: the release review's two findings; release 1.2.54 prepared
-
-- **Asked for:** write the docs and prepare the release. The next release covers the UI lock (D69, 1.2.47-1.2.50), clippy 1.100 (1.2.51), the bug hunt's inherited quirks (1.2.52) and the GTK quit signals (1.2.53). The security review of `v1.2.46..HEAD` (Road to 1.0 item 14; [SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) "Release 1.2.54", code read by a subagent, both findings checked here) found two things, fixed here, so the release is **1.2.54**:
-  - **Set PIN replaced an existing PIN** without the current one; on Windows only the greyed menu item stood in the way of a posted `WM_COMMAND`. `ui_lock::submit` now treats Set with a PIN as needing the current one ("Wrong PIN.", counted by the guard), and Win32's `on_command` opens Set, Change and Remove only in the state their menu items are enabled in, as the Mac's `pin_command` did. Test: `the_forms_do_what_their_ok_does`.
-  - **1.2.52's web seed rule reached v1 and hybrid torrents:** a `files` list of one file and a pad (never made by libtorrent, possible from other tools) became a single file, so its seed was asked for the directory URL and a bad piece banned it at once. `serves_one_file` and `WebPeer::new` take `v1` now; the pad counts as no second file only in a v2-only torrent. Test: `a_tail_pad_is_a_second_file_only_with_v1_metadata`, which fails with the 1.2.52 rule ("unknown path /web_seed"). PORTING's row says so.
-  - Left open (BACKLOG "UI lock"): GTK's window actions have no central lock check and are exported on the session bus (not run); a second forwarded `--reset-lock` on Windows stacks a question.
-- **Docs written:** `docs/releases/1.2.54.md` (the lock, the v2-only web seed fix, the second SIGTERM, Minimize to tray for a window shown late, the LSD floor, the stricter `\u`; the remote protocol is still 18; 1.2.46 and older ignore the lock; the hand checks not done and the lock's known faults); the Flatpak metainfo's first `<release>` (1.2.54, 2026-11-14); the wiki's lock marks name 1.2.54 instead of 1.2.50, never published; Troubleshooting's "Closing Rookparcel takes a long time" says what a second signal does on Linux now.
-- **Branch `publish-1.2.54`** (not on `main`; fast-forward `main` to it after publishing, RELEASING.md step 2): the site news entry dated 2026-11-14, the README's and the wiki's version lines at 1.2.54 and the "not in a published release yet" marks dropped. If the release goes out on another day, change the entry's and the metainfo's date.
-- **Validation (Rust 1.100, CI's stable):** rustfmt and clippy `--all-targets -D warnings` clean for the workspace and the fuzz workspace; `cargo test --workspace` 1,874 passed, none failed (the Win32 crate on one thread); the same run on 1.2.53 before the fixes passed 1,873. CI has not run 1.2.52-1.2.54 yet (not pushed); `9fb7e42d` (1.2.51) was green on CI, FreeBSD and Fuzz.
-- **Not done:** `tools/bench` (no hot-path change since 1.2.46's run), an interop rerun (no peer-wire change), RELEASING.md step 5 (needs the draft); the GTK and Mac crates were not linted again (their code did not change).
-- **Plan and backlog:** the release's status in PLAN; the µTorrent 2.2.1 comparison's detail moved to BACKLOG "Win32 layout and dialogs" (PLAN 17.5 KB to 16.9 KB).

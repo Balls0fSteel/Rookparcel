@@ -262,6 +262,7 @@ LogPrefsNotSaved=kon de voorkeuren niet opslaan: {error}
 LogSettingsUnreadable=kan het voorkeurenbestand {file} niet lezen: {error}. In deze sessie wordt er niets overheen opgeslagen.
 LogSettingsDamaged=het voorkeurenbestand {file} was geen geldige tekst: het is gelezen met de foute tekens vervangen, en het origineel is bewaard als {copy}
 LogSettingsNoCopy=het voorkeurenbestand {file} was geen geldige tekst en er kon geen kopie van worden gemaakt: in deze sessie wordt er niets overheen opgeslagen
+LogSettingsMissing={file} bevat geen instellingen, maar er zijn opgeslagen torrents: de instellingen zijn misschien verloren gegaan, dus dit is geen eerste start
 LogSettingUnreadable=deze versie kan de instelling {name}={value} niet lezen: die staat voorlopig op de standaardwaarde en blijft in het bestand
 LogSettingsHeld=overdrachten worden vastgehouden tot u de instellingen bevestigt: controleer ze in Voorkeuren en druk dan op OK
 LogSettingsChanged=deze instellingen worden anders gelezen dan Rookparcel {old} ze heeft opgeslagen:

@@ -262,6 +262,7 @@ LogPrefsNotSaved=nie można zapisać ustawień: {error}
 LogSettingsUnreadable=nie można odczytać pliku ustawień {file}: {error}. W tej sesji nic nie zostanie na nim zapisane.
 LogSettingsDamaged=plik ustawień {file} nie był poprawnym tekstem: odczytano go z zastąpionymi błędnymi znakami, a oryginał zachowano jako {copy}
 LogSettingsNoCopy=plik ustawień {file} nie był poprawnym tekstem i nie udało się zrobić jego kopii: w tej sesji nic nie zostanie na nim zapisane
+LogSettingsMissing=w {file} nie ma ustawień, ale są zapisane torrenty: ustawienia mogły zostać utracone, więc nie jest to pierwsze uruchomienie
 LogSettingUnreadable=ta wersja nie potrafi odczytać ustawienia {name}={value}: na razie ma wartość domyślną i pozostaje w pliku
 LogSettingsHeld=transfery są wstrzymane do czasu potwierdzenia ustawień: sprawdź je w Ustawieniach, a następnie naciśnij OK
 LogSettingsChanged=te ustawienia są odczytywane inaczej, niż zapisał je Rookparcel {old}:
