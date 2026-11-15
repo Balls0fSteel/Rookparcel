@@ -335,23 +335,23 @@ mod tests {
         // an older version wrote the stamp, and this one reads the proxy differently (as
         // qBittorrent's update did): the stamp says SOCKS5, the line now reads as none
         let edited = text
-            .replace(&format!("check.version={}", version()), "check.version=1.2.56")
+            .replace(&format!("check.version={}", version()), "check.version=1.0.0")
             .replace("lt.proxy_type=2", "lt.proxy_type=0");
         std::fs::write(&path, &edited).unwrap();
         let mut prefs = Prefs::load(&path);
         let c = on_start(&mut prefs);
         assert!(c.hold, "{:?}", c.log);
-        assert!(c.log[0].contains("1.2.56") && c.log[0].contains("rookparcel.ini.1.2.56.bak"), "{:?}", c.log);
+        assert!(c.log[0].contains("1.0.0") && c.log[0].contains("rookparcel.ini.1.0.0.bak"), "{:?}", c.log);
         assert!(
             c.log.iter().any(|l| l.contains("proxy: socks5 10.8.0.1:1080 peers trackers names → none")),
             "{:?}",
             c.log
         );
-        assert_eq!(std::fs::read_to_string(dir.join("rookparcel.ini.1.2.56.bak")).unwrap(), edited);
+        assert_eq!(std::fs::read_to_string(dir.join("rookparcel.ini.1.0.0.bak")).unwrap(), edited);
         // saved before the user confirms: the old stamp stays, so the next start asks again
         prefs.set("ui.toolbar", "0");
         prefs.save().unwrap();
-        assert!(std::fs::read_to_string(&path).unwrap().contains("check.version=1.2.56"));
+        assert!(std::fs::read_to_string(&path).unwrap().contains("check.version=1.0.0"));
         let again = on_start(&mut Prefs::load(&path));
         assert!(again.hold && !again.log.iter().any(|l| l.contains(".bak")), "one backup per version");
         // confirmed: this version's reading is stamped, and the next start is quiet

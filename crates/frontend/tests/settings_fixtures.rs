@@ -51,12 +51,14 @@ fn rows() -> impl Iterator<Item = &'static Entry> {
     TABLE.iter().filter(|e| !e.name.starts_with("bt."))
 }
 
-/// A text for `e` that is not its default.
+/// A text for `e` that is not its default. A text row gets a value of its own, never one made
+/// from its default: `user_agent`'s default names the version, and a version bump must not
+/// read as a new format.
 fn away_from_default(e: &Entry) -> String {
     match (e.kind, e.get(&Settings::default())) {
         (Kind::Bool, Value::Bool(b)) => (!b).to_string(),
         (Kind::Int { max, .. }, Value::Int(i)) => (if i < max { i + 1 } else { i - 1 }).to_string(),
-        (_, v) => format!("{v}fixture"),
+        _ => format!("fixture-{}", e.name),
     }
 }
 
@@ -80,7 +82,7 @@ fn every_setting_away_from_default() -> Prefs {
         let v = match v {
             "0" => "1".to_owned(),
             "1" => "0".to_owned(),
-            v => v.parse::<i64>().map_or_else(|_| format!("{v}fixture"), |i| (i + 1).to_string()),
+            v => v.parse::<i64>().map_or_else(|_| format!("fixture-{k}"), |i| (i + 1).to_string()),
         };
         gui.set(k, v);
     }
@@ -207,10 +209,10 @@ fn every_setting_survives_the_file() {
 #[test]
 fn the_newest_fixture_is_this_builds_format() {
     let version = env!("CARGO_PKG_VERSION");
-    let text = format!(
-        "# Written by Rookparcel {version} (tests/settings_fixtures.rs).\n{}",
-        plain_text(&every_setting_away_from_default())
-    );
+    let body = plain_text(&every_setting_away_from_default());
+    // a version bump alone must not look like a new format
+    assert!(!body.contains(version), "the fixture text names the version {version}:\n{body}");
+    let text = format!("# Written by Rookparcel {version} (tests/settings_fixtures.rs).\n{body}");
     let newest = all_fixtures().into_iter().filter_map(|(v, p)| v.map(|_| p)).next_back();
     let same = newest.as_ref().is_some_and(|p| {
         // the comment line names the version that wrote it

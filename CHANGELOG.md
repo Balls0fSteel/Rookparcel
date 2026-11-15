@@ -4,6 +4,15 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-15_143820_1794749900: CI red on 1.2.56: two tests depended on the version (tests only)
+
+- **What failed** (CI on all three systems, FreeBSD): `guard::tests::a_different_reading_of_the_stamped_settings_holds_until_confirmed` used `1.2.56` as "an older version", which the bump made the current one. On macOS, which runs with `--no-fail-fast`, `the_newest_fixture_is_this_builds_format` also failed: the fixture generator built text settings from their defaults, and `user_agent`'s default names the version, so every bump looked like a new format.
+- **Cause:** the tests ran before the bump to 1.2.56, not after.
+- **Fixed:**
+  - The test's older version is `1.0.0`.
+  - Text rows get `fixture-<name>`, and the test fails if the snapshot names the version. `1.2.56.ini` is added; `1.2.55.ini` stays as that version's file.
+- **Validation:** `cargo test --workspace --no-fail-fast` green (40 test binaries); the guard and fixture tests green again under a scratch version of 1.2.99.
+
 ## 2026-11-15_141701_1794748621: Version 1.2.56: the start compares the settings with how the last version read them (D70, part 2)
 
 - **The stamp:** every save writes `check.version` and `check.guard` (`guard::summary`). The summary is a frozen `v1` text of the proxy (type, host, port, scopes), the network rule, the listen interfaces, the encryption and the IP filter. It holds no user name or password.
