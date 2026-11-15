@@ -18,7 +18,10 @@ Earlier history: [archive index](docs/archive/README.md), including all 148 orig
   - frontend 401 tests and Win32 151 tests (one thread), including new ones for the page, the switch and the dialog's growth.
   - Clippy with `-D warnings` for Win32, frontend and nox; GTK (Linux target) and the Mac (both targets) cross-linted.
   - The hidden desktop, light and dark: Set → Change with a wrong PIN → lock → wrong and right PIN in the prompt → switch off with the PIN → File > Lock gone and a posted Lock ignored → on again.
-- **Not run:** GTK and the Mac, which were only type-checked; hand checks are in BACKLOG "UI lock".
+- **VM runs (same evening):**
+  - **GTK on the Xubuntu VM** (Xvfb, private bus, no tray): the page, Set PIN, the switch with Cancel and with the PIN, File > Lock hidden and Ctrl+L ignored while off, both back once ticked, and Ctrl+L without a PIN asking for one before it locks.
+  - **The Mac on the macOS VM** (a subagent, light and dark), the same plus Change PIN with a wrong PIN, no Lock in the status item's or the Dock's menu while off, and a lock and unlock.
+  - No D71 bug. Found and left in BACKLOG "UI lock": "tray" in the Mac's status line, and the Preferences sidebar's symbols nearly invisible in dark mode (older than D71).
 
 ## 2026-11-15_180859_1794762539: Release 1.2.57 published; the site's news and the wiki pushed
 

@@ -1187,10 +1187,22 @@ Hand checks still open:
 - **GTK:** a real KDE and GNOME (Wayland) session, plain GNOME without AppIndicator (the prompt standing in for the window), the digit filter with an input method; a countdown opened before the lock stays modal to the hidden main window (check under a window manager); the portal's file chooser stays on screen through a lock (another process).
 - **macOS:** <kbd>⌥</kbd> held at launch and <kbd>⌥</kbd> with a Dock click on a real Mac (keys cannot be held over SSH); the status item's and the Dock's menus while locked; a minimized or full-screen window at lock time; sheets coming back attached; Auto Shutdown's Quit or a logout while the prompt is up; arm64.
 
-Preferences > Advanced > UI Lock (D71, 1.2.58): Win32 driven on the hidden desktop, light and dark. Open:
-- **GTK:** the page on a real session (three buttons on one row, the switch re-ticked after a cancelled Turn Off), File > Lock hidden by `hidden-when=action-disabled` in the popover menu bar, Ctrl+L doing nothing while off, the tray's Lock.
-- **macOS:** the page in the sidebar, File > Lock hidden while off and ⌘L refused, the status item's and the Dock's menus; the 1 s refresh re-ticks the switch while the Turn Off dialog is up (cosmetic, check it is not visible).
+Preferences > Advanced > UI Lock (D71, 1.2.58): checked on all three (2026-11-15_235800). Win32 on the hidden desktop, light and dark. GTK under Xvfb on the Xubuntu VM, without a tray:
+- the page, Set PIN, and Cancel re-ticking the switch;
+- off with the PIN, with File > Lock hidden by `hidden-when` and Ctrl+L ignored, then on again;
+- Ctrl+L without a PIN asks for one, then locks.
+
+The Mac on the macOS VM, light and dark:
+- steps 1-6 as on GTK, plus Change PIN with a wrong PIN;
+- ⌘L ignored while off; no Lock in the status item's or the Dock's menu;
+- a lock and an unlock afterwards.
+
+Open:
+- **GTK:** a real session with a tray (the tray's Lock while off), KDE and GNOME.
+- **macOS:** Lock without a PIN and Remove PIN were not driven. While Turn Off the Lock is open, the switch already shows ticked: the 1 s refresh reads the lock, which is still on.
 - **Windows:** the page and the narrower PIN dialog at 125/150 % DPI and in a long language (German, Finnish).
+- **Text:** the status line "A PIN is set. File > Lock Rookparcel hides the windows in the tray." says "tray" on the Mac too, where it is the menu-bar item. A Mac-only text would need the 34 translations again.
+- **macOS, older than D71:** the Preferences sidebar's symbols are drawn nearly black on the dark sidebar (all pages; only the selected row's is white). They are plain SF Symbols in a bare `NSImageView` (`images::symbol`, `table.rs` `make_cell`); the template is probably not tinted for dark. Seen in `screencapture` of a fresh dark start too.
 
 Found and left:
 - **macOS, a second copy:** started with `open -n` or from Terminal (only `--reset-lock` from Terminal needs one), it reaches the running copy, but on macOS 15 that copy stays behind the front app, as an unlocked one did before, so its prompt or question has no keyboard until clicked. Yielding activation to it (by bundle identifier or to each running copy) changed nothing on the VM. Opening the app again from Finder or the Dock starts no second copy and works.
