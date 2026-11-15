@@ -52,6 +52,9 @@ minutes is taken over as stale. A script removes only its own lock, also when in
   app itself, and `windows.txt` with every visible text); `menus.txt` from System Events holds
   the menus' items, their state and key equivalents. A snapshot's title bar and toolbar can lag
   behind a change of the toolbar (it is drawn in its own layer); the content is current.
+- **Not seen right**: the VM draws no GPU effects. Symbols in a source list (the Preferences
+  sidebar, Finder's own sidebar) come out nearly black in light and dark, whatever their tint;
+  the same symbols elsewhere are right. Judge sidebar icon colours on a real Mac.
 - **Driving it**: System Events works over SSH (Accessibility is granted), also while the screen
   is locked, through accessibility actions: opening menus and clicking their items, header
   buttons, selecting table rows, hiding the process. After the toolbar is hidden or shown the

@@ -292,7 +292,7 @@ Run by me with one agent, then the owner's hand checks:
 - Windows checks; CI green including the MSRV check and the arm64 smoke start.
 - VM: the main window in light and dark mode, German and Hebrew; every menu item through osascript; every dialog's snapshot; a real transfer from nox to the GUI on localhost; magnet and `.torrent` opening; second-start forwarding; status item and notification; LaunchAgent and associations; Auto Shutdown dry run; instant-apply Preferences with a refused bad port; the quit flow; the GTK library takeover.
 - Scale on the VM with `--demo 100000`: time to the full list, sort, ⌘A, main-thread idle CPU (`top -l`), memory; compared with the Win32 baseline.
-- The owner's real Mac: the arm64 slice, Retina, the status icon in light and dark menu bars, Gatekeeper's Open Anyway on a downloaded dmg.
+- The owner's real Mac: the arm64 slice, Retina, the status icon in light and dark menu bars, Gatekeeper's Open Anyway on a downloaded dmg, the Preferences sidebar's symbols in light and dark (the VM draws source-list symbols black; tools/mac-vm/README.md).
 
 ## Not in scope
 

@@ -4,6 +4,15 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-16_001242_1794784362: The Mac's dark Preferences sidebar symbols: the VM's drawing, not a bug (documentation only)
+
+- **Asked for:** a fix for the Preferences sidebar's SF Symbols drawn nearly black on the dark sidebar on the macOS VM (BACKLOG "UI lock", older than D71).
+- **Found:** a source-list row (`NSTableViewStyle::SourceList`) tints its template symbols with an effect that VMware's software renderer draws black. On the VM they are black in light mode too.
+  - An `NSTableCellView` subclass that set `contentTintColor` (`secondaryLabelColor`, by background style) changed nothing. At run time the image was a template with the tint set under the dark appearance, and still black.
+  - A small Swift app with the same outline in a sidebar split item showed the same, even with a red tint. Finder's own sidebar icons on the VM are black instead of the accent colour.
+  - The same symbols outside a source list draw right in light and dark: plain and sidebar image views in that app, the browse buttons on Directories.
+- **Kept:** no code change; the subclass was dropped, so no version bump. BACKLOG, `tools/mac-vm/README.md` ("Not seen right") and MACOS_GUI.md L (a check for the owner's real Mac) say so.
+
 ## 2026-11-15_232343_1794781423: Version 1.2.58: Preferences > Advanced > UI Lock, the lock's off switch, a narrower PIN dialog (D71)
 
 - **Asked for:** a place in Advanced for the UI lock, a way to change the PIN and to turn the lock off, and a fix for the oddly sized Set PIN window on Windows. The owner chose an off switch that hides every Lock command and dropping Options > Lock PIN.
@@ -100,28 +109,3 @@ Earlier history: [archive index](docs/archive/README.md), including all 148 orig
   - SOCKS4 and SOCKS5 renumbered in both directions, so the stored "2" is unchanged but read as SOCKS4: `field proxy_type: then "Socks5", now Some("Socks4")`.
   - LSD's default changed: the format test asks for a new fixture. A value stored before the change still compares, with no false alarm.
 - **RELEASING.md** step 3 says what to do when the test fails: add the fixture in the change set itself, write a migration, and never edit an old fixture.
-
-## 2026-11-15_140244_1794747764: Version 1.2.55: settings not taken on trust (D70, part 1)
-
-- **Asked for:** the owner remembered qBittorrent's update that lost users' proxy setting and asked for a smart guard rather than hand tests of every upgrade path. The owner chose all three layers of the plan (close the loss paths, a fixture test, a check after a version change) and holding the transfers when the proxy cannot be trusted (D70). This is layer 1.
-- **Loss paths found and closed:**
-  - **An unreadable settings file.** A `rookparcel.ini` that could not be read, or was not UTF-8, loaded empty, opened the Setup Guide and was saved over. Now a missing file is a first start. An unreadable one is never saved over and holds the transfers. A damaged one is read with the bad bytes replaced, after a `.damaged-<secs>` copy is kept. Notepad's UTF-16 reads as it is.
-  - **Lines this build cannot read.** `settings::store` erased such a line (`lt.proxy_type=6` from a newer build) the next time it stored. Now the line stays until the user confirms (`settings::unreadable`, `forget_unreadable`).
-  - **An unknown proxy type.** It became "none", a direct connection. Now `guard::on_start` starts the engine held.
-  - **A damaged `webui.json`.** nox replaced it with defaults and saved over it. Now nox stops with an error that names the file.
-- **The hold (core):** `SessionHandle::hold_transfers` and `SessionParams::hold_transfers`, through the D54 machinery.
-  - While held, torrent traffic is bound to nothing: no listen socket, DHT, uTP, LSD or port mapping, and torrents wait. The hold is set before the first socket and the first restored torrent.
-  - The status is `NetworkStatus::Held`, so the remote protocol is 19. The status bar says "Transfers held: confirm the settings" in every GUI and the Web UI, and the Logger says why.
-  - Preferences' OK or Apply confirms the settings and lifts the hold. In nox a preference change through the Web UI or the API does the same.
-- **nox, found in the same review:**
-  - The network rule's rows were stored as `net.*` but read back as `lt.net.*`, so a `--network` rule was lost at a restart. They are now read under their own keys, and the old keys are migrated.
-  - The start's `* proxy:` line shows the proxy in force after the stored settings.
-- **How it was built:** two worktree subagents (the engine hold, the nox fixes) from a contracts commit. Their branches were reviewed and merged here. 6 new strings in all 35 tables (machine translations).
-- **Validation:**
-  - Tests: core lib 940 (the subagent's run, with three new hold tests); frontend 394; the nox suite with its new damaged-file, network-rule and held-start tests; Win32 150 on one thread.
-  - Lint: clippy `-D warnings` for core, frontend, nox and Win32; GTK and macOS cross-linted.
-  - End to end: nox in scratch folders with `lt.proxy_type=7` stored. It started held (no listen socket, the DHT not started); `setPreferences` lifted the hold and stored `lt.proxy_type=0` in place of the unreadable 7.
-- **Not done:**
-  - The status bar's look in the GUIs, by hand.
-  - A remote GUI's OK without a change lifts nox's hold for that run only.
-  - A GUI-hosted Web UI confirms through the host's Preferences path.
