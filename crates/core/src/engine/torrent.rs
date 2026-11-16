@@ -627,12 +627,22 @@ impl Torrent {
         self.flags.contains(TorrentFlags::SUPER_SEEDING) && !self.checking && self.is_seed()
     }
 
+    /// Gives the picker the piece priorities the file priorities and `FIRST_LAST_PIECES` make.
+    pub fn push_piece_priorities(&mut self) {
+        let first_last = self.flags.contains(TorrentFlags::FIRST_LAST_PIECES);
+        if let (Some(ti), Some(p)) = (&self.ti, self.picker.as_mut()) {
+            for (i, &pr) in piece_priorities(ti, &self.file_priority, first_last).iter().enumerate() {
+                p.set_piece_priority(i as u32, pr);
+            }
+        }
+    }
+
     /// Every wanted piece is done (libtorrent `is_finished`).
     pub fn is_finished(&self) -> bool {
         match (&self.picker, self.have_bits(), &self.ti) {
             (Some(p), _, _) => p.is_finished(),
             (None, Some(have), Some(ti)) => {
-                let prio = piece_priorities(ti, &self.file_priority);
+                let prio = piece_priorities(ti, &self.file_priority, false);
                 (0..have.len()).all(|i| prio[i] == 0 || have.get(i))
             }
             (None, Some(have), None) if self.wanted_pieces.is_some() => {
@@ -686,7 +696,9 @@ impl Torrent {
     pub fn wanted(&self) -> (u64, u64) {
         let prio: Vec<bool> = match (&self.picker, &self.ti, &self.wanted_pieces) {
             (Some(p), _, _) => (0..self.num_pieces).map(|i| p.piece_priority(i) > 0).collect(),
-            (None, Some(ti), _) => piece_priorities(ti, &self.file_priority).iter().map(|&p| p > 0).collect(),
+            (None, Some(ti), _) => {
+                piece_priorities(ti, &self.file_priority, false).iter().map(|&p| p > 0).collect()
+            }
             (None, None, Some(w)) => (0..w.len()).map(|i| w.get(i)).collect(),
             (None, None, None) => return (self.total_size, self.total_done()),
         };
@@ -876,6 +888,7 @@ impl Torrent {
             paused: self.is_paused(),
             auto_managed: self.flags.contains(TorrentFlags::AUTO_MANAGED),
             sequential_download: self.flags.contains(TorrentFlags::SEQUENTIAL_DOWNLOAD),
+            first_last_pieces: self.flags.contains(TorrentFlags::FIRST_LAST_PIECES),
             super_seeding: self.flags.contains(TorrentFlags::SUPER_SEEDING),
             disable_dht: self.flags.contains(TorrentFlags::DISABLE_DHT),
             disable_lsd: self.flags.contains(TorrentFlags::DISABLE_LSD),
@@ -1000,10 +1013,14 @@ impl HaveRef<'_> {
 }
 
 /// libtorrent `torrent::update_piece_priorities`: a piece gets the highest priority of the
-/// files it overlaps (pad files don't count).
-pub(crate) fn piece_priorities(ti: &TorrentInfo, file_priority: &[u8]) -> Vec<u8> {
+/// files it overlaps (pad files don't count). With `first_last` (`TorrentFlags::
+/// FIRST_LAST_PIECES`) the first and last pieces of each wanted file get the top priority:
+/// as many as hold 1 % of the file, at least one (qBittorrent's
+/// `applyFirstLastPiecePriority`). Which pieces are wanted is the same either way.
+pub(crate) fn piece_priorities(ti: &TorrentInfo, file_priority: &[u8], first_last: bool) -> Vec<u8> {
     let fs = ti.files();
-    let mut prio = vec![0u8; ti.num_pieces() as usize];
+    let n = ti.num_pieces();
+    let mut prio = vec![0u8; n as usize];
     for f in 0..fs.num_files() {
         if fs.file_size(f) == 0 || fs.file_flags(f).contains(FileFlags::PAD_FILE) {
             continue;
@@ -1014,8 +1031,16 @@ pub(crate) fn piece_priorities(ti: &TorrentInfo, file_priority: &[u8]) -> Vec<u8
         }
         // libtorrent's "inclusive" range includes partially covered pieces; `end` is exclusive.
         let (first, end) = crate::metainfo::file_storage::file_piece_range_inclusive(fs, f);
-        for piece in first..end.min(ti.num_pieces()) {
+        let end = end.min(n);
+        for piece in first..end {
             prio[piece as usize] = prio[piece as usize].max(p);
+        }
+        if first_last && first < end {
+            let len = ti.piece_length().max(1) as u64;
+            let k = fs.file_size(f).div_ceil(100).div_ceil(len).clamp(1, (end - first) as u64) as u32;
+            for piece in (first..first + k).chain(end - k..end) {
+                prio[piece as usize] = DownloadPriority::TOP.0;
+            }
         }
     }
     prio
@@ -1024,7 +1049,7 @@ pub(crate) fn piece_priorities(ti: &TorrentInfo, file_priority: &[u8]) -> Vec<u8
 /// The pieces some downloaded file touches, as [`piece_priorities`] gives them; `None` when
 /// every piece is wanted.
 pub(crate) fn wanted_mask(ti: &TorrentInfo, file_priority: &[u8]) -> Option<Bitfield> {
-    let prio = piece_priorities(ti, file_priority);
+    let prio = piece_priorities(ti, file_priority, false);
     if prio.iter().all(|&p| p > 0) {
         return None;
     }
@@ -1231,15 +1256,66 @@ mod tests {
         assert_eq!(restored.private, None, "an older record does not say");
     }
 
+    /// `FIRST_LAST_PIECES`: each wanted file's first and last pieces (1 % of the file, at least
+    /// one piece) get priority 7; skipped files and the wanted set are left alone.
+    #[test]
+    fn first_and_last_pieces_of_wanted_files() {
+        // Pieces of 16 KiB: a is pieces 0-7 exactly, b is 8-9, c starts in piece 9 (shared
+        // with b) and ends in piece 210; 1 % of c is 33,000 bytes, three pieces.
+        let (bytes, _) = make_torrent(&[("a", 8 * 16384), ("b", 20_000), ("c", 3_300_000)], 16 * 1024);
+        let ti = TorrentInfo::from_bytes(&bytes).unwrap();
+        assert_eq!(ti.num_pieces(), 211);
+        let top = |prio: &[u8]| -> Vec<usize> { (0..prio.len()).filter(|&i| prio[i] == 7).collect() };
+
+        let prio = piece_priorities(&ti, &[4, 4, 4], true);
+        assert_eq!(top(&prio), [0, 7, 8, 9, 10, 11, 208, 209, 210]);
+        assert!(prio.iter().all(|&p| p == 4 || p == 7));
+        // a skipped file's edges are not raised; a piece it shares with a wanted file is
+        let prio = piece_priorities(&ti, &[4, 0, 4], true);
+        assert_eq!(prio[8], 0);
+        assert_eq!(top(&prio), [0, 7, 9, 10, 11, 208, 209, 210]);
+        let prio = piece_priorities(&ti, &[0, 4, 0], true);
+        assert_eq!(top(&prio), [8, 9]);
+        assert!(prio[..8].iter().chain(&prio[10..]).all(|&p| p == 0));
+        // a low priority file keeps its middle low
+        let prio = piece_priorities(&ti, &[1, 0, 0], true);
+        assert_eq!((prio[0], prio[1], prio[6], prio[7], prio[8]), (7, 1, 1, 7, 0));
+        // the wanted pieces are the same as without the flag
+        for fp in [[4, 4, 4], [4, 0, 4], [0, 4, 0], [1, 0, 7], [0, 0, 0]] {
+            let on: Vec<bool> = piece_priorities(&ti, &fp, true).iter().map(|&p| p > 0).collect();
+            let off: Vec<bool> = piece_priorities(&ti, &fp, false).iter().map(|&p| p > 0).collect();
+            assert_eq!(on, off, "{fp:?}");
+        }
+        // with sequential download the picker takes the edges first, then the rest in order
+        let n = ti.num_pieces();
+        let mut picker = crate::engine::picker::PiecePicker::new(n, 16384, ti.piece_size(n - 1), 16384);
+        for (i, &p) in piece_priorities(&ti, &[4, 4, 4], true).iter().enumerate() {
+            picker.set_piece_priority(i as u32, p);
+        }
+        picker.set_sequential(true);
+        let seed = std::net::SocketAddr::from(([10, 0, 0, 1], 6881));
+        let picked =
+            picker.pick(&Bitfield::new(n as usize, false), true, n as usize, seed, false, |_, _| false);
+        let order: Vec<u32> = picked.iter().map(|&(piece, _)| piece).collect();
+        let mut want = vec![0, 7, 8, 9, 10, 11, 208, 209, 210];
+        want.extend((1..7).chain(12..208));
+        assert_eq!(order, want);
+        // a one-piece torrent: the piece is both edges
+        let (bytes, _) = make_torrent(&[("x", 1000)], 16 * 1024);
+        let ti = TorrentInfo::from_bytes(&bytes).unwrap();
+        assert_eq!(piece_priorities(&ti, &[4], true), [7]);
+        assert_eq!(piece_priorities(&ti, &[0], true), [0]);
+    }
+
     #[test]
     fn priorities_progress_and_resume() {
         // Pieces of 16 KiB: file a covers pieces 0-1, b covers 1-3, c covers 3.
         let (bytes, _) = make_torrent(&[("a", 20_000), ("b", 30_000), ("c", 10_000)], 16 * 1024);
         let ti = Arc::new(TorrentInfo::from_bytes(&bytes).unwrap());
         assert_eq!(ti.num_pieces(), 4);
-        assert_eq!(piece_priorities(&ti, &[4, 0, 0]), [4, 4, 0, 0]);
-        assert_eq!(piece_priorities(&ti, &[0, 0, 7]), [0, 0, 0, 7]);
-        assert_eq!(piece_priorities(&ti, &[1, 7, 0]), [1, 7, 7, 7]);
+        assert_eq!(piece_priorities(&ti, &[4, 0, 0], false), [4, 4, 0, 0]);
+        assert_eq!(piece_priorities(&ti, &[0, 0, 7], false), [0, 0, 0, 7]);
+        assert_eq!(piece_priorities(&ti, &[1, 7, 0], false), [1, 7, 7, 7]);
 
         let mut t = Torrent::new(
             TorrentId::default(),

@@ -118,6 +118,8 @@ fn choice() -> AddChoice {
         skip_hash_check: false,
         top_of_queue: false,
         label: String::new(),
+        sequential: false,
+        first_last: false,
     }
 }
 
@@ -528,12 +530,20 @@ fn menu_state_and_remove_question_follow_the_selection() {
     let mut a = status(1, 1, "a", true);
     a.download_limit = 50 * 1024;
     a.upload_limit = 1000;
-    let b = status(2, 2, "b", false);
+    a.has_metadata = true;
+    let mut b = status(2, 2, "b", false);
+    b.flags |= TorrentFlags::SEQUENTIAL_DOWNLOAD;
     core.handle_alerts(vec![Alert::StateUpdate(vec![a, b])]);
     let (a, b) = (TorrentId::from_raw(1), TorrentId::from_raw(2));
     assert!(core.menu_state(&[]).is_none());
     let m = core.menu_state(&[a]).unwrap();
     assert!(m.single_done && m.can_super_seed && !m.super_seeding && m.can_open_folder);
+    // the download order is for unfinished torrents; Export for those with metadata
+    assert!(!m.can_sequential && !m.sequential && !m.first_last && m.can_export);
+    let m = core.menu_state(&[b]).unwrap();
+    assert!(m.can_sequential && m.sequential && !m.first_last && !m.can_export);
+    let m = core.menu_state(&[a, b]).unwrap();
+    assert!(m.can_sequential && !m.sequential && m.can_export, "checked only when every one has it");
     assert_eq!((m.download_kib, m.upload_kib), (50, u32::MAX));
     assert_eq!(m.label.as_deref(), Some(""));
     assert!(!m.can_remove_label);
@@ -547,6 +557,70 @@ fn menu_state_and_remove_question_follow_the_selection() {
     core.prefs_mut().set_bool("ui.confirm_delete", false);
     assert!(core.remove_question(&[a], false).is_none());
     assert!(core.remove_question(&[a], true).is_some());
+}
+
+/// The download order from the Add dialog and the torrent menu, Copy Magnet Link's text and
+/// Export .torrent, on the mock engine.
+#[test]
+fn download_order_magnet_links_and_export() {
+    use crate::export::ExportTarget;
+    use rookparcel_core::metainfo::{TorrentInfo, parse_magnet_uri};
+    let (seq, first_last) = (TorrentFlags::SEQUENTIAL_DOWNLOAD, TorrentFlags::FIRST_LAST_PIECES);
+    let mut core = Setup::new().start("order-export");
+    let AddStep::Dialog(r) = core.add_file(torrent("Movie")) else { panic!("no dialog") };
+    core.finish_add(r, Some(AddChoice { first_last: true, ..choice() }));
+    let AddStep::Dialog(r) = core.add_file(torrent("Other")) else { panic!("no dialog") };
+    core.finish_add(r, Some(choice()));
+    pump(&mut core, "the torrents", |c| c.list().len() == 2);
+    let by_name =
+        |c: &Core, name: &str| c.list().ids().find(|&id| c.list().get(id).unwrap().name == name).unwrap();
+    let (movie, other) = (by_name(&core, "Movie"), by_name(&core, "Other"));
+    let flags = move |c: &Core| c.list().get(movie).unwrap().flags;
+    assert!(flags(&core).contains(first_last) && !flags(&core).contains(seq), "the Add dialog's choice");
+    assert!(!core.list().get(other).unwrap().flags.intersects(seq | first_last), "not remembered");
+
+    // on for all unless every one has it, then off for all
+    core.toggle_first_last(&[movie, other]);
+    pump(&mut core, "first-last on for both", |c| c.menu_state(&[movie, other]).unwrap().first_last);
+    core.toggle_first_last(&[movie, other]);
+    pump(&mut core, "first-last off", |c| {
+        !c.list().ids().any(|id| c.list().get(id).unwrap().flags.contains(first_last))
+    });
+    core.toggle_sequential(&[movie]);
+    pump(&mut core, "sequential on", |c| flags(c).contains(seq));
+    let m = core.menu_state(&[movie]).unwrap();
+    assert!(m.sequential && m.can_sequential && m.can_export);
+    core.toggle_sequential(&[movie]);
+    pump(&mut core, "sequential off", |c| !flags(c).contains(seq));
+
+    // Copy Magnet Link: a line per torrent, in the selection's order
+    let text = core.copy_magnets(&[other, movie]);
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 2, "{text}");
+    for (line, id) in lines.iter().zip([other, movie]) {
+        let st = core.list().get(id).unwrap();
+        let m = parse_magnet_uri(line).unwrap();
+        assert_eq!((m.info_hashes, m.name.as_str()), (st.info_hashes, st.name.as_str()));
+    }
+
+    // Export .torrent: one to a chosen file, both into a folder
+    let dir = temp("order-export-files");
+    let file = dir.join("chosen.torrent");
+    core.export_torrents(&[movie], ExportTarget::File(file.clone()));
+    pump(&mut core, "the export", |c| logged(c, "Exported Movie to"));
+    let want = core.list().get(movie).unwrap().info_hashes;
+    assert_eq!(TorrentInfo::from_bytes(&std::fs::read(&file).unwrap()).unwrap().info_hashes(), want);
+    core.export_torrents(&[movie, other], ExportTarget::Folder(dir.clone()));
+    let ev =
+        pump(&mut core, "the folder export", |c| logged(c, "Movie.torrent") && logged(c, "Other.torrent"));
+    assert!(dir.join("Movie.torrent").exists() && dir.join("Other.torrent").exists());
+    assert!(ev.errors.is_empty());
+    // a failed export to a chosen file is an error to show
+    core.export_torrents(&[movie], ExportTarget::File(dir.join("missing").join("x.torrent")));
+    let ev = pump(&mut core, "the failure", |c| logged(c, "Could not export Movie"));
+    assert_eq!(ev.errors.len(), 1);
+    assert_eq!(ev.errors[0].0, tr!(CannotExport, name = "Movie"));
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[test]

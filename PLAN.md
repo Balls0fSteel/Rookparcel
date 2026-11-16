@@ -1,8 +1,8 @@
 # Rookparcel plan
 
-Last updated: 2026-11-15_232343_1794781423
+Last updated: 2026-11-16_122332_1794828212
 
-Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D71](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
+Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D73](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
 ## Vision
 
@@ -19,13 +19,18 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Current status
 
+- **Feature plan of 2026-11-16:** six features from the comparison with qBittorrent, Transmission, Deluge and BiglyBT, in four waves for one published release; each wave bumps the patch version, only the last is tagged. Subagents do the work per crate after a shared step that adds all strings.
+  - Wave 1 = **1.2.59** (D72 download order, D73 Copy Magnet Link / Export .torrent): built and checked in all interfaces, not released. Hand checks: BACKLOG "Download order, magnet links and export".
+  - Wave 2 = 1.2.60: excluded file names, and the IP filter from a URL with CIDR.
+  - Wave 3 = 1.2.61: tags everywhere (API, three GUIs, Web UI; owner's choice).
+  - Wave 4 = 1.2.62: "Append .!ut to incomplete files" (writes `.!ut`, adopts a `.!ut` or `.!qB` file when the plain name is missing). Last because it renames files on disk; left out of the release if its tests do not hold.
 - **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.
 - **Artwork:** the Postal Rook won ([small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
-- **Releases:** 1.0.1 to 1.2.57 published ([notes](docs/releases/)); hand checks are below. 1.2.0 (2026-11-05) shipped profiles (D42), D50-D55 and the bug-hunt fixes. 1.2.54 shipped the UI lock (D69). **1.2.57** (published 2026-11-15) shipped the settings guard (D70) with the release review's fixes; its draft was checked by checksum, the zip's contents and versions and `rookparcel-nox --version`; RELEASING.md step 5 by hand is open.
+- **Releases:** 1.0.1 to 1.2.57 published ([notes](docs/releases/)). 1.2.0 shipped profiles (D42), D50-D55 and the bug-hunt fixes; 1.2.54 the UI lock (D69); **1.2.57** (2026-11-15) the settings guard (D70), its draft checked by checksum, the zip's contents and versions and `rookparcel-nox --version`; RELEASING.md step 5 by hand is open.
 - **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.57. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`. A small nox add race is in BACKLOG "Remote mode and Web UI".
-- **UI lock (D69, 1.2.47-1.2.50, 2026-11-13):** a PIN of 4 to 6 digits hides the windows of all three GUIs in the tray; Ctrl or Option held at start, or `--reset-lock`, removes a forgotten one. Run on the hidden desktop, the Xubuntu VM and the macOS VM; wiki page `Locking-Rookparcel` (pushed 2026-11-13). First released in 1.2.54. **1.2.58 (D71, not released):** managed in Preferences > Advanced > UI Lock, with an off switch that removes every Lock command; the Options > Lock PIN submenu is gone; the Win32 PIN dialog is narrower. GTK and the Mac are type-checked only. Hand checks and what was left: BACKLOG "UI lock".
+- **UI lock (D69, 1.2.47-1.2.50; released in 1.2.54):** a PIN of 4 to 6 digits hides all three GUIs' windows in the tray; Ctrl or Option at start, or `--reset-lock`, removes a forgotten one; wiki page `Locking-Rookparcel`. **1.2.58 (D71, not released):** Preferences > Advanced > UI Lock with an off switch that removes every Lock command, no Options > Lock PIN, a narrower Win32 PIN dialog; checked on all three. Open: BACKLOG "UI lock".
 - **Benchmarks:** [2026-11-11 results](docs/BENCHMARKS.md) for 1.2.46: 10,000 torrents use 67 MB after restart (qBittorrent 612 MB) and idle at 0.07 % of a core; Win32 lists 100,000 in 1.37-1.49 s. Not rerun since (no hot-path change).
 - CI, FreeBSD and Fuzz were green for `b0f3852b` (1.2.57, 2026-11-15), and the Release run for `v1.2.57` on its first attempt.
 - Scale baselines on this PC: [plan snapshot](docs/archive/PLAN-2026-11-13.md), [BENCHMARKS.md](docs/BENCHMARKS.md); the low-end-machine gate remains open.
@@ -33,25 +38,24 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Next steps
 
-**Releases 1.2.29-1.2.54 (2026-11-09 to 2026-11-15)** are published; their notes are in `docs/releases/` and the full paragraphs in the [plan snapshot of 2026-11-13](docs/archive/PLAN-2026-11-13.md). Still open from them: RELEASING.md step 5 by hand (the setup, zip, AppImages, Flatpaks, dmg and container image on the VMs; Help > Check for Updates from 1.2.30, and from an installed 1.2.46 to 1.2.54; the owner's installed copy should start with one "setup.exe is missing" line and no long check; the UI lock's hand checks); the machine-made translations of 1.2.34-1.2.43 and of D69; 1.2.44's GTK line and shared-frontend change on the VMs; 1.2.33's fix tried with the installed client; a real session's Logger with private torrents; the owner's look at the GTK sizes; the dmg step and real Macs for the first-run guide; the nox Docker image's first push; next on macOS, dropping the legacy notification centre. Detail in BACKLOG "Themes", "Files tab folder tree", "Localisation", "GTK desktop checks", "macOS", "Statistics, trackers and Run Program", "Seeding goals", "Disk and storage" and "UI lock".
+**Open from releases 1.2.29-1.2.54** (notes in `docs/releases/`, full paragraphs in the [2026-11-13 snapshot](docs/archive/PLAN-2026-11-13.md)): RELEASING.md step 5 by hand (setup, zip, AppImages, Flatpaks, dmg and image on the VMs; updates from 1.2.30 and from an installed 1.2.46-1.2.54, the owner's copy starting with one "setup.exe is missing" line and no long check; the UI lock); the machine translations of 1.2.34-1.2.43 and D69; 1.2.44's GTK line and frontend change on the VMs; 1.2.33's fix with the installed client; a real Logger with private torrents; the owner's look at the GTK sizes; the dmg step and real Macs for the first-run guide; the Docker image's first push; then dropping the Mac's legacy notification centre. BACKLOG: "Themes", "Files tab folder tree", "Localisation", "GTK desktop checks", "macOS", "Statistics, trackers and Run Program", "Seeding goals", "Disk and storage", "UI lock".
 
 **Feature order chosen by the owner (2026-10-30_085652_1793347012):**
 
-- **C, D.** RSS in hosted mode and Torznab search (D41, 1.1.12-1.1.19): done; hand checks in BACKLOG. No alternative speed limits in the Win32 GUI (owner, 2026-10-30).
-- **E.** Profiles and portable mode (D42): shipped in 1.2.0 (D58). Remaining hand checks: [BACKLOG](docs/BACKLOG.md#profiles-and-portable-mode-d42).
-- **F.** Microsoft Store release: D46 approved 2026-11-04 (free MSIX, individual account, settings shared with the setup copy, all markets and 34 languages, the Postal Rook icon, D60); build per [STORE.md](docs/STORE.md).
-- **G.** Smart disk I/O (D48, [DISKIO.md](docs/DISKIO.md)) and **Keep ping low** (D49, [LOWPING.md](docs/LOWPING.md)) shipped in 1.1.29-1.1.40. Open: real-disk busy-throttle measurements (BACKLOG "Disk and storage"), the owner's gaming line, a Mac run, 2.2.1's "Stop transfers on user interaction".
-- **H.** D56 (2.2.1's web search engines, icon skins, dark mode; research in [BACKLOG](docs/BACKLOG.md#themes-researched-2026-11-02_110639_1793613999-theme-pass-2026-11-09_152030_1794234030)): the theme pass (D63) and Win32 dark mode (D64, [DARKMODE.md](docs/DARKMODE.md)) shipped by 1.2.29, hand checks in BACKLOG "Themes". Icon skins and web search engines remain, each designed before code.
-- **I.** The owner's six points ([PROPOSALS.md](docs/PROPOSALS.md)): D50-D55 shipped (D52 as the Mac GUI in 1.2.19); [BUGHUNT-2026-11-05.md](docs/BUGHUNT-2026-11-05.md) has the 38 findings, all closed; 1.2.52 fixed its inherited quirks, and 26, 30 and 14 passed by hand (1.2.52-1.2.53). **Open:** a real VPN run, a real first start through the guide, the GUI looks; the Win32 test binary's rare heap fault under parallel load (BACKLOG "Validation"; run its tests on one thread meanwhile).
+- **C-E** done: RSS in hosted mode and Torznab search (D41), no alternative speed limits in Win32 (owner); profiles and portable mode (D42, 1.2.0). Hand checks in BACKLOG ([profiles](docs/BACKLOG.md#profiles-and-portable-mode-d42)).
+- **F.** Microsoft Store release (D46, approved 2026-11-04): build per [STORE.md](docs/STORE.md).
+- **G.** Smart disk I/O (D48) and Keep ping low (D49) shipped in 1.1.29-1.1.40. Open: real-disk busy-throttle measurements (BACKLOG "Disk and storage"), the owner's gaming line, a Mac run, 2.2.1's "Stop transfers on user interaction".
+- **H.** D56: the theme pass (D63) and Win32 dark mode (D64) shipped by 1.2.29, hand checks in [BACKLOG "Themes"](docs/BACKLOG.md#themes-researched-2026-11-02_110639_1793613999-theme-pass-2026-11-09_152030_1794234030). Icon skins and web search engines remain, each designed before code.
+- **I.** The owner's six points (D50-D55, [PROPOSALS.md](docs/PROPOSALS.md)) shipped; the 38 [bug-hunt](docs/BUGHUNT-2026-11-05.md) findings closed. **Open:** a real VPN run, a real first start through the guide, the GUI looks; the Win32 test binary's rare heap fault under parallel load (BACKLOG "Validation"; run its tests on one thread).
 
 0. **Owner hand-test findings (2026-10-27):** fixed in 1.0.2-1.0.8; re-test on a fresh Win32 build ([BACKLOG](docs/BACKLOG.md#owner-hand-test-findings-2026-10-27_225501_1793138101)).
 1. Run the installer's wizard and the all-users UAC path once on a real PC, and register `RP` with the client-ID lists (item 14).
-2. Rerun `tools/bench` before each release and on bare metal when one is free ([BACKLOG](docs/BACKLOG.md#validation-and-development-environment)); the 1.2.46 run is done (2026-11-11).
-3. Hand-check V1.1 (below, implemented) and keep the 1.0.x validation going. Refresh the hand-test set with the latest Win32 dialog changes, then check the remaining dialogs for clipped translations and layout problems in the new font.
+2. Rerun `tools/bench` before each release and on bare metal when one is free ([BACKLOG](docs/BACKLOG.md#validation-and-development-environment)).
+3. Hand-check V1.1 and keep the 1.0.x validation going. Refresh the hand-test set with the latest Win32 dialog changes, then check the remaining dialogs for clipped translations and layout problems in the new font.
 4. Complete the manual checks in Road to 1.0 item 9, starting with Add Torrent from URL, Preferences and the changed Add dialog. Use [BACKLOG.md](docs/BACKLOG.md) for the relevant feature's exact gaps.
 5. Finish the outstanding platform, scale and interop checks in items 5-8 and 11-13. Record what was actually run and what remains unverified.
-6. **Security fixes** (done 2026-10-27): every audit finding is Fixed or Ruled out ([SECURITY.md](SECURITY.md); the full audit is the untracked `SECURITY-AUDIT.md`). Native review still wanted for `RemotePlaintext`, `ForwardRefused`, `PrefCurrentPassword`, `PrefNeedCurrentPassword`.
-7. **Sonarr/Radarr/Prowlarr** ([INTEGRATIONS.md](docs/INTEGRATIONS.md) part 1): gaps 1-3 are fixed or decided (1.1.3-1.1.4); real apps passed against nox and the hosted Web UI (2026-10-29, `tools/arr-test`). Still open: a magnet grab with real peers, and "First" priority / Force Start. Torznab search is item D above.
+6. **Security:** every audit finding is Fixed or Ruled out ([SECURITY.md](SECURITY.md)). Native review still wanted for `RemotePlaintext`, `ForwardRefused`, `PrefCurrentPassword`, `PrefNeedCurrentPassword`.
+7. **Sonarr/Radarr/Prowlarr** ([INTEGRATIONS.md](docs/INTEGRATIONS.md)): real apps passed against nox and the hosted Web UI (`tools/arr-test`). Still open: a magnet grab with real peers, and "First" priority / Force Start.
 8. Keep Windows, Linux, macOS and FreeBSD CI green. MSRV is 1.85; avoid let-chains. Before pushing code, use stable clippy and rustfmt, including the separate fuzz workspace. Interop reruns are needed after peer-wire, picker or disk changes.
 
 ## Road to 1.0
@@ -83,9 +87,8 @@ Q1-Q15 are resolved; their answers and the original Q10 interop setup are in the
 
 - UI artwork (D27-D30): the bold family is integrated (gate 10). Optional: hand-drawn 20 px globe and pylon, dedicated 48/64 px drawings, and a web-ui globe matching the network globe.
 - Compare Properties > Advanced, `rss.*`, the Add dialog's wording and all 15 Preferences pages with the owner's µTorrent 2.2.1 captures in `z_exclude_uTorrent/` (BACKLOG "Win32 layout and dialogs"; Road to 1.0 item 9).
-- D46 and D50-D69 are settled; no decision is proposed.
+- D46 and D50-D73 are settled; no decision is proposed.
 - Decide the Flathub permission/submission approach (item 7); the recorded exception policy requires the owner's own text.
-
 
 ## V1.1
 
@@ -93,11 +96,8 @@ Released in 1.1.0 (D35: the name search, and importers from qBittorrent / µTorr
 
 ## V2.0 goals
 
-Owner priorities recorded 2026-10-21 and reaffirmed 2026-10-23. Goals 1 and 3 are designed in [PROFILES.md](docs/PROFILES.md) and planned in [PROFILES_PLAN.md](docs/PROFILES_PLAN.md) (D42, approved 2026-11-03); step E above.
+Owner priorities recorded 2026-10-21 and reaffirmed 2026-10-23. Goals 1-3 are done: profiles and portable mode on every platform (D42, [PROFILES.md](docs/PROFILES.md), shipped in 1.2.0) and binaries on GitHub Releases.
 
-1. Profiles: separate settings, torrents and state, simultaneous instances, per-profile single-instance handling, ports and nox services.
-2. Downloadable binaries on GitHub Releases: build on the tagged packaging workflow already started for 1.0 (items 6-8).
-3. Portable mode on every platform: settings, state and downloads relative to the portable folder. Research the model first and revisit D7 together with profiles.
 4. A multilingual wiki/user guide in the D24 languages. The English guide is done (2026-11-04_211029_1793823029): 28 pages on the [GitHub wiki](https://github.com/Balls0fSteel/Rookparcel/wiki), source in `docs/wiki` (copy it to `Rookparcel.wiki.git` after edits; `docs/wiki/BRIEF.md` has the conventions). Open: translations; F1 could open the wiki (`help::WIKI_URL` is `None`); keep pages current as features change.
 5. Compiled-in Rust plugin hooks (moved from V1.1, D35), once a completion action, search source or custom column needs one.
 

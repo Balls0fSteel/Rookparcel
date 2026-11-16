@@ -675,7 +675,7 @@ helps! {
     /// win32 app.rs cmd::REANNOUNCE -> torrent_action -> force_reannounce
     MenuUpdateTracker = "Contacts the selected torrents' trackers now, without waiting for the next announce, to report progress and get more peers.";
     /// win32 app.rs torrent menu -> submenu_icon(menu, adv, MenuAdvanced)
-    MenuAdvanced = "Moves the selected torrents' files to another folder, or turns Initial Seeding on or off.";
+    MenuAdvanced = "Moves the selected torrents' files to another folder, turns Initial Seeding on or off, or changes the order their pieces download in.";
     /// win32 app.rs cmd::SET_LOCATION -> set_download_location -> move_storage(AlwaysReplaceFiles)
     MenuSetLocation = "Picks a folder and moves the selected torrents' files there. Files of the same name already there are replaced.";
     /// win32 app.rs cmd::SUPER_SEED -> toggles TorrentFlags::SUPER_SEEDING (only when every selected torrent seeds)
@@ -694,6 +694,14 @@ helps! {
     MenuRemoveLabel = "Takes the label off the selected torrents.";
     /// win32 app.rs cmd::PROPERTIES -> show_properties -> properties::show, Changes::apply, Changes::store
     MenuProperties = "Opens the Torrent Properties of the selected torrents: trackers, bandwidth, seeding goal and other settings.";
+    /// frontend app/commands.rs Core::toggle_sequential -> actions::toggle_flag(TorrentFlags::SEQUENTIAL_DOWNLOAD); core engine/picker.rs rebuild_order (priority, then piece order); MenuState::can_sequential = actions::any_unfinished
+    MenuSequential = "Downloads the selected torrents' pieces in order, from the start of the data to its end, so a video can be played while it downloads. Higher file priorities still come first. Greyed out when every selected torrent is finished.";
+    /// frontend app/commands.rs Core::toggle_first_last -> actions::toggle_flag(TorrentFlags::FIRST_LAST_PIECES); core engine/torrent.rs piece_priorities (1 % of the file, at least one piece, priority 7)
+    MenuFirstLast = "Downloads the first and last pieces of each wanted file before the rest, so a player can read a video's header and index early. Each end is 1 % of the file, at least one piece. Skipped files are left alone.";
+    /// frontend app/commands.rs Core::copy_magnets -> export::magnet_for (btih, btmh, dn, tr from properties::fetch_trackers)
+    MenuCopyMagnet = "Puts the selected torrents' magnet links on the clipboard, one per line, with their info-hashes, names and trackers.";
+    /// frontend app/commands.rs Core::export_torrents -> export::Exports::request (post_torrent_file), Exports::on_torrent_file; MenuState::can_export = actions::any_has_metadata
+    MenuExportTorrent = "Saves the selected torrents' .torrent files: one to a file you name, several into a folder you pick, each under its own name, numbered when the name is taken. A torrent added from a magnet link has none until its metadata has arrived.";
 
     // ---- Menu: Files tab
     /// win32 app.rs cmd::FILE_OPEN -> open_file(folder = false) -> ShellExecuteW default verb
@@ -736,4 +744,18 @@ helps! {
     ToolRss = "Opens the RSS Downloader, where you add feeds and set filters that download matching items automatically.";
     /// win32 app.rs TOOLBAR cmd::PREFS -> show_preferences
     ToolPreferences = "Opens the Preferences window with the settings for connections, bandwidth, queueing, folders and the rest of the program.";
+
+    // ======== Dialogs
+
+    // ---- Torrent Properties > Other Settings
+    /// frontend properties.rs Fields::sequential -> Changes::sequential -> Changes::apply (TorrentFlags::SEQUENTIAL_DOWNLOAD); Properties::can_sequential
+    PropsSequential = "Downloads the torrent's pieces in order, from the start of the data to its end, as Torrent menu > Advanced > Download in Sequential Order does. Greyed out when every torrent is finished.";
+    /// frontend properties.rs Fields::first_last -> Changes::first_last -> Changes::apply (TorrentFlags::FIRST_LAST_PIECES)
+    PropsFirstLast = "Downloads the first and last pieces of each wanted file before the rest, as Torrent menu > Advanced > Download First and Last Pieces First does.";
+
+    // ---- Add New Torrent
+    /// frontend add.rs AddChoice::sequential -> AddChoice::apply_to, apply_to_torrent (TorrentFlags::SEQUENTIAL_DOWNLOAD); off on every add
+    AddSequential = "Downloads the torrent's pieces in order, from the start of the data to its end, so a video can be played while it downloads. Off for every new torrent; Torrent menu > Advanced changes it later.";
+    /// frontend add.rs AddChoice::first_last -> AddChoice::apply_to, apply_to_torrent (TorrentFlags::FIRST_LAST_PIECES); off on every add
+    AddFirstLast = "Downloads the first and last pieces of each wanted file before the rest, so a player can read a video's header and index early. Off for every new torrent; Torrent menu > Advanced changes it later.";
 }

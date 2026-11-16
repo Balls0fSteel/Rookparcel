@@ -7,11 +7,12 @@
 use std::path::{Path, PathBuf};
 
 use objc2::MainThreadMarker;
-use objc2_app_kit::NSWorkspace;
+use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString, NSWorkspace};
 use objc2_foundation::{NSArray, NSString, NSURL};
 use rookparcel_core::TorrentId;
 use rookparcel_frontend::actions::LIMITS;
 use rookparcel_frontend::app::TorrentAction;
+use rookparcel_frontend::export::{ExportTarget, export_file_name};
 use rookparcel_frontend::tr;
 
 use crate::app::{apply, labels, peek, selected, ui, with_core};
@@ -52,6 +53,16 @@ pub fn run(cmd: Command) {
             c.toggle_super_seeding(&ids);
             c.events()
         })),
+        Sequential => apply(with_core(|c| {
+            c.toggle_sequential(&ids);
+            c.events()
+        })),
+        FirstLast => apply(with_core(|c| {
+            c.toggle_first_last(&ids);
+            c.events()
+        })),
+        CopyMagnet => copy_magnets(&ids),
+        ExportTorrent => export(ids),
         DownLimit(i) | UpLimit(i) => {
             let Some(&kib) = LIMITS.get(usize::from(i)) else { return };
             let download = matches!(cmd, DownLimit(_));
@@ -84,7 +95,7 @@ pub fn run(cmd: Command) {
 }
 
 /// Whether a command needing a selection is enabled now, and its check mark (Label ▸,
-/// Bandwidth ▸, Initial Seeding), from `Core::menu_state`.
+/// Bandwidth ▸, Initial Seeding, the sequential and first-and-last toggles), from `Core::menu_state`.
 pub fn state(cmd: Command) -> (bool, Option<bool>) {
     use Command::*;
     let ids = selected();
@@ -94,6 +105,10 @@ pub fn state(cmd: Command) -> (bool, Option<bool>) {
         OpenFolder => (m.can_open_folder, None),
         SetLocation => (m.can_set_location, None),
         InitialSeeding => (m.can_super_seed, Some(m.super_seeding)),
+        Sequential => (m.can_sequential, Some(m.sequential)),
+        FirstLast => (m.can_sequential, Some(m.first_last)),
+        CopyMagnet => (true, None),
+        ExportTorrent => (m.can_export, None),
         DownLimit(i) => (true, limit(i, m.download_kib)),
         UpLimit(i) => (true, limit(i, m.upload_kib)),
         RemoveLabel => (m.can_remove_label, None),
@@ -208,4 +223,67 @@ fn set_location(ids: Vec<TorrentId>) {
         },
         mtm,
     );
+}
+
+/// Copy Magnet Link: the selection's links, one per line, on the general pasteboard.
+fn copy_magnets(ids: &[TorrentId]) {
+    let Some(text) = with_core(|c| c.copy_magnets(ids)) else { return };
+    // (popped alerts wait for the next tick)
+    if text.is_empty() {
+        return;
+    }
+    let board = NSPasteboard::generalPasteboard();
+    board.clearContents();
+    // SAFETY: AppKit's pasteboard type constant.
+    board.setString_forType(&NSString::from_str(&text), unsafe { NSPasteboardTypeString });
+}
+
+/// Export .torrent: one torrent to the file the save panel names (`<name>.torrent` offered),
+/// several into a folder from the open panel. `Core` writes them when the engine hands the
+/// files over, logs each, and reports a failed file export among its events' errors.
+fn export(ids: Vec<TorrentId>) {
+    let Some(mtm) = MainThreadMarker::new() else { return };
+    // only the torrents with metadata (a magnet still fetching it has no .torrent yet)
+    let Some(named) = peek(|c| {
+        ids.iter()
+            .filter_map(|&id| c.list().get(id).filter(|s| s.has_metadata).map(|s| (id, s.name.clone())))
+            .collect::<Vec<_>>()
+    }) else {
+        return;
+    };
+    let window = ui().map(|u| u.window.clone());
+    let ids: Vec<TorrentId> = named.iter().map(|(id, _)| *id).collect();
+    let go = move |target: ExportTarget| {
+        apply(with_core(|c| {
+            c.export_torrents(&ids, target);
+            c.events()
+        }))
+    };
+    match named.as_slice() {
+        [] => {}
+        [(_, name)] => crate::dialogs::save_panel(
+            window.as_deref(),
+            &export_file_name(name),
+            None,
+            move |path| {
+                if let Some(p) = path {
+                    go(ExportTarget::File(p));
+                }
+            },
+            mtm,
+        ),
+        _ => {
+            let pick = Pick { folders: true, message: mui::text(tr!(ExportFolderTitle)), ..Pick::default() };
+            crate::dialogs::open_panel(
+                window.as_deref(),
+                pick,
+                move |paths| {
+                    if let Some(p) = paths.into_iter().next() {
+                        go(ExportTarget::Folder(p));
+                    }
+                },
+                mtm,
+            );
+        }
+    }
 }

@@ -259,6 +259,24 @@ MenuSelectNone=Select N&one
 # Options menu (D53): opens the Setup Guide, the few questions asked at a profile's first
 # start; µTorrent 2.2.1's item.
 MenuSetupGuide=Setup &Guide
+
+# Torrent menu > Advanced (D72): the torrent's pieces download in order, from the start
+# of the data to its end, so a video can be played while it downloads. Checked when every
+# selected torrent has it.
+MenuSequential=Download in Se&quential Order
+
+# Torrent menu > Advanced (D72): the first and last pieces of each file download before
+# the rest, so a player can read a video's header and index early. Checked when every
+# selected torrent has it.
+MenuFirstLast=Download &First and Last Pieces First
+
+# Torrent menu (D73): puts the selected torrents' magnet links on the clipboard, one per
+# line. "Magnet link" is the usual name of a magnet: link.
+MenuCopyMagnet=Copy &Magnet Link
+
+# Torrent menu (D73): saves the selected torrents' .torrent files where you choose; keep
+# ".torrent" as it is.
+MenuExportTorrent=E&xport .torrent...
 ToolAddTorrent=Add Torrent
 ToolAddUrl=Add Torrent from URL
 ToolCreate=Create New Torrent
@@ -468,6 +486,16 @@ SeedingGoalRatio=ratio {ratio}, goal {goal}
 
 # The same for the seeding time: {time} and {goal} are durations like 2h 5m.
 SeedingGoalTime=seeded {time}, goal {goal}
+
+# Torrent menu > Export .torrent: {path} is the .torrent file written.
+ExportDone=Exported {name} to {path}
+
+# {error} says why: the system's message, or the text below.
+ExportFailed=Could not export {name}: {error}
+
+# Why a torrent added from a magnet link cannot be exported yet: it has no .torrent until
+# its metadata comes from peers.
+ExportNoMetadata=its metadata has not been downloaded yet
 ErrEngineStart=Cannot start the BitTorrent engine:\n{error}
 AskAssociate=Rookparcel is not the program that opens .torrent files and magnet: links.\n\nAssociate them with Rookparcel?\n\n(Preferences > General > "Check association on startup" turns this question off.)
 
@@ -599,6 +627,9 @@ StatsReadCache=Read Cache:
 # Help > Statistics: the share of the blocks sent to peers that came from the read cache
 # rather than the disk, as a percentage.
 StatsCacheHits=Read Cache Hits:
+
+# Message heading for Torrent menu > Export .torrent; the error follows on its own.
+CannotExport=Could not export {name}
 BtnOk=OK
 BtnCancel=Cancel
 BtnApply=&Apply
@@ -614,6 +645,14 @@ FilterTorrents=Torrents (*.torrent)
 FilterAllFiles=All Files (*.*)
 PickTorrent=Select a .torrent to open
 PickFile=Select a file
+
+# The title of the Save As dialog of Torrent menu > Export .torrent (one torrent
+# selected); keep ".torrent" as it is.
+ExportTitle=Export .torrent
+
+# The folder picker of Torrent menu > Export .torrent when several torrents are selected:
+# each is saved there as "<its name>.torrent".
+ExportFolderTitle=Select the folder to export the .torrent files to
 AddTitle=Add New Torrent
 AddSaveIn=Save In
 AddName=&Name
@@ -680,6 +719,12 @@ PropsOther=Other Settings
 PropsInitialSeeding=Initial Seeding
 PropsDht=Enable DHT
 PropsPex=Peer Exchange
+
+# Other Settings: as Torrent menu > Advanced > Download in Sequential Order.
+PropsSequential=Download in sequential order
+
+# Other Settings: as Torrent menu > Advanced > Download First and Last Pieces First.
+PropsFirstLast=Download first and last pieces first
 RemoteTitle=Connect to Remote
 RemoteHost=&Host:
 RemotePort=&Port:
@@ -1334,6 +1379,11 @@ PrefBadTheme=A theme name is 1 to 40 lower-case letters, digits and dashes.
 # Under the Windows program's Theme drop-down when this Windows cannot show dark mode.
 PrefThemeUnavailable=This Windows cannot show the dark theme; the light one is used.
 
+# Copy Magnet Link when the browser does not let the page use the clipboard (a page not
+# opened over https or from this computer): a small window shows the links, selected, to
+# copy with Ctrl+C.
+CopyMagnetManual=Copy the link below:
+
 # Piece size: pick one from the total size.
 CreateAutoDetect=(auto detect)
 CreateHybrid=Hybrid (v1 + v2)
@@ -1383,6 +1433,13 @@ SchedStatusSeedingOnly=Scheduler: seeding only
 
 # {selected} and {total} are sizes like "1.20 GB".
 AddSizeSelected={selected} of {total} selected
+
+# Torrent Options check box: as Torrent menu > Advanced > Download in Sequential Order.
+AddSequential=Download in se&quential order
+
+# Torrent Options check box: as Torrent menu > Advanced > Download First and Last Pieces
+# First.
+AddFirstLast=Download &first and last pieces first
 
 # {name} is a torrent's name, {path} a file.
 FoldersStored={name}: .torrent stored as {path}
@@ -2127,7 +2184,7 @@ help.MenuRemoveAnd=Removes the selected torrents from the list and also deletes 
 help.MenuDeleteData=Removes the selected torrents and deletes their downloaded files. The files are deleted for good, not moved to the Recycle Bin or the trash.
 help.MenuRecheck=Checks the selected torrents' files on disk piece by piece and counts only the pieces that are complete and correct.
 help.MenuUpdateTracker=Contacts the selected torrents' trackers now, without waiting for the next announce, to report progress and get more peers.
-help.MenuAdvanced=Moves the selected torrents' files to another folder, or turns Initial Seeding on or off.
+help.MenuAdvanced=Moves the selected torrents' files to another folder, turns Initial Seeding on or off, or changes the order their pieces download in.
 help.MenuSetLocation=Picks a folder and moves the selected torrents' files there. Files of the same name already there are replaced.
 help.MenuInitialSeeding=Turns initial seeding on or off for the selected seeds: each peer gets pieces no one else has yet, to spread a new torrent faster.
 help.MenuBandwidth=Sets a download or upload rate limit of its own for the selected torrents.
@@ -2137,6 +2194,10 @@ help.MenuLabel=Gives the selected torrents a label, which groups them in the cat
 help.MenuNewLabel=Asks for a new label name and gives it to the selected torrents.
 help.MenuRemoveLabel=Takes the label off the selected torrents.
 help.MenuProperties=Opens the Torrent Properties of the selected torrents: trackers, bandwidth, seeding goal and other settings.
+help.MenuSequential=Downloads the selected torrents' pieces in order, from the start of the data to its end, so a video can be played while it downloads. Higher file priorities still come first. Greyed out when every selected torrent is finished.
+help.MenuFirstLast=Downloads the first and last pieces of each wanted file before the rest, so a player can read a video's header and index early. Each end is 1 % of the file, at least one piece. Skipped files are left alone.
+help.MenuCopyMagnet=Puts the selected torrents' magnet links on the clipboard, one per line, with their info-hashes, names and trackers.
+help.MenuExportTorrent=Saves the selected torrents' .torrent files: one to a file you name, several into a folder you pick, each under its own name, numbered when the name is taken. A torrent added from a magnet link has none until its metadata has arrived.
 help.MenuOpenFile=Opens the selected file in its default program, as a double click in the file manager would. A file not on disk yet does nothing.
 help.MenuPrioritizeByOrder=Gives the selected files falling priorities in their order in the torrent, so they finish one after another; skipped ones are downloaded again. With the filter on, it orders all the torrent's files.
 help.MenuRelocate=Picks a new place for the selected file and moves it there, or, when it is not on disk, uses the file found there; a Force Re-check counts its pieces.
@@ -2155,3 +2216,7 @@ help.ToolQueueUp=Moves the selected torrents one place up the queue, so they get
 help.ToolQueueDown=Moves the selected torrents one place down the queue, so they get a turn to run later.
 help.ToolRss=Opens the RSS Downloader, where you add feeds and set filters that download matching items automatically.
 help.ToolPreferences=Opens the Preferences window with the settings for connections, bandwidth, queueing, folders and the rest of the program.
+help.PropsSequential=Downloads the torrent's pieces in order, from the start of the data to its end, as Torrent menu > Advanced > Download in Sequential Order does. Greyed out when every torrent is finished.
+help.PropsFirstLast=Downloads the first and last pieces of each wanted file before the rest, as Torrent menu > Advanced > Download First and Last Pieces First does.
+help.AddSequential=Downloads the torrent's pieces in order, from the start of the data to its end, so a video can be played while it downloads. Off for every new torrent; Torrent menu > Advanced changes it later.
+help.AddFirstLast=Downloads the first and last pieces of each wanted file before the rest, so a player can read a video's header and index early. Off for every new torrent; Torrent menu > Advanced changes it later.

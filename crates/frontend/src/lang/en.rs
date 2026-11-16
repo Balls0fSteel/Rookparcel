@@ -260,6 +260,20 @@ strings! {
     /// Options menu (D53): opens the Setup Guide, the few questions asked at a profile's first
     /// start; µTorrent 2.2.1's item.
     MenuSetupGuide = "Setup &Guide";
+    /// Torrent menu > Advanced (D72): the torrent's pieces download in order, from the start
+    /// of the data to its end, so a video can be played while it downloads. Checked when every
+    /// selected torrent has it.
+    MenuSequential = "Download in Se&quential Order";
+    /// Torrent menu > Advanced (D72): the first and last pieces of each file download before
+    /// the rest, so a player can read a video's header and index early. Checked when every
+    /// selected torrent has it.
+    MenuFirstLast = "Download &First and Last Pieces First";
+    /// Torrent menu (D73): puts the selected torrents' magnet links on the clipboard, one per
+    /// line. "Magnet link" is the usual name of a magnet: link.
+    MenuCopyMagnet = "Copy &Magnet Link";
+    /// Torrent menu (D73): saves the selected torrents' .torrent files where you choose; keep
+    /// ".torrent" as it is.
+    MenuExportTorrent = "E&xport .torrent...";
 
     // ---- Toolbar buttons (tooltips)
 
@@ -443,6 +457,13 @@ strings! {
     SeedingGoalRatio = "ratio {ratio}, goal {goal}";
     /// The same for the seeding time: {time} and {goal} are durations like 2h 5m.
     SeedingGoalTime = "seeded {time}, goal {goal}";
+    /// Torrent menu > Export .torrent: {path} is the .torrent file written.
+    ExportDone = "Exported {name} to {path}";
+    /// {error} says why: the system's message, or the text below.
+    ExportFailed = "Could not export {name}: {error}";
+    /// Why a torrent added from a magnet link cannot be exported yet: it has no .torrent until
+    /// its metadata comes from peers.
+    ExportNoMetadata = "its metadata has not been downloaded yet";
 
     // ---- Message boxes and errors
 
@@ -544,6 +565,8 @@ strings! {
     /// Help > Statistics: the share of the blocks sent to peers that came from the read cache
     /// rather than the disk, as a percentage.
     StatsCacheHits = "Read Cache Hits:";
+    /// Message heading for Torrent menu > Export .torrent; the error follows on its own.
+    CannotExport = "Could not export {name}";
 
     // ---- Small dialogs: Add Torrent from URL, New Label, folder pickers, file filters
 
@@ -561,6 +584,12 @@ strings! {
     FilterAllFiles = "All Files (*.*)";
     PickTorrent = "Select a .torrent to open";
     PickFile = "Select a file";
+    /// The title of the Save As dialog of Torrent menu > Export .torrent (one torrent
+    /// selected); keep ".torrent" as it is.
+    ExportTitle = "Export .torrent";
+    /// The folder picker of Torrent menu > Export .torrent when several torrents are selected:
+    /// each is saved there as "<its name>.torrent".
+    ExportFolderTitle = "Select the folder to export the .torrent files to";
 
     // ---- Add New Torrent
 
@@ -630,6 +659,10 @@ strings! {
     PropsInitialSeeding = "Initial Seeding";
     PropsDht = "Enable DHT";
     PropsPex = "Peer Exchange";
+    /// Other Settings: as Torrent menu > Advanced > Download in Sequential Order.
+    PropsSequential = "Download in sequential order";
+    /// Other Settings: as Torrent menu > Advanced > Download First and Last Pieces First.
+    PropsFirstLast = "Download first and last pieces first";
 
     // ---- Connect to Remote
 
@@ -1179,6 +1212,10 @@ strings! {
     PrefBadTheme = "A theme name is 1 to 40 lower-case letters, digits and dashes.";
     /// Under the Windows program's Theme drop-down when this Windows cannot show dark mode.
     PrefThemeUnavailable = "This Windows cannot show the dark theme; the light one is used.";
+    /// Copy Magnet Link when the browser does not let the page use the clipboard (a page not
+    /// opened over https or from this computer): a small window shows the links, selected, to
+    /// copy with Ctrl+C.
+    CopyMagnetManual = "Copy the link below:";
 
     // ---- Create New Torrent: choices and errors
 
@@ -1239,6 +1276,11 @@ strings! {
 
     /// {selected} and {total} are sizes like "1.20 GB".
     AddSizeSelected = "{selected} of {total} selected";
+    /// Torrent Options check box: as Torrent menu > Advanced > Download in Sequential Order.
+    AddSequential = "Download in se&quential order";
+    /// Torrent Options check box: as Torrent menu > Advanced > Download First and Last Pieces
+    /// First.
+    AddFirstLast = "Download &first and last pieces first";
 
     // ---- .torrent folders (Logger lines)
 

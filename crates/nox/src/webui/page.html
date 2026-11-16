@@ -110,6 +110,8 @@
           <label><input type="checkbox" id="add-skip"> <span data-t="AddSkipCheck">Skip hash check</span></label>
           <label><input type="checkbox" id="add-start" checked> <span data-t="AddStart">Start torrent</span></label>
           <label><input type="checkbox" id="add-top"> <span data-t="AddTopOfQueue">Add to top of queue</span></label>
+          <label><input type="checkbox" id="add-seq"> <span data-t="AddSequential">Download in sequential order</span></label>
+          <label><input type="checkbox" id="add-fl"> <span data-t="AddFirstLast">Download first and last pieces first</span></label>
           <label class="lbl"><span data-t="AddLabel">Label:</span> <input id="add-label" list="add-labels" autocomplete="off"></label>
           <datalist id="add-labels"></datalist>
         </fieldset>
@@ -187,6 +189,8 @@
         <label class="pf chk"><input type="checkbox" data-f="initial_seeding"> <span data-t="PropsInitialSeeding">Initial Seeding</span></label>
         <label class="pf chk"><input type="checkbox" data-f="pex"> <span data-t="PropsPex">Peer Exchange</span></label>
         <label class="pf chk"><input type="checkbox" data-f="dht"> <span data-t="PropsDht">Enable DHT</span></label>
+        <label class="pf chk wide"><input type="checkbox" data-f="sequential"> <span data-t="PropsSequential">Download in sequential order</span></label>
+        <label class="pf chk wide"><input type="checkbox" data-f="first_last"> <span data-t="PropsFirstLast">Download first and last pieces first</span></label>
       </fieldset>
     </div>
     <p id="props-err" role="alert" hidden></p>
@@ -356,6 +360,13 @@
   <h2 id="donate-title" data-t="MenuDonate">Donate</h2>
   <p id="donate-text" class="find-pre"></p>
   <div class="rss-ok"><button type="button" id="donate-open" data-t="DonateOpen">Open Donation Page</button><button type="button" id="donate-close" data-t="BtnClose">Close</button></div>
+</dialog>
+<!-- Copy Magnet Link where the browser gives the page no clipboard (plain HTTP on a LAN): the links, selected, to copy by hand -->
+<dialog id="magnets" aria-labelledby="magnets-title">
+  <h2 id="magnets-title" data-t="MenuCopyMagnet">Copy Magnet Link</h2>
+  <p id="magnets-hint" data-t="CopyMagnetManual">Copy the link below:</p>
+  <textarea id="magnets-text" rows="4" readonly spellcheck="false" autocomplete="off" aria-labelledby="magnets-hint"></textarea>
+  <div class="rss-ok"><button type="button" id="magnets-close" data-t="BtnClose">Close</button></div>
 </dialog>
 <!-- Statistics (the GUIs' Help > Statistics): the all-time and session totals, the rows GET /pa/session/stats gives, asked again every second while this is open -->
 <dialog id="stats" aria-labelledby="stats-title">

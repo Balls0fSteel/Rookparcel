@@ -52,6 +52,14 @@ pub enum Command {
     UpdateTracker,
     SetLocation,
     InitialSeeding,
+    /// Advanced > Download in Sequential Order (a check mark).
+    Sequential,
+    /// Advanced > Download First and Last Pieces First (a check mark).
+    FirstLast,
+    /// Copy Magnet Link: the selection's links on the pasteboard, one per line.
+    CopyMagnet,
+    /// Export .torrent: one torrent to a file from the save panel, several into a folder.
+    ExportTorrent,
     /// An index into `actions::LIMITS`.
     DownLimit(u16),
     /// An index into `actions::LIMITS`.
@@ -154,7 +162,7 @@ pub const FILES: [Command; 7] = [
 ];
 
 /// Every command: those without a value, then those with one (at index 0).
-pub const ALL: [Command; 67] = [
+pub const ALL: [Command; 71] = [
     Command::About,
     Command::CheckUpdates,
     Command::Preferences,
@@ -188,6 +196,10 @@ pub const ALL: [Command; 67] = [
     Command::UpdateTracker,
     Command::SetLocation,
     Command::InitialSeeding,
+    Command::Sequential,
+    Command::FirstLast,
+    Command::CopyMagnet,
+    Command::ExportTorrent,
     Command::NewLabel,
     Command::RemoveLabel,
     Command::Properties,
@@ -319,6 +331,11 @@ impl Command {
             // the windows' lock (D69: kind 80, after slice H's 70-79; 81-83 were the Lock PIN
             // submenu's, gone with D71)
             Lock => (80, 0),
+            // wave 1 (D73: kinds 84-87, after the lock's; 81-83 stay unused)
+            Sequential => (84, 0),
+            FirstLast => (85, 0),
+            CopyMagnet => (86, 0),
+            ExportTorrent => (87, 0),
         }
     }
 
@@ -409,6 +426,11 @@ impl Command {
             76 => plain(FeedDownload),
             // the windows' lock
             80 => plain(Lock),
+            // wave 1
+            84 => plain(Sequential),
+            85 => plain(FirstLast),
+            86 => plain(CopyMagnet),
+            87 => plain(ExportTorrent),
             _ => None,
         }
     }
@@ -445,6 +467,10 @@ impl Command {
                 | UpdateTracker
                 | SetLocation
                 | InitialSeeding
+                | Sequential
+                | FirstLast
+                | CopyMagnet
+                | ExportTorrent
                 | DownLimit(_)
                 | UpLimit(_)
                 | NewLabel
@@ -525,6 +551,23 @@ mod tests {
         assert_eq!(Command::from_tag((80 << SHIFT) + 1), None, "a plain command takes no value");
         // D71: the Lock PIN submenu's kinds are no commands any more
         for kind in 81..=83 {
+            assert_eq!(Command::from_tag(kind << SHIFT), None, "{kind}");
+        }
+    }
+
+    #[test]
+    fn wave_1_kinds_are_their_own() {
+        use Command::*;
+        for (c, kind) in [(Sequential, 84), (FirstLast, 85), (CopyMagnet, 86), (ExportTorrent, 87)] {
+            assert_eq!(c.tag() >> SHIFT, kind, "{c:?}");
+            assert_eq!(Command::from_tag(c.tag()), Some(c));
+            assert_eq!(Command::from_tag(c.tag() + 1), None, "a plain command takes no value");
+            assert!(ALL.contains(&c));
+            assert!(c.needs_selection(), "{c:?} acts on the selected torrents");
+            assert!(!c.works_locked(), "{c:?}");
+        }
+        // the rest of the free range stays unknown
+        for kind in 88..=99 {
             assert_eq!(Command::from_tag(kind << SHIFT), None, "{kind}");
         }
     }

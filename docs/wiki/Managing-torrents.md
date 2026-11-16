@@ -13,6 +13,8 @@ Right-click a torrent (or press <kbd>Shift</kbd>+<kbd>F10</kbd>) for this menu:
 | Item | Does | Key |
 |---|---|---|
 | **Open Containing Folder** | opens the torrent's folder in Explorer, with its data selected | |
+| **Copy Magnet Link** | puts the torrent's magnet link on the clipboard | |
+| **Export .torrent...** | saves the torrent's `.torrent` file | |
 | **Force Start** | starts now, outside the queue | |
 | **Start** | hands the torrent to the queue | <kbd>Ctrl</kbd>+<kbd>S</kbd> |
 | **Pause** | halts it and takes it out of the queue; shows **Paused** | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> |
@@ -25,6 +27,8 @@ Right-click a torrent (or press <kbd>Shift</kbd>+<kbd>F10</kbd>) for this menu:
 | **Update Tracker** | contacts the trackers now | |
 | **Advanced > Set Download Location...** | moves its files to another folder | |
 | **Advanced > Initial Seeding** | turns initial seeding on or off | |
+| **Advanced > Download in Sequential Order** | downloads the pieces in order, from start to end | |
+| **Advanced > Download First and Last Pieces First** | downloads both ends of each wanted file first | |
 | **Bandwidth Allocation > Set Download Limit / Set Upload Limit** | its own speed limits | |
 | **Label** | gives it a label, a new one, or none | |
 | **Properties** | trackers, limits, seeding goal and more | <kbd>Enter</kbd> |
@@ -84,6 +88,22 @@ To move finished downloads automatically, see **Move completed downloads to:** o
 
 To open a single file, use the [Files tab](Torrent-details-and-files#files).
 
+## Copy Magnet Link and Export .torrent
+
+*New in 1.2.59, not in a published release yet.*
+
+**Copy Magnet Link** puts the selected torrents' magnet links on the clipboard, one per line. Each link holds the torrent's info-hash, its name and its trackers. Paste it into another torrent program, or send it to someone, to share the torrent without a file.
+
+Because the link includes the trackers, do not share a link copied from a private tracker's torrent. A private tracker's address usually holds your personal key (a passkey), and anyone with the link could announce as you.
+
+**Export .torrent...** saves the selected torrents' `.torrent` files. The file holds the torrent as Rookparcel received it, with the trackers and web seeds it uses now. You can add it on another computer, or keep it as a copy.
+
+- With one torrent selected, Rookparcel asks for a file name.
+- With several, it asks for a folder and saves each as `<name>.torrent`. When a name is taken, it adds a number, such as ` (2)`, instead of replacing the file.
+- A torrent added from a magnet link has no `.torrent` file until its file list has arrived ("Downloading metadata"). The item is greyed out when no selected torrent has one.
+
+If the file you named cannot be written, Rookparcel says "Could not export" with the torrent's name and the reason. Files that fail in a folder export are written to the [Logger tab](Torrent-details-and-files#logger) instead.
+
 ## Labels
 
 A label is a name you give torrents to group them, such as "Movies" or "Linux". Each label in use appears under **Labels** in the category list, with a count, so a click shows only those torrents.
@@ -104,20 +124,33 @@ With **Append the torrent's label** on next to **Move completed downloads to:** 
 
 **Advanced > Initial Seeding** is for a torrent you are the first to share. Each peer gets pieces no one else has yet, so a new torrent spreads faster. It can be turned on only when every selected torrent is seeding. The status shows **[S] Seeding** while it is on. Choose it again to turn it off.
 
+## Download order
+
+*New in 1.2.59, not in a published release yet.*
+
+By default Rookparcel downloads the pieces that are rarest among the peers first. That keeps every piece available in the swarm and is best for everyone sharing the torrent. Two items under **Advanced** change the order, mainly so you can watch a video while it downloads. Each is ticked while it is on; choose it again to turn it off.
+
+- **Download in Sequential Order** downloads the pieces in order, from the start of the data to its end, so a player can play the video as it arrives. Files with a higher priority still come first. It costs the swarm: the rare pieces you would have passed on arrive late. Use it for a torrent you want to preview, and leave it off otherwise.
+- **Download First and Last Pieces First** downloads the first and last pieces of each wanted file before the rest: 1 % of the file at each end, at least one piece. Many video formats keep their header and index there, so a player can open the unfinished file. Skipped files are left alone.
+
+Both are greyed out when every selected torrent is finished. Each torrent keeps its choice after a restart. You can also set them when you add a torrent, in the [Add New Torrent window](Adding-torrents#torrent-options), and in [Properties](Torrent-details-and-files#torrent-properties).
+
 ## Properties
 
-**Properties** (<kbd>Enter</kbd>, or double-click a torrent that is not finished) opens the Torrent Properties window: trackers, speed limits, upload slots, the seeding goal, and DHT and Peer Exchange for this torrent. See [Torrent details and files](Torrent-details-and-files#torrent-properties).
+**Properties** (<kbd>Enter</kbd>, or double-click a torrent that is not finished) opens the Torrent Properties window: trackers, speed limits, upload slots, the seeding goal, DHT and Peer Exchange, and the download order for this torrent. See [Torrent details and files](Torrent-details-and-files#torrent-properties).
 
 ## In the GTK version (Linux, BSD)
 
-- The same right-click menu, in the same order.
+- The same right-click menu, in the same order, except that **Copy Magnet Link** and **Export .torrent...** have their own group just before **Advanced**. The macOS app puts them there too.
 - Shortcuts: <kbd>Delete</kbd> removes, <kbd>Shift</kbd>+<kbd>Delete</kbd> removes and deletes the files, <kbd>Ctrl</kbd>+<kbd>A</kbd> selects all. Start, Pause and Stop have no shortcut.
 - **Open Containing Folder** opens the folder in your file manager.
 - On Linux and BSD, deleted files are removed from the disk, not moved to the trash.
 
 ## In the Web UI
 
-- The same right-click menu, except that **Open Containing Folder** is greyed out ("not from a browser").
+- The same right-click menu, except that **Open Containing Folder** is greyed out ("not from a browser"), and **Copy Magnet Link** and **Export .torrent...** sit just before **Advanced**.
+- **Export .torrent...** downloads the file through the browser, into its download folder. With several torrents, the browser downloads each file in turn, at most 50 per click.
+- **Copy Magnet Link** needs the browser's clipboard access. A page opened over plain `http://` from another computer has none, so the page shows the links instead, under "Copy the link below:", for you to copy by hand.
 - **Set Download Location** asks for a folder on the server, typed as a path.
 - Deleted files are removed from the disk, not moved to the trash.
 - On a phone, the menu leaves out **Open Containing Folder** and starts with **Details**.

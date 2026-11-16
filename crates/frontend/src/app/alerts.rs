@@ -64,6 +64,12 @@ impl Core {
         for line in self.torrent_files.on_alert(&alert, &self.torrent_folders, &self.handle) {
             self.log(line);
         }
+        if let Some(done) = self.exports.on_alert(&alert) {
+            self.log(done.log_line());
+            if let (Err(error), true) = (&done.result, done.to_file) {
+                self.ev.errors.push((tr!(CannotExport, name = done.name), error.clone()));
+            }
+        }
         if self.awaiting.on_alert(&alert, &self.handle, &mut self.prefs) {
             self.ev.magnet_ready = true;
         }

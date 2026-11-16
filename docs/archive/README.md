@@ -1,6 +1,6 @@
 # Planning and changelog history
 
-Last updated: 2026-11-16_001242_1794784362
+Last updated: 2026-11-16_122332_1794828212
 
 Start with [PLAN.md](../../PLAN.md) and [CHANGELOG.md](../../CHANGELOG.md). Active decision rationale is in [DECISIONS.md](../DECISIONS.md); detailed unfinished work is in [BACKLOG.md](../BACKLOG.md).
 
@@ -89,3 +89,4 @@ Keep archives as plain Markdown so Git diffs, repository browsing and targeted s
 | [Changelog, 2026-11-13 and 2026-11-14 (1.2.51 to 1.2.53)](CHANGELOG-2026-11-13-v1.2.51-v1.2.53-2026-11-15_140244_1794747764.md) | `2026-11-13_220737_1794604057` through `2026-11-14_154940_1794667780` | 4 entries moved verbatim from the root changelog on 2026-11-15_140244_1794747764: the UI lock's wiki page and D69 (documentation only), clippy 1.100's range loops (1.2.51), the bug hunt's inherited quirks (1.2.52) and the GTK hand checks with the second SIGTERM (1.2.53). |
 | [Changelog, 2026-11-14 and 2026-11-15 (release 1.2.54)](CHANGELOG-2026-11-14-release-1.2.54-2026-11-15_174308_1794760988.md) | `2026-11-14_163756_1794670676` through `2026-11-15_132051_1794745251` | 3 entries moved verbatim from the root changelog on 2026-11-15_174308_1794760988: the release review's two findings and release 1.2.54 prepared, tagged and published. |
 | [Changelog, 2026-11-15 (1.2.55)](CHANGELOG-2026-11-15-v1.2.55-2026-11-16_001242_1794784362.md) | `2026-11-15_140244_1794747764` | 1 entry moved verbatim from the root changelog on 2026-11-16_001242_1794784362: settings not taken on trust (1.2.55, D70 part 1). |
+| [Changelog, 2026-11-15 (the settings fixture test, 1.2.56)](CHANGELOG-2026-11-15-v1.2.56-fixture-test-2026-11-16_122332_1794828212.md) | `2026-11-15_140719_1794748039` through `2026-11-15_143820_1794749900` | 3 entries moved verbatim from the root changelog on 2026-11-16_122332_1794828212: the settings fixture test (D70 layer 3, tests only), the start comparing the settings with how the last version read them (1.2.56, D70 part 2), and CI red on 1.2.56 from two version-dependent tests. |

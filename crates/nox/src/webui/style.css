@@ -586,6 +586,7 @@ div.pg { border: 0; padding: 0 8px; }
 #props .pf.disabled { color: var(--muted); }
 #props .pf input:disabled { opacity: 0.6; }
 .props-other { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 12px; }
+.props-other .wide { grid-column: 1 / -1; }
 #props .bad { border-color: var(--err); outline: 1px solid var(--err); }
 #props-err { margin: 0; color: var(--err); white-space: pre-wrap; overflow-wrap: anywhere; }
 .props-btns { display: flex; justify-content: flex-end; gap: 6px; }
@@ -688,7 +689,7 @@ div.pg { border: 0; padding: 0 8px; }
 }
 
 /* the torrent search (query bar, status lines, results; Manage Sources and its edit dialog) */
-#find, #find-sources, #find-edit, #find-helper, #find-sites, #donate, #stats {
+#find, #find-sources, #find-edit, #find-helper, #find-sites, #donate, #stats, #magnets {
   padding: 10px 12px;
   border: 1px solid var(--line);
   background: var(--bg);
@@ -711,8 +712,28 @@ div.pg { border: 0; padding: 0 8px; }
 #stats-rows span { color: var(--muted); }
 #stats-rows b { font-weight: inherit; text-align: end; overflow-wrap: anywhere; min-width: 0; font-variant-numeric: tabular-nums; }
 #find-sites { width: min(720px, calc(100vw - 32px)); height: min(560px, calc(100vh - 32px)); }
-#find::backdrop, #find-sources::backdrop, #find-edit::backdrop, #find-helper::backdrop, #find-sites::backdrop, #donate::backdrop, #stats::backdrop { background: var(--scrim); }
-#find h2, #find-sources h2, #find-edit h2, #find-helper h2, #find-sites h2, #donate h2, #stats h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+/* Copy Magnet Link without a clipboard: the links in a read-only box, selected */
+#magnets { width: min(560px, calc(100vw - 32px)); }
+#magnets-hint { margin: 0 0 6px; }
+#magnets-text {
+  display: block;
+  width: 100%;
+  min-height: 6em;
+  max-height: 50vh;
+  margin-bottom: 12px;
+  resize: vertical;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 3px 5px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+#magnets-text:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+#find::backdrop, #find-sources::backdrop, #find-edit::backdrop, #find-helper::backdrop, #find-sites::backdrop, #donate::backdrop, #stats::backdrop, #magnets::backdrop { background: var(--scrim); }
+#find h2, #find-sources h2, #find-edit h2, #find-helper h2, #find-sites h2, #donate h2, #stats h2, #magnets h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
 #find-body, #find-sources-body { display: flex; flex-direction: column; gap: 8px; height: 100%; }
 #find select, #find input:not([type="checkbox"]) { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; min-width: 0; }
 .find-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

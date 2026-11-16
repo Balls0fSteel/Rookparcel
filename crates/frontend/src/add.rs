@@ -768,9 +768,21 @@ pub struct AddChoice {
     pub top_of_queue: bool,
     /// Empty for no label.
     pub label: String,
+    /// "Download in sequential order" and "Download first and last pieces first"; off on every
+    /// add (not remembered).
+    pub sequential: bool,
+    pub first_last: bool,
 }
 
 impl AddChoice {
+    /// The download order flags the choice sets.
+    fn order_flags(&self) -> TorrentFlags {
+        let mut f = TorrentFlags::empty();
+        f.set(TorrentFlags::SEQUENTIAL_DOWNLOAD, self.sequential);
+        f.set(TorrentFlags::FIRST_LAST_PIECES, self.first_last);
+        f
+    }
+
     /// Fills in the parts of `p` the dialog decides (after the Preferences' defaults). A new
     /// name renames the torrent's folder (or its only file) on disk too.
     pub fn apply_to(&self, ti: &TorrentInfo, p: &mut AddTorrentParams) {
@@ -785,6 +797,7 @@ impl AddChoice {
             p.flags = p.flags & !TorrentFlags::AUTO_MANAGED | TorrentFlags::PAUSED;
         }
         p.flags.set(TorrentFlags::SEED_MODE, self.skip_hash_check);
+        p.flags |= self.order_flags();
     }
 }
 
@@ -792,7 +805,8 @@ impl AddChoice {
     /// Applies the choice to a magnet that waited for its metadata in the session
     /// ([`AwaitingMetadata`]): renames, the save folder (`added_to` is the one it was added
     /// with; nothing was written there in upload mode, so the files are looked for in the new
-    /// one), priorities, the queue, then the download starts or the torrent stops. "Skip hash
+    /// one), priorities, the download order, the queue, then the download starts or the
+    /// torrent stops. "Skip hash
     /// check" cannot apply any more (the files were checked when the metadata arrived).
     /// `keep_upload_mode` leaves upload mode on (the scheduler's Seeding only hours).
     pub fn apply_to_torrent(
@@ -810,6 +824,10 @@ impl AddChoice {
         }
         if !self.file_priorities.is_empty() {
             h.prioritize_files(self.file_priorities.clone());
+        }
+        let order = self.order_flags();
+        if !order.is_empty() {
+            h.set_flags(order);
         }
         if self.start {
             // queued like any started torrent; the queue may hold it back
@@ -1424,10 +1442,17 @@ mod tests {
             skip_hash_check: true,
             top_of_queue: true,
             label: "Linux".into(),
+            sequential: false,
+            first_last: true,
         };
         let multi = b"d4:infod5:filesld6:lengthi3e4:pathl1:x5:y.txteed6:lengthi4e4:pathl5:z.txteee4:name4:root12:piece lengthi16384e6:pieces20:aaaaaaaaaaaaaaaaaaaaee";
         let ti = TorrentInfo::from_bytes(multi).unwrap();
         c.apply_to(&ti, &mut params);
+        assert!(params.flags.contains(TorrentFlags::FIRST_LAST_PIECES));
+        assert!(!params.flags.contains(TorrentFlags::SEQUENTIAL_DOWNLOAD));
+        c.sequential = true;
+        c.apply_to(&ti, &mut params);
+        assert!(params.flags.contains(TorrentFlags::FIRST_LAST_PIECES | TorrentFlags::SEQUENTIAL_DOWNLOAD));
         assert_eq!(params.save_path, r"D:\in");
         assert_eq!(params.name.as_deref(), Some("New"));
         let renamed: Vec<_> = params.renamed_files.values().map(String::as_str).collect();
@@ -1538,6 +1563,8 @@ mod tests {
             skip_hash_check: false,
             top_of_queue: false,
             label: String::new(),
+            sequential: true,
+            first_last: true,
         };
         c.apply_to_torrent(&h.torrent(id), &ti, &w.save_path, false);
         waiting.finish(&mut prefs, hash);
@@ -1556,6 +1583,7 @@ mod tests {
             });
             if let Some(st) = st {
                 if st.flags.contains(TorrentFlags::AUTO_MANAGED)
+                    && st.flags.contains(TorrentFlags::SEQUENTIAL_DOWNLOAD | TorrentFlags::FIRST_LAST_PIECES)
                     && !st.flags.contains(TorrentFlags::UPLOAD_MODE)
                     && st.save_path == "/other"
                 {

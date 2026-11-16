@@ -168,6 +168,8 @@ struct Dialog {
     skip: Retained<NSButton>,
     start: Retained<NSButton>,
     top: Retained<NSButton>,
+    sequential: Retained<NSButton>,
+    first_last: Retained<NSButton>,
     label: Retained<NSComboBox>,
     again: Retained<NSButton>,
     size: Retained<NSTextField>,
@@ -238,10 +240,13 @@ fn show(req: AddRequest, mtm: MainThreadMarker) {
     skip.setEnabled(!setup.in_session);
     let start = check(tr!(AddStart), setup.start);
     let top = check(tr!(AddTopOfQueue), false);
+    // off each time: not remembered between adds
+    let sequential = check(tr!(AddSequential), false);
+    let first_last = check(tr!(AddFirstLast), false);
     let label = combo(&setup.labels, "", cmd(id, NOTHING), mtm);
     layout::stretch(&label);
     let label_row = layout::hstack(&[&ui::label_tr(tr!(AddLabel), mtm), &label], mtm);
-    let options = super::column(&[&skip, &start, &top, &label_row], mtm);
+    let options = super::column(&[&skip, &start, &top, &sequential, &first_last, &label_row], mtm);
     // the column is as tall as the contents beside it: the room left goes under its controls
     let rest = NSView::new(mtm);
     ui::auto(&rest);
@@ -257,7 +262,13 @@ fn show(req: AddRequest, mtm: MainThreadMarker) {
     );
     left.setSpacing(16.0);
     left.setDistribution(NSStackViewDistribution::Fill);
-    layout::width(&left, 260.0);
+    // 260 pt, but wider when an option's text needs it (German's first-and-last box): the
+    // width gives way to the check boxes' compression resistance (750), not to the contents'
+    // stretching
+    layout::min_width(&left, 260.0);
+    let preferred = left.widthAnchor().constraintEqualToConstant(260.0);
+    preferred.setPriority(740.0);
+    layout::activate(&[preferred]);
 
     // Torrent Contents: the torrent's facts, the files, Select All / None
     let size = value_label("", mtm);
@@ -340,6 +351,8 @@ fn show(req: AddRequest, mtm: MainThreadMarker) {
         skip,
         start,
         top,
+        sequential,
+        first_last,
         label,
         again,
         size,
@@ -503,6 +516,8 @@ impl Dialog {
             skip_hash_check: !self.in_session && ui::checked(&self.skip),
             top_of_queue: ui::checked(&self.top),
             label: ui::value(&self.label).trim().to_owned(),
+            sequential: ui::checked(&self.sequential),
+            first_last: ui::checked(&self.first_last),
         };
         self.answer(Some(choice), ui::checked(&self.again), true);
     }

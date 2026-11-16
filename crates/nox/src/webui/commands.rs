@@ -11,6 +11,7 @@
 //! dialog add the same way.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::Arc;
 
 use rookparcel_core::fetch::FetchProxy;
 use rookparcel_core::metainfo::{TorrentInfo, parse_magnet_uri};
@@ -18,17 +19,17 @@ use rookparcel_core::{
     AddTorrentParams, AnnounceEntry, DownloadPriority, MoveFlags, QueueMove, RemoveFlags, TorrentFlags,
     TorrentId, TorrentSource,
 };
-use rookparcel_frontend::actions;
 use rookparcel_frontend::add::{self, AddChoice, AwaitingMetadata};
-use rookparcel_frontend::fmt;
 use rookparcel_frontend::properties::{self, Changes, Field, Fields, Properties, TorrentProps, Tri};
 use rookparcel_frontend::scheduler::Mode;
 use rookparcel_frontend::seeding::SeedGoal;
 use rookparcel_frontend::status::Category;
+use rookparcel_frontend::{actions, export, fmt, tr};
 
 use super::api::Request;
 use super::http::{
-    Head, Part, Response, multipart_boundary, parse_header_params, parse_multipart, parse_urlencoded,
+    Head, Part, Response, attachment, multipart_boundary, parse_header_params, parse_multipart,
+    parse_urlencoded,
 };
 use super::json::{self, Json};
 use super::native::category_from_id;
@@ -339,6 +340,92 @@ pub fn super_seed(shared: &Shared, ids: &[TorrentId], on: bool) {
     }
 }
 
+/// Download in Sequential Order (`SEQUENTIAL_DOWNLOAD`) or Download First and Last Pieces
+/// First (`FIRST_LAST_PIECES`) on or off for every torrent (D72); the page decides which, as
+/// the GUIs' check items do (`frontend::actions::toggle_flag`).
+pub fn set_flag(shared: &Shared, ids: &[TorrentId], flag: TorrentFlags, on: bool) {
+    for &id in ids {
+        let t = shared.handle.torrent(id);
+        if on {
+            t.set_flags(flag);
+        } else {
+            t.unset_flags(flag);
+        }
+    }
+    shared.handle.post_torrent_updates();
+}
+
+/// The shim's `toggleSequentialDownload` / `toggleFirstLastPiecePrio`: each torrent's flag
+/// flips on its own, as qBittorrent's do (not all one way, as the menu items).
+pub fn toggle_each(shared: &Shared, ids: &[TorrentId], flag: TorrentFlags) {
+    let had: Vec<(TorrentId, bool)> = {
+        let st = shared.lock();
+        ids.iter().filter_map(|&id| Some((id, st.torrents.get(&id)?.status.flags.contains(flag)))).collect()
+    };
+    for (id, on) in had {
+        let t = shared.handle.torrent(id);
+        if on {
+            t.unset_flags(flag);
+        } else {
+            t.set_flags(flag);
+        }
+    }
+    shared.handle.post_torrent_updates();
+}
+
+// --- Copy Magnet Link and Export .torrent (D73) -------------------------------------------------
+
+/// Each torrent's magnet link (`frontend::export::magnet_for`), as `(hash, name, link)` in the
+/// order of `ids`; with `trackers` its tracker list is asked of the engine (32 at a time within
+/// one deadline, as Torrent Properties does) and a torrent whose list is late goes out without.
+pub fn magnet_links(shared: &Shared, ids: &[TorrentId], trackers: bool) -> Vec<(String, String, String)> {
+    let lists = if trackers { tracker_lists(shared, ids) } else { HashMap::new() };
+    let st = shared.lock();
+    ids.iter()
+        .filter_map(|id| {
+            let e = st.torrents.get(id)?;
+            let list = lists.get(id).map_or(&[][..], Vec::as_slice);
+            Some((e.hash.clone(), e.status.name.clone(), export::magnet_for(&e.status, list)))
+        })
+        .collect()
+}
+
+/// The `.torrent` file of torrent `id` and its name, asked of the engine
+/// (`post_torrent_file`). 409 for a magnet whose metadata is not in yet, 404 for a torrent
+/// that went away, 503 when the engine does not answer in time.
+pub fn torrent_file(shared: &Shared, id: TorrentId) -> Result<(String, Arc<[u8]>), CmdError> {
+    let no_metadata = || err(409, tr!(ExportNoMetadata).to_owned());
+    let name = {
+        let st = shared.lock();
+        let e = st.torrents.get(&id).ok_or_else(not_found)?;
+        if !e.status.has_metadata {
+            return Err(no_metadata());
+        }
+        e.status.name.clone()
+    };
+    let reply = shared.query(id, ReplyKind::TorrentFile, |h| h.torrent(id).post_torrent_file());
+    let mut st = shared.lock();
+    let data = match reply {
+        Some(Reply::TorrentFile(Some(data))) => data,
+        Some(_) => return Err(no_metadata()),
+        None if st.torrents.contains_key(&id) => return Err(err(503, "the engine did not answer in time")),
+        None => return Err(not_found()),
+    };
+    // read once: the bytes leave the cache unless a newer answer replaced them meanwhile
+    let key = (id, ReplyKind::TorrentFile);
+    if matches!(st.replies.get(&key), Some((_, Reply::TorrentFile(Some(d)))) if Arc::ptr_eq(d, &data)) {
+        st.replies.remove(&key);
+    }
+    Ok((name, data))
+}
+
+/// The answer to an export: the `.torrent` bytes as a download named after the torrent
+/// (`frontend::export::export_file_name`).
+pub fn torrent_download(name: &str, data: &[u8]) -> Response {
+    Response::new(200, "application/x-bittorrent", data.to_vec())
+        .with_header("Content-Disposition", attachment(&export::export_file_name(name)))
+}
+
 // --- Torrent Properties (`frontend::properties`) ----------------------------------------------
 
 /// Each torrent's tracker list, asked of the engine (outside the lock); a torrent that does not
@@ -381,7 +468,7 @@ fn tri_name(t: Tri) -> &'static str {
 
 /// `GET /pa/torrents/properties?ids=<hash>,<hash>`: the fields (text as the dialog shows it,
 /// check boxes as `"on"`, `"off"` or `"mixed"`), how many torrents, and whether Initial
-/// Seeding can be set.
+/// Seeding and the download order boxes can be set.
 pub fn properties_json(p: &Properties) -> Json {
     let f = &p.fields;
     let fields = Json::obj()
@@ -395,8 +482,14 @@ pub fn properties_json(p: &Properties) -> Json {
         .with("goal_minutes", f.goal_minutes.as_str())
         .with("initial_seeding", tri_name(f.initial_seeding))
         .with("dht", tri_name(f.dht))
-        .with("pex", tri_name(f.pex));
-    Json::obj().with("count", p.count).with("can_initial_seed", p.can_initial_seed).with("fields", fields)
+        .with("pex", tri_name(f.pex))
+        .with("sequential", tri_name(f.sequential))
+        .with("first_last", tri_name(f.first_last));
+    Json::obj()
+        .with("count", p.count)
+        .with("can_initial_seed", p.can_initial_seed)
+        .with("can_sequential", p.can_sequential)
+        .with("fields", fields)
 }
 
 /// The `GET`'s selection: `ids=<hash>,<hash>`, or `all=1` with the view's `category`, `label`
@@ -431,6 +524,25 @@ fn properties_reply(shared: &Shared, sel: &Selection) -> Result<Json, CmdError> 
     Ok(out)
 }
 
+/// `GET /pa/torrents/magnet`: `[{"hash", "name", "magnet"}]`, one per torrent, in the order the
+/// ids were given (by name for `all=1`); 404 when the selection names none.
+fn magnet_reply(shared: &Shared, sel: &Selection, trackers: bool) -> Result<Json, CmdError> {
+    let mut ids = sel.resolve(&shared.lock());
+    if let Selection::All(_) = sel {
+        let st = shared.lock();
+        let name = |id: &TorrentId| st.torrents.get(id).map(|e| e.status.name.to_lowercase());
+        ids.sort_by_cached_key(name);
+    }
+    if ids.is_empty() {
+        return Err(not_found());
+    }
+    let links = magnet_links(shared, &ids, trackers)
+        .into_iter()
+        .map(|(hash, name, magnet)| Json::obj().with("hash", hash).with("name", name).with("magnet", magnet))
+        .collect();
+    Ok(Json::Arr(links))
+}
+
 /// Sets the fields a partial `fields` object names (same names and values as the `GET`).
 fn overlay(f: &mut Fields, body: &Json) -> Result<(), CmdError> {
     for (k, v) in body.entries() {
@@ -456,6 +568,8 @@ fn overlay(f: &mut Fields, body: &Json) -> Result<(), CmdError> {
             "initial_seeding" => f.initial_seeding = tri()?,
             "dht" => f.dht = tri()?,
             "pex" => f.pex = tri()?,
+            "sequential" => f.sequential = tri()?,
+            "first_last" => f.first_last = tri()?,
             _ => return Err(err(400, format!("unknown field {k}"))),
         }
     }
@@ -767,7 +881,9 @@ pub struct AddOptions {
     pub top: bool,
     /// File index to priority 0..7; files not named keep Normal.
     pub priorities: BTreeMap<u32, DownloadPriority>,
+    /// "Download in sequential order" and "Download first and last pieces first" (D72).
     pub sequential: bool,
+    pub first_last: bool,
     pub download_limit: u32,
     pub upload_limit: u32,
     /// The torrent's own seeding goal (the shim's `ratioLimit` / `seedingTimeLimit`).
@@ -805,6 +921,7 @@ impl AddOptions {
             top: flag("top")?.unwrap_or(false),
             priorities,
             sequential: flag("sequential")?.unwrap_or(false),
+            first_last: flag("first_last")?.unwrap_or(false),
             download_limit: limit("download_limit"),
             upload_limit: limit("upload_limit"),
             seed_goal: None,
@@ -842,6 +959,8 @@ pub fn add(shared: &Shared, source: Source, o: &AddOptions) -> Result<String, Cm
         skip_hash_check: o.skip_check,
         top_of_queue: o.top,
         label: label.to_owned(),
+        sequential: o.sequential,
+        first_last: o.first_last,
     };
     // the Preferences' per-torrent defaults first, then the dialog's choices, as the Win32 add does
     let defaults = st.prefs.gui();
@@ -864,9 +983,6 @@ pub fn add(shared: &Shared, source: Source, o: &AddOptions) -> Result<String, Cm
         }
     };
     let mut params = params;
-    if o.sequential {
-        params.flags |= TorrentFlags::SEQUENTIAL_DOWNLOAD;
-    }
     params.download_limit = o.download_limit;
     params.upload_limit = o.upload_limit;
     if !label.is_empty() {
@@ -997,6 +1113,8 @@ pub fn finish_awaiting(shared: &Shared, hash: &str, o: &AddOptions, cancel: bool
         skip_hash_check: false,
         top_of_queue: o.top,
         label: label.to_owned(),
+        sequential: o.sequential,
+        first_last: o.first_last,
     };
     if !label.is_empty() {
         st.set_label(hash, label);
@@ -1009,9 +1127,6 @@ pub fn finish_awaiting(shared: &Shared, hash: &str, o: &AddOptions, cancel: bool
     add::remember_dir(&mut s.options, &save_path);
     shared.save(&mut st);
     drop(st);
-    if o.sequential {
-        h.set_flags(TorrentFlags::SEQUENTIAL_DOWNLOAD);
-    }
     if o.download_limit > 0 {
         h.set_download_limit(o.download_limit);
     }
@@ -1332,6 +1447,21 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
                 let sel = query_selection(&parse_urlencoded(req.head.query.as_bytes()))?;
                 Ok(Response::json(&properties_reply(shared, &sel)?))
             }
+            "torrents/magnet" => {
+                let q = parse_urlencoded(req.head.query.as_bytes());
+                let sel = query_selection(&q)?;
+                let trackers = !q.iter().any(|(k, v)| k == "trackers" && matches!(v.as_str(), "0" | "false"));
+                Ok(Response::json(&magnet_reply(shared, &sel, trackers)?))
+            }
+            "torrents/export" => {
+                let q = parse_urlencoded(req.head.query.as_bytes());
+                let hash =
+                    q.iter().rev().find(|(k, _)| k == "id").map(|(_, v)| v.trim().to_ascii_lowercase());
+                let hash = hash.filter(|h| !h.is_empty()).ok_or_else(|| err(400, "missing id"))?;
+                let id = shared.lock().by_hash.get(&hash).copied().ok_or_else(not_found)?;
+                let (name, data) = torrent_file(shared, id)?;
+                Ok(torrent_download(&name, &data))
+            }
             _ => Err(err(405, "POST only")),
         };
     }
@@ -1494,6 +1624,14 @@ fn torrent_command(shared: &Shared, cmd: &str, body: &Json) -> Result<(), CmdErr
         "label" => label(shared, &ids, body.get("label").and_then(Json::as_str).unwrap_or(""))?,
         "location" => location(shared, &ids, body.get("path").and_then(Json::as_str).unwrap_or(""))?,
         "super-seed" => super_seed(shared, &ids, body.get("on").and_then(Json::as_bool).unwrap_or(true)),
+        "sequential" | "first-last" => {
+            let flag = if cmd == "sequential" {
+                TorrentFlags::SEQUENTIAL_DOWNLOAD
+            } else {
+                TorrentFlags::FIRST_LAST_PIECES
+            };
+            set_flag(shared, &ids, flag, body.get("on").and_then(Json::as_bool).unwrap_or(true));
+        }
         "properties" => set_properties(shared, &ids, body.get("fields").unwrap_or(&Json::obj()))?,
         _ => return Err(err(404, "no such command")),
     }

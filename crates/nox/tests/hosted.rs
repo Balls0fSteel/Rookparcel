@@ -1183,3 +1183,43 @@ fn run_program_is_the_hosts_own() {
     std::thread::sleep(Duration::from_millis(400));
     assert!(!t.web.run_program_enabled() && !t.web.run_program_armed());
 }
+
+/// The download order flags, Copy Magnet Link and Export .torrent (D72, D73) work on the
+/// host's engine: the flags are the engine's own (nothing for the host to store), the
+/// `.torrent` comes through the host's alert batches.
+#[test]
+fn download_order_magnets_and_export_on_the_hosts_engine() {
+    let t = Harness::start("order-export", Prefs::default(), Some(PASS));
+    let sid = t.login();
+    let hashes = t.hashes(&sid);
+    let a = &hashes[0];
+    let flag = |x: &Json, k: &str| x.get(k).and_then(Json::as_bool).unwrap_or(false);
+    let r = t.pa(&sid, "/pa/torrents/sequential", &format!(r#"{{"ids":["{a}"],"on":true}}"#));
+    assert_eq!(r.status, 204, "{}", r.text());
+    t.wait_for(&sid, a, "seq_dl", |x| flag(x, "seq_dl"));
+    let r = t.post(&sid, "/api/v2/torrents/toggleFirstLastPiecePrio", &format!("hashes={a}"));
+    assert_eq!(r.status, 200, "{}", r.text());
+    t.wait_for(&sid, a, "f_l_piece_prio", |x| flag(x, "f_l_piece_prio") && flag(x, "seq_dl"));
+    let p = t.get(&sid, &format!("/pa/torrents/properties?ids={a}")).json();
+    let field = |k: &str| s(p.get("fields").and_then(|f| f.get(k))).to_owned();
+    assert_eq!((field("sequential"), field("first_last")), ("on".to_owned(), "on".to_owned()));
+    assert!(!t.host.changes().iter().any(|(k, _)| k.starts_with("torrent.")), "{:?}", t.host.changes());
+
+    let name =
+        s(first(&t.get(&sid, &format!("/api/v2/torrents/info?hashes={a}")).json()).get("name")).to_owned();
+    let r = t.get(&sid, &format!("/pa/torrents/export?id={a}"));
+    assert_eq!(r.status, 200, "{}", r.text());
+    assert_eq!(r.header("content-type"), Some("application/x-bittorrent"));
+    assert!(r.header("content-disposition").is_some_and(|v| v.starts_with("attachment; filename=\"")));
+    let ti = rookparcel_core::metainfo::TorrentInfo::from_bytes(&r.body).unwrap();
+    assert_eq!(ti.name(), name);
+    let r = t.get(&sid, &format!("/api/v2/torrents/export?hash={a}"));
+    assert_eq!(r.status, 200, "{}", r.text());
+
+    let Json::Arr(links) = t.get(&sid, &format!("/pa/torrents/magnet?ids={a}")).json() else { panic!() };
+    assert!(
+        s(links[0].get("magnet")).starts_with(&format!("magnet:?xt=urn:btih:{a}")),
+        "{}",
+        links[0].to_json()
+    );
+}

@@ -1434,6 +1434,13 @@
         path = "torrents/super-seed";
         body.on = !!arg;
         break;
+      // Download in Sequential Order, Download First and Last Pieces First (D72): on for all,
+      // or off for all when every torrent has it (the check mark)
+      case "sequential":
+      case "first_last":
+        path = "torrents/" + name.replace("_", "-");
+        body.on = !!arg;
+        break;
       case "dl_limit":
         path = "torrents/limits";
         body.down = arg * 1024;
@@ -1503,11 +1510,15 @@
       { label: T("MenuRecheck"), run: () => command("recheck") },
       { label: T("MenuUpdateTracker"), run: () => command("reannounce") },
       "-",
+      { label: T("MenuCopyMagnet"), run: copyMagnets },
+      { label: T("MenuExportTorrent"), key: "export", run: exportTorrents },
       {
         label: T("MenuAdvanced"),
         sub: [
           { label: T("MenuSetLocation"), run: () => command("location") },
           { label: T("MenuInitialSeeding"), key: "superseed", run: (it) => command("superseed", !it.chk) },
+          { label: T("MenuSequential"), key: "sequential", run: (it) => command("sequential", !it.chk) },
+          { label: T("MenuFirstLast"), key: "first_last", run: (it) => command("first_last", !it.chk) },
         ],
       },
       {
@@ -1543,8 +1554,9 @@
       run: () => command(kind + "_limit", kb),
     }));
   }
-  /// Check marks need the torrents' current limits, label and super-seeding flag, which the
-  /// cells do not carry: one shim read (`torrents/info`), applied while the menu is still open.
+  /// Check marks need the torrents' current limits, label, super-seeding and download order
+  /// flags, which the cells do not carry: one shim read (`torrents/info`), applied while the
+  /// menu is still open.
   async function fillChecks(items) {
     if (selAll || sel.size === 0 || sel.size > 100) return;
     const hashes = [...sel].join("|");
@@ -1561,6 +1573,8 @@
     };
     const checks = new Map();
     checks.set("superseed", same((t) => !!t.super_seeding) === true);
+    checks.set("sequential", same((t) => !!t.seq_dl) === true);
+    checks.set("first_last", same((t) => !!t.f_l_piece_prio) === true);
     const dl = same((t) => t.dl_limit);
     const ul = same((t) => t.up_limit);
     for (const kb of LIMITS) {
@@ -1571,6 +1585,12 @@
     checks.set("label:", false);
     for (const l of labels) checks.set("label:" + l, label === l);
     const grey = new Map([["label:", label === ""]]);
+    // the download order means nothing once every torrent is finished (a seed's state ends in
+    // UP); Export needs a torrent with its metadata (a magnet without has no size yet)
+    const finished = info.every((t) => /UP$/.test(t.state || "") || t.state === "uploading");
+    grey.set("sequential", finished);
+    grey.set("first_last", finished);
+    grey.set("export", info.every((t) => !t.total_size));
     const walk = (list) => {
       for (const it of list) {
         if (typeof it !== "object") continue;
@@ -2914,6 +2934,9 @@
     $("add-skip").disabled = !!setup.in_session;
     $("add-start").checked = setup.start !== false;
     $("add-top").checked = false;
+    // the download order is chosen for each add, never remembered (D72)
+    $("add-seq").checked = false;
+    $("add-fl").checked = false;
     setText("add-t-name", info.name || "");
     setText("add-t-comment", info.comment || "");
     setText("add-t-date", info.date_text || "");
@@ -3254,6 +3277,8 @@
       start: $("add-start").checked,
       skip_check: $("add-skip").checked,
       top: $("add-top").checked,
+      sequential: $("add-seq").checked,
+      first_last: $("add-fl").checked,
       priorities: {},
     };
     const name = $("add-name").value.trim();
@@ -5036,7 +5061,7 @@
   // (blank where the selected torrents differ), the check boxes as "on", "off" or "mixed". OK
   // sends only the fields that changed: what the others hold stays as it is on every torrent.
   const propsDlg = $("props");
-  let props = null; // {sel, loaded, multi, canSeed} while the dialog is open
+  let props = null; // {sel, loaded, multi, canSeed, canSequential} while the dialog is open
   let propsBusy = false; // a GET or the OK's POST in flight
 
   const propsInputs = () => propsDlg.querySelectorAll("[data-f]");
@@ -5070,7 +5095,7 @@
     }
     // the Win32 window opens a finished torrent's folder instead, which a browser cannot
     if (dblclick && m.finished) return;
-    props = { sel: s, loaded: m.fields, multi: m.count > 1, canSeed: m.can_initial_seed };
+    props = { sel: s, loaded: m.fields, multi: m.count > 1, canSeed: m.can_initial_seed, canSequential: m.can_sequential };
     $("props-title").textContent =
       m.count === 1 && m.name != null ? T("PropsTitle", { name: m.name }) : T("PropsTitleMany", { count: m.count });
     for (const inp of propsInputs()) {
@@ -5096,7 +5121,8 @@
     body.focus();
   }
   /// The slot count and the goal's values are edited only while their override is not off,
-  /// Initial Seeding only when every torrent is a seed (the Win32 dialog's greying).
+  /// Initial Seeding only when every torrent is a seed, the download order only while some
+  /// torrent is not finished (the Win32 dialog's greying).
   function propsGrey() {
     const on = (f) => triOf(propsField(f)) !== "off";
     const grey = (f, off) => {
@@ -5107,6 +5133,8 @@
     grey("goal_ratio", !on("override_goal"));
     grey("goal_minutes", !on("override_goal"));
     grey("initial_seeding", !props.canSeed);
+    grey("sequential", !props.canSequential);
+    grey("first_last", !props.canSequential);
   }
   /// A validation error under its field, which takes the focus with the text selected (the
   /// tracker box selects the line named); without a field, above the buttons.
@@ -5286,6 +5314,137 @@
   });
   $("donate-close").addEventListener("click", closeDonate);
   $("tb-donate").addEventListener("click", openDonate);
+  // ---- Copy Magnet Link and Export .torrent (D73), the torrent menu's items ----------------
+  // GET pa/torrents/magnet gives the selection's links with their trackers (and with
+  // trackers=0 only the hashes and names, which Export uses to resolve a Ctrl+A selection).
+  const magnetsDlg = $("magnets");
+  /// The links go to the clipboard. The write starts inside the menu's click, as browsers want
+  /// (Safari refuses one after the fetch): a ClipboardItem whose text comes when the links do.
+  /// Without a clipboard (plain HTTP on a LAN is no secure context) or when the browser
+  /// refuses, a small dialog shows them selected, to copy by hand.
+  function copyMagnets() {
+    const s = selection();
+    if (!s) return;
+    const links = pa("torrents/magnet?" + propsQuery(s)).then((list) => list.map((m) => m.magnet).join("\n"));
+    links.catch(() => {}); // shown by pa()
+    const clip = window.isSecureContext ? navigator.clipboard : null;
+    let copied;
+    if (clip && clip.write && window.ClipboardItem) {
+      const blob = links.then((text) => new Blob([text], { type: "text/plain" }));
+      try {
+        copied = clip.write([new ClipboardItem({ "text/plain": blob })]);
+      } catch (e) {
+        copied = Promise.reject(e);
+      }
+    } else if (clip && clip.writeText) copied = links.then((text) => clip.writeText(text));
+    else copied = Promise.reject(new Error("no clipboard"));
+    copied.catch(() =>
+      links.then(
+        (text) => {
+          if (text) showMagnets(text);
+        },
+        () => {},
+      ),
+    );
+  }
+  function showMagnets(text) {
+    if ($("app").hidden) return;
+    const box = $("magnets-text");
+    box.value = text;
+    box.rows = Math.min(8, Math.max(3, text.split("\n").length * 2));
+    if (!magnetsDlg.open) {
+      magnetsDlg.showModal();
+      layerOpened(closeMagnets);
+    }
+    box.focus();
+    box.select();
+    box.scrollTop = 0;
+  }
+  function closeMagnets() {
+    if (magnetsDlg.open) magnetsDlg.close();
+    body.focus();
+  }
+  magnetsDlg.addEventListener("close", () => layerClosed(closeMagnets));
+  $("magnets-close").addEventListener("click", closeMagnets);
+  // a click in the box selects all of it again, so a tap and Copy takes every link
+  $("magnets-text").addEventListener("focus", (ev) => ev.target.select());
+
+  /// Export .torrent: one download per torrent, the server's `.torrent` under the torrent's
+  /// name, fetched and saved through a hidden link (so a magnet without its metadata gives a
+  /// message, not a broken download), EXPORT_GAP ms apart so browsers take them all (Chrome
+  /// asks once whether the page may save several files). At most EXPORT_MAX per click, the
+  /// first ones by name; the status bar says when there were more.
+  const EXPORT_MAX = 50;
+  const EXPORT_GAP = 400;
+  let exporting = false;
+  async function exportTorrents() {
+    const s = selection();
+    if (!s || exporting) return;
+    let list;
+    try {
+      list = await pa("torrents/magnet?" + propsQuery(s) + "&trackers=0");
+    } catch (e) {
+      return; // shown by pa()
+    }
+    exporting = true;
+    try {
+      for (let i = 0; i < list.length && i < EXPORT_MAX; i++) {
+        if (i) await new Promise((r) => setTimeout(r, EXPORT_GAP));
+        if (!(await exportOne(list[i]))) break;
+      }
+      if (list.length > EXPORT_MAX) flash(T("MenuExportTorrent") + " " + EXPORT_MAX + " / " + list.length);
+    } finally {
+      exporting = false;
+    }
+  }
+  /// One torrent's `.torrent`, saved; false when the session ended (the login shows).
+  async function exportOne(t) {
+    let r;
+    try {
+      r = await fetch("pa/torrents/export?id=" + encodeURIComponent(t.hash), { credentials: "same-origin" });
+    } catch (e) {
+      flash(T("CannotExport", { name: t.name }));
+      return true;
+    }
+    if (r.status === 403) {
+      showLogin();
+      return false;
+    }
+    if (!r.ok) {
+      let msg = "";
+      try {
+        msg = (await r.json()).error || "";
+      } catch (e) {
+        /* no body */
+      }
+      flash(T("CannotExport", { name: t.name }) + ": " + (msg || "HTTP " + r.status));
+      return true;
+    }
+    const url = URL.createObjectURL(await r.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = downloadName(r.headers.get("content-disposition")) || "torrent.torrent";
+    a.hidden = true;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return true;
+  }
+  /// The file name of a `Content-Disposition: attachment`: `filename*` (UTF-8), else
+  /// `filename`.
+  function downloadName(cd) {
+    const ext = /filename\*=UTF-8''([^;\s]+)/i.exec(cd || "");
+    if (ext) {
+      try {
+        return decodeURIComponent(ext[1]);
+      } catch (e) {
+        /* the plain one then */
+      }
+    }
+    const plain = /filename=\x22([^\x22]*)\x22/i.exec(cd || ""); // (\x22: a quote)
+    return plain ? plain[1] : "";
+  }
   // ---- Statistics: the all-time and session totals, as the GUIs' Help > Statistics ----------
   // GET /pa/session/stats gives the rows as text in the server's language: {"h": heading} or
   // {"l": label, "v": value}. Their number and order never change, so the list is built once

@@ -238,7 +238,7 @@ pub fn fields(st: &TorrentStatus, x: &Extra<'_>) -> Vec<Json> {
         st.all_time_download.into(),
         st.total_payload_download.into(),
         Json::Int(eta),
-        false.into(),
+        st.flags.contains(TorrentFlags::FIRST_LAST_PIECES).into(),
         (!auto && !paused).into(),
         hash_of(&st.info_hashes).into(),
         st.info_hashes.v1.map(|h| h.to_hex()).unwrap_or_default().into(),
@@ -359,5 +359,11 @@ mod tests {
             Some(format!("magnet:?xt=urn:btih:{}&dn=a%20b", "ab".repeat(20)).as_str())
         );
         assert_eq!(o.get("ratio").and_then(Json::as_f64), Some(0.4));
+        assert_eq!(o.get("seq_dl"), Some(&Json::Bool(false)));
+        assert_eq!(o.get("f_l_piece_prio"), Some(&Json::Bool(false)));
+        s.flags |= TorrentFlags::SEQUENTIAL_DOWNLOAD | TorrentFlags::FIRST_LAST_PIECES;
+        let o = object(&s, &Extra::default());
+        assert_eq!(o.get("seq_dl"), Some(&Json::Bool(true)));
+        assert_eq!(o.get("f_l_piece_prio"), Some(&Json::Bool(true)));
     }
 }

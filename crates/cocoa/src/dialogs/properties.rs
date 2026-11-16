@@ -67,6 +67,8 @@ struct Dialog {
     ratio: Retained<NSTextField>,
     minutes: Retained<NSTextField>,
     initial_seeding: Retained<NSButton>,
+    sequential: Retained<NSButton>,
+    first_last: Retained<NSButton>,
     dht: Retained<NSButton>,
     pex: Retained<NSButton>,
 }
@@ -178,7 +180,12 @@ fn show(parent: &NSWindow, ids: Vec<TorrentId>, title: &str, props: Properties, 
     let initial_seeding = check(tr!(PropsInitialSeeding), f.initial_seeding, NOTHING);
     let dht = check(tr!(PropsDht), f.dht, NOTHING);
     let pex = check(tr!(PropsPex), f.pex, NOTHING);
+    let sequential = check(tr!(PropsSequential), f.sequential, NOTHING);
+    let first_last = check(tr!(PropsFirstLast), f.first_last, NOTHING);
     initial_seeding.setEnabled(props.can_initial_seed);
+    // only while a torrent still downloads
+    sequential.setEnabled(props.can_sequential);
+    first_last.setEnabled(props.can_sequential);
     dht.setEnabled(props.can_dht_pex);
     pex.setEnabled(props.can_dht_pex);
 
@@ -207,7 +214,14 @@ fn show(parent: &NSWindow, ids: Vec<TorrentId>, title: &str, props: Properties, 
         ],
         mtm,
     );
-    let other = layout::grid(&[vec![Some(&*initial_seeding), Some(&*pex)], vec![Some(&*dht), None]], mtm);
+    let other = layout::grid(
+        &[
+            vec![Some(&*initial_seeding), Some(&*pex)],
+            vec![Some(&*dht), None],
+            vec![Some(&*sequential), Some(&*first_last)],
+        ],
+        mtm,
+    );
     other.setColumnSpacing(24.0);
     let ok = ui::button_tr(tr!(BtnOk), cmd(id, OK), mtm);
     let cancel = ui::button_tr(tr!(BtnCancel), cmd(id, CANCEL), mtm);
@@ -243,6 +257,8 @@ fn show(parent: &NSWindow, ids: Vec<TorrentId>, title: &str, props: Properties, 
         ratio,
         minutes,
         initial_seeding,
+        sequential,
+        first_last,
         dht,
         pex,
     });
@@ -304,6 +320,8 @@ impl Dialog {
             initial_seeding: tri(&self.initial_seeding),
             dht: tri(&self.dht),
             pex: tri(&self.pex),
+            sequential: tri(&self.sequential),
+            first_last: tri(&self.first_last),
         }
     }
 

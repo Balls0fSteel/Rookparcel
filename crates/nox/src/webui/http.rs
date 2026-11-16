@@ -535,6 +535,47 @@ impl Response {
     }
 }
 
+/// The longest file name [`attachment`] passes on, in bytes (most file systems' limit).
+const MAX_FILE_NAME: usize = 255;
+
+/// A `Content-Disposition` value that makes a browser save the response as file `name` (RFC
+/// 6266): `filename` an ASCII stand-in for old clients (anything but printable ASCII, and `"`,
+/// `\` and `%`, as `_`) and `filename*` the name itself in UTF-8, percent-encoded as RFC 8187
+/// says, so no byte of the name reaches the header unescaped. A name over 255 bytes is cut,
+/// keeping a short extension.
+pub fn attachment(name: &str) -> String {
+    let name = &cut_file_name(name, MAX_FILE_NAME);
+    let fallback: String = name
+        .chars()
+        .map(|c| if (c == ' ' || c.is_ascii_graphic()) && !matches!(c, '"' | '\\' | '%') { c } else { '_' })
+        .collect();
+    let mut encoded = String::with_capacity(name.len() * 3);
+    for b in name.bytes() {
+        // RFC 8187's attr-char
+        if b.is_ascii_alphanumeric() || b"!#$&+-.^_`|~".contains(&b) {
+            encoded.push(b as char);
+        } else {
+            let _ = write!(encoded, "%{b:02X}");
+        }
+    }
+    format!("attachment; filename=\"{fallback}\"; filename*=UTF-8''{encoded}")
+}
+
+/// `name` in at most `max` bytes, cut at a character boundary before its extension (up to 16
+/// bytes) when it is longer.
+fn cut_file_name(name: &str, max: usize) -> String {
+    if name.len() <= max {
+        return name.to_owned();
+    }
+    let ext = name.rfind('.').map_or("", |i| &name[i..]);
+    let ext = if ext.len() <= 16 { ext } else { "" };
+    let mut end = max - ext.len();
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}{ext}", &name[..end])
+}
+
 pub fn reason(status: u16) -> &'static str {
     match status {
         100 => "Continue",
@@ -713,5 +754,48 @@ Content-Type: application/x-bittorrent\r\n\r\nd4:infod\r\n--XYe\r\n--XyZ--\r\nep
             "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 4\r\n\
 Connection: close\r\nX-A: bEvil: 1\r\n\r\nnope"
         );
+    }
+
+    /// The download name of Export .torrent: an ASCII stand-in plus the exact UTF-8 name, and
+    /// nothing in a name can end the quoted string, add a parameter or start a header.
+    #[test]
+    fn attachment_names() {
+        assert_eq!(
+            attachment("Show S01.torrent"),
+            "attachment; filename=\"Show S01.torrent\"; filename*=UTF-8''Show%20S01.torrent"
+        );
+        // quotes, backslashes, percent signs, semicolons
+        assert_eq!(
+            attachment("a\"b\\c%d;e.torrent"),
+            "attachment; filename=\"a_b_c_d;e.torrent\"; filename*=UTF-8''a%22b%5Cc%25d%3Be.torrent"
+        );
+        // CR / LF and other controls never reach the header
+        let v = attachment("x\r\nSet-Cookie: SID=1\t.torrent");
+        assert!(!v.contains(['\r', '\n', '\t']), "{v}");
+        assert!(v.starts_with("attachment; filename=\"x__Set-Cookie: SID=1_.torrent\"; filename*=UTF-8''x%0D%0ASet-Cookie%3A%20SID%3D1%09.torrent"), "{v}");
+        // non-ASCII: `_` in the stand-in, UTF-8 bytes in `filename*`
+        assert_eq!(
+            attachment("Ünï 日本.torrent"),
+            "attachment; filename=\"_n_ __.torrent\"; filename*=UTF-8''%C3%9Cn%C3%AF%20%E6%97%A5%E6%9C%AC.torrent"
+        );
+        // only one quoted string, closed at the end of the stand-in
+        for name in ["\"\"", "\\\"", "a\";filename=\"evil.exe", "日\u{0}本"] {
+            let v = attachment(name);
+            let fallback = v.strip_prefix("attachment; filename=\"").unwrap();
+            let (inside, rest) = fallback.split_once('"').unwrap();
+            assert!(!inside.contains(['"', '\\']) && rest.starts_with("; filename*=UTF-8''"), "{v}");
+            assert!(!rest[19..].contains(['"', ';', ' ', '\\']), "{v}");
+        }
+        // a very long name is cut to 255 bytes at a character boundary, keeping its extension
+        let long = format!("{}.torrent", "é".repeat(400));
+        let v = attachment(&long);
+        let fallback = &v["attachment; filename=\"".len()..v.find("\"; ").unwrap()];
+        assert!(fallback.ends_with(".torrent") && fallback.len() <= 255, "{fallback}");
+        let encoded = &v[v.find("UTF-8''").unwrap() + 7..];
+        assert!(encoded.ends_with(".torrent") && !encoded.contains("%C3.torrent"), "{encoded}");
+        assert!(encoded.len() <= 255 * 3);
+        assert_eq!(cut_file_name(&long, 255).len(), 254, "é is two bytes: 123 of them and .torrent");
+        assert_eq!(cut_file_name(&"a".repeat(300), 255), "a".repeat(255));
+        assert_eq!(cut_file_name("short.torrent", 255), "short.torrent");
     }
 }

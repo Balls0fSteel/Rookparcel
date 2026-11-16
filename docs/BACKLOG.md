@@ -1218,6 +1218,21 @@ Found and left:
 - **Fixed in 1.2.54:** Set PIN no longer replaces an existing PIN (`ui_lock::submit`, and
   `on_command` checks the menu state for a posted command, as the Mac did).
 
+## Download order, magnet links and export (D72, D73; built 2026-11-16, 1.2.59)
+
+2026-11-16_113648_1794825408. Open:
+
+- **Windows:** Copy Magnet Link and Export .torrent (the Save As dialog and the folder export) were not clicked live; unit tests only.
+- **Windows:** no icons on Copy Magnet Link and Export .torrent. The bold set has no copy or export symbol; an unused `copy.png` is in `assets/ui-icon-explorations`.
+- **GTK:** the torrent menu is now taller than a 620 px window and scrolls.
+- **GTK:** the Export save dialog opens in GTK's default folder.
+- **Web UI:** the export saves through `fetch` and a hidden download link, and Copy Magnet Link writes through a `ClipboardItem` promise. Neither was seen in Safari, Firefox or on a phone.
+- **Web UI:** more than 50 torrents exported at once stop at 50, with only a count in the status bar (no proper string).
+- **qBittorrent API:** the shim's `magnet_uri` field still has no trackers (the status carries no tracker list).
+- **Not tried:** a real video previewed while it downloads with both switches on.
+- **Text:** the 15 new strings are machine-translated in 34 tables.
+- **macOS:** see CHANGELOG 1.2.59.
+
 ## Settings guard (D70; 2026-11-15, 1.2.55-)
 
 Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/frontend/tests/settings_fixtures.rs`. Layer 2 (1.2.56): the stamp, the start comparison and the backups. Open:

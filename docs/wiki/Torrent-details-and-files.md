@@ -201,6 +201,10 @@ With both set, both must be reached. What happens then is set in Preferences > Q
 | **Initial Seeding** | as in the right-click menu; only for torrents that are seeding |
 | **Enable DHT** | lets this torrent find peers through the DHT |
 | **Peer Exchange** | lets this torrent learn about peers from other peers |
+| **Download in sequential order** | downloads the pieces in order, as **Advanced > Download in Sequential Order** in the right-click menu does; greyed out when every torrent is finished |
+| **Download first and last pieces first** | downloads both ends of each wanted file first, as **Advanced > Download First and Last Pieces First** does |
+
+*The two download order boxes are new in 1.2.59, not in a published release yet.* See [Managing torrents](Managing-torrents#download-order) for when they help.
 
 Private torrents never use the DHT or Peer Exchange.
 

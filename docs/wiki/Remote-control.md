@@ -52,6 +52,7 @@ Nearly everything works as in a local window, acting on the server:
 - Adding torrents: `.torrent` files from this computer are sent to the server; magnet links too.
 - Start, stop, pause, force start, remove (also with the data, deleted on the server), recheck, queue order, labels, speed limits, trackers, file priorities, renaming, Torrent Properties.
 - The detail tabs, with the server's peers, pieces, files and speed graph.
+- **Copy Magnet Link** and **Export .torrent...** (*new in 1.2.59, not in a published release yet*). An exported `.torrent` file is saved on this computer.
 - **Preferences:** the engine's settings (connection, bandwidth, BitTorrent, queueing and the like) are the server's. What you change there is applied on the server and kept there.
 
 What is different:

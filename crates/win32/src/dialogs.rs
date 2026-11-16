@@ -14,7 +14,7 @@ use windows_sys::Win32::System::Memory::{GlobalLock, GlobalUnlock};
 use windows_sys::Win32::System::Ole::CF_UNICODETEXT;
 use windows_sys::Win32::UI::Controls::Dialogs::{
     GetOpenFileNameW, GetSaveFileNameW, OFN_ALLOWMULTISELECT, OFN_EXPLORER, OFN_FILEMUSTEXIST,
-    OFN_HIDEREADONLY, OFN_NOCHANGEDIR, OFN_PATHMUSTEXIST, OPENFILENAMEW,
+    OFN_HIDEREADONLY, OFN_NOCHANGEDIR, OFN_OVERWRITEPROMPT, OFN_PATHMUSTEXIST, OPENFILENAMEW,
 };
 use windows_sys::Win32::UI::HiDpi::SystemParametersInfoForDpi;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -86,6 +86,34 @@ pub fn relocate_file(owner: HWND, current: &Path) -> Option<PathBuf> {
         ofn.lpstrTitle = title.as_ptr();
         ofn.lpstrInitialDir = dir.as_ref().map_or(null(), |d| d.as_ptr());
         ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_NOCHANGEDIR;
+        if GetSaveFileNameW(&mut ofn) == 0 {
+            return None;
+        }
+    }
+    Some(PathBuf::from(from_wide(&buf)))
+}
+
+/// A Save As dialog for a `.torrent` file, offering `name` (Export .torrent); it asks before
+/// replacing a file.
+pub fn save_torrent(owner: HWND, title: &str, name: &str) -> Option<PathBuf> {
+    let filter = wide(&torrent_filter());
+    let title = wide(title);
+    let ext = wide("torrent");
+    let mut buf = vec![0u16; 32 * 1024];
+    for (i, c) in name.encode_utf16().take(buf.len() - 1).enumerate() {
+        buf[i] = c;
+    }
+    unsafe {
+        let mut ofn: OPENFILENAMEW = zeroed();
+        ofn.lStructSize = size_of::<OPENFILENAMEW>() as u32;
+        ofn.hwndOwner = owner;
+        ofn.lpstrFilter = filter.as_ptr();
+        ofn.lpstrFile = buf.as_mut_ptr();
+        ofn.nMaxFile = buf.len() as u32;
+        ofn.lpstrTitle = title.as_ptr();
+        ofn.lpstrDefExt = ext.as_ptr();
+        ofn.Flags =
+            OFN_EXPLORER | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_NOCHANGEDIR;
         if GetSaveFileNameW(&mut ofn) == 0 {
             return None;
         }

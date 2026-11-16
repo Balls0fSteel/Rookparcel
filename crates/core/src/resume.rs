@@ -48,6 +48,9 @@ pub(crate) struct ResumeData {
     /// A magnet that still waits for its metadata to get the session's extra trackers (D66,
     /// `rp-extra-trackers`; written only when set).
     pub extra_trackers_pending: bool,
+    /// The first and last pieces of each wanted file come first (`TorrentFlags::
+    /// FIRST_LAST_PIECES`, `rp-first-last`; written only when set).
+    pub first_last_pieces: bool,
     pub file_priority: Vec<u8>,
     /// The pieces a downloaded file touches (`lt-wanted-pieces`, packed as `pieces`); `None`
     /// when every piece is wanted. Lets a stopped torrent count only its selected files without
@@ -133,6 +136,9 @@ impl ResumeData {
         *e.key("disable_pex") = int(self.disable_pex as i64);
         if self.extra_trackers_pending {
             *e.key("rp-extra-trackers") = int(1);
+        }
+        if self.first_last_pieces {
+            *e.key("rp-first-last") = int(1);
         }
         if !self.file_priority.is_empty() {
             *e.key("file_priority") =
@@ -264,6 +270,7 @@ impl ResumeData {
             disable_lsd: int("disable_lsd") != 0,
             disable_pex: int("disable_pex") != 0,
             extra_trackers_pending: int("rp-extra-trackers") != 0,
+            first_last_pieces: int("rp-first-last") != 0,
             upload_rate_limit: opt("upload_rate_limit").unwrap_or(0),
             download_rate_limit: opt("download_rate_limit").unwrap_or(0),
             max_connections: opt("max_connections"),
@@ -556,9 +563,11 @@ mod tests {
             added_time: 1_700_000_000,
             paused: true,
             auto_managed: true,
+            sequential_download: true,
             super_seeding: true,
             disable_dht: true,
             disable_pex: true,
+            first_last_pieces: true,
             file_priority: vec![4, 0, 7],
             mapped_files: [(1, "x/renamed.bin".to_owned()), (3, "/abs/y".to_owned())].into(),
             trackers: vec![vec!["http://a/announce".into()], vec!["udp://b:1".into(), "udp://c:2".into()]],
@@ -593,6 +602,14 @@ mod tests {
         assert_eq!(names, ["", "x/renamed.bin", "", "/abs/y"]);
         assert_eq!(root.dict_find_int_value("disable_dht"), Some(1));
         assert_eq!(root.dict_find_int_value("disable_lsd"), Some(0));
+        assert_eq!(root.dict_find_int_value("sequential_download"), Some(1));
+        assert_eq!(root.dict_find_int_value("rp-first-last"), Some(1));
+        // written only when set
+        let off = ResumeData { first_last_pieces: false, ..r.clone() };
+        let off_bytes = off.encode();
+        let doc_off = bdecode(&off_bytes[..]).unwrap();
+        assert_eq!(doc_off.root().unwrap().dict_find_int_value("rp-first-last"), None);
+        assert_eq!(ResumeData::decode(&off_bytes).unwrap(), off);
         let u = root.dict_find_list("unfinished").unwrap().list_at(0).unwrap();
         assert_eq!(u.dict_find_int_value("piece"), Some(4));
         assert_eq!(u.dict_find_string_value("bitmask").unwrap(), &[0b1010_0000, 0x01]);

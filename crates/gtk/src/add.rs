@@ -105,6 +105,9 @@ pub fn show(
     let start = gtk::CheckButton::with_mnemonic(&gtk_mnemonic(tr!(AddStart)));
     start.set_active(setup.start);
     let top = gtk::CheckButton::with_mnemonic(&gtk_mnemonic(tr!(AddTopOfQueue)));
+    // the download order (D73): off each time, not remembered
+    let sequential = gtk::CheckButton::with_mnemonic(&gtk_mnemonic(tr!(AddSequential)));
+    let first_last = gtk::CheckButton::with_mnemonic(&gtk_mnemonic(tr!(AddFirstLast)));
     let (label_row, label) = entry_with_choices(&setup.labels);
     label.set_hexpand(true);
     label.set_activates_default(true);
@@ -114,7 +117,13 @@ pub fn show(
     label_line.append(&label_caption);
     label_line.append(&label_row);
     let options = gtk::Box::new(gtk::Orientation::Vertical, 4);
-    for w in [skip.upcast_ref::<gtk::Widget>(), start.upcast_ref(), top.upcast_ref()] {
+    for w in [
+        skip.upcast_ref::<gtk::Widget>(),
+        start.upcast_ref(),
+        top.upcast_ref(),
+        sequential.upcast_ref(),
+        first_last.upcast_ref(),
+    ] {
         options.append(w);
     }
     label_line.set_margin_top(8);
@@ -425,6 +434,7 @@ pub fn show(
         let window = window.downgrade();
         let (name, skip, start, top, label) =
             (name.downgrade(), skip.downgrade(), start.downgrade(), top.downgrade(), label.downgrade());
+        let (sequential, first_last) = (sequential.downgrade(), first_last.downgrade());
         let (torrent_name, in_session) = (ti.name().to_owned(), setup.in_session);
         move |_| {
             let (Some(d), Some(window)) = (w.upgrade(), window.upgrade()) else { return };
@@ -450,6 +460,8 @@ pub fn show(
                 skip_hash_check: !in_session && skip.is_active(),
                 top_of_queue: top.is_active(),
                 label: label.text().trim().to_owned(),
+                sequential: sequential.upgrade().is_some_and(|b| b.is_active()),
+                first_last: first_last.upgrade().is_some_and(|b| b.is_active()),
             };
             let done = d.done.borrow_mut().take();
             window.close();

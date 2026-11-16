@@ -43,6 +43,11 @@ pub struct TorrentProps {
     /// BEP 27's private flag: the engine uses no DHT or PEX for it, whatever its flags say.
     /// [`TorrentProps::new`] leaves it false; the GUI sets it from the torrent's metadata.
     pub private: bool,
+    /// Download order (`SEQUENTIAL_DOWNLOAD`, `FIRST_LAST_PIECES`); meaningless once it is
+    /// finished.
+    pub sequential: bool,
+    pub first_last: bool,
+    pub is_finished: bool,
 }
 
 impl TorrentProps {
@@ -59,6 +64,9 @@ impl TorrentProps {
             dht: !st.flags.contains(TorrentFlags::DISABLE_DHT),
             pex: !st.flags.contains(TorrentFlags::DISABLE_PEX),
             private: false,
+            sequential: st.flags.contains(TorrentFlags::SEQUENTIAL_DOWNLOAD),
+            first_last: st.flags.contains(TorrentFlags::FIRST_LAST_PIECES),
+            is_finished: st.is_finished,
         }
     }
 }
@@ -110,6 +118,9 @@ pub struct Fields {
     pub initial_seeding: Tri,
     pub dht: Tri,
     pub pex: Tri,
+    /// "Download in sequential order", "Download first and last pieces first".
+    pub sequential: Tri,
+    pub first_last: Tri,
 }
 
 /// Which field a validation error is about (so the dialog can focus it).
@@ -147,6 +158,9 @@ pub struct Properties {
     /// DHT and PEX mean nothing for private torrents (µTorrent greys them out when every
     /// selected torrent is private).
     pub can_dht_pex: bool,
+    /// The download order boxes mean nothing once every selected torrent is finished (greyed
+    /// out, as the torrent menu's items).
+    pub can_sequential: bool,
     defaults: Defaults,
 }
 
@@ -173,6 +187,8 @@ pub struct Changes {
     pub super_seeding: Option<bool>,
     pub dht: Option<bool>,
     pub pex: Option<bool>,
+    pub sequential: Option<bool>,
+    pub first_last: Option<bool>,
 }
 
 impl Changes {
@@ -196,10 +212,16 @@ impl Changes {
         }
         let mut set = TorrentFlags::empty();
         let mut unset = TorrentFlags::empty();
-        match self.super_seeding {
-            Some(true) => set |= TorrentFlags::SUPER_SEEDING,
-            Some(false) => unset |= TorrentFlags::SUPER_SEEDING,
-            None => {}
+        for (on, flag) in [
+            (self.super_seeding, TorrentFlags::SUPER_SEEDING),
+            (self.sequential, TorrentFlags::SEQUENTIAL_DOWNLOAD),
+            (self.first_last, TorrentFlags::FIRST_LAST_PIECES),
+        ] {
+            match on {
+                Some(true) => set |= flag,
+                Some(false) => unset |= flag,
+                None => {}
+            }
         }
         // the switches are "disable" flags in the engine
         for (on, flag) in [(self.dht, TorrentFlags::DISABLE_DHT), (self.pex, TorrentFlags::DISABLE_PEX)] {
@@ -266,6 +288,8 @@ impl Properties {
             initial_seeding: Tri::of(items.iter().map(|t| t.super_seeding)),
             dht: Tri::of(items.iter().map(|t| t.dht)),
             pex: Tri::of(items.iter().map(|t| t.pex)),
+            sequential: Tri::of(items.iter().map(|t| t.sequential)),
+            first_last: Tri::of(items.iter().map(|t| t.first_last)),
         };
         Properties {
             loaded: fields.clone(),
@@ -273,6 +297,7 @@ impl Properties {
             count: items.len(),
             can_initial_seed: !items.is_empty() && items.iter().all(|t| t.is_seed),
             can_dht_pex: items.iter().any(|t| !t.private),
+            can_sequential: items.iter().any(|t| !t.is_finished),
             defaults,
         }
     }
@@ -336,6 +361,10 @@ impl Properties {
         if self.can_dht_pex {
             c.dht = switch(f.dht, l.dht);
             c.pex = switch(f.pex, l.pex);
+        }
+        if self.can_sequential {
+            c.sequential = switch(f.sequential, l.sequential);
+            c.first_last = switch(f.first_last, l.first_last);
         }
         Ok(c)
     }
@@ -513,6 +542,9 @@ mod tests {
             dht: true,
             pex: true,
             private: false,
+            sequential: false,
+            first_last: false,
+            is_finished: true,
         }
     }
 
@@ -567,6 +599,8 @@ mod tests {
                 super_seeding: Some(true),
                 dht: None,
                 pex: Some(false),
+                sequential: None,
+                first_last: None,
             }
         );
 
@@ -591,6 +625,45 @@ mod tests {
         p.fields.download_kib = String::new();
         p.fields.goal_minutes = "x".into();
         assert_eq!(p.changes().unwrap_err().field, Field::GoalMinutes);
+    }
+
+    /// The download order boxes follow Initial Seeding's rules: Mixed for torrents that differ,
+    /// left alone unless touched, and greyed out (not applied) when every torrent is finished.
+    #[test]
+    fn download_order_boxes() {
+        let a = TorrentProps { is_finished: false, sequential: true, ..one() };
+        let b = TorrentProps { is_finished: false, first_last: true, ..one() };
+        let mut p = Properties::load(&[a.clone(), b.clone()], DEFAULTS);
+        assert!(p.can_sequential);
+        assert_eq!((p.fields.sequential, p.fields.first_last), (Tri::Mixed, Tri::Mixed));
+        assert!(p.changes().unwrap().is_empty());
+        p.fields.sequential = Tri::On;
+        let c = p.changes().unwrap();
+        assert_eq!((c.sequential, c.first_last), (Some(true), None));
+        p.fields.first_last = Tri::Off;
+        assert_eq!(p.changes().unwrap().first_last, Some(false));
+
+        let mut p = Properties::load(std::slice::from_ref(&a), DEFAULTS);
+        assert_eq!((p.fields.sequential, p.fields.first_last), (Tri::On, Tri::Off));
+        p.fields.sequential = Tri::Off;
+        p.fields.first_last = Tri::On;
+        let c = p.changes().unwrap();
+        assert_eq!((c.sequential, c.first_last), (Some(false), Some(true)));
+
+        // one unfinished torrent is enough; none greys them out
+        assert!(Properties::load(&[a, one()], DEFAULTS).can_sequential);
+        let mut p = Properties::load(&[one(), one()], DEFAULTS);
+        assert!(!p.can_sequential);
+        p.fields.sequential = Tri::On;
+        assert!(p.changes().unwrap().is_empty());
+
+        // the status gives them
+        let st = TorrentStatus {
+            flags: TorrentFlags::SEQUENTIAL_DOWNLOAD | TorrentFlags::FIRST_LAST_PIECES,
+            ..Default::default()
+        };
+        let t = TorrentProps::new(&st, None, &Prefs::default());
+        assert!(t.sequential && t.first_last && !t.is_finished);
     }
 
     #[test]
@@ -705,6 +778,8 @@ mod tests {
             max_uploads: Some(2),
             dht: Some(false),
             pex: Some(false),
+            sequential: Some(true),
+            first_last: Some(true),
             ..Changes::default()
         };
         let mut applied = false;
@@ -723,6 +798,9 @@ mod tests {
                                 && st.upload_limit == 5120
                                 && st.uploads_limit == Some(2)
                                 && st.flags.contains(TorrentFlags::DISABLE_DHT | TorrentFlags::DISABLE_PEX)
+                                && st.flags.contains(
+                                    TorrentFlags::SEQUENTIAL_DOWNLOAD | TorrentFlags::FIRST_LAST_PIECES,
+                                )
                         });
                     }
                     Alert::TrackerList { trackers, .. } if applied => {

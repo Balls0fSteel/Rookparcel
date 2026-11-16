@@ -538,6 +538,8 @@ fn serve_inner(shared: &Shared, req: &Request) -> Response {
             | "torrents/setUploadLimit"
             | "torrents/setForceStart"
             | "torrents/setSuperSeeding"
+            | "torrents/toggleSequentialDownload"
+            | "torrents/toggleFirstLastPiecePrio"
             | "torrents/setCategory"
             | "torrents/createCategory"
             | "torrents/editCategory"
@@ -688,6 +690,23 @@ fn serve_inner(shared: &Shared, req: &Request) -> Response {
         "torrents/setSuperSeeding" => {
             commands::super_seed(shared, &selected(&shared.lock(), &p), p.flag("value"));
             Response::ok()
+        }
+        "torrents/toggleSequentialDownload" | "torrents/toggleFirstLastPiecePrio" => {
+            let flag = if endpoint == "torrents/toggleSequentialDownload" {
+                TorrentFlags::SEQUENTIAL_DOWNLOAD
+            } else {
+                TorrentFlags::FIRST_LAST_PIECES
+            };
+            let ids = selected(&shared.lock(), &p); // (the guard goes before the toggle locks)
+            commands::toggle_each(shared, &ids, flag);
+            Response::ok()
+        }
+        "torrents/export" => {
+            let Some(id) = one(&shared.lock(), &p) else { return not_found() };
+            match commands::torrent_file(shared, id) {
+                Ok((name, data)) => commands::torrent_download(&name, &data),
+                Err(e) => Response::text(e.status, e.msg),
+            }
         }
         "torrents/recheck" => {
             commands::recheck(shared, &selected(&shared.lock(), &p));
@@ -1827,6 +1846,7 @@ fn add(shared: &Shared, p: &Params) -> Response {
         top: false,
         priorities: Default::default(),
         sequential: p.flag("sequentialDownload"),
+        first_last: p.flag("firstLastPiecePrio"),
         download_limit: lim("dlLimit"),
         upload_limit: lim("upLimit"),
         seed_goal,

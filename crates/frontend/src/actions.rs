@@ -10,7 +10,9 @@
 //! Pause and Stop are the same in the engine. The frontend records which one the user chose
 //! (see [`crate::status::status_text`]).
 
-use rookparcel_core::{TorrentFlags, TorrentHandle};
+use rookparcel_core::{SessionHandle, TorrentFlags, TorrentHandle, TorrentId};
+
+use crate::model::TorrentList;
 
 /// The context menu's Bandwidth Allocation presets in kB/s; 0 = unlimited.
 pub const LIMITS: [u32; 10] = [0, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000];
@@ -38,6 +40,37 @@ pub fn force_start(t: &TorrentHandle) {
 pub fn stop(t: &TorrentHandle) {
     t.unset_flags(TorrentFlags::AUTO_MANAGED);
     t.pause();
+}
+
+/// Every torrent of a non-empty selection has `flag`: the check mark of a flag's menu item
+/// (Initial Seeding, Download in Sequential Order, First and Last Pieces First).
+pub fn all_flagged(list: &TorrentList, ids: &[TorrentId], flag: TorrentFlags) -> bool {
+    !ids.is_empty() && ids.iter().all(|&id| list.get(id).is_some_and(|s| s.flags.contains(flag)))
+}
+
+/// A flag's menu item toggles as in µTorrent: off for all when every torrent has it, else on
+/// for all.
+pub fn toggle_flag(handle: &SessionHandle, list: &TorrentList, ids: &[TorrentId], flag: TorrentFlags) {
+    let on = all_flagged(list, ids, flag);
+    for &id in ids {
+        let t = handle.torrent(id);
+        if on {
+            t.unset_flags(flag);
+        } else {
+            t.set_flags(flag);
+        }
+    }
+    handle.post_torrent_updates();
+}
+
+/// Some torrent of the selection is not finished: the download order items are enabled.
+pub fn any_unfinished(list: &TorrentList, ids: &[TorrentId]) -> bool {
+    ids.iter().any(|&id| list.get(id).is_some_and(|s| !s.is_finished))
+}
+
+/// Some torrent of the selection has its metadata: Export .torrent is enabled.
+pub fn any_has_metadata(list: &TorrentList, ids: &[TorrentId]) -> bool {
+    ids.iter().any(|&id| list.get(id).is_some_and(|s| s.has_metadata))
 }
 
 #[cfg(test)]

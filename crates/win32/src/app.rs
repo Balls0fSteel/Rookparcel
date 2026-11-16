@@ -48,7 +48,7 @@ use rookparcel_frontend::torrent_folders::{self, TorrentFiles, TorrentFolders, W
 use rookparcel_frontend::tracker_list::{self, TrackerList};
 use rookparcel_frontend::ui_lock::{self, Form};
 use rookparcel_frontend::update::{self, Checker, Kind, Manifest, Version};
-use rookparcel_frontend::{actions, add, create, fmt, profile, settings, tr};
+use rookparcel_frontend::{actions, add, create, export, fmt, profile, settings, tr};
 use rookparcel_nox::webui::{Rss, WebUi};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::*;
@@ -337,8 +337,14 @@ mod cmd {
     /// Help > Statistics (D65).
     pub const STATISTICS: u16 = 157;
     /// File > Lock Rookparcel (D69), Ctrl+L, and the tray menu's; not there while the lock is
-    /// off (D71). (159-161 were Options > Lock PIN's items, now Preferences > UI Lock's buttons.)
+    /// off (D71).
     pub const LOCK: u16 = 158;
+    /// The torrent menu's Advanced > Download in Sequential Order, Download First and Last
+    /// Pieces First, and its Copy Magnet Link and Export .torrent (D73).
+    pub const SEQUENTIAL: u16 = 159;
+    pub const FIRST_LAST: u16 = 160;
+    pub const COPY_MAGNET: u16 = 161;
+    pub const EXPORT_TORRENT: u16 = 162;
     /// File > Profiles' list, by `profile::menu` index (at most 256 entries).
     pub const PROFILE_BASE: u16 = 3700;
     pub const LABEL_BASE: u16 = 1000;
@@ -505,6 +511,8 @@ struct App {
     /// copies (fed every alert) and the auto-load folder's watcher (run from the timer).
     torrent_folders: TorrentFolders,
     torrent_files: TorrentFiles,
+    /// Torrent menu > Export .torrent: the files asked for and not written yet (fed every alert).
+    exports: export::Exports,
     autoload: Watcher,
     /// Preferences > Queueing "Seeding Goal", checked on every status update.
     seeding_goal: SeedingGoal,
@@ -1486,6 +1494,7 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
             scheduler: Scheduler::new(),
             torrent_folders: gui.torrent_folders,
             torrent_files: TorrentFiles::new(),
+            exports: export::Exports::new(),
             autoload: Watcher::new(),
             seeding_goal,
             scrapes: Scrapes::default(),
@@ -3052,6 +3061,14 @@ unsafe fn on_alerts(hwnd: HWND) {
             for line in a.torrent_files.on_alert(&alert, &a.torrent_folders, &a.handle) {
                 a.detail.push_log(format!("{} {line}", now_hms()));
             }
+            // Export .torrent: the files asked for; a chosen file that could not be written
+            // also says so in a box
+            if let Some(done) = a.exports.on_alert(&alert) {
+                a.detail.push_log(format!("{} {}", now_hms(), done.log_line()));
+                if let (Err(error), true) = (&done.result, done.to_file) {
+                    errors.push(export_error(&done.name, error));
+                }
+            }
             // A torrent's first status: the label the Add dialog or an import stored for it,
             // before Run Program reads it for %L (the same update starts the "added" program).
             if let Alert::StateUpdate(v) = &alert {
@@ -4105,7 +4122,9 @@ unsafe fn reset_lock(hwnd: HWND, by: ResetBy) {
 }
 
 /// A menu command's icon. Check-marked commands (the Show and tray options, Initial Seeding,
-/// labels, limits, columns, Auto Shutdown modes) have none, nor do Exit and Remove And.
+/// the download order, labels, limits, columns, Auto Shutdown modes) have none, nor do Exit,
+/// Remove And, and Copy Magnet Link and Export .torrent (no symbol of the set says copy or
+/// export).
 /// Disable / Enable Feed is tagged where its menu is built ([`icons::tag_item`]).
 fn command_icon(id: u16) -> Option<UiIcon> {
     Some(match id {
@@ -4273,42 +4292,93 @@ unsafe fn column_menu(hwnd: HWND, p: POINT) {
     }
 }
 
+/// What the torrent menu shows for a selection.
+#[derive(Default)]
+struct TorrentMenu {
+    labels: Vec<String>,
+    /// The selection's label when they all have the same one ("" for none).
+    current_label: Option<String>,
+    /// The first torrent's limits, checked in Bandwidth.
+    dl: u32,
+    ul: u32,
+    /// One finished torrent: Open Containing Folder rather than Open Folder.
+    single_done: bool,
+    /// Every torrent is a seed, every one super seeds (Initial Seeding).
+    seeds: bool,
+    super_seeding: bool,
+    /// Some torrent's files are moving: no Set Download Location.
+    moving: bool,
+    /// Some torrent is not finished: the download order items are enabled.
+    unfinished: bool,
+    /// Every torrent downloads in sequential order, first and last pieces first.
+    sequential: bool,
+    first_last: bool,
+    /// Some torrent has its metadata: Export .torrent is enabled.
+    has_metadata: bool,
+    /// Connected to a remote server: no Open Folder.
+    remote: bool,
+}
+
+impl TorrentMenu {
+    fn new(a: &mut App, ids: &[TorrentId]) -> TorrentMenu {
+        let labels: Vec<String> = a.list.labels().into_iter().map(|(l, _)| l).collect();
+        let first = ids.first().and_then(|&id| a.list.get(id));
+        let current_label = ids.first().and_then(|&id0| {
+            let v = a.list.extra(id0).label.to_owned();
+            ids.iter().all(|&id| a.list.extra(id).label == v).then_some(v)
+        });
+        a.menu_labels = labels.clone();
+        let (seeds, super_seeding) = super_seed_state(a, ids);
+        TorrentMenu {
+            labels,
+            current_label,
+            dl: first.map_or(0, |s| s.download_limit),
+            ul: first.map_or(0, |s| s.upload_limit),
+            single_done: ids.len() == 1 && first.is_some_and(|s| s.is_finished),
+            seeds,
+            super_seeding,
+            moving: ids.iter().any(|&id| a.list.get(id).is_some_and(|s| s.moving_storage)),
+            unfinished: actions::any_unfinished(&a.list, ids),
+            sequential: actions::all_flagged(&a.list, ids, TorrentFlags::SEQUENTIAL_DOWNLOAD),
+            first_last: actions::all_flagged(&a.list, ids, TorrentFlags::FIRST_LAST_PIECES),
+            has_metadata: actions::any_has_metadata(&a.list, ids),
+            remote: crate::remote_ui::is_remote(),
+        }
+    }
+}
+
 unsafe fn torrent_menu(hwnd: HWND, p: POINT) {
     unsafe {
         let ids = selected_ids();
         if ids.is_empty() {
             return;
         }
-        let Some((labels, current_label, dl, ul, single_done, (seeds, super_seeding), moving)) =
-            with_app(|a| {
-                let labels: Vec<String> = a.list.labels().into_iter().map(|(l, _)| l).collect();
-                let first = a.list.get(ids[0]);
-                let same = |f: &dyn Fn(TorrentId) -> String| {
-                    let v = f(ids[0]);
-                    ids.iter().all(|&id| f(id) == v).then_some(v)
-                };
-                let label = same(&|id| a.list.extra(id).label.to_owned());
-                a.menu_labels = labels.clone();
-                (
-                    labels,
-                    label,
-                    first.map_or(0, |s| s.download_limit),
-                    first.map_or(0, |s| s.upload_limit),
-                    ids.len() == 1 && first.is_some_and(|s| s.is_finished),
-                    super_seed_state(a, &ids),
-                    ids.iter().any(|&id| a.list.get(id).is_some_and(|s| s.moving_storage)),
-                )
-            })
-        else {
+        let Some(m) = with_app(|a| TorrentMenu::new(a, &ids)) else {
             return;
         };
+        let menu = build_torrent_menu(&m);
+        let id = popup(hwnd, menu, p.x, p.y);
+        if id != 0 {
+            on_command(hwnd, id);
+        }
+    }
+}
+
+/// The torrent menu, as µTorrent 2.2.1's, with Copy Magnet Link and Export .torrent beside
+/// Open Folder and the download order items in Advanced (D73).
+unsafe fn build_torrent_menu(m: &TorrentMenu) -> HMENU {
+    unsafe {
+        let TorrentMenu { labels, current_label, .. } = m;
+        let (dl, ul) = (m.dl, m.ul);
         let menu = CreatePopupMenu();
         append_flags(
             menu,
-            grayed(crate::remote_ui::is_remote()),
+            grayed(m.remote),
             cmd::OPEN_FOLDER,
-            if single_done { tr!(MenuOpenFolder) } else { tr!(MenuOpenFolderMany) },
+            if m.single_done { tr!(MenuOpenFolder) } else { tr!(MenuOpenFolderMany) },
         );
+        append(menu, cmd::COPY_MAGNET, tr!(MenuCopyMagnet));
+        append_flags(menu, grayed(!m.has_metadata), cmd::EXPORT_TORRENT, tr!(MenuExportTorrent));
         separator(menu);
         append(menu, cmd::FORCE_START, tr!(MenuForceStart));
         append(menu, cmd::START, &shortcut(tr!(MenuStart), Hotkey::Ctrl('S')));
@@ -4329,8 +4399,17 @@ unsafe fn torrent_menu(hwnd: HWND, p: POINT) {
         append(menu, cmd::REANNOUNCE, tr!(MenuUpdateTracker));
         separator(menu);
         let adv = CreatePopupMenu();
-        append_flags(adv, grayed(moving), cmd::SET_LOCATION, tr!(MenuSetLocation));
-        append_flags(adv, checked(super_seeding) | grayed(!seeds), cmd::SUPER_SEED, tr!(MenuInitialSeeding));
+        append_flags(adv, grayed(m.moving), cmd::SET_LOCATION, tr!(MenuSetLocation));
+        append_flags(
+            adv,
+            checked(m.super_seeding) | grayed(!m.seeds),
+            cmd::SUPER_SEED,
+            tr!(MenuInitialSeeding),
+        );
+        separator(adv);
+        let order = grayed(!m.unfinished);
+        append_flags(adv, checked(m.sequential) | order, cmd::SEQUENTIAL, tr!(MenuSequential));
+        append_flags(adv, checked(m.first_last) | order, cmd::FIRST_LAST, tr!(MenuFirstLast));
         submenu_icon(menu, adv, tr!(MenuAdvanced), UiIcon::Advanced);
         let bw = CreatePopupMenu();
         let dl_menu = CreatePopupMenu();
@@ -4360,10 +4439,7 @@ unsafe fn torrent_menu(hwnd: HWND, p: POINT) {
         submenu_icon(menu, lm, tr!(MenuLabel), UiIcon::Labels);
         separator(menu);
         append(menu, cmd::PROPERTIES, &shortcut(tr!(MenuProperties), Hotkey::Enter));
-        let id = popup(hwnd, menu, p.x, p.y);
-        if id != 0 {
-            on_command(hwnd, id);
-        }
+        menu
     }
 }
 
@@ -4719,6 +4795,17 @@ unsafe fn on_command(hwnd: HWND, id: u16) {
                     a.handle.post_torrent_updates();
                 });
             }
+            cmd::SEQUENTIAL | cmd::FIRST_LAST => {
+                let flag = if id == cmd::SEQUENTIAL {
+                    TorrentFlags::SEQUENTIAL_DOWNLOAD
+                } else {
+                    TorrentFlags::FIRST_LAST_PIECES
+                };
+                let ids = selected_ids();
+                with_app(|a| actions::toggle_flag(&a.handle, &a.list, &ids, flag));
+            }
+            cmd::COPY_MAGNET => copy_magnets(hwnd),
+            cmd::EXPORT_TORRENT => export_torrents(hwnd),
             cmd::START
             | cmd::FORCE_START
             | cmd::PAUSE
@@ -4829,6 +4916,58 @@ unsafe fn set_download_location(hwnd: HWND) {
         a.handle.post_torrent_updates();
     });
     unsafe { update_detail_lists() };
+}
+
+/// Copy Magnet Link (D73): the selected torrents' links on the clipboard, one per line. Their
+/// tracker lists are waited for as Properties waits for them.
+unsafe fn copy_magnets(hwnd: HWND) {
+    let ids = selected_ids();
+    let Some(text) = with_app(|a| {
+        export::magnet_links(&a.handle, &a.list, &ids, &mut a.alerts, std::time::Duration::from_secs(2))
+    }) else {
+        return;
+    };
+    // the alerts popped while waiting for the tracker lists
+    unsafe { PostMessageW(hwnd, WM_APP_ALERTS, 0, 0) };
+    if !text.is_empty() {
+        dialogs::set_clipboard_text(hwnd, &clipboard_lines(&text));
+    }
+}
+
+/// Text with Windows line ends, as the clipboard's text is.
+fn clipboard_lines(text: &str) -> String {
+    text.replace('\n', "\r\n")
+}
+
+/// Export .torrent (D73): one torrent to the file a Save As dialog chooses, several to a chosen
+/// folder; only those with their metadata. The files are written when the engine hands them
+/// out (`Alert::TorrentFile`, in `on_alerts`).
+unsafe fn export_torrents(hwnd: HWND) {
+    let ids = selected_ids();
+    let Some(torrents) = with_app(|a| {
+        ids.iter()
+            .filter_map(|&id| a.list.get(id).filter(|s| s.has_metadata).map(|s| (id, s.name.clone())))
+            .collect::<Vec<_>>()
+    }) else {
+        return;
+    };
+    let target = match torrents.as_slice() {
+        [] => return,
+        [(_, name)] => match dialogs::save_torrent(hwnd, tr!(ExportTitle), &export::export_file_name(name)) {
+            Some(path) => export::ExportTarget::File(path),
+            None => return,
+        },
+        _ => match unsafe { crate::create::pick_folder(hwnd, tr!(ExportFolderTitle)) } {
+            Some(dir) => export::ExportTarget::Folder(PathBuf::from(dir)),
+            None => return,
+        },
+    };
+    with_app(|a| a.exports.request(&a.handle, &torrents, &target));
+}
+
+/// The message box for an export to a chosen file that failed: the heading, then the error.
+fn export_error(name: &str, error: &str) -> String {
+    format!("{}\n\n{error}", tr!(CannotExport, name))
 }
 
 /// (every torrent is a seed, every torrent is super seeding), for "Initial Seeding".
@@ -8087,6 +8226,66 @@ mod tests {
             assert_eq!(GetMenuItemID(options, last), cmd::MIN_TO_TRAY as u32);
             DestroyMenu(bar);
         }
+    }
+
+    /// The torrent menu (D73): Copy Magnet Link and Export .torrent right after Open Folder,
+    /// Export greyed when no torrent has its metadata; Advanced ends with the download order
+    /// items, checked when every torrent has the flag and greyed once all are finished.
+    #[test]
+    fn the_torrent_menu_download_order_and_export_items() {
+        unsafe {
+            let state =
+                |menu: HMENU, id: u16| GetMenuState(menu, id as u32, MF_BYCOMMAND) & (MF_CHECKED | MF_GRAYED);
+            let m = TorrentMenu {
+                unfinished: true,
+                sequential: true,
+                has_metadata: true,
+                ..TorrentMenu::default()
+            };
+            let menu = build_torrent_menu(&m);
+            let ids: Vec<u32> = (0..4).map(|i| GetMenuItemID(menu, i)).collect();
+            let top = [cmd::OPEN_FOLDER, cmd::COPY_MAGNET, cmd::EXPORT_TORRENT].map(u32::from);
+            assert_eq!(ids[..3], top);
+            assert_ne!(GetMenuState(menu, 3, MF_BYPOSITION) & MF_SEPARATOR, 0, "then a separator");
+            let adv = (0..GetMenuItemCount(menu))
+                .map(|i| GetSubMenu(menu, i))
+                .find(|&s| !s.is_null() && GetMenuItemID(s, 0) == cmd::SET_LOCATION as u32)
+                .expect("the Advanced submenu");
+            let adv_ids: Vec<u32> = (0..GetMenuItemCount(adv)).map(|i| GetMenuItemID(adv, i)).collect();
+            assert_eq!(adv_ids.len(), 5);
+            assert_eq!(adv_ids[..2], [cmd::SET_LOCATION as u32, cmd::SUPER_SEED as u32]);
+            assert_ne!(GetMenuState(adv, 2, MF_BYPOSITION) & MF_SEPARATOR, 0);
+            assert_eq!(adv_ids[3..], [cmd::SEQUENTIAL as u32, cmd::FIRST_LAST as u32]);
+            assert_eq!(state(menu, cmd::SEQUENTIAL), MF_CHECKED);
+            assert_eq!(state(menu, cmd::FIRST_LAST), 0);
+            assert_eq!((state(menu, cmd::COPY_MAGNET), state(menu, cmd::EXPORT_TORRENT)), (0, 0));
+            // each with its status bar help
+            for id in [cmd::COPY_MAGNET, cmd::EXPORT_TORRENT, cmd::SEQUENTIAL, cmd::FIRST_LAST] {
+                let mut buf = [0u16; 128];
+                let n = GetMenuStringW(menu, id as u32, buf.as_mut_ptr(), buf.len() as i32, MF_BYCOMMAND);
+                let text = String::from_utf16_lossy(&buf[..n.max(0) as usize]);
+                assert!(crate::help::for_menu_text(&text).is_some(), "no help for {text:?}");
+            }
+            DestroyMenu(menu);
+
+            // every torrent finished, none with its metadata
+            let m = TorrentMenu { first_last: true, ..TorrentMenu::default() };
+            let menu = build_torrent_menu(&m);
+            assert_eq!(state(menu, cmd::SEQUENTIAL), MF_GRAYED);
+            assert_eq!(state(menu, cmd::FIRST_LAST), MF_CHECKED | MF_GRAYED);
+            assert_eq!(state(menu, cmd::EXPORT_TORRENT), MF_GRAYED);
+            assert_eq!(state(menu, cmd::COPY_MAGNET), 0, "a magnet link needs only the hash");
+            DestroyMenu(menu);
+        }
+    }
+
+    /// Copy Magnet Link's lines end as Windows text does; an export to a chosen file that
+    /// failed is told with its heading and the error.
+    #[test]
+    fn magnet_lines_and_the_export_error() {
+        assert_eq!(clipboard_lines("magnet:?a\nmagnet:?b"), "magnet:?a\r\nmagnet:?b");
+        assert_eq!(clipboard_lines("magnet:?a"), "magnet:?a");
+        assert_eq!(export_error("Show", "access denied"), "Could not export Show\n\naccess denied");
     }
 
     #[test]

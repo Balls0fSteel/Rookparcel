@@ -498,6 +498,9 @@ pub(crate) enum Reply {
     /// Our pieces, the availability per piece, the pieces being downloaded with their blocks.
     Pieces(Bitfield, Vec<u32>, Vec<PartialPiece>),
     Peers(Vec<PeerInfo>),
+    /// The torrent's `.torrent` file (`post_torrent_file`); `None` for a magnet whose metadata
+    /// is not in yet. Taken out of the cache by its one reader (`commands::torrent_file`).
+    TorrentFile(Option<Arc<[u8]>>),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -507,6 +510,7 @@ pub(crate) enum ReplyKind {
     Trackers,
     Pieces,
     Peers,
+    TorrentFile,
 }
 
 /// One Logger line: the alert's time, the torrent it concerns (none for session-wide ones) and
@@ -1555,6 +1559,12 @@ impl WebUi {
                 }
                 Alert::PeerInfo { id, peers } => {
                     st.reply(*id, ReplyKind::Peers, Reply::Peers(peers.clone()));
+                    replied = true;
+                }
+                // Export .torrent (`GET /pa/torrents/export`, the shim's `torrents/export`); the
+                // `.torrent` folders and the waiting magnets above see the same alert
+                Alert::TorrentFile { id, data } => {
+                    st.reply(*id, ReplyKind::TorrentFile, Reply::TorrentFile(data.clone()));
                     replied = true;
                 }
                 _ => {}

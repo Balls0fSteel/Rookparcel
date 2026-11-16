@@ -11,8 +11,9 @@
 //! `create_torrent` (with pad files); a peer banned by smart-ban for a bad block while the seed
 //! that sent the rest of the piece is kept; and the IP and port filters: blocked peers are never
 //! connected, refused when they connect, and dropped when a new filter blocks them, and blocked
-//! trackers are not announced to; and a skipped file kept in the part file across a restart and
-//! a recheck, then unskipped.
+//! trackers are not announced to; a skipped file kept in the part file across a restart and
+//! a recheck, then unskipped; and a sequential download that asks for each file's first and
+//! last pieces first.
 
 use std::collections::VecDeque;
 use std::net::{SocketAddr, TcpListener, UdpSocket};
@@ -2461,4 +2462,83 @@ fn a_skipped_file_stays_in_the_part_file_until_it_is_unskipped() {
     for d in [dir, state, seed_dir, seed2_dir] {
         let _ = std::fs::remove_dir_all(d);
     }
+}
+
+/// A scripted seed: every piece, unchoked at once, each request answered in the order it came.
+/// Returns the pieces in the order they were first asked for, once the leech closes.
+fn recording_seed(f: &Fixture) -> (u16, std::thread::JoinHandle<Vec<u32>>) {
+    use std::io::{Read, Write};
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    let all: Vec<u8> = f.files.iter().flat_map(|(_, d)| d.iter().copied()).collect();
+    let (info_hash, piece_len) = (f.info_hash, f.piece_len);
+    let h = std::thread::spawn(move || {
+        let (mut c, _) = l.accept().unwrap();
+        c.set_read_timeout(Some(Duration::from_secs(60))).unwrap();
+        let mut hs = [0u8; 68];
+        c.read_exact(&mut hs).unwrap();
+        assert_eq!(&hs[28..48], &info_hash);
+        let mut out = scripted_handshake(&info_hash, [0; 8], b"-XX0001-recordseed00");
+        let num_pieces = all.len().div_ceil(piece_len);
+        let mut bits = vec![0u8; num_pieces.div_ceil(8)];
+        for i in 0..num_pieces {
+            bits[i / 8] |= 0x80 >> (i % 8);
+        }
+        out.extend_from_slice(&(bits.len() as u32 + 1).to_be_bytes());
+        out.push(5);
+        out.extend_from_slice(&bits);
+        out.extend_from_slice(&[0, 0, 0, 1, 1]); // unchoke
+        c.write_all(&out).unwrap();
+        let mut order = Vec::new();
+        while let Some(msg) = read_message(&mut c) {
+            if msg.first() != Some(&6) {
+                continue;
+            }
+            let field = |i: usize| u32::from_be_bytes(msg[1 + 4 * i..5 + 4 * i].try_into().unwrap());
+            let (piece, begin, length) = (field(0), field(1), field(2));
+            if !order.contains(&piece) {
+                order.push(piece);
+            }
+            let start = piece as usize * piece_len + begin as usize;
+            let mut out = (9 + length).to_be_bytes().to_vec();
+            out.push(7);
+            out.extend_from_slice(&piece.to_be_bytes());
+            out.extend_from_slice(&begin.to_be_bytes());
+            out.extend_from_slice(&all[start..start + length as usize]);
+            if c.write_all(&out).is_err() {
+                break;
+            }
+        }
+        order
+    });
+    (port, h)
+}
+
+/// Sequential download with `FIRST_LAST_PIECES` set after the add: the leech asks for the
+/// first and last piece of every file before anything else, then for the rest in order. The
+/// fixture's 32 KiB pieces: alpha is 0-9, beta 9-39, gamma 39-40 (1 % of a file is less than a
+/// piece here). The order of the requests is the picker's, so it does not depend on timing.
+#[test]
+fn first_and_last_pieces_are_asked_for_first() {
+    let f = fixture(None);
+    let dir = temp_dir("leech-first-last");
+    let (port, peer) = recording_seed(&f);
+    let leech = start(None);
+    let mut w = Watch::new(leech.handle());
+    let id = add_with_flags(&mut w, &f, &dir, TorrentFlags::SEQUENTIAL_DOWNLOAD);
+    wait_state(&mut w, id, TorrentState::Downloading, 10);
+    leech.handle().torrent(id).set_flags(TorrentFlags::FIRST_LAST_PIECES);
+    let st = wait(&mut w, 5, "the flag", |a| {
+        status_of(a, id).filter(|s| s.flags.contains(TorrentFlags::FIRST_LAST_PIECES))
+    });
+    assert!(st.flags.contains(TorrentFlags::SEQUENTIAL_DOWNLOAD));
+    leech.handle().torrent(id).connect_peer(SocketAddr::from(([127, 0, 0, 1], port)));
+    wait(&mut w, 60, "finished", |a| matches!(a, Alert::TorrentFinished { id: i } if *i == id).then_some(()));
+    leech.shutdown();
+    let order = peer.join().unwrap();
+    let mut want = vec![0, 9, 39, 40];
+    want.extend((1..9).chain(10..39));
+    assert_eq!(order, want);
+    assert_files(&f, &dir);
+    let _ = std::fs::remove_dir_all(dir);
 }

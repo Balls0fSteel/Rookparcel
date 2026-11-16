@@ -230,11 +230,16 @@ pub fn torrent(labels: &[String], shortcuts: bool) -> Vec<Item> {
         c(Recheck, tr!(MenuRecheck), None),
         c(UpdateTracker, tr!(MenuUpdateTracker), None),
         Item::Sep,
+        c(CopyMagnet, tr!(MenuCopyMagnet), None),
+        c(ExportTorrent, tr!(MenuExportTorrent), None),
+        Item::Sep,
         sub(
             tr!(MenuAdvanced),
             vec![
                 c(SetLocation, tr!(MenuSetLocation), None),
                 c(InitialSeeding, tr!(MenuInitialSeeding), None),
+                c(Sequential, tr!(MenuSequential), None),
+                c(FirstLast, tr!(MenuFirstLast), None),
             ],
             Role::Plain,
         ),
@@ -675,6 +680,34 @@ mod tests {
             let s = cmds(&status_item(visible, false, true));
             assert_eq!(s[..2], [Command::ToggleWindow, Command::Lock]);
             assert_eq!(s.last(), Some(&Command::Quit));
+        }
+    }
+
+    #[test]
+    fn wave_1_items_sit_in_the_torrent_menu() {
+        for shortcuts in [true, false] {
+            let t = torrent(&[], shortcuts);
+            // Copy Magnet Link and Export .torrent: a group of their own just before Advanced
+            let at = t
+                .iter()
+                .position(|i| matches!(i, Item::Cmd { cmd: Command::CopyMagnet, .. }))
+                .expect("Copy Magnet Link");
+            assert!(matches!(&t[at - 1], Item::Sep));
+            assert!(matches!(&t[at + 1], Item::Cmd { cmd: Command::ExportTorrent, key: None, .. }));
+            assert!(matches!(&t[at + 2], Item::Sep));
+            let Item::Sub { title, items, .. } = &t[at + 3] else { panic!("Advanced follows") };
+            assert_eq!(title, &text(tr!(MenuAdvanced)));
+            // the two toggles after Initial Seeding
+            assert_eq!(
+                cmds(items),
+                [Command::SetLocation, Command::InitialSeeding, Command::Sequential, Command::FirstLast]
+            );
+            assert!(cmds(&t).iter().all(|c| c.needs_selection()), "the menu acts on the selection");
+        }
+        // in the menu bar's Torrent menu, once each
+        let all = cmds(&tree());
+        for c in [Command::Sequential, Command::FirstLast, Command::CopyMagnet, Command::ExportTorrent] {
+            assert_eq!(all.iter().filter(|x| **x == c).count(), 1, "{c:?}");
         }
     }
 }

@@ -41,6 +41,8 @@ const ID_MINUTES: u16 = 108;
 const ID_INITIAL_SEEDING: u16 = 109;
 const ID_DHT: u16 = 110;
 const ID_PEX: u16 = 111;
+const ID_SEQUENTIAL: u16 = 112;
+const ID_FIRST_LAST: u16 = 113;
 
 struct State {
     /// "Properties - name", or how many torrents.
@@ -76,7 +78,7 @@ fn template(multi: bool) -> Vec<u16> {
     const GROUP: u32 = C | BS_GROUPBOX as u32;
     let check = TAB | if multi { BS_AUTO3STATE } else { BS_AUTOCHECKBOX } as u32;
     let tracker_box = TAB | WS_BORDER | WS_VSCROLL | (ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN) as u32;
-    let mut t = Template::new(300, 324);
+    let mut t = Template::new(300, 352);
     t.item(BUTTON, 0xffff, GROUP, [14, 24, 272, 78], tr!(PropsTrackers));
     t.item(EDIT, ID_TRACKERS, tracker_box, [21, 36, 258, 60], "");
 
@@ -96,15 +98,18 @@ fn template(multi: bool) -> Vec<u16> {
     t.item(STATIC, 0xffff, C, [21, 228, 200, 9], tr!(PropsSeedTime));
     t.item(EDIT, ID_MINUTES, NUMBER, [230, 226, 49, 13], "");
 
-    t.item(BUTTON, 0xffff, GROUP, [14, 246, 272, 44], tr!(PropsOther));
+    t.item(BUTTON, 0xffff, GROUP, [14, 246, 272, 72], tr!(PropsOther));
     t.item(BUTTON, ID_INITIAL_SEEDING, check, [21, 258, 120, 10], tr!(PropsInitialSeeding));
     t.item(BUTTON, ID_DHT, check, [21, 272, 120, 10], tr!(PropsDht));
     t.item(BUTTON, ID_PEX, check, [150, 258, 120, 10], tr!(PropsPex));
+    // the download order (D73): long texts, a row each
+    t.item(BUTTON, ID_SEQUENTIAL, check, [21, 286, 258, 10], tr!(PropsSequential));
+    t.item(BUTTON, ID_FIRST_LAST, check, [21, 300, 258, 10], tr!(PropsFirstLast));
 
     // last, so it lies under the page's controls (and does not take their clicks)
-    t.item(Class::Name("SysTabControl32"), ID_TABS, C | WS_CLIPSIBLINGS, [7, 7, 286, 290], "");
-    t.item(BUTTON, IDOK as u16, TAB | BS_DEFPUSHBUTTON as u32, [189, 303, 50, 14], tr!(BtnOk));
-    t.item(BUTTON, IDCANCEL as u16, TAB | BS_PUSHBUTTON as u32, [243, 303, 50, 14], tr!(BtnCancel));
+    t.item(Class::Name("SysTabControl32"), ID_TABS, C | WS_CLIPSIBLINGS, [7, 7, 286, 318], "");
+    t.item(BUTTON, IDOK as u16, TAB | BS_DEFPUSHBUTTON as u32, [189, 331, 50, 14], tr!(BtnOk));
+    t.item(BUTTON, IDCANCEL as u16, TAB | BS_PUSHBUTTON as u32, [243, 331, 50, 14], tr!(BtnCancel));
     t.finish()
 }
 
@@ -171,6 +176,9 @@ unsafe fn init(dlg: HWND, st: &State) {
         for id in [ID_DHT, ID_PEX] {
             EnableWindow(item(dlg, id), st.props.can_dht_pex as i32);
         }
+        for id in [ID_SEQUENTIAL, ID_FIRST_LAST] {
+            EnableWindow(item(dlg, id), st.props.can_sequential as i32);
+        }
         update_enabled(dlg);
     }
 }
@@ -193,6 +201,8 @@ unsafe fn show_fields(dlg: HWND, f: &Fields) {
             (ID_INITIAL_SEEDING, f.initial_seeding),
             (ID_DHT, f.dht),
             (ID_PEX, f.pex),
+            (ID_SEQUENTIAL, f.sequential),
+            (ID_FIRST_LAST, f.first_last),
         ] {
             set_tri(dlg, id, v);
         }
@@ -214,6 +224,8 @@ unsafe fn read_fields(dlg: HWND) -> Fields {
             initial_seeding: get_tri(dlg, ID_INITIAL_SEEDING),
             dht: get_tri(dlg, ID_DHT),
             pex: get_tri(dlg, ID_PEX),
+            sequential: get_tri(dlg, ID_SEQUENTIAL),
+            first_last: get_tri(dlg, ID_FIRST_LAST),
         }
     }
 }
@@ -381,6 +393,9 @@ mod tests {
             dht: true,
             pex: false,
             private: false,
+            sequential: false,
+            first_last: false,
+            is_finished: false,
         }
     }
 
@@ -474,6 +489,66 @@ mod tests {
         assert_eq!(f.tri(ID_PEX), Tri::On);
         f.ok();
         assert_eq!(f.st.changes.take().unwrap().pex, Some(true));
+    }
+
+    /// The download order boxes (D73): mixed for torrents that differ, a change reaches the
+    /// `Changes`, greyed once every torrent is finished.
+    #[test]
+    fn the_download_order_boxes() {
+        let a = TorrentProps { sequential: true, ..torrent() };
+        let b = TorrentProps { first_last: true, ..torrent() };
+        let mut f = Fixture::new(&[a.clone(), b]);
+        assert_eq!((f.tri(ID_SEQUENTIAL), f.tri(ID_FIRST_LAST)), (Tri::Mixed, Tri::Mixed));
+        assert!(f.enabled(ID_SEQUENTIAL) && f.enabled(ID_FIRST_LAST));
+        f.ok();
+        assert!(f.st.changes.take().unwrap().is_empty(), "left mixed: left alone");
+        // mixed -> off
+        f.click(ID_SEQUENTIAL);
+        f.ok();
+        let c = f.st.changes.take().unwrap();
+        assert_eq!((c.sequential, c.first_last), (Some(false), None));
+        // off -> on; the other mixed -> off -> on
+        f.click(ID_SEQUENTIAL);
+        f.click(ID_FIRST_LAST);
+        f.click(ID_FIRST_LAST);
+        f.ok();
+        let c = f.st.changes.take().unwrap();
+        assert_eq!((c.sequential, c.first_last), (Some(true), Some(true)));
+
+        // one torrent: its own flags, two states
+        let mut f = Fixture::new(&[a]);
+        assert_eq!((f.tri(ID_SEQUENTIAL), f.tri(ID_FIRST_LAST)), (Tri::On, Tri::Off));
+        f.click(ID_FIRST_LAST);
+        f.ok();
+        let c = f.st.changes.take().unwrap();
+        assert_eq!((c.sequential, c.first_last), (None, Some(true)));
+
+        let f = Fixture::new(&[TorrentProps { is_finished: true, ..torrent() }]);
+        assert!(!f.enabled(ID_SEQUENTIAL) && !f.enabled(ID_FIRST_LAST), "finished: greyed");
+        assert!(f.enabled(ID_DHT));
+    }
+
+    /// Every check box of Other Settings lies inside its group, above OK, and none overlaps
+    /// another.
+    #[test]
+    fn other_settings_fit_their_group() {
+        let f = Fixture::new(&[torrent()]);
+        let rect = |id: u16| unsafe {
+            let mut r: windows_sys::Win32::Foundation::RECT = zeroed();
+            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect(item(f.dlg, id), &mut r);
+            r
+        };
+        let boxes = [ID_INITIAL_SEEDING, ID_DHT, ID_PEX, ID_SEQUENTIAL, ID_FIRST_LAST];
+        let (tabs, ok) = (rect(ID_TABS), rect(IDOK as u16));
+        for (i, &id) in boxes.iter().enumerate() {
+            let r = rect(id);
+            assert!(r.bottom <= tabs.bottom && r.right <= tabs.right && r.bottom < ok.top, "{id}");
+            for &other in &boxes[i + 1..] {
+                let o = rect(other);
+                let apart = r.right <= o.left || o.right <= r.left || r.bottom <= o.top || o.bottom <= r.top;
+                assert!(apart, "{id} overlaps {other}");
+            }
+        }
     }
 
     #[test]

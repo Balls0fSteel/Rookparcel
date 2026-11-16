@@ -78,6 +78,8 @@ struct Dialog {
     initial_seeding: TriCheck,
     dht: TriCheck,
     pex: TriCheck,
+    sequential: TriCheck,
+    first_last: TriCheck,
     done: RefCell<Option<Done>>,
 }
 
@@ -123,6 +125,8 @@ pub fn show(
         initial_seeding: TriCheck::new(tr!(PropsInitialSeeding), multi),
         dht: TriCheck::new(tr!(PropsDht), multi),
         pex: TriCheck::new(tr!(PropsPex), multi),
+        sequential: TriCheck::new(tr!(PropsSequential), multi),
+        first_last: TriCheck::new(tr!(PropsFirstLast), multi),
         props: RefCell::new(props),
         done: RefCell::new(Some(Box::new(done))),
     });
@@ -147,6 +151,9 @@ pub fn show(
     other.attach(&d.initial_seeding.button, 0, 0, 1, 1);
     other.attach(&d.pex.button, 1, 0, 1, 1);
     other.attach(&d.dht.button, 0, 1, 1, 1);
+    // the download order (D73); the longer text gets a row of its own
+    other.attach(&d.sequential.button, 1, 1, 1, 1);
+    other.attach(&d.first_last.button, 0, 2, 2, 1);
 
     let page = gtk::Box::new(gtk::Orientation::Vertical, 10);
     page.set_margin_top(10);
@@ -198,6 +205,8 @@ pub fn show(
     d.initial_seeding.button.set_sensitive(d.props.borrow().can_initial_seed);
     d.dht.button.set_sensitive(d.props.borrow().can_dht_pex);
     d.pex.button.set_sensitive(d.props.borrow().can_dht_pex);
+    d.sequential.button.set_sensitive(d.props.borrow().can_sequential);
+    d.first_last.button.set_sensitive(d.props.borrow().can_sequential);
     d.update_sensitivity();
     for c in [&d.override_slots, &d.override_goal] {
         let w = Rc::downgrade(&d);
@@ -294,6 +303,8 @@ impl Dialog {
             (&self.initial_seeding, f.initial_seeding),
             (&self.dht, f.dht),
             (&self.pex, f.pex),
+            (&self.sequential, f.sequential),
+            (&self.first_last, f.first_last),
         ] {
             check.set(v);
         }
@@ -314,6 +325,8 @@ impl Dialog {
             initial_seeding: self.initial_seeding.get(),
             dht: self.dht.get(),
             pex: self.pex.get(),
+            sequential: self.sequential.get(),
+            first_last: self.first_last.get(),
         }
     }
 

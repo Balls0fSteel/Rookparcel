@@ -18,6 +18,7 @@
 //! * [`palette`]: the colours of the parts the GUIs draw themselves, for light and dark pages.
 //! * [`scheduler`]: the weekly scheduler (table, modes, what to change when the hour turns).
 //! * [`torrent_folders`]: the `.torrent` folders (stored copies, finished jobs, auto-load).
+//! * [`export`]: Copy Magnet Link and Export .torrent (D73).
 //! * [`rss`]: RSS / Atom feeds and the RSS Downloader (filters, episodes, history, `rss.dat`).
 //! * [`properties`]: the Torrent Properties dialog (trackers, limits, seeding goal, switches).
 //! * [`remote`]: remote mode's Connect to Remote step (the form, certificates, failure texts).
@@ -50,6 +51,7 @@ pub mod closing;
 pub mod columns;
 pub mod create;
 pub mod detail;
+pub mod export;
 pub mod fmt;
 pub mod guard;
 pub mod help;

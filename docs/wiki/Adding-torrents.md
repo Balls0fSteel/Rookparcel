@@ -62,6 +62,10 @@ The folder the torrent's files go into. The list holds the default download fold
 | **Start torrent** | On: the torrent goes into the queue and starts as the queue allows. Off: it is added stopped. It starts ticked unless **Don't start the download automatically** is on in Preferences > UI Settings. |
 | **Add to top of queue** | Puts the torrent first in the queue, so it starts before the others. |
 | **Label:** | Gives the torrent a label. Pick one in use or type a new one. See [Managing torrents](Managing-torrents#labels). |
+| **Download in sequential order** | Downloads the pieces in order, from the start of the data to its end, so a video can be played while it downloads. Use it only for what you want to preview: the usual rarest-first order is better for the other peers. |
+| **Download first and last pieces first** | Downloads the first and last pieces of each wanted file before the rest, so a player can read a video's header and index early. |
+
+*The two download order boxes are new in 1.2.59, not in a published release yet.* Both start unticked for every torrent; Rookparcel does not remember them. To change them after adding, use **Advanced** in the right-click menu or Properties. See [Managing torrents](Managing-torrents#download-order).
 
 ### Torrent Contents
 

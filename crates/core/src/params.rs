@@ -36,6 +36,10 @@ bit_flags! {
         /// Not libtorrent's. A magnet whose metadata is not in yet: the session's extra
         /// trackers are added when it is, unless the torrent turns out to be private.
         const EXTRA_TRACKERS_PENDING = 29;
+        /// Not libtorrent's (qBittorrent's "first and last piece priority"): the pieces at the
+        /// start and the end of each wanted file get the top priority, so a player can read the
+        /// file's header and index early.
+        const FIRST_LAST_PIECES = 30;
     }
 }
 

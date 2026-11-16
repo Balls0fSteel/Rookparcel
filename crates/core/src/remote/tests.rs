@@ -39,7 +39,8 @@ fn status() -> TorrentStatus {
         name: "ünïcode name".into(),
         save_path: r"D:\Torrents".into(),
         state: TorrentState::Seeding,
-        flags: TorrentFlags::AUTO_MANAGED | TorrentFlags::SUPER_SEEDING,
+        // FIRST_LAST_PIECES is one of our own bits: it travels too
+        flags: TorrentFlags::AUTO_MANAGED | TorrentFlags::SUPER_SEEDING | TorrentFlags::FIRST_LAST_PIECES,
         error: "disk full".into(),
         has_metadata: true,
         private: Some(true),

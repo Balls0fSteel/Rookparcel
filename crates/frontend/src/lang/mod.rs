@@ -807,6 +807,7 @@ fn english_lng() -> String {
 pub(crate) fn help_texts_md() -> String {
     let cell = |s: &str| s.replace('|', "\\|");
     let menu = |k: &str| k.starts_with("Menu") || k.starts_with("Tool") || k.starts_with("Shutdown");
+    let dialog = |k: &str| k.starts_with("Props") || k.starts_with("Add");
     let mut out = String::from(
         "# Help texts\n\n\
          Generated from `crates/frontend/src/lang/help_en.rs` by a test \
@@ -826,7 +827,7 @@ pub(crate) fn help_texts_md() -> String {
             cell(help_en::HELP_NOTES[i].trim())
         ));
     };
-    for &h in H::ALL.iter().filter(|h| !h.key().starts_with("Adv") && !menu(h.key())) {
+    for &h in H::ALL.iter().filter(|h| !h.key().starts_with("Adv") && !menu(h.key()) && !dialog(h.key())) {
         row(&mut out, h);
     }
     out.push_str(
@@ -856,6 +857,12 @@ pub(crate) fn help_texts_md() -> String {
     }
     out.push_str("\n## Menus and toolbar\n\n| Key | Text | Read in |\n|---|---|---|\n");
     for &h in H::ALL.iter().filter(|h| menu(h.key())) {
+        row(&mut out, h);
+    }
+    out.push_str(
+        "\n## Dialogs\n\nTorrent Properties and Add New Torrent.\n\n| Key | Text | Read in |\n|---|---|---|\n",
+    );
+    for &h in H::ALL.iter().filter(|h| dialog(h.key())) {
         row(&mut out, h);
     }
     out

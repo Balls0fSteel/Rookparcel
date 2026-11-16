@@ -351,7 +351,7 @@ Every engine setting, in the table's order. A row a Preferences page edits under
 | `MenuDeleteData` | Removes the selected torrents and deletes their downloaded files. The files are deleted for good, not moved to the Recycle Bin or the trash. | win32 app.rs cmd::REMOVE_DATA -> remove_selected(true) -> RemoveFlags::DELETE_FILES |
 | `MenuRecheck` | Checks the selected torrents' files on disk piece by piece and counts only the pieces that are complete and correct. | win32 app.rs cmd::RECHECK -> torrent_action -> force_recheck |
 | `MenuUpdateTracker` | Contacts the selected torrents' trackers now, without waiting for the next announce, to report progress and get more peers. | win32 app.rs cmd::REANNOUNCE -> torrent_action -> force_reannounce |
-| `MenuAdvanced` | Moves the selected torrents' files to another folder, or turns Initial Seeding on or off. | win32 app.rs torrent menu -> submenu_icon(menu, adv, MenuAdvanced) |
+| `MenuAdvanced` | Moves the selected torrents' files to another folder, turns Initial Seeding on or off, or changes the order their pieces download in. | win32 app.rs torrent menu -> submenu_icon(menu, adv, MenuAdvanced) |
 | `MenuSetLocation` | Picks a folder and moves the selected torrents' files there. Files of the same name already there are replaced. | win32 app.rs cmd::SET_LOCATION -> set_download_location -> move_storage(AlwaysReplaceFiles) |
 | `MenuInitialSeeding` | Turns initial seeding on or off for the selected seeds: each peer gets pieces no one else has yet, to spread a new torrent faster. | win32 app.rs cmd::SUPER_SEED -> toggles TorrentFlags::SUPER_SEEDING (only when every selected torrent seeds) |
 | `MenuBandwidth` | Sets a download or upload rate limit of its own for the selected torrents. | win32 app.rs torrent menu -> submenu_icon(menu, bw, MenuBandwidth) |
@@ -361,6 +361,10 @@ Every engine setting, in the table's order. A row a Preferences page edits under
 | `MenuNewLabel` | Asks for a new label name and gives it to the selected torrents. | win32 app.rs cmd::LABEL_NEW -> dialogs::input, set_label |
 | `MenuRemoveLabel` | Takes the label off the selected torrents. | win32 app.rs cmd::LABEL_NONE -> set_label(empty) |
 | `MenuProperties` | Opens the Torrent Properties of the selected torrents: trackers, bandwidth, seeding goal and other settings. | win32 app.rs cmd::PROPERTIES -> show_properties -> properties::show, Changes::apply, Changes::store |
+| `MenuSequential` | Downloads the selected torrents' pieces in order, from the start of the data to its end, so a video can be played while it downloads. Higher file priorities still come first. Greyed out when every selected torrent is finished. | frontend app/commands.rs Core::toggle_sequential -> actions::toggle_flag(TorrentFlags::SEQUENTIAL_DOWNLOAD); core engine/picker.rs rebuild_order (priority, then piece order); MenuState::can_sequential = actions::any_unfinished |
+| `MenuFirstLast` | Downloads the first and last pieces of each wanted file before the rest, so a player can read a video's header and index early. Each end is 1 % of the file, at least one piece. Skipped files are left alone. | frontend app/commands.rs Core::toggle_first_last -> actions::toggle_flag(TorrentFlags::FIRST_LAST_PIECES); core engine/torrent.rs piece_priorities (1 % of the file, at least one piece, priority 7) |
+| `MenuCopyMagnet` | Puts the selected torrents' magnet links on the clipboard, one per line, with their info-hashes, names and trackers. | frontend app/commands.rs Core::copy_magnets -> export::magnet_for (btih, btmh, dn, tr from properties::fetch_trackers) |
+| `MenuExportTorrent` | Saves the selected torrents' .torrent files: one to a file you name, several into a folder you pick, each under its own name, numbered when the name is taken. A torrent added from a magnet link has none until its metadata has arrived. | frontend app/commands.rs Core::export_torrents -> export::Exports::request (post_torrent_file), Exports::on_torrent_file; MenuState::can_export = actions::any_has_metadata |
 | `MenuOpenFile` | Opens the selected file in its default program, as a double click in the file manager would. A file not on disk yet does nothing. | win32 app.rs cmd::FILE_OPEN -> open_file(folder = false) -> ShellExecuteW default verb |
 | `MenuPrioritizeByOrder` | Gives the selected files falling priorities in their order in the torrent, so they finish one after another; skipped ones are downloaded again. With the filter on, it orders all the torrent's files. | win32 app.rs cmd::FILE_BY_ORDER -> detail::by_file_order, set_file_priority |
 | `MenuRelocate` | Picks a new place for the selected file and moves it there, or, when it is not on disk, uses the file found there; a Force Re-check counts its pieces. | win32 app.rs cmd::FILE_RELOCATE -> relocate_file -> dialogs::relocate_file, rename_file |
@@ -379,3 +383,14 @@ Every engine setting, in the table's order. A row a Preferences page edits under
 | `ToolQueueDown` | Moves the selected torrents one place down the queue, so they get a turn to run later. | win32 app.rs TOOLBAR cmd::DOWN -> torrent_action -> queue_position(QueueMove::Down) |
 | `ToolRss` | Opens the RSS Downloader, where you add feeds and set filters that download matching items automatically. | win32 app.rs TOOLBAR cmd::RSS -> show_rss |
 | `ToolPreferences` | Opens the Preferences window with the settings for connections, bandwidth, queueing, folders and the rest of the program. | win32 app.rs TOOLBAR cmd::PREFS -> show_preferences |
+
+## Dialogs
+
+Torrent Properties and Add New Torrent.
+
+| Key | Text | Read in |
+|---|---|---|
+| `PropsSequential` | Downloads the torrent's pieces in order, from the start of the data to its end, as Torrent menu > Advanced > Download in Sequential Order does. Greyed out when every torrent is finished. | frontend properties.rs Fields::sequential -> Changes::sequential -> Changes::apply (TorrentFlags::SEQUENTIAL_DOWNLOAD); Properties::can_sequential |
+| `PropsFirstLast` | Downloads the first and last pieces of each wanted file before the rest, as Torrent menu > Advanced > Download First and Last Pieces First does. | frontend properties.rs Fields::first_last -> Changes::first_last -> Changes::apply (TorrentFlags::FIRST_LAST_PIECES) |
+| `AddSequential` | Downloads the torrent's pieces in order, from the start of the data to its end, so a video can be played while it downloads. Off for every new torrent; Torrent menu > Advanced changes it later. | frontend add.rs AddChoice::sequential -> AddChoice::apply_to, apply_to_torrent (TorrentFlags::SEQUENTIAL_DOWNLOAD); off on every add |
+| `AddFirstLast` | Downloads the first and last pieces of each wanted file before the rest, so a player can read a video's header and index early. Off for every new torrent; Torrent menu > Advanced changes it later. | frontend add.rs AddChoice::first_last -> AddChoice::apply_to, apply_to_torrent (TorrentFlags::FIRST_LAST_PIECES); off on every add |

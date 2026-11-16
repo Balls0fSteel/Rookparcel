@@ -102,6 +102,9 @@ const ID_BOX_CONTENTS: u16 = 116;
 const ID_FILTER: u16 = 117;
 const ID_FILTER_CLEAR: u16 = 118;
 const ID_FILTER_COUNT: u16 = 119;
+/// "Download in sequential order", "Download first and last pieces first" (D73).
+const ID_SEQUENTIAL: u16 = 120;
+const ID_FIRST_LAST: u16 = 121;
 
 /// How a control follows the window's size: moved or grown with the width or the height.
 const MOVE_X: u8 = 1;
@@ -230,8 +233,8 @@ fn template() -> Vec<u16> {
     let list = TAB | WS_BORDER | LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS;
     // 2.2.1's layout: one column, the contents' list the whole width. Everything is 7 units
     // in from the box around it; the two boxes and OK / Cancel keep 7 to the dialog's edge.
-    let mut t = Template::new(420, 317);
-    t.item(BUTTON, ID_BOX_SAVE, GROUP, [7, 4, 406, 78], tr!(AddSaveIn));
+    let mut t = Template::new(420, 331);
+    t.item(BUTTON, ID_BOX_SAVE, GROUP, [7, 4, 406, 92], tr!(AddSaveIn));
     t.item(COMBOBOX, ID_SAVE, COMBO, [14, 16, 370, 150], "");
     t.item(BUTTON, ID_BROWSE, PUSH, [388, 15, 18, 14], "...");
     t.item(STATIC, 0xffff, C, [14, 36, 40, 9], tr!(AddNameLine));
@@ -242,33 +245,36 @@ fn template() -> Vec<u16> {
     t.item(COMBOBOX, ID_LABEL, COMBO | CBS_SORT as u32, [165, 52, 241, 120], "");
     t.item(BUTTON, ID_START, CHECK, [14, 67, 100, 10], tr!(AddStart));
     t.item(BUTTON, ID_TOP, CHECK, [122, 67, 160, 10], tr!(AddTopOfQueue));
-    t.item(BUTTON, ID_BOX_CONTENTS, GROUP, [7, 88, 406, 203], tr!(AddContents));
-    t.item(STATIC, 0xffff, C, [14, 100, 36, 9], tr!(AddTorrentName));
-    t.item(STATIC, ID_T_NAME, VALUE, [54, 100, 352, 9], "");
-    t.item(STATIC, 0xffff, C, [14, 111, 36, 9], tr!(AddComment));
-    t.item(STATIC, ID_T_COMMENT, VALUE, [54, 111, 352, 9], "");
-    t.item(STATIC, 0xffff, C, [14, 122, 36, 9], tr!(AddSize));
-    t.item(STATIC, ID_T_SIZE, VALUE, [54, 122, 352, 9], "");
-    t.item(STATIC, 0xffff, C, [14, 133, 36, 9], tr!(AddDate));
+    // the download order (D73), off on every add
+    t.item(BUTTON, ID_SEQUENTIAL, CHECK, [14, 81, 100, 10], tr!(AddSequential));
+    t.item(BUTTON, ID_FIRST_LAST, CHECK, [122, 81, 200, 10], tr!(AddFirstLast));
+    t.item(BUTTON, ID_BOX_CONTENTS, GROUP, [7, 102, 406, 203], tr!(AddContents));
+    t.item(STATIC, 0xffff, C, [14, 114, 36, 9], tr!(AddTorrentName));
+    t.item(STATIC, ID_T_NAME, VALUE, [54, 114, 352, 9], "");
+    t.item(STATIC, 0xffff, C, [14, 125, 36, 9], tr!(AddComment));
+    t.item(STATIC, ID_T_COMMENT, VALUE, [54, 125, 352, 9], "");
+    t.item(STATIC, 0xffff, C, [14, 136, 36, 9], tr!(AddSize));
+    t.item(STATIC, ID_T_SIZE, VALUE, [54, 136, 352, 9], "");
+    t.item(STATIC, 0xffff, C, [14, 147, 36, 9], tr!(AddDate));
     // Select All / None beside the date, as in 2.2.1
-    t.item(STATIC, ID_T_DATE, VALUE, [54, 133, 244, 9], "");
-    t.item(BUTTON, ID_ALL, PUSH, [302, 130, 50, 14], tr!(MenuSelectAll));
-    t.item(BUTTON, ID_NONE, PUSH, [356, 130, 50, 14], tr!(MenuSelectNone));
+    t.item(STATIC, ID_T_DATE, VALUE, [54, 147, 244, 9], "");
+    t.item(BUTTON, ID_ALL, PUSH, [302, 144, 50, 14], tr!(MenuSelectAll));
+    t.item(BUTTON, ID_NONE, PUSH, [356, 144, 50, 14], tr!(MenuSelectNone));
     // the file filter over the list (its hint set by `init`); the × and the count show while
     // it filters (`filter_changed`)
-    t.item(EDIT, ID_FILTER, LINE, [14, 148, 274, 13], "");
-    t.item(BUTTON, ID_FILTER_CLEAR, WS_CHILD | BS_PUSHBUTTON as u32, [290, 148, 14, 13], "\u{00d7}");
+    t.item(EDIT, ID_FILTER, LINE, [14, 162, 274, 13], "");
+    t.item(BUTTON, ID_FILTER_CLEAR, WS_CHILD | BS_PUSHBUTTON as u32, [290, 162, 14, 13], "\u{00d7}");
     t.item(
         STATIC,
         ID_FILTER_COUNT,
         WS_CHILD | SS_RIGHT | SS_CENTERIMAGE | SS_NOPREFIX,
-        [308, 148, 98, 13],
+        [308, 162, 98, 13],
         "",
     );
-    t.item(Class::Name("SysListView32"), ID_FILES, list, [14, 165, 392, 119], "");
-    t.item(BUTTON, ID_AGAIN, CHECK, [7, 298, 220, 10], tr!(AddDontShowAgain));
-    t.item(BUTTON, IDOK as u16, TAB | BS_DEFPUSHBUTTON as u32, [309, 296, 50, 14], tr!(BtnOk));
-    t.item(BUTTON, IDCANCEL as u16, PUSH, [363, 296, 50, 14], tr!(BtnCancel));
+    t.item(Class::Name("SysListView32"), ID_FILES, list, [14, 179, 392, 119], "");
+    t.item(BUTTON, ID_AGAIN, CHECK, [7, 312, 220, 10], tr!(AddDontShowAgain));
+    t.item(BUTTON, IDOK as u16, TAB | BS_DEFPUSHBUTTON as u32, [309, 310, 50, 14], tr!(BtnOk));
+    t.item(BUTTON, IDCANCEL as u16, PUSH, [363, 310, 50, 14], tr!(BtnCancel));
     t.finish()
 }
 
@@ -784,6 +790,8 @@ unsafe fn collect(dlg: HWND, st: &State) -> Option<AddChoice> {
             skip_hash_check: !st.setup.in_session && checked(dlg, ID_SKIP),
             top_of_queue: checked(dlg, ID_TOP),
             label: window_text(item(dlg, ID_LABEL)).trim().to_owned(),
+            sequential: checked(dlg, ID_SEQUENTIAL),
+            first_last: checked(dlg, ID_FIRST_LAST),
         })
     }
 }
@@ -1200,6 +1208,19 @@ mod tests {
             assert_eq!(send(item(dlg, ID_SAVE), CB_GETCOUNT, 0, 0), 2);
             assert_eq!(send(item(dlg, ID_LABEL), CB_GETCOUNT, 0, 0), 2);
             assert!(checked(dlg, ID_START) && !checked(dlg, ID_SKIP) && !checked(dlg, ID_TOP));
+            // the download order is off on every add
+            assert!(!checked(dlg, ID_SEQUENTIAL) && !checked(dlg, ID_FIRST_LAST));
+            // the options inside the Save In box, above the contents
+            let at = |id: u16| rect_in(dlg, item(dlg, id));
+            let (save_box, contents) = (at(ID_BOX_SAVE), at(ID_BOX_CONTENTS));
+            for id in [ID_SKIP, ID_START, ID_TOP, ID_SEQUENTIAL, ID_FIRST_LAST] {
+                let r = at(id);
+                assert!(r.top > at(ID_NAME).bottom && r.bottom < save_box.bottom, "{id}");
+                assert!(r.left > save_box.left && r.right < save_box.right, "{id}");
+            }
+            assert!(save_box.bottom < contents.top);
+            let (seq, fl) = (at(ID_SEQUENTIAL), at(ID_FIRST_LAST));
+            assert!(seq.top > at(ID_START).bottom && seq.right <= fl.left && seq.top == fl.top);
         }
         assert_eq!(f.text(ID_SAVE), r"C:\Downloads");
         assert_eq!(f.text(ID_NAME), "Pack");
@@ -1443,6 +1464,7 @@ mod tests {
         assert_eq!(c.name.as_deref(), Some("Renamed"));
         assert_eq!(c.label, "Linux");
         assert!(!c.start && c.skip_hash_check && c.top_of_queue);
+        assert!(!c.sequential && !c.first_last, "off unless ticked");
         assert_eq!(c.file_priorities.iter().map(|p| p.0).collect::<Vec<_>>(), [4, 4, 4, 0]);
         // the free space of the new folder's volume is shown
         assert!(f.text(ID_T_SIZE).contains("free"), "{}", f.text(ID_T_SIZE));
@@ -1451,6 +1473,18 @@ mod tests {
         unsafe { set_text(item(f.dlg, ID_NAME), "Pack") };
         let c = unsafe { collect(f.dlg, &f.st) }.unwrap();
         assert_eq!(c.name, None);
+
+        // the download order boxes, each on its own
+        unsafe { set_check(f.dlg, ID_SEQUENTIAL, true) };
+        let c = unsafe { collect(f.dlg, &f.st) }.unwrap();
+        assert!(c.sequential && !c.first_last);
+        unsafe {
+            set_check(f.dlg, ID_SEQUENTIAL, false);
+            set_check(f.dlg, ID_FIRST_LAST, true);
+        }
+        f.click(IDOK as u16);
+        let c = f.st.choice.take().expect("OK gives a choice");
+        assert!(!c.sequential && c.first_last);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

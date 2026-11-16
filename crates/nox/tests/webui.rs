@@ -4795,3 +4795,284 @@ fn a_program_runs_when_a_torrent_is_added_and_the_logger_says_so() {
     let lines = logger_lines(&t, &sid, &after);
     assert_eq!((of(&lines, &started), of(&lines, &ended)), (1, 1), "{lines:?}");
 }
+
+// ---- download order, Copy Magnet Link, Export .torrent (D72, D73) ------------------------------
+
+/// Polls `sync/maindata` diffs from `rid` until one carries `field` = `want` for `hash`: a
+/// change of the flag bumps the torrent's row. The rid to go on from.
+fn diff_until(t: &Harness, sid: &str, mut rid: i64, hash: &str, field: &str, want: bool) -> i64 {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let m = t.maindata(sid, rid);
+        let row = m.get("torrents").and_then(|ts| ts.get(hash));
+        rid = m.get("rid").and_then(Json::as_i64).unwrap();
+        if row.and_then(|r| r.get(field)) == Some(&Json::Bool(want)) {
+            return rid;
+        }
+        assert!(Instant::now() < deadline, "no diff with {field}={want}: {}", m.to_json());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn flag_of(x: &Json, field: &str) -> bool {
+    x.get(field).and_then(Json::as_bool).unwrap_or_else(|| panic!("{field}: {}", x.to_json()))
+}
+
+/// The two download order flags through the shim's toggles and the native commands: in
+/// `torrents/info`, in `sync/maindata` diffs, in the Properties dialog's tri-states, and after a
+/// restart (the engine's resume data).
+#[test]
+fn download_order_flags_through_the_shim_the_native_api_and_a_restart() {
+    let dir = temp_dir("download-order");
+    let (a, b);
+    {
+        let mut t = Harness::start_with(dir.clone(), Harness::settings());
+        let sid = t.login();
+        a = add_stopped(&t, &sid, "order-alpha", false);
+        b = add_stopped(&t, &sid, "order-bravo", false);
+        let x = t.wait_for(&sid, &a, "alpha", |_| true);
+        assert!(!flag_of(&x, "seq_dl") && !flag_of(&x, "f_l_piece_prio"));
+        let rid = t.maindata(&sid, 0).get("rid").and_then(Json::as_i64).unwrap();
+
+        // the shim: POST only, each torrent flips on its own
+        assert_eq!(t.get(&sid, &format!("/api/v2/torrents/toggleSequentialDownload?hashes={a}")).status, 405);
+        assert_eq!(t.get(&sid, &format!("/api/v2/torrents/toggleFirstLastPiecePrio?hashes={a}")).status, 405);
+        let r = t.post(&sid, "/api/v2/torrents/toggleSequentialDownload", &format!("hashes={a}"));
+        assert_eq!(r.status, 200, "{}", r.text());
+        let rid = diff_until(&t, &sid, rid, &a, "seq_dl", true);
+        t.wait_for(&sid, &a, "seq_dl on", |x| flag_of(x, "seq_dl"));
+        let r = t.post(&sid, "/api/v2/torrents/toggleFirstLastPiecePrio", &format!("hashes={a}"));
+        assert_eq!(r.status, 200, "{}", r.text());
+        let rid = diff_until(&t, &sid, rid, &a, "f_l_piece_prio", true);
+        let x = t.wait_for(&sid, &a, "f_l_piece_prio on", |x| flag_of(x, "f_l_piece_prio"));
+        assert!(flag_of(&x, "seq_dl"));
+        // `all`: alpha's goes off, bravo's on
+        let r = t.post(&sid, "/api/v2/torrents/toggleSequentialDownload", "hashes=all");
+        assert_eq!(r.status, 200);
+        let rid = diff_until(&t, &sid, rid, &a, "seq_dl", false);
+        t.wait_for(&sid, &b, "bravo's seq_dl on", |x| flag_of(x, "seq_dl"));
+
+        // the native commands set, they do not toggle
+        let r = t.pa(&sid, "/pa/torrents/sequential", &format!(r#"{{"ids":["{a}","{b}"],"on":true}}"#));
+        assert_eq!(r.status, 204, "{}", r.text());
+        diff_until(&t, &sid, rid, &a, "seq_dl", true);
+        let r = t.pa(&sid, "/pa/torrents/first-last", &format!(r#"{{"ids":["{a}"],"on":false}}"#));
+        assert_eq!(r.status, 204, "{}", r.text());
+        t.wait_for(&sid, &a, "f_l off", |x| !flag_of(x, "f_l_piece_prio") && flag_of(x, "seq_dl"));
+        t.wait_for(&sid, &b, "bravo still sequential", |x| flag_of(x, "seq_dl"));
+        let r = t.pa(&sid, "/pa/torrents/first-last", r#"{"all":true,"filter":{"search":"BRAVO"}}"#);
+        assert_eq!(r.status, 204, "{}", r.text());
+        t.wait_for(&sid, &b, "bravo's f_l on", |x| flag_of(x, "f_l_piece_prio"));
+        let x = t.wait_for(&sid, &a, "alpha", |_| true);
+        assert!(!flag_of(&x, "f_l_piece_prio"), "outside the filter");
+        let none = r#"{"ids":["0000000000000000000000000000000000000000"],"on":true}"#;
+        assert_eq!(t.pa(&sid, "/pa/torrents/sequential", none).status, 404);
+
+        // Properties: the two tri-states and can_sequential, like Initial Seeding
+        let props = |ids: &str| t.get(&sid, &format!("/pa/torrents/properties?ids={ids}")).json();
+        let field = |p: &Json, k: &str| s(p.get("fields").and_then(|f| f.get(k))).to_owned();
+        let p = props(&a);
+        assert_eq!((field(&p, "sequential"), field(&p, "first_last")), ("on".into(), "off".into()));
+        assert_eq!(p.get("can_sequential").and_then(Json::as_bool), Some(true));
+        let both = props(&format!("{a},{b}"));
+        assert_eq!((field(&both, "sequential"), field(&both, "first_last")), ("on".into(), "mixed".into()));
+        let r = t.pa(
+            &sid,
+            "/pa/torrents/properties",
+            &format!(r#"{{"ids":["{a}"],"fields":{{"sequential":"off","first_last":"on"}}}}"#),
+        );
+        assert_eq!(r.status, 204, "{}", r.text());
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while (field(&props(&a), "sequential"), field(&props(&a), "first_last"))
+            != ("off".into(), "on".into())
+        {
+            assert!(Instant::now() < deadline, "{}", props(&a).to_json());
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let x = t.wait_for(&sid, &a, "the dialog's flags", |x| flag_of(x, "f_l_piece_prio"));
+        assert!(!flag_of(&x, "seq_dl"));
+        let bad = format!(r#"{{"ids":["{a}"],"fields":{{"first_last":"sideways"}}}}"#);
+        assert_eq!(t.pa(&sid, "/pa/torrents/properties", &bad).status, 400);
+        // keep the directory for the second run: the harness removes this one instead
+        t.dir = temp_dir("download-order-scratch");
+    }
+    // the engine's resume data keeps them: alpha first and last, bravo both
+    let t = Harness::start_with(dir, Harness::settings());
+    let sid = t.login();
+    let x = t.wait_for(&sid, &a, "alpha restored", |x| s(x.get("name")) == "order-alpha");
+    assert_eq!((flag_of(&x, "seq_dl"), flag_of(&x, "f_l_piece_prio")), (false, true), "{}", x.to_json());
+    let x = t.wait_for(&sid, &b, "bravo restored", |x| s(x.get("name")) == "order-bravo");
+    assert_eq!((flag_of(&x, "seq_dl"), flag_of(&x, "f_l_piece_prio")), (true, true), "{}", x.to_json());
+}
+
+/// `torrents/add`'s `sequentialDownload` and `firstLastPiecePrio`, and the native add's
+/// `sequential` and `first_last` (an upload and a magnet).
+#[test]
+fn adds_take_the_download_order() {
+    let t = Harness::start("add-order");
+    let sid = t.login();
+    let (bytes, hash) = torrent_named("add-order-shim", None);
+    let fields = [("paused", "true"), ("sequentialDownload", "true"), ("firstLastPiecePrio", "true")];
+    let (body, boundary) = multipart(&fields, &bytes);
+    let r = t.req("POST", "/api/v2/torrents/add", &[("Cookie", &sid)], Body::Multipart(&body, boundary));
+    assert_eq!((r.status, r.text().as_str()), (200, "Ok."));
+    t.wait_for(&sid, &hash, "both flags from the shim's add", |x| {
+        flag_of(x, "seq_dl") && flag_of(x, "f_l_piece_prio")
+    });
+    // only one of them
+    let (bytes, hash) = torrent_named("add-order-shim-fl", None);
+    let (body, boundary) = multipart(&[("paused", "true"), ("firstLastPiecePrio", "true")], &bytes);
+    let r = t.req("POST", "/api/v2/torrents/add", &[("Cookie", &sid)], Body::Multipart(&body, boundary));
+    assert_eq!(r.status, 200);
+    let x = t.wait_for(&sid, &hash, "first and last only", |x| flag_of(x, "f_l_piece_prio"));
+    assert!(!flag_of(&x, "seq_dl"));
+
+    // the page's Add dialog
+    let (bytes, hash) = torrent_named("add-order-native", None);
+    let r = t.pa_upload(&sid, "/pa/add", r#"{"start":false,"sequential":true,"first_last":true}"#, &bytes);
+    assert_eq!(r.status, 204, "{}", r.text());
+    t.wait_for(&sid, &hash, "both flags from the native add", |x| {
+        flag_of(x, "seq_dl") && flag_of(x, "f_l_piece_prio")
+    });
+    let magnet = "3323456789abcdef0123456789abcdef01234567";
+    let r = t.pa(&sid, "/pa/add", &format!(r#"{{"url":"magnet:?xt=urn:btih:{magnet}","first_last":true}}"#));
+    assert_eq!(r.status, 204, "{}", r.text());
+    let x = t.wait_for(&sid, magnet, "a magnet's flag", |x| flag_of(x, "f_l_piece_prio"));
+    assert!(!flag_of(&x, "seq_dl"));
+    let r = t.pa(&sid, "/pa/add", &format!(r#"{{"url":"magnet:?xt=urn:btih:{magnet}","first_last":"yes"}}"#));
+    assert_eq!(r.status, 400, "not a boolean");
+}
+
+/// Export .torrent through both front doors: the bytes parse back to the same torrent, they
+/// come as an attachment named after it; an unknown hash is 404, a magnet without its metadata
+/// 409. Copy Magnet Link's endpoint gives `xt`, `dn` and `tr`. None of them answers without a
+/// login.
+#[test]
+fn export_and_magnet_links() {
+    use rookparcel_core::metainfo::{TorrentInfo, parse_magnet_uri};
+    let t = Harness::start("export");
+    let sid = t.login();
+    let (bytes, hash) = torrent_with(Some("udp://127.0.0.1:9/announce"));
+    let (body, boundary) = multipart(&[("paused", "true")], &bytes);
+    let r = t.req("POST", "/api/v2/torrents/add", &[("Cookie", &sid)], Body::Multipart(&body, boundary));
+    assert_eq!(r.status, 200);
+    t.wait_for(&sid, &hash, "the added torrent", |x| s(x.get("name")) == "webui-test");
+
+    for path in [
+        format!("/pa/torrents/export?id={}", hash.to_uppercase()),
+        format!("/api/v2/torrents/export?hash={hash}"),
+    ] {
+        let r = t.get(&sid, &path);
+        assert_eq!(r.status, 200, "{path}: {}", r.text());
+        assert_eq!(r.header("content-type"), Some("application/x-bittorrent"), "{path}");
+        assert_eq!(
+            r.header("content-disposition"),
+            Some("attachment; filename=\"webui-test.torrent\"; filename*=UTF-8''webui-test.torrent"),
+            "{path}"
+        );
+        assert_eq!(r.header("cache-control"), Some("no-store"), "{path}");
+        let ti = TorrentInfo::from_bytes(&r.body).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+        assert_eq!(ti.info_hashes().v1.map(|h| h.to_hex()), Some(hash.clone()), "{path}");
+        assert_eq!(ti.name(), "webui-test");
+    }
+    // the shim's export takes either method; the native one is a GET (a download by
+    // navigation), not a command
+    let r = t.post(&sid, "/api/v2/torrents/export", &format!("hash={hash}"));
+    assert_eq!(r.status, 200);
+    let r = t.pa(&sid, "/pa/torrents/export", &format!(r#"{{"id":"{hash}"}}"#));
+    assert!(r.status >= 400 && r.header("content-disposition").is_none(), "{}", r.status);
+    // unknown, missing
+    let zero = "0000000000000000000000000000000000000000";
+    assert_eq!(t.get(&sid, &format!("/pa/torrents/export?id={zero}")).status, 404);
+    assert_eq!(t.get(&sid, &format!("/api/v2/torrents/export?hash={zero}")).status, 404);
+    assert_eq!(t.get(&sid, "/pa/torrents/export").status, 400);
+    assert_eq!(t.get(&sid, "/api/v2/torrents/export").status, 404);
+
+    // a magnet without metadata (no DHT, no trackers: it never gets any)
+    let magnet = "4423456789abcdef0123456789abcdef01234567";
+    let r = t.post(&sid, "/api/v2/torrents/add", &format!("urls=magnet:?xt=urn:btih:{magnet}%26dn=no-meta"));
+    assert_eq!(r.status, 200, "{}", r.text());
+    t.wait_for(&sid, magnet, "the magnet", |_| true);
+    let r = t.get(&sid, &format!("/pa/torrents/export?id={magnet}"));
+    assert_eq!(r.status, 409, "{}", r.text());
+    assert_eq!(r.header("content-type"), Some("application/json"));
+    assert!(!s(r.json().get("error")).is_empty());
+    let r = t.get(&sid, &format!("/api/v2/torrents/export?hash={magnet}"));
+    assert_eq!(r.status, 409, "{}", r.text());
+
+    // Copy Magnet Link: the hash, the name, the trackers
+    let r = t.get(&sid, &format!("/pa/torrents/magnet?ids={hash},{magnet}"));
+    assert_eq!(r.status, 200, "{}", r.text());
+    let Json::Arr(links) = r.json() else { panic!("{}", r.text()) };
+    assert_eq!(links.len(), 2, "in the order asked");
+    assert_eq!(s(links[0].get("hash")), hash);
+    assert_eq!(s(links[0].get("name")), "webui-test");
+    let link = s(links[0].get("magnet")).to_owned();
+    assert!(link.starts_with(&format!("magnet:?xt=urn:btih:{hash}&dn=webui-test&tr=")), "{link}");
+    let m = parse_magnet_uri(&link).unwrap();
+    assert_eq!(
+        (m.name.as_str(), m.trackers.as_slice()),
+        ("webui-test", &["udp://127.0.0.1:9/announce".to_owned()][..])
+    );
+    assert_eq!(s(links[1].get("hash")), magnet);
+    assert!(s(links[1].get("magnet")).starts_with(&format!("magnet:?xt=urn:btih:{magnet}")));
+    // without the tracker lists (the page's Export resolving a Ctrl+A selection)
+    let Json::Arr(bare) = t.get(&sid, &format!("/pa/torrents/magnet?ids={hash}&trackers=0")).json() else {
+        panic!()
+    };
+    assert!(!s(bare[0].get("magnet")).contains("&tr="), "{}", bare[0].to_json());
+    // `all` with the view's filter, by name
+    let Json::Arr(all) = t.get(&sid, "/pa/torrents/magnet?all=1&category=all&search=").json() else {
+        panic!()
+    };
+    assert_eq!(all.len(), 2);
+    let Json::Arr(one) = t.get(&sid, "/pa/torrents/magnet?all=1&search=WEBUI").json() else { panic!() };
+    assert_eq!((one.len(), s(one[0].get("hash"))), (1, hash.as_str()));
+    assert_eq!(t.get(&sid, &format!("/pa/torrents/magnet?ids={zero}")).status, 404);
+    assert_eq!(t.get(&sid, "/pa/torrents/magnet?all=1&search=zzz").status, 404);
+
+    // no login, no answer: the native ones are /pa/'s 403, the shim's its own
+    for path in [
+        format!("/pa/torrents/export?id={hash}"),
+        format!("/pa/torrents/magnet?ids={hash}"),
+        format!("/api/v2/torrents/export?hash={hash}"),
+    ] {
+        let r = t.req("GET", &path, &[], Body::None);
+        assert_eq!(r.status, 403, "{path}");
+        assert!(r.header("content-disposition").is_none(), "{path}");
+    }
+    for (path, body) in [
+        ("/api/v2/torrents/toggleSequentialDownload", format!("hashes={hash}")),
+        ("/api/v2/torrents/toggleFirstLastPiecePrio", format!("hashes={hash}")),
+    ] {
+        assert_eq!(t.req("POST", path, &[], Body::Form(&body)).status, 403, "{path}");
+    }
+    let origin = format!("http://{}", t.host());
+    for path in ["/pa/torrents/sequential", "/pa/torrents/first-last"] {
+        let r = t.req(
+            "POST",
+            path,
+            &[("Origin", &origin), ("X-Requested-With", "Rookparcel")],
+            Body::Json(&format!(r#"{{"ids":["{hash}"],"on":true}}"#)),
+        );
+        assert_eq!(r.status, 403, "{path}");
+        // with a login but without the CSRF header
+        let r = t.req(
+            "POST",
+            path,
+            &[("Cookie", &sid)],
+            Body::Json(&format!(r#"{{"ids":["{hash}"],"on":true}}"#)),
+        );
+        assert_eq!(r.status, 403, "{path}");
+    }
+    // a cross-site page cannot read the export either: its Origin is refused before the login
+    let r = t.req(
+        "GET",
+        &format!("/pa/torrents/export?id={hash}"),
+        &[("Cookie", &sid), ("Origin", "http://evil.example")],
+        Body::None,
+    );
+    assert_eq!(r.status, 403);
+    let x = t.wait_for(&sid, &hash, "untouched", |_| true);
+    assert!(!flag_of(&x, "seq_dl") && !flag_of(&x, "f_l_piece_prio"));
+}

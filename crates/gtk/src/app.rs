@@ -24,6 +24,7 @@ use rookparcel_core::{
 use rookparcel_frontend::auto_shutdown::{self, AutoShutdown, Mode as AutoMode, Step};
 use rookparcel_frontend::columns::Column;
 use rookparcel_frontend::detail::{Detail, FILES_TREE_KEY, PRIORITIES, Tab};
+use rookparcel_frontend::export::{self, ExportTarget, Exports};
 use rookparcel_frontend::icons::{Icon, network_icon};
 use rookparcel_frontend::import::{self, Begin, Client};
 use rookparcel_frontend::integration::{Integration, MINIMIZED};
@@ -119,6 +120,8 @@ struct App {
     /// The programs started when a torrent is added or finishes (D67, Preferences > Advanced >
     /// Run Program); `None` in a remote window, whose server starts its own.
     run: Option<RunProgram>,
+    /// Export .torrent: the files asked for and not written yet (D73).
+    exports: Exports,
 }
 
 /// The widgets that draw from [`App`].
@@ -814,10 +817,16 @@ fn torrent_menu(m: &MenuState) -> gio::Menu {
     item(&check, tr!(MenuRecheck), "win.recheck");
     item(&check, tr!(MenuUpdateTracker), "win.reannounce");
     menu.append_section(None, &check);
+    let share = gio::Menu::new();
+    item(&share, tr!(MenuCopyMagnet), "win.copy-magnet");
+    item(&share, tr!(MenuExportTorrent), "win.export-torrent");
+    menu.append_section(None, &share);
     let more = gio::Menu::new();
     let advanced = gio::Menu::new();
     item(&advanced, tr!(MenuSetLocation), "win.set-location");
     item(&advanced, tr!(MenuInitialSeeding), "win.super-seed");
+    item(&advanced, tr!(MenuSequential), "win.sequential");
+    item(&advanced, tr!(MenuFirstLast), "win.first-last");
     more.append_submenu(Some(&gtk_mnemonic(tr!(MenuAdvanced))), &advanced);
     let bandwidth = gio::Menu::new();
     for (title, action) in [(tr!(MenuSetDownLimit), "win.dl-limit"), (tr!(MenuSetUpLimit), "win.ul-limit")] {
@@ -878,11 +887,22 @@ fn menu_state() -> Option<MenuState> {
         set("ul-limit", Some(st.map_or(0, |s| kib(s.upload_limit)).to_variant()), true);
         set("set-location", None, !moving);
         set("super-seed", Some(super_seeding.to_variant()), seeds);
+        // the download order: for torrents still downloading (D73)
+        let unfinished = actions::any_unfinished(&a.list, &ids);
+        for (name, flag) in FLAG_ITEMS {
+            set(name, Some(actions::all_flagged(&a.list, &ids, flag).to_variant()), unfinished);
+        }
+        // a magnet without its metadata has no .torrent yet
+        set("export-torrent", None, actions::any_has_metadata(&a.list, &ids));
         // the server's folders are not on this computer
         set("open-folder", None, !crate::remote::is_remote());
         MenuState { labels: labels(a), single_done: ids.len() == 1 && st.is_some_and(|s| s.is_finished) }
     })
 }
+
+/// The Advanced submenu's flag check items besides Initial Seeding: (action, flag) (D73).
+const FLAG_ITEMS: [(&str, TorrentFlags); 2] =
+    [("sequential", TorrentFlags::SEQUENTIAL_DOWNLOAD), ("first-last", TorrentFlags::FIRST_LAST_PIECES)];
 
 /// (every torrent is a seed, every torrent is super seeding), for "Initial Seeding".
 fn super_seed_state(a: &App, ids: &[TorrentId]) -> (bool, bool) {
@@ -1471,6 +1491,7 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
                 let (added, finished) = opts.gui.run_commands();
                 RunProgram::new(added, finished)
             }),
+            exports: Exports::new(),
         })
     });
     with_app(|a| {
@@ -2149,6 +2170,13 @@ fn on_alerts() {
             for line in a.torrent_files.on_alert(&alert, &a.torrent_folders, &a.handle) {
                 a.detail.push_log(format!("{} {line}", now_hms()));
             }
+            // Export .torrent (D73): a failed export to a chosen file gets a box too
+            if let Some(done) = a.exports.on_alert(&alert) {
+                a.detail.push_log(format!("{} {}", now_hms(), done.log_line()));
+                if let (true, Err(e)) = (done.to_file, &done.result) {
+                    errors.push((tr!(CannotExport, name = done.name), e.clone()));
+                }
+            }
             magnet_ready |= a.awaiting.on_alert(&alert, &a.handle, &mut a.prefs);
             a.listen.on_alert(&alert);
             match alert {
@@ -2595,6 +2623,17 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     let super_seed = gio::SimpleAction::new_stateful("super-seed", None, &false.to_variant());
     super_seed.connect_activate(|_, _| toggle_super_seeding());
     window.add_action(&super_seed);
+    // Advanced > Download in Sequential Order, First and Last Pieces First (D73)
+    for (name, flag) in FLAG_ITEMS {
+        let a = gio::SimpleAction::new_stateful(name, None, &false.to_variant());
+        a.connect_activate(move |_, _| {
+            let ids = selected();
+            with_app(|a| actions::toggle_flag(&a.handle, &a.list, &ids, flag));
+        });
+        window.add_action(&a);
+    }
+    simple("copy-magnet", copy_magnets);
+    simple("export-torrent", export_torrents);
     // Options > Auto Shutdown: one check item per mode, the chosen one checked
     for (i, &mode) in AutoMode::MENU.iter().enumerate() {
         let a = gio::SimpleAction::new_stateful(&format!("auto-shutdown-{i}"), None, &(i == 0).to_variant());
@@ -2842,6 +2881,73 @@ fn toggle_super_seeding() {
         }
         a.handle.post_torrent_updates();
     });
+}
+
+/// Copy Magnet Link: the selected torrents' magnet links on the clipboard, one per line, with
+/// their trackers when the engine lists them within 2 s (D73).
+fn copy_magnets() {
+    let ids = selected();
+    let Some((window, text)) = with_app(|a| {
+        let wait = std::time::Duration::from_secs(2);
+        let text = export::magnet_links(&a.handle, &a.list, &ids, &mut a.alerts, wait);
+        (a.window.clone(), text)
+    }) else {
+        return;
+    };
+    // the alerts popped while waiting for the tracker lists
+    glib::idle_add_local_once(on_alerts);
+    if !text.is_empty() {
+        WidgetExt::display(&window).clipboard().set_text(&text);
+    }
+}
+
+/// Export .torrent: one torrent to a file chosen in a Save dialog, several into a chosen folder
+/// (D73). Magnets still without their metadata are left out; the files are written when the
+/// engine hands them over (`on_alerts`).
+fn export_torrents() {
+    let ids = selected();
+    let Some(Some((window, torrents))) = with_app(|a| {
+        let torrents: Vec<(TorrentId, String)> = ids
+            .iter()
+            .filter_map(|&id| a.list.get(id).filter(|s| s.has_metadata).map(|s| (id, s.name.clone())))
+            .collect();
+        (!torrents.is_empty()).then(|| (a.window.clone(), torrents))
+    }) else {
+        return;
+    };
+    let single = (torrents.len() == 1).then(|| torrents[0].1.clone());
+    let request = move |target: ExportTarget| {
+        with_app(|a| a.exports.request(&a.handle, &torrents, &target));
+    };
+    match single {
+        Some(name) => {
+            let filter = gtk::FileFilter::new();
+            filter.set_name(Some(tr!(FilterTorrents)));
+            filter.add_pattern("*.torrent");
+            let filters = gio::ListStore::new::<gtk::FileFilter>();
+            filters.append(&filter);
+            let dialog = gtk::FileDialog::builder()
+                .title(lang::plain(tr!(ExportTitle)))
+                .modal(true)
+                .filters(&filters)
+                .initial_name(export::export_file_name(&name))
+                .build();
+            // the file chooser asks before replacing a file
+            dialog.save(Some(&window), None::<&gio::Cancellable>, move |r| {
+                if let Some(path) = r.ok().and_then(|f| f.path()) {
+                    request(ExportTarget::File(path));
+                }
+            });
+        }
+        None => {
+            let dialog = gtk::FileDialog::builder().title(tr!(ExportFolderTitle)).modal(true).build();
+            dialog.select_folder(Some(&window), None::<&gio::Cancellable>, move |r| {
+                if let Some(dir) = r.ok().and_then(|f| f.path()) {
+                    request(ExportTarget::Folder(dir));
+                }
+            });
+        }
+    }
 }
 
 /// Advanced > Set Download Location: a folder, then the selected torrents' files move there
@@ -4312,5 +4418,55 @@ mod tests {
                 context.iteration(true);
             }
         }
+    }
+
+    /// The menu's actions in order, each with the submenu it sits in (`""`: the top level).
+    fn menu_actions(model: &gio::MenuModel, submenu: &str, out: &mut Vec<(String, String)>) {
+        for i in 0..model.n_items() {
+            let action = model.item_attribute_value(i, "action", None).and_then(|v| v.get::<String>());
+            if let Some(action) = action {
+                out.push((submenu.to_owned(), action));
+            }
+            if let Some(section) = model.item_link(i, "section") {
+                menu_actions(&section, submenu, out);
+            }
+            if let Some(sub) = model.item_link(i, "submenu") {
+                let label = model.item_attribute_value(i, "label", None).and_then(|v| v.get::<String>());
+                menu_actions(&sub, &label.unwrap_or_default(), out);
+            }
+        }
+    }
+
+    /// D73: the download order check items follow Initial Seeding in Advanced; Copy Magnet Link
+    /// and Export .torrent sit in the top level, in their own section, before Advanced.
+    #[test]
+    fn the_torrent_menu_has_the_d73_items() {
+        let menu = torrent_menu(&MenuState { labels: Vec::new(), single_done: false });
+        let mut items = Vec::new();
+        menu_actions(menu.upcast_ref(), "", &mut items);
+        let at = |action: &str| items.iter().position(|(_, a)| a == action).unwrap();
+        let advanced = gtk_mnemonic(tr!(MenuAdvanced));
+        for action in ["win.super-seed", "win.sequential", "win.first-last"] {
+            assert_eq!(items[at(action)].0, advanced, "{action}");
+        }
+        assert_eq!(at("win.sequential"), at("win.super-seed") + 1);
+        assert_eq!(at("win.first-last"), at("win.sequential") + 1);
+        for action in ["win.copy-magnet", "win.export-torrent"] {
+            assert_eq!(items[at(action)].0, "", "{action}");
+        }
+        assert_eq!(at("win.export-torrent"), at("win.copy-magnet") + 1);
+        assert!(at("win.reannounce") < at("win.copy-magnet"));
+        assert!(at("win.export-torrent") < at("win.set-location"));
+        // their own section: not in Update Tracker's
+        let sections: Vec<gio::MenuModel> =
+            (0..menu.n_items()).filter_map(|i| menu.item_link(i, "section")).collect();
+        let actions_of = |m: &gio::MenuModel| {
+            let mut v = Vec::new();
+            menu_actions(m, "", &mut v);
+            v.into_iter().map(|(_, a)| a).collect::<Vec<_>>()
+        };
+        assert!(sections.iter().any(|s| actions_of(s) == ["win.copy-magnet", "win.export-torrent"]));
+        // the two check items' actions are the ones `add_actions` makes from FLAG_ITEMS
+        assert_eq!(FLAG_ITEMS.map(|(n, _)| format!("win.{n}")), ["win.sequential", "win.first-last"]);
     }
 }

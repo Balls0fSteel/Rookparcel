@@ -98,7 +98,7 @@ Prowlarr only adds torrents; it does not track or import them. Add Rookparcel in
 ## Known limits
 
 - Rookparcel reports itself as qBittorrent's API version 2.11.2.
-- Ignored when an app sends them: "first and last piece first", the content layout choice, and Sonarr's inactive seeding time limit.
+- Ignored when an app sends them: the content layout choice and Sonarr's inactive seeding time limit. "First and last piece first" is honoured since 1.2.59 (not in a published release yet); before that it was ignored.
 - Adding a torrent that is already in the list is answered as a success; the app then tracks the existing one.
 
 ## If something goes wrong

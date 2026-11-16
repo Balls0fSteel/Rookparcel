@@ -1,7 +1,8 @@
 //! The torrent commands, the selection and Preferences (GTK `torrent_action`, `set_label`,
 //! `set_limit`, `toggle_super_seeding`, `set_download_location`, `set_paused`, `remove`,
 //! `menu_state`, `super_seed_state`, `selection_changed`, the Files tab's actions,
-//! `show_properties`' logic, `apply_options`, `load_ip_filter`).
+//! `show_properties`' logic, `apply_options`, `load_ip_filter`), and the download order, Copy
+//! Magnet Link and Export .torrent (D72, D73).
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -13,6 +14,7 @@ use rookparcel_core::{
 use super::{Core, Events};
 use crate::actions;
 use crate::detail::Tab;
+use crate::export::ExportTarget;
 use crate::model::Filter;
 use crate::options::{GuiOptions, Options};
 use crate::properties::{Changes, Properties, TorrentProps};
@@ -60,6 +62,13 @@ pub struct MenuState {
     /// Initial Seeding is enabled (every torrent is a seed) and checked (every one has it).
     pub can_super_seed: bool,
     pub super_seeding: bool,
+    /// Advanced > Download in Sequential Order and Download First and Last Pieces First are
+    /// enabled (some torrent is not finished); each is checked when every torrent has it.
+    pub can_sequential: bool,
+    pub sequential: bool,
+    pub first_last: bool,
+    /// Export .torrent is enabled (some torrent has its metadata).
+    pub can_export: bool,
 }
 
 impl Core {
@@ -225,6 +234,31 @@ impl Core {
         self.handle.post_torrent_updates();
     }
 
+    /// Advanced > Download in Sequential Order: on for all unless every torrent has it.
+    pub fn toggle_sequential(&mut self, ids: &[TorrentId]) {
+        actions::toggle_flag(&self.handle, &self.list, ids, TorrentFlags::SEQUENTIAL_DOWNLOAD);
+    }
+
+    /// Advanced > Download First and Last Pieces First: on for all unless every torrent has it.
+    pub fn toggle_first_last(&mut self, ids: &[TorrentId]) {
+        actions::toggle_flag(&self.handle, &self.list, ids, TorrentFlags::FIRST_LAST_PIECES);
+    }
+
+    /// Copy Magnet Link: the magnet links of `ids`, one per line, in their order (waiting up to
+    /// 2 s for their tracker lists). The GUI puts the text on the clipboard.
+    pub fn copy_magnets(&mut self, ids: &[TorrentId]) -> String {
+        crate::export::magnet_links(&self.handle, &self.list, ids, &mut self.alerts, Duration::from_secs(2))
+    }
+
+    /// Export .torrent: asks the engine for the `.torrent` files of `ids`, written to `target`
+    /// when they come (the Logger tells; a failed export to a chosen file is also an error to
+    /// show). One torrent goes to the file a Save As dialog chose, several into a folder.
+    pub fn export_torrents(&mut self, ids: &[TorrentId], target: ExportTarget) {
+        let torrents: Vec<(TorrentId, String)> =
+            ids.iter().filter_map(|&id| Some((id, self.list.get(id)?.name.clone()))).collect();
+        self.exports.request(&self.handle, &torrents, &target);
+    }
+
     /// (every torrent is a seed, every torrent is super seeding).
     fn super_seed_state(&self, ids: &[TorrentId]) -> (bool, bool) {
         let all = |f: &dyn Fn(&rookparcel_core::TorrentStatus) -> bool| {
@@ -278,6 +312,10 @@ impl Core {
             can_set_location: !moving,
             can_super_seed: seeds,
             super_seeding,
+            can_sequential: actions::any_unfinished(&self.list, ids),
+            sequential: actions::all_flagged(&self.list, ids, TorrentFlags::SEQUENTIAL_DOWNLOAD),
+            first_last: actions::all_flagged(&self.list, ids, TorrentFlags::FIRST_LAST_PIECES),
+            can_export: actions::any_has_metadata(&self.list, ids),
         })
     }
 

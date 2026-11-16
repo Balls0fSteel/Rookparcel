@@ -49,6 +49,7 @@ use rookparcel_core::{Alert, Exit, MoveCompleted, Session, SessionHandle, Sessio
 use crate::add::AwaitingMetadata;
 use crate::auto_shutdown::{Action, AutoShutdown, Step};
 use crate::detail::{Detail, Tab};
+use crate::export::Exports;
 use crate::model::TorrentList;
 use crate::options::{GuiOptions, Options};
 use crate::prefs::Prefs;
@@ -274,6 +275,8 @@ pub struct Core {
     seeding_goal: SeedingGoal,
     torrent_folders: TorrentFolders,
     torrent_files: TorrentFiles,
+    /// Export .torrent's files waiting for the engine.
+    exports: Exports,
     autoload: Watcher,
     schedule: Schedule,
     scheduler: Scheduler,
@@ -414,6 +417,7 @@ impl Core {
             seeding_goal: opts.gui.seeding_goal(),
             torrent_folders: opts.gui.torrent_folders.clone(),
             torrent_files: TorrentFiles::new(),
+            exports: Exports::new(),
             autoload: Watcher::new(),
             schedule: opts.gui.schedule.clone(),
             scheduler: Scheduler::new(),

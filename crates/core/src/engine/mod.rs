@@ -2466,6 +2466,9 @@ impl Engine {
         if let Some(p) = t.picker.as_mut() {
             p.set_sequential(new.contains(TorrentFlags::SEQUENTIAL_DOWNLOAD));
         }
+        if old.contains(TorrentFlags::FIRST_LAST_PIECES) != new.contains(TorrentFlags::FIRST_LAST_PIECES) {
+            t.push_piece_priorities();
+        }
         // A user pause/resume clears a torrent's error, as libtorrent's `clear_error` + resume.
         if old.contains(TorrentFlags::PAUSED) && !new.contains(TorrentFlags::PAUSED) {
             t.error = None;
@@ -2586,7 +2589,8 @@ impl Engine {
             }
         }
         let t = self.torrent(id).expect("exists");
-        for (i, &p) in piece_priorities(&ti, &t.file_priority).iter().enumerate() {
+        let first_last = t.flags.contains(TorrentFlags::FIRST_LAST_PIECES);
+        for (i, &p) in piece_priorities(&ti, &t.file_priority, first_last).iter().enumerate() {
             picker.set_piece_priority(i as u32, p);
         }
         picker.set_sequential(t.flags.contains(TorrentFlags::SEQUENTIAL_DOWNLOAD));
@@ -2862,11 +2866,7 @@ impl Engine {
         t.resume_dirty = true;
         t.status_dirty = true;
         t.interest_dirty = true;
-        if let (Some(ti), Some(p)) = (t.ti.clone(), t.picker.as_mut()) {
-            for (i, &pr) in piece_priorities(&ti, &t.file_priority).iter().enumerate() {
-                p.set_piece_priority(i as u32, pr);
-            }
-        }
+        t.push_piece_priorities();
         // The storage moves data in or out of the part file (libtorrent `prioritize_files`).
         if let Some(storage) = t.storage.clone() {
             let prios = t.file_priority.clone();
@@ -4174,6 +4174,7 @@ fn apply_resume(t: &mut Torrent, r: &ResumeData) {
     flags.set(TorrentFlags::PAUSED, r.paused);
     flags.set(TorrentFlags::AUTO_MANAGED, r.auto_managed);
     flags.set(TorrentFlags::SEQUENTIAL_DOWNLOAD, r.sequential_download);
+    flags.set(TorrentFlags::FIRST_LAST_PIECES, r.first_last_pieces);
     flags.set(TorrentFlags::SUPER_SEEDING, r.super_seeding);
     flags.set(TorrentFlags::DISABLE_DHT, r.disable_dht);
     flags.set(TorrentFlags::DISABLE_LSD, r.disable_lsd);

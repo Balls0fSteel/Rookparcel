@@ -577,9 +577,8 @@ pub fn run(cmd: Command) {
         Properties => crate::dialogs::properties::open(&ui().map(|u| u.list.selected()).unwrap_or_default()),
         StartAll | StopAll | OpenFolder | ForceStart | Start | Pause | Stop | QueueUp | QueueDown
         | QueueTop | QueueBottom | Remove | RemoveAndDelete | Recheck | UpdateTracker | SetLocation
-        | InitialSeeding | DownLimit(_) | UpLimit(_) | NewLabel | RemoveLabel | Label(_) => {
-            crate::torrent_menu::run(cmd)
-        }
+        | InitialSeeding | Sequential | FirstLast | CopyMagnet | ExportTorrent | DownLimit(_)
+        | UpLimit(_) | NewLabel | RemoveLabel | Label(_) => crate::torrent_menu::run(cmd),
         FileFilter | FileOpen | FileOpenFolder | FileByOrder | FilePriority(_) | FileRelocate | FilesTree => {
             crate::detail::run(cmd)
         }
