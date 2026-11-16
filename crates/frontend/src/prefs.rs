@@ -637,6 +637,29 @@ x=1
         assert_eq!(p.sort(), None);
     }
 
+    /// A layout saved before the Tags column (D76) existed keeps its order and widths; Tags is
+    /// added at the end, hidden.
+    #[test]
+    fn a_layout_from_before_the_tags_column() {
+        let mut p = Prefs::default();
+        let old: Vec<String> = Column::ALL
+            .iter()
+            .filter(|&&c| c != Column::Tags)
+            .rev()
+            .map(|c| format!("{}:77", c.key()))
+            .collect();
+        p.set("list.columns", old.join(","));
+        let cols = p.columns();
+        assert_eq!(cols.len(), Column::ALL.len());
+        assert_eq!(cols[0], (Column::Wasted, 77));
+        assert_eq!(cols.last(), Some(&(Column::Tags, -Column::Tags.default_width())));
+        assert!(cols[..cols.len() - 1].iter().all(|&(_, w)| w == 77));
+        p.set_columns(&cols);
+        assert_eq!(p.columns(), cols);
+        p.set_sort(Some((Column::Tags, false)));
+        assert_eq!(p.sort(), Some((Column::Tags, false)));
+    }
+
     #[test]
     fn clearing_the_sort_is_journaled() {
         let mut p = Prefs::default();

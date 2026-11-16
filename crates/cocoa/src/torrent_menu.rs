@@ -1,8 +1,9 @@
 //! The Torrent menu's and the list's context menu's commands on the selected torrents (GTK
 //! `torrent_action`, `remove`, `open_folder`, `set_download_location`, `set_label`, `set_limit`,
 //! `toggle_super_seeding`, `menu_state`), and Start All / Stop All of the Dock and status item.
-//! The logic is `Core`'s; this asks the questions (Remove's sheet, the folder panel, New Label)
-//! and gives the menus their check marks and greying ([`state`]).
+//! Tags ▸ (D76) too. The logic is `Core`'s; this asks the questions (Remove's sheet, the folder
+//! panel, New Label, New Tag) and gives the menus their check marks and greying ([`state`],
+//! [`mixed`]).
 
 use std::path::{Path, PathBuf};
 
@@ -13,9 +14,10 @@ use rookparcel_core::TorrentId;
 use rookparcel_frontend::actions::LIMITS;
 use rookparcel_frontend::app::TorrentAction;
 use rookparcel_frontend::export::{ExportTarget, export_file_name};
+use rookparcel_frontend::tags::TagState;
 use rookparcel_frontend::tr;
 
-use crate::app::{apply, labels, peek, selected, ui, with_core};
+use crate::app::{apply, labels, peek, selected, tags, ui, with_core};
 use crate::commands::Command;
 use crate::ui::{self as mui, Pick, Style};
 
@@ -90,15 +92,39 @@ pub fn run(cmd: Command) {
                 set_label(&ids, l);
             }
         }
+        Tag(i) => {
+            if let Some(t) = tags().get(usize::from(i)) {
+                apply(with_core(|c| {
+                    c.toggle_tag(&ids, t);
+                    c.events()
+                }));
+            }
+        }
+        NewTag => new_tag(ids),
+        ClearTags => apply(with_core(|c| {
+            c.clear_tags(&ids);
+            c.events()
+        })),
         _ => {}
     }
 }
 
-/// Whether a command needing a selection is enabled now, and its check mark (Label ▸,
-/// Bandwidth ▸, Initial Seeding, the sequential and first-and-last toggles), from `Core::menu_state`.
+/// Whether a command needing a selection is enabled now, and its check mark (Label ▸, Tags ▸,
+/// Bandwidth ▸, Initial Seeding, the sequential and first-and-last toggles), from `Core::menu_state`;
+/// Tags ▸'s items from `Core::tag_state` and `Core::can_clear_tags`, each looking at one tag or
+/// none (every menu and toolbar item is validated on its own).
 pub fn state(cmd: Command) -> (bool, Option<bool>) {
     use Command::*;
     let ids = selected();
+    match cmd {
+        _ if ids.is_empty() && matches!(cmd, Tag(_) | ClearTags) => return (false, None),
+        Tag(i) => {
+            return peek(|c| c.tag_state(&ids, usize::from(i)))
+                .map_or((false, None), |s| (true, Some(s == Some(TagState::On))));
+        }
+        ClearTags => return peek(|c| c.can_clear_tags(&ids)).map_or((false, None), |on| (on, None)),
+        _ => {}
+    }
     let Some(m) = peek(|c| c.menu_state(&ids)).flatten() else { return (false, None) };
     let limit = |i: u16, kib: u32| Some(LIMITS.get(usize::from(i)) == Some(&kib));
     match cmd {
@@ -118,6 +144,42 @@ pub fn state(cmd: Command) -> (bool, Option<bool>) {
         ),
         _ => (true, None),
     }
+}
+
+/// Whether a tag's item in Tags ▸ shows the mixed mark: some of the selection have it (D76).
+pub fn mixed(cmd: Command) -> bool {
+    let Command::Tag(i) = cmd else { return false };
+    let ids = selected();
+    peek(|c| c.tag_state(&ids, usize::from(i))).flatten() == Some(TagState::Mixed)
+}
+
+/// Tags ▸ > New Tag: a name as New Label asks it; the selection gets the tag (made known when
+/// new). An empty name does nothing, as New Label's; a refused one says why.
+fn new_tag(ids: Vec<TorrentId>) {
+    ask_tag(move |name| {
+        let made = with_core(|c| c.create_tag(&ids, name).map(|_| c.events()))?;
+        Some(made.map(|ev| apply(Some(ev))))
+    });
+}
+
+/// Asks a tag's name (New Tag's prompt) and hands it to `make`, which gives `Some(Err)` for a
+/// name refused, whose reason is then shown.
+pub fn ask_tag(make: impl FnOnce(&str) -> Option<Result<(), rookparcel_frontend::tags::TagError>> + 'static) {
+    crate::dialogs::input::ask(
+        &mui::text(tr!(NewTagTitle)),
+        &mui::text(tr!(NewTagPrompt)),
+        "",
+        move |name| {
+            if name.trim().is_empty() {
+                return;
+            }
+            if let Some(Err(e)) = make(&name) {
+                if let Some(mtm) = MainThreadMarker::new() {
+                    crate::dialogs::tell(None, Style::Warning, &e.text(), "", mtm);
+                }
+            }
+        },
+    );
 }
 
 /// Open Containing Folder's text: one finished torrent's own folder, or the torrents'.

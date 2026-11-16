@@ -97,6 +97,9 @@ impl Core {
                         if self.prefs.get_bool(&format!("torrent.{key}.paused"), false) {
                             self.list.set_user_paused(st.id, true);
                         }
+                        if crate::tags::on_first_sight(&mut self.list, &mut self.prefs, st.id, &key) {
+                            self.save_prefs();
+                        }
                     }
                     if !st.is_finished {
                         self.downloading.insert(st.id);
@@ -131,6 +134,7 @@ impl Core {
                 let key = info_hashes.key_hex();
                 self.prefs.remove(&format!("torrent.{key}.label"));
                 self.prefs.remove(&format!("torrent.{key}.paused"));
+                crate::tags::forget_torrent(&mut self.prefs, &key);
                 crate::seeding::SeedGoal::forget(&mut self.prefs, &key);
                 // the torrent shown went away
                 if shown(id) {

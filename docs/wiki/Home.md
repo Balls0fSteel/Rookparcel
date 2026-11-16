@@ -27,7 +27,7 @@ Most pages describe the Windows window and then say what differs in the GTK wind
 
 - [Adding torrents](Adding-torrents): files, magnet links, URLs, the Add New Torrent window
 - [The main window](The-main-window)
-- [Managing torrents](Managing-torrents): start, stop, remove, labels, queue order
+- [Managing torrents](Managing-torrents): start, stop, remove, labels and tags, queue order
 - [Torrent details and files](Torrent-details-and-files): the detail tabs, choosing files, Torrent Properties
 - [Creating torrents](Creating-torrents)
 - [Importing from µTorrent and qBittorrent](Importing-from-uTorrent-and-qBittorrent)

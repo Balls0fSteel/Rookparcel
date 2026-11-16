@@ -54,7 +54,7 @@ End users of Rookparcel, not developers. Task-oriented: "how do I...". Cover the
 | Updating-Rookparcel.md | A | the update check, self-update from the installer, beta channel, turning it off, nox |
 | Adding-torrents.md | B | .torrent files, magnet links, URLs, drag and drop, browser/file associations, the Add New Torrent window, adding stopped, watched/auto-load folder if any |
 | The-main-window.md | B | layout: categories/labels list, torrent list, columns, toolbar, status bar, detail tabs overview, list search box (filter), sorting, tray |
-| Managing-torrents.md | B | start/stop/pause/force start, remove (and with data), recheck, move storage, labels, queue order, copy magnet, open folder, multi-select, the right-click menu |
+| Managing-torrents.md | B | start/stop/pause/force start, remove (and with data), recheck, move storage, labels, tags, queue order, copy magnet, open folder, multi-select, the right-click menu |
 | Torrent-details-and-files.md | B | each detail tab (General, Trackers, Peers, Pieces, Files, Speed, Logger as they exist), file priorities, skipping files, the Files tab filter and menu, Torrent Properties dialog (trackers, limits, ratio) |
 | Creating-torrents.md | B | Create New Torrent window, v1/v2/hybrid, trackers, private, piece size, seeding it |
 | Importing-from-uTorrent-and-qBittorrent.md | B | the importers |

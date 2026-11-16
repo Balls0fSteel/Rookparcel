@@ -479,6 +479,11 @@ pub fn labels() -> Vec<String> {
     peek(|c| c.labels()).unwrap_or_default()
 }
 
+/// The tags the Tags submenu lists (D76): every known one, in order.
+pub fn tags() -> Vec<String> {
+    peek(|c| c.tags()).unwrap_or_default()
+}
+
 /// File > Profiles' names (`None`: the default profile).
 pub fn profile_names() -> Vec<Option<String>> {
     profile::menu(&paths::profiles_root()).into_iter().map(|(n, _)| n).collect()
@@ -578,7 +583,11 @@ pub fn run(cmd: Command) {
         StartAll | StopAll | OpenFolder | ForceStart | Start | Pause | Stop | QueueUp | QueueDown
         | QueueTop | QueueBottom | Remove | RemoveAndDelete | Recheck | UpdateTracker | SetLocation
         | InitialSeeding | Sequential | FirstLast | CopyMagnet | ExportTorrent | DownLimit(_)
-        | UpLimit(_) | NewLabel | RemoveLabel | Label(_) => crate::torrent_menu::run(cmd),
+        | UpLimit(_) | NewLabel | RemoveLabel | Label(_) | Tag(_) | NewTag | ClearTags => {
+            crate::torrent_menu::run(cmd)
+        }
+        // D76: the sidebar's Tags rows' context menu
+        SidebarNewTag | DeleteTag => crate::sidebar::run(cmd),
         FileFilter | FileOpen | FileOpenFolder | FileByOrder | FilePriority(_) | FileRelocate | FilesTree => {
             crate::detail::run(cmd)
         }
@@ -642,6 +651,8 @@ pub fn state(cmd: Command) -> (bool, Option<bool>) {
         Command::ImportQbt | Command::ImportUt => crate::import::enabled(),
         // D71: no Lock while the lock is switched off (the item is hidden too, `hidden`)
         Command::Lock => crate::lock::enabled() == Some(true),
+        // D76: greyed on the Tags heading and No Tag, as on Win32, GTK and the Web page
+        Command::DeleteTag => crate::sidebar::menu_on_tag(),
         _ => true,
     };
     (enabled, checked)

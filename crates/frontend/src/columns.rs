@@ -14,6 +14,8 @@ pub struct RowExtra<'a> {
     /// The user chose Pause rather than Stop (see [`crate::status`]).
     pub user_paused: bool,
     pub label: &'a str,
+    /// The torrent's tags (D76), in [`crate::tags::cmp`] order.
+    pub tags: &'a [String],
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -42,6 +44,8 @@ pub enum Column {
     SeedsPeers,
     SaveAs,
     Wasted,
+    /// The torrent's tags (D76): after µTorrent 2.2.1's columns, off by default.
+    Tags,
 }
 
 /// Cell alignment.
@@ -54,7 +58,7 @@ pub enum Align {
 impl Column {
     /// In µTorrent 2.2.1's default order. This is also the stable identity order used when
     /// saving the layout, so append new columns at the end.
-    pub const ALL: [Column; 24] = [
+    pub const ALL: [Column; 25] = [
         Column::Name,
         Column::QueuePosition,
         Column::Size,
@@ -79,6 +83,7 @@ impl Column {
         Column::SeedsPeers,
         Column::SaveAs,
         Column::Wasted,
+        Column::Tags,
     ];
 
     /// Short stable key for saved layouts.
@@ -108,6 +113,7 @@ impl Column {
             Column::SeedsPeers => "seedspeers",
             Column::SaveAs => "saveas",
             Column::Wasted => "wasted",
+            Column::Tags => "tags",
         }
     }
 
@@ -141,6 +147,7 @@ impl Column {
             Column::SeedsPeers => tr!(ColSeedsPeers),
             Column::SaveAs => tr!(ColSaveAs),
             Column::Wasted => tr!(ColWasted),
+            Column::Tags => tr!(ColTags),
         }
     }
 
@@ -153,6 +160,7 @@ impl Column {
             Column::Status => 110,
             Column::AddedOn | Column::CompletedOn => 125,
             Column::Tracker | Column::SaveAs => 180,
+            Column::Tags => 120,
             _ => 70,
         }
     }
@@ -182,6 +190,7 @@ impl Column {
             Column::Name
             | Column::Status
             | Column::Label
+            | Column::Tags
             | Column::Tracker
             | Column::SaveAs
             | Column::Done
@@ -250,6 +259,7 @@ impl Column {
             },
             Column::SaveAs => st.save_path.clone(),
             Column::Wasted => fmt::size(st.total_failed_bytes + st.total_redundant_bytes),
+            Column::Tags => crate::tags::display(x.tags),
         }
     }
 
@@ -291,6 +301,7 @@ impl Column {
             Column::SaveAs => natural_cmp(&a.save_path, &b.save_path),
             Column::Wasted => (a.total_failed_bytes + a.total_redundant_bytes)
                 .cmp(&(b.total_failed_bytes + b.total_redundant_bytes)),
+            Column::Tags => crate::tags::cmp_lists(xa.tags, xb.tags),
         }
     }
 }
@@ -588,6 +599,23 @@ mod tests {
         st.flags |= rookparcel_core::TorrentFlags::PAUSED;
         assert_eq!(Column::DownSpeed.text(&st, x), "");
         assert_eq!(Column::UpSpeed.text(&st, x), "");
+    }
+
+    /// D76: the Tags column is the last one, off by default, its cell the sorted names.
+    #[test]
+    fn the_tags_column() {
+        assert_eq!(Column::ALL.last(), Some(&Column::Tags));
+        assert!(!Column::Tags.default_visible());
+        assert_eq!((Column::Tags.key(), Column::Tags.align()), ("tags", Align::Left));
+        assert_eq!(Column::Tags.title(), crate::tr!(ColTags));
+        let st = TorrentStatus::default();
+        let (a, b) = (vec!["Movies".to_owned(), "tv".to_owned()], vec!["tv".to_owned()]);
+        let x = |tags| RowExtra { tags, ..RowExtra::default() };
+        assert_eq!(Column::Tags.text(&st, x(&a)), "Movies, tv");
+        assert_eq!(Column::Tags.text(&st, x(&[])), "");
+        assert_eq!(Column::Tags.cmp(&st, &st, x(&[]), x(&a)), Ordering::Less, "untagged first");
+        assert_eq!(Column::Tags.cmp(&st, &st, x(&a), x(&b)), Ordering::Less);
+        assert_eq!(Column::Tags.cmp(&st, &st, x(&b), x(&b)), Ordering::Equal);
     }
 
     /// A magnet without its metadata yet has no known size: empty cells, not "0 B".

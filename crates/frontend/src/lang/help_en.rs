@@ -708,6 +708,14 @@ helps! {
     MenuCopyMagnet = "Puts the selected torrents' magnet links on the clipboard, one per line, with their info-hashes, names and trackers.";
     /// frontend app/commands.rs Core::export_torrents -> export::Exports::request (post_torrent_file), Exports::on_torrent_file; MenuState::can_export = actions::any_has_metadata
     MenuExportTorrent = "Saves the selected torrents' .torrent files: one to a file you name, several into a folder you pick, each under its own name, numbered when the name is taken. A torrent added from a magnet link has none until its metadata has arrived.";
+    /// frontend tags.rs states, state, toggle (TagState::Mixed -> add for all, On -> remove for all); app/commands.rs Core::tag_state; model.rs TorrentList::tag_counts (the Tags group)
+    MenuTags = "Lists every tag; picking one gives it to all the selected torrents, or takes it off them when they all have it. A torrent can have any number of tags besides its label, and the category list shows each tag with its torrents.";
+    /// frontend tags.rs add (Tags in the torrent menu) / create (the category list) -> TorrentList::create_tag (tags::normalize: trimmed, no comma or control character, at most 128 bytes; MAX_TAGS 1024), store_torrent (torrent.<key>.tags), store_known (tags.list)
+    MenuNewTag = "Asks for a new tag's name. From Tags in the torrent menu the selected torrents get it; from the category list the tag is only made. A name cannot be empty or contain a comma; a name longer than 128 bytes is cut.";
+    /// frontend tags.rs clear -> TorrentList::set_tags(empty), store_torrent; app/commands.rs Core::can_clear_tags = tags::any_tagged
+    MenuRemoveAllTags = "Takes every tag off the selected torrents. The tags themselves stay in the category list.";
+    /// frontend tags.rs delete -> TorrentList::delete_tag (every torrent loses it, a list filtered by it shows all torrents), forget_everywhere (torrent.<key>.tags of torrents not in the list), store_known
+    MenuDeleteTag = "Deletes the tag: it leaves the category list and every torrent that has it loses it. The torrents themselves stay.";
 
     // ---- Menu: Files tab
     /// win32 app.rs cmd::FILE_OPEN -> open_file(folder = false) -> ShellExecuteW default verb

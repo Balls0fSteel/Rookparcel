@@ -45,6 +45,7 @@ use rookparcel_frontend::search::{Source as SearchSource, load_sources, store_so
 use rookparcel_frontend::seeding::{SeedGoal, SeedingGoal};
 use rookparcel_frontend::setup_guide;
 use rookparcel_frontend::status::{self, Category, status_icon};
+use rookparcel_frontend::tags::{self, TagState};
 use rookparcel_frontend::torrent_folders::{self, TorrentFiles, TorrentFolders, Watcher};
 use rookparcel_frontend::tracker_list::{self, TrackerList};
 use rookparcel_frontend::ui_lock::{self, Form};
@@ -346,9 +347,20 @@ mod cmd {
     pub const FIRST_LAST: u16 = 160;
     pub const COPY_MAGNET: u16 = 161;
     pub const EXPORT_TORRENT: u16 = 162;
+    /// The torrent menu's Tags > New Tag... and Remove All Tags (D76); the sidebar's New Tag...
+    /// and Delete Tag (its own menu, run where it is shown).
+    pub const TAG_NEW: u16 = 163;
+    pub const TAG_CLEAR: u16 = 164;
+    pub const TAG_DELETE: u16 = 165;
     /// File > Profiles' list, by `profile::menu` index (at most 256 entries).
     pub const PROFILE_BASE: u16 = 3700;
+    /// The torrent menu's Label list, by `App::menu_labels` index (at most `LABEL_COUNT`).
     pub const LABEL_BASE: u16 = 1000;
+    pub const LABEL_COUNT: u16 = 900;
+    /// The torrent menu's Tags list (D76), by `App::menu_tags` index: room for every tag that
+    /// can be known (`tags::MAX_TAGS`), so none is left out.
+    pub const TAG_BASE: u16 = 4000;
+    pub const TAG_COUNT: u16 = rookparcel_frontend::tags::MAX_TAGS as u16;
     pub const DL_LIMIT_BASE: u16 = 2000;
     pub const UL_LIMIT_BASE: u16 = 2100;
     pub const COLUMN_BASE: u16 = 3000;
@@ -469,13 +481,18 @@ struct App {
     detail: Detail,
     /// The torrent whose file list the Files tab has requested.
     files_requested: Option<TorrentId>,
+    /// The category tree's rows by item parameter: the fixed ones ([`TREE_FIXED`]), then one
+    /// per label and one per known tag ([`group_rows`]).
     tree_items: Vec<(HTREEITEM, Filter)>,
     tree_texts: Vec<String>,
-    tree_labels: Vec<String>,
+    /// The label and tag rows are being rebuilt: the tree's selection changes are not the
+    /// user's.
+    tree_busy: bool,
     /// `list.generation()` when the tree counts were last computed.
     tree_generation: Option<u64>,
-    /// Labels offered by the last context menu, by command offset.
+    /// Labels and tags offered by the last context menu, by command offset.
     menu_labels: Vec<String>,
+    menu_tags: Vec<String>,
 
     known: HashSet<TorrentId>,
     /// Torrents seen incomplete in this session (for the completion balloon).
@@ -1421,6 +1438,8 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
         let update_seen = prefs.get("update.seen").and_then(Version::parse);
         let mut list = TorrentList::new();
         list.set_sort(prefs.sort());
+        // the known tags (D76), before the torrents come with theirs
+        tags::load_into(&mut list, &prefs);
         let page =
             Page::ALL.into_iter().find(|p| prefs.get("ui.tab") == Some(p.key())).unwrap_or(Page::General);
         // The worker's notify runs on a fetch's worker thread: only post a message.
@@ -1488,9 +1507,10 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
             files_requested: None,
             tree_items: Vec::new(),
             tree_texts: Vec::new(),
-            tree_labels: Vec::new(),
+            tree_busy: false,
             tree_generation: None,
             menu_labels: Vec::new(),
+            menu_tags: Vec::new(),
             known: HashSet::new(),
             downloading: HashSet::new(),
             alerts: Vec::new(),
@@ -2089,7 +2109,15 @@ unsafe fn check_auto_shutdown(menu: HMENU, mode: Option<AutoMode>) {
     unsafe { CheckMenuRadioItem(menu, first, last, first + i, MF_BYCOMMAND) };
 }
 
-/// Category tree: Torrents with its four categories, then Labels.
+/// The category tree's fixed rows, by item parameter: Torrents (0) with its four categories,
+/// Labels with No Label, and Tags with No Tag (D76); the label and tag rows follow
+/// ([`group_rows`]).
+const TREE_LABELS: usize = 5;
+const TREE_TAGS: usize = 7;
+const TREE_FIXED: usize = 9;
+
+/// Category tree: Torrents with its four categories, then Labels and Tags (D76). The label and
+/// tag rows come with the first [`update_tree`].
 unsafe fn build_tree() {
     unsafe {
         let Some(tree) = with_app(|a| a.tree) else { return };
@@ -2105,13 +2133,20 @@ unsafe fn build_tree() {
         items.push((labels, Filter::Category(Category::All)));
         let none = insert_tree(tree, labels, tr!(CatNoLabel), items.len(), UiIcon::NoLabel);
         items.push((none, Filter::Label(String::new())));
-        send(tree, TVM_EXPAND, TVE_EXPAND as usize, root);
-        send(tree, TVM_EXPAND, TVE_EXPAND as usize, labels);
+        // no symbol of the set says tag: the labels' stand in
+        let tags = insert_tree(tree, TVI_ROOT, tr!(CatTags), items.len(), UiIcon::Labels);
+        items.push((tags, Filter::Category(Category::All)));
+        let none = insert_tree(tree, tags, tr!(CatNoTag), items.len(), UiIcon::NoLabel);
+        items.push((none, Filter::Tag(String::new())));
+        debug_assert_eq!(items.len(), TREE_FIXED);
+        for h in [root, labels, tags] {
+            send(tree, TVM_EXPAND, TVE_EXPAND as usize, h);
+        }
         send(tree, TVM_SELECTITEM, TVGN_CARET as usize, root);
         with_app(|a| {
             a.tree_texts = vec![String::new(); items.len()];
             a.tree_items = items;
-            a.tree_labels.clear();
+            a.tree_generation = None;
             a.feed_tree.clear();
         });
         update_feed_tree();
@@ -2133,83 +2168,77 @@ unsafe fn insert_tree(tree: HWND, parent: HTREEITEM, text: &str, param: usize, i
     }
 }
 
-/// Updates the counts in the tree and adds or removes label entries.
+/// The tree's rows after the fixed ones: one per label (under Labels), then one per known tag,
+/// used or not (under Tags, D76).
+fn group_rows(list: &TorrentList) -> Vec<Filter> {
+    let labels = list.labels().into_iter().map(|(l, _)| Filter::Label(l));
+    labels.chain(list.tags().iter().map(|t| Filter::Tag(t.clone()))).collect()
+}
+
+/// The torrent counts the tree shows beside the labels and the tags.
+struct TreeCounts {
+    labels: HashMap<String, usize>,
+    tags: HashMap<String, usize>,
+}
+
+impl TreeCounts {
+    fn of(list: &TorrentList) -> TreeCounts {
+        TreeCounts {
+            labels: list.labels().into_iter().collect(),
+            tags: list.tag_counts().into_iter().collect(),
+        }
+    }
+}
+
+/// Tree row `i`'s text (its filter `f`): a group's name, else a category's, label's or tag's
+/// name with its torrent count, as µTorrent showed them.
+fn tree_text(list: &TorrentList, counts: &TreeCounts, i: usize, f: &Filter) -> String {
+    match (i, f) {
+        (TREE_LABELS, _) => tr!(CatLabels).to_owned(),
+        (TREE_TAGS, _) => tr!(CatTags).to_owned(),
+        (_, Filter::Category(c)) => format!("{} ({})", c.label(), list.count(*c)),
+        (_, Filter::Label(l)) if l.is_empty() => format!("{} ({})", tr!(CatNoLabel), list.unlabeled()),
+        (_, Filter::Label(l)) => format!("{l} ({})", counts.labels.get(l).copied().unwrap_or(0)),
+        (_, Filter::Tag(t)) if t.is_empty() => format!("{} ({})", tr!(CatNoTag), list.untagged()),
+        (_, Filter::Tag(t)) => format!("{t} ({})", counts.tags.get(t).copied().unwrap_or(0)),
+    }
+}
+
+/// The tree row to select for the list's filter `filter` after the label and tag rows changed:
+/// the selected one `selected` while it still stands for it (Labels and Tags stand for every
+/// torrent, as Torrents does), else the first that does; `None` when none does any more (a
+/// label that went away), and the list shows every torrent.
+fn tree_target(items: &[Filter], selected: Option<usize>, filter: &Filter) -> Option<usize> {
+    selected
+        .filter(|&i| i < TREE_FIXED && items.get(i) == Some(filter))
+        .or_else(|| items.iter().position(|f| f == filter))
+}
+
+/// Updates the counts in the tree and adds or removes label and tag rows.
 unsafe fn update_tree() {
     let _timing = bench::span("update_tree");
     unsafe {
-        let Some((tree, labels, changed)) = with_app(|a| {
+        let Some((tree, rows)) = with_app(|a| {
             let generation = Some(a.list.generation());
-            if a.tree_generation == generation {
+            if a.tree_generation == generation || a.tree_items.len() < TREE_FIXED {
                 return None;
             }
             a.tree_generation = generation;
-            let labels = a.list.labels();
-            let names: Vec<String> = labels.iter().map(|(l, _)| l.clone()).collect();
-            let changed = names != a.tree_labels;
-            Some((a.tree, labels, changed))
+            let rows = group_rows(&a.list);
+            let same = a.tree_items[TREE_FIXED..].iter().map(|(_, f)| f).eq(rows.iter());
+            Some((a.tree, (!same).then_some(rows)))
         })
         .flatten() else {
             return;
         };
-        if changed {
-            // Label entries follow the fixed ones; drop them and add the current set.
-            let Some((stale, parent, selected_label)) = with_app(|a| {
-                let fixed = 7;
-                let stale: Vec<HTREEITEM> = a.tree_items.iter().skip(fixed).map(|(h, _)| *h).collect();
-                let sel = match a.list.filter() {
-                    Filter::Label(l) if !l.is_empty() => Some(l.clone()),
-                    _ => None,
-                };
-                (stale, a.tree_items[5].0, sel)
-            }) else {
-                return;
-            };
-            for h in stale {
-                send(tree, TVM_DELETEITEM, 0, h);
-            }
-            let mut new_items = Vec::new();
-            for (i, (l, _)) in labels.iter().enumerate() {
-                let h = insert_tree(tree, parent, l, 7 + i, UiIcon::Labels);
-                new_items.push((h, Filter::Label(l.clone())));
-            }
-            let reselect = selected_label
-                .and_then(|l| new_items.iter().find(|(_, f)| *f == Filter::Label(l.clone())).map(|x| x.0));
-            let names = labels.iter().map(|(l, _)| l.clone()).collect();
-            with_app(|a| {
-                a.tree_items.truncate(7);
-                a.tree_texts.truncate(7);
-                a.tree_texts.extend(std::iter::repeat_n(String::new(), new_items.len()));
-                a.tree_items.extend(new_items);
-                a.tree_labels = names;
-            });
-            match reselect {
-                Some(h) => {
-                    send(tree, TVM_SELECTITEM, TVGN_CARET as usize, h);
-                }
-                None => {
-                    // The selected label went away: show everything.
-                    let gone = with_app(|a| matches!(a.list.filter(), Filter::Label(l) if !l.is_empty()));
-                    if gone == Some(true) {
-                        let root = with_app(|a| a.tree_items[0].0).unwrap_or(0);
-                        send(tree, TVM_SELECTITEM, TVGN_CARET as usize, root);
-                    }
-                }
-            }
+        if let Some(rows) = rows {
+            rebuild_group_rows(tree, rows);
         }
         let Some(updates) = with_app(|a| {
-            let label_counts = a.list.labels();
-            let no_label = a.list.unlabeled();
+            let counts = TreeCounts::of(&a.list);
             let mut out = Vec::new();
             for (i, (h, f)) in a.tree_items.iter().enumerate() {
-                let text = match (i, f) {
-                    (5, _) => tr!(CatLabels).to_owned(),
-                    (_, Filter::Category(c)) => format!("{} ({})", c.label(), a.list.count(*c)),
-                    (_, Filter::Label(l)) if l.is_empty() => format!("{} ({no_label})", tr!(CatNoLabel)),
-                    (_, Filter::Label(l)) => {
-                        let n = label_counts.iter().find(|(x, _)| x == l).map_or(0, |x| x.1);
-                        format!("{l} ({n})")
-                    }
-                };
+                let text = tree_text(&a.list, &counts, i, f);
                 if a.tree_texts[i] != text {
                     a.tree_texts[i] = text.clone();
                     out.push((*h, text));
@@ -2226,6 +2255,63 @@ unsafe fn update_tree() {
             item.hItem = h;
             item.pszText = t.as_mut_ptr();
             send(tree, TVM_SETITEMW, 0, &item as *const _ as LPARAM);
+        }
+    }
+}
+
+/// Replaces the label and tag rows with `rows` ([`group_rows`]), then puts the selection back on
+/// the row of the list's filter. A label or tag that went away leaves the list showing every
+/// torrent (a deleted tag's filter is All already, `TorrentList::delete_tag`). While the list
+/// shows feed items their node keeps the selection.
+unsafe fn rebuild_group_rows(tree: HWND, rows: Vec<Filter>) {
+    unsafe {
+        let caret = send(tree, TVM_GETNEXTITEM, TVGN_CARET as usize, 0) as HTREEITEM;
+        let Some((stale, parents, selected)) = with_app(|a| {
+            a.tree_busy = true;
+            let stale: Vec<HTREEITEM> = a.tree_items[TREE_FIXED..].iter().map(|(h, _)| *h).collect();
+            let parents = (a.tree_items[TREE_LABELS].0, a.tree_items[TREE_TAGS].0);
+            let selected = a.tree_items.iter().position(|(h, _)| *h == caret);
+            (stale, parents, selected)
+        }) else {
+            return;
+        };
+        for h in stale {
+            send(tree, TVM_DELETEITEM, 0, h);
+        }
+        let mut new_items = Vec::with_capacity(rows.len());
+        for f in rows {
+            let (parent, name) = match &f {
+                Filter::Tag(t) => (parents.1, t.as_str()),
+                Filter::Label(l) => (parents.0, l.as_str()),
+                Filter::Category(_) => continue,
+            };
+            let h = insert_tree(tree, parent, name, TREE_FIXED + new_items.len(), UiIcon::Labels);
+            new_items.push((h, f));
+        }
+        let Some((target, filter_changed)) = with_app(|a| {
+            a.tree_items.truncate(TREE_FIXED);
+            a.tree_texts.truncate(TREE_FIXED);
+            a.tree_texts.extend(std::iter::repeat_n(String::new(), new_items.len()));
+            a.tree_items.extend(new_items);
+            let filters: Vec<Filter> = a.tree_items.iter().map(|(_, f)| f.clone()).collect();
+            let target = tree_target(&filters, selected, a.list.filter());
+            let gone = target.is_none();
+            if gone {
+                a.list.set_filter(Filter::Category(Category::All));
+            }
+            // a feed's items keep the list and their node
+            let target = if a.feed_view.is_some() { None } else { Some(a.tree_items[target.unwrap_or(0)].0) };
+            (target, gone)
+        }) else {
+            return;
+        };
+        if let Some(h) = target {
+            send(tree, TVM_SELECTITEM, TVGN_CARET as usize, h);
+        }
+        with_app(|a| a.tree_busy = false);
+        if filter_changed {
+            refresh_list();
+            selection_changed();
         }
     }
 }
@@ -3070,6 +3156,7 @@ unsafe fn on_alerts(hwnd: HWND) {
     let mut suspend = None;
     let mut magnet_ready = false;
     let mut adapters = false;
+    let mut prefs_changed = false;
     let Some((lists_changed, removed_any, repaint_page)) = with_app(|a| {
         // the alerts a dialog saved while it waited (fetch_trackers) come first
         let mut alerts = properties::take_alerts(&a.handle, &mut a.alerts);
@@ -3146,6 +3233,8 @@ unsafe fn on_alerts(hwnd: HWND) {
                                 let l = l.to_owned();
                                 a.list.set_label(st.id, &l);
                             }
+                            // its tags (D76); a new or untidy name is written back
+                            prefs_changed |= tags::on_first_sight(&mut a.list, &mut a.prefs, st.id, &key);
                             if a.prefs.get_bool(&format!("torrent.{key}.paused"), false) {
                                 a.list.set_user_paused(st.id, true);
                             }
@@ -3185,6 +3274,7 @@ unsafe fn on_alerts(hwnd: HWND) {
                     let key = info_hashes.key_hex();
                     a.keys.remove(&key);
                     a.prefs.remove(&format!("torrent.{key}.label"));
+                    tags::forget_torrent(&mut a.prefs, &key);
                     a.prefs.remove(&format!("torrent.{key}.paused"));
                     SeedGoal::forget(&mut a.prefs, &key);
                     SeedGoal::store_override(&mut a.prefs, &key, None);
@@ -3304,6 +3394,8 @@ unsafe fn on_alerts(hwnd: HWND) {
         }
         if removed_any {
             selection_changed();
+        }
+        if removed_any || prefs_changed {
             with_app(|a| {
                 let _ = a.prefs.save();
             });
@@ -4156,7 +4248,7 @@ unsafe fn reset_lock(hwnd: HWND, by: ResetBy) {
 }
 
 /// A menu command's icon. Check-marked commands (the Show and tray options, Initial Seeding,
-/// the download order, labels, limits, columns, Auto Shutdown modes) have none, nor do Exit,
+/// the download order, labels, tags, limits, columns, Auto Shutdown modes) have none, nor do Exit,
 /// Remove And, and Copy Magnet Link and Export .torrent (no symbol of the set says copy or
 /// export).
 /// Disable / Enable Feed is tagged where its menu is built ([`icons::tag_item`]).
@@ -4190,6 +4282,10 @@ fn command_icon(id: u16) -> Option<UiIcon> {
         cmd::SET_LOCATION => UiIcon::SetLocation,
         cmd::LABEL_NEW => UiIcon::NewLabel,
         cmd::LABEL_NONE => UiIcon::RemoveLabel,
+        // no symbol of the set says tag: the labels' stand in (D76)
+        cmd::TAG_NEW => UiIcon::NewLabel,
+        cmd::TAG_CLEAR => UiIcon::RemoveLabel,
+        cmd::TAG_DELETE => UiIcon::Remove,
         cmd::PROPERTIES => UiIcon::Properties,
         cmd::FEED_ADD => UiIcon::AddFeed,
         cmd::FEED_UPDATE => UiIcon::Refresh,
@@ -4307,12 +4403,7 @@ unsafe fn column_menu(hwnd: HWND, p: POINT) {
         }) else {
             return;
         };
-        let menu = CreatePopupMenu();
-        for c in Column::ALL {
-            let shown = cols.iter().any(|&(d, w)| d == c && w > 0);
-            let idx = Column::ALL.iter().position(|&d| d == c).unwrap_or(0) as u16;
-            append_flags(menu, checked(shown) | grayed(c == Column::Name), cmd::COLUMN_BASE + idx, c.title());
-        }
+        let menu = build_column_menu(&cols);
         let id = popup(hwnd, menu, p.x, p.y);
         if id >= cmd::COLUMN_BASE && ((id - cmd::COLUMN_BASE) as usize) < Column::ALL.len() {
             let col = Column::ALL[(id - cmd::COLUMN_BASE) as usize];
@@ -4323,6 +4414,19 @@ unsafe fn column_menu(hwnd: HWND, p: POINT) {
             });
             rebuild_columns();
         }
+    }
+}
+
+/// The column header's menu: every column (Tags last, D76), checked when shown; Name stays.
+unsafe fn build_column_menu(cols: &[(Column, i32)]) -> HMENU {
+    unsafe {
+        let menu = CreatePopupMenu();
+        for (idx, c) in Column::ALL.into_iter().enumerate() {
+            let shown = cols.iter().any(|&(d, w)| d == c && w > 0);
+            let flags = checked(shown) | grayed(c == Column::Name);
+            append_flags(menu, flags, cmd::COLUMN_BASE + idx as u16, c.title());
+        }
+        menu
     }
 }
 
@@ -4351,11 +4455,19 @@ struct TorrentMenu {
     has_metadata: bool,
     /// Connected to a remote server: no Open Folder.
     remote: bool,
+    /// Tags ▸'s items (D76): every known tag with its state across the selection.
+    tags: Vec<(String, TagState)>,
+    /// Some torrent has a tag: Remove All Tags is enabled.
+    can_clear_tags: bool,
 }
 
 impl TorrentMenu {
     fn new(a: &mut App, ids: &[TorrentId]) -> TorrentMenu {
-        let labels: Vec<String> = a.list.labels().into_iter().map(|(l, _)| l).collect();
+        let mut labels: Vec<String> = a.list.labels().into_iter().map(|(l, _)| l).collect();
+        labels.truncate(cmd::LABEL_COUNT as usize);
+        let mut tag_states = tags::states(&a.list, ids);
+        tag_states.truncate(cmd::TAG_COUNT as usize);
+        a.menu_tags = tag_states.iter().map(|(t, _)| t.clone()).collect();
         let first = ids.first().and_then(|&id| a.list.get(id));
         let current_label = ids.first().and_then(|&id0| {
             let v = a.list.extra(id0).label.to_owned();
@@ -4377,6 +4489,8 @@ impl TorrentMenu {
             first_last: actions::all_flagged(&a.list, ids, TorrentFlags::FIRST_LAST_PIECES),
             has_metadata: actions::any_has_metadata(&a.list, ids),
             remote: crate::remote_ui::is_remote(),
+            tags: tag_states,
+            can_clear_tags: tags::any_tagged(&a.list, ids),
         }
     }
 }
@@ -4471,6 +4585,19 @@ unsafe fn build_torrent_menu(m: &TorrentMenu) -> HMENU {
             );
         }
         submenu_icon(menu, lm, tr!(MenuLabel), UiIcon::Labels);
+        // Tags (D76): a tag is checked when every torrent has it; a menu has no mixed mark, so
+        // one only some have shows none (picking it gives it to all); New Tag... and Remove All
+        // Tags come first, as Label's New Label... and Remove Label do
+        let tm = CreatePopupMenu();
+        append(tm, cmd::TAG_NEW, tr!(MenuNewTag));
+        append_flags(tm, grayed(!m.can_clear_tags), cmd::TAG_CLEAR, tr!(MenuRemoveAllTags));
+        if !m.tags.is_empty() {
+            separator(tm);
+        }
+        for (i, (t, state)) in m.tags.iter().take(cmd::TAG_COUNT as usize).enumerate() {
+            append_flags(tm, checked(*state == TagState::On), cmd::TAG_BASE + i as u16, &tags::menu_text(t));
+        }
+        submenu_icon(menu, tm, tr!(MenuTags), UiIcon::Labels);
         separator(menu);
         append(menu, cmd::PROPERTIES, &shortcut(tr!(MenuProperties), Hotkey::Enter));
         menu
@@ -4784,10 +4911,22 @@ unsafe fn on_command(hwnd: HWND, id: u16) {
                 }
             }
             cmd::LABEL_NONE => set_label(""),
-            id if (cmd::LABEL_BASE..cmd::LABEL_BASE + 900).contains(&id) => {
+            id if (cmd::LABEL_BASE..cmd::LABEL_BASE + cmd::LABEL_COUNT).contains(&id) => {
                 let l = with_app(|a| a.menu_labels.get((id - cmd::LABEL_BASE) as usize).cloned()).flatten();
                 if let Some(l) = l {
                     set_label(&l);
+                }
+            }
+            cmd::TAG_NEW => new_tag(hwnd, &selected_ids()),
+            cmd::TAG_CLEAR => {
+                let ids = selected_ids();
+                change_tags(|a| tags::clear(&mut a.list, &mut a.prefs, &ids));
+            }
+            id if (cmd::TAG_BASE..cmd::TAG_BASE + cmd::TAG_COUNT).contains(&id) => {
+                let t = with_app(|a| a.menu_tags.get((id - cmd::TAG_BASE) as usize).cloned()).flatten();
+                if let Some(t) = t {
+                    let ids = selected_ids();
+                    change_tags(|a| tags::toggle(&mut a.list, &mut a.prefs, &ids, &t));
                 }
             }
             id if (cmd::DL_LIMIT_BASE..cmd::DL_LIMIT_BASE + LIMITS.len() as u16).contains(&id)
@@ -5044,6 +5183,55 @@ fn set_label(label: &str) {
         refresh_list();
         update_tree();
     }
+}
+
+/// A change to the tags (D76) made by `f`, which changes the list and the preferences: the
+/// preferences are saved and the list and the tree follow.
+fn change_tags(f: impl FnOnce(&mut App)) {
+    with_app(|a| {
+        f(a);
+        if let Err(e) = a.prefs.save() {
+            a.detail.push_log(format!("{} {}", now_hms(), tr!(LogPrefsNotSaved, error = e)));
+        }
+    });
+    unsafe {
+        refresh_list();
+        update_tree();
+    }
+}
+
+/// New Tag... (D76): asks for a name (the New Label prompt's box); from the torrent menu `ids`
+/// get the tag, from the sidebar (no `ids`) it is only made known. A name that is refused says
+/// why.
+unsafe fn new_tag(hwnd: HWND, ids: &[TorrentId]) {
+    let Some(name) = dialogs::input(hwnd, tr!(NewTagTitle), tr!(NewTagPrompt), "") else { return };
+    // OK on an empty box is Cancel, as New Label takes it
+    if name.is_empty() {
+        return;
+    }
+    let mut result = Ok(());
+    change_tags(|a| {
+        result = if ids.is_empty() {
+            tags::create(&mut a.list, &mut a.prefs, &name).map(|_| ())
+        } else {
+            tags::add(&mut a.list, &mut a.prefs, ids, &name)
+        };
+    });
+    if let Err(e) = result {
+        dialogs::error(hwnd, &e.text());
+    }
+}
+
+/// The sidebar's Delete Tag (D76), after a question: every torrent loses the tag; a list
+/// showing it shows every torrent again (the tree's selection follows, [`rebuild_group_rows`]).
+unsafe fn delete_tag(hwnd: HWND, name: &str) {
+    if !dialogs::confirm(hwnd, &tr!(AskDeleteTag, name)) {
+        return;
+    }
+    change_tags(|a| {
+        tags::delete(&mut a.list, &mut a.prefs, name);
+    });
+    unsafe { selection_changed() };
 }
 
 unsafe fn torrent_action(id: u16) {
@@ -5724,8 +5912,9 @@ fn sync_web(a: &mut App) {
 }
 
 /// `WM_APP_WEBUI`: what a browser changed through the Web UI (its host's queue). The keys go
-/// into the preferences without being mirrored back, a label or a pause mark into the list as
-/// well, and anything the Preferences dialog edits is applied as its OK would. A label for a
+/// into the preferences without being mirrored back, a label, a pause mark or tags (D76) into
+/// the list as well ([`apply_web_change`]), and anything the Preferences dialog edits is applied
+/// as its OK would. A label for a
 /// torrent not seen yet (one the browser is adding) waits in the preferences for its first
 /// sight.
 fn on_web_changes() {
@@ -5740,16 +5929,7 @@ fn on_web_changes() {
         let before = Options::load(&a.prefs, &a.save_path);
         a.prefs.apply_changes(&changes);
         for (k, v) in &changes {
-            let Some(rest) = k.strip_prefix("torrent.") else { continue };
-            if let Some(key) = rest.strip_suffix(".label") {
-                if let Some(&id) = a.keys.get(key) {
-                    a.list.set_label(id, v.as_deref().unwrap_or(""));
-                }
-            } else if let Some(key) = rest.strip_suffix(".paused") {
-                if let Some(&id) = a.keys.get(key) {
-                    a.list.set_user_paused(id, v.as_deref() == Some("1"));
-                }
-            }
+            apply_web_change(&mut a.list, &a.keys, k, v.as_deref());
         }
         let after = Options::load(&a.prefs, &a.save_path);
         if after != before {
@@ -5765,6 +5945,27 @@ fn on_web_changes() {
             // a browser changed the search sources: the drop-down and the search windows
             search_sources_changed();
         }
+    }
+}
+
+/// A preference the Web UI changed (`key` to `value`, `None`: removed), into the list when it
+/// is a torrent's label, pause mark or tags, or the known tags (D76); `keys` finds a torrent by
+/// its `InfoHashes::key_hex` (one not seen yet takes its values at its first sight).
+fn apply_web_change(
+    list: &mut TorrentList,
+    keys: &HashMap<String, TorrentId>,
+    key: &str,
+    value: Option<&str>,
+) {
+    if key == tags::KNOWN_KEY || tags::key_of(key).is_some() {
+        tags::apply_change(list, key, value, |k| keys.get(k).copied());
+        return;
+    }
+    let Some(rest) = key.strip_prefix("torrent.") else { return };
+    if let Some(&id) = rest.strip_suffix(".label").and_then(|k| keys.get(k)) {
+        list.set_label(id, value.unwrap_or(""));
+    } else if let Some(&id) = rest.strip_suffix(".paused").and_then(|k| keys.get(k)) {
+        list.set_user_paused(id, value == Some("1"));
     }
 }
 
@@ -7252,6 +7453,20 @@ unsafe fn tree_menu(hwnd: HWND, tree: HWND, p: POINT, keyboard: bool) {
             windows_sys::Win32::Graphics::Gdi::ScreenToClient(tree, &mut ht.pt);
             send(tree, TVM_HITTEST, 0, &mut ht as *mut _ as LPARAM) as HTREEITEM
         };
+        // the Tags group (D76): its root, No Tag, or a tag (`Some(name)`)
+        let tag_row = with_app(|a| {
+            let i = a.tree_items.iter().position(|(x, _)| *x == h)?;
+            match &a.tree_items[i].1 {
+                _ if i == TREE_TAGS => Some(None),
+                Filter::Tag(t) if t.is_empty() => Some(None),
+                Filter::Tag(t) => Some(Some(t.clone())),
+                _ => None,
+            }
+        })
+        .flatten();
+        if let Some(tag) = tag_row {
+            return tag_menu(hwnd, p, tag);
+        }
         let Some((feed, enabled)) = with_app(|a| {
             let feed = a.feed_tree.iter().find(|(x, _)| *x == h)?.1;
             let enabled = feed.and_then(|id| rss_lock(&a.rss).d.feed(id).map(|f| f.enabled)).unwrap_or(true);
@@ -7272,6 +7487,29 @@ unsafe fn tree_menu(hwnd: HWND, tree: HWND, p: POINT, keyboard: bool) {
         append(menu, cmd::RSS, tr!(MenuRss));
         let id = popup(hwnd, menu, p.x, p.y);
         feed_command(hwnd, id, feed);
+    }
+}
+
+/// The tree's Tags group's right-click menu (D76): New Tag... (made known, on no torrent) and,
+/// on a tag's row (`tag`), Delete Tag.
+unsafe fn tag_menu(hwnd: HWND, p: POINT, tag: Option<String>) {
+    unsafe {
+        let menu = build_tag_menu(tag.is_some());
+        match (popup(hwnd, menu, p.x, p.y), tag) {
+            (cmd::TAG_NEW, _) => new_tag(hwnd, &[]),
+            (cmd::TAG_DELETE, Some(t)) => delete_tag(hwnd, &t),
+            _ => {}
+        }
+    }
+}
+
+/// [`tag_menu`]'s items: Delete Tag greyed but on a tag's row.
+unsafe fn build_tag_menu(on_tag: bool) -> HMENU {
+    unsafe {
+        let menu = CreatePopupMenu();
+        append(menu, cmd::TAG_NEW, tr!(MenuNewTag));
+        append_flags(menu, grayed(!on_tag), cmd::TAG_DELETE, tr!(MenuDeleteTag));
+        menu
     }
 }
 
@@ -7551,7 +7789,7 @@ unsafe fn on_notify(hwnd: HWND, nm: *const NMHDR) -> LRESULT {
             (IDC_TREE, TVN_SELCHANGEDW) => {
                 let tv = &*(nm as *const NMTREEVIEWW);
                 let idx = tv.itemNew.lParam as usize;
-                if with_app(|a| a.feed_tree_busy) != Some(false) {
+                if with_app(|a| a.feed_tree_busy || a.tree_busy) != Some(false) {
                     return 0;
                 }
                 if idx >= FEED_PARAM {
@@ -8443,6 +8681,245 @@ mod tests {
         assert_eq!(clipboard_lines("magnet:?a\nmagnet:?b"), "magnet:?a\r\nmagnet:?b");
         assert_eq!(clipboard_lines("magnet:?a"), "magnet:?a");
         assert_eq!(export_error("Show", "access denied"), "Could not export Show\n\naccess denied");
+    }
+
+    /// The text a menu item shows, by command.
+    unsafe fn item_text(menu: HMENU, id: u16) -> String {
+        let mut buf = [0u16; 260];
+        let n = unsafe { GetMenuStringW(menu, id as u32, buf.as_mut_ptr(), buf.len() as i32, MF_BYCOMMAND) };
+        String::from_utf16_lossy(&buf[..n.max(0) as usize])
+    }
+
+    /// A list of three torrents for the tags' tests: 1 and 2 have the label "linux"; 1 has the
+    /// tags Movies and tv, 2 has tv, 3 none, and "unused" is known with no torrent (D76).
+    fn tagged_list() -> TorrentList {
+        let st = |raw: u64| rookparcel_core::TorrentStatus {
+            id: TorrentId::from_raw(raw),
+            info_hashes: rookparcel_core::InfoHashes::v1(rookparcel_core::Sha1Hash([raw as u8; 20])),
+            name: format!("t{raw}"),
+            ..rookparcel_core::TorrentStatus::default()
+        };
+        let mut l = TorrentList::new();
+        l.update([st(1), st(2), st(3)]);
+        let id = TorrentId::from_raw;
+        l.set_label(id(1), "linux");
+        l.set_label(id(2), "linux");
+        l.set_known_tags(vec!["unused".into()]);
+        l.set_tags(id(1), &["tv".into(), "Movies".into()]);
+        l.set_tags(id(2), &["tv".into()]);
+        l
+    }
+
+    /// The command ranges of the menus never overlap, and the Tags list has room for every tag
+    /// that can be known (D76).
+    #[test]
+    fn the_menu_command_ranges_are_apart() {
+        let mut ranges = [
+            (cmd::LABEL_BASE, cmd::LABEL_COUNT),
+            (cmd::DL_LIMIT_BASE, LIMITS.len() as u16),
+            (cmd::UL_LIMIT_BASE, LIMITS.len() as u16),
+            (cmd::COLUMN_BASE, Column::ALL.len() as u16),
+            (cmd::FILE_PRIO_BASE, PRIORITIES.len() as u16),
+            (cmd::AUTO_SHUTDOWN_BASE, AutoMode::MENU.len() as u16),
+            (cmd::IMPORT_BASE, import::Client::ALL.len() as u16),
+            (cmd::SEARCH_MODE_BASE, 2 + search_ui::MAX_SOURCES as u16),
+            (cmd::PROFILE_BASE, 256),
+            (cmd::TAG_BASE, cmd::TAG_COUNT),
+        ];
+        ranges.sort();
+        assert!(ranges[0].0 > cmd::TAG_DELETE, "the single commands come first");
+        for w in ranges.windows(2) {
+            assert!(w[0].0 + w[0].1 <= w[1].0, "{w:?}");
+        }
+        assert_eq!(cmd::TAG_COUNT as usize, tags::MAX_TAGS);
+        assert!((cmd::TAG_BASE as u32 + cmd::TAG_COUNT as u32) < u16::MAX as u32);
+    }
+
+    /// The torrent menu's Tags submenu (D76) right after Label and in its order: New Tag... and
+    /// Remove All Tags (greyed when no selected torrent has a tag), a separator, then every
+    /// known tag, checked when every selected torrent has it (a mixed one unchecked), its `&`
+    /// doubled.
+    #[test]
+    fn the_torrent_menu_tags_submenu() {
+        unsafe {
+            let state =
+                |menu: HMENU, id: u16| GetMenuState(menu, id as u32, MF_BYCOMMAND) & (MF_CHECKED | MF_GRAYED);
+            let m = TorrentMenu {
+                tags: vec![
+                    ("Movies".into(), TagState::On),
+                    ("R&B".into(), TagState::Mixed),
+                    ("tv".into(), TagState::Off),
+                ],
+                can_clear_tags: true,
+                ..TorrentMenu::default()
+            };
+            let menu = build_torrent_menu(&m);
+            let n = GetMenuItemCount(menu);
+            let texts: Vec<String> = (0..n)
+                .map(|i| {
+                    let mut buf = [0u16; 128];
+                    let len =
+                        GetMenuStringW(menu, i as u32, buf.as_mut_ptr(), buf.len() as i32, MF_BYPOSITION);
+                    String::from_utf16_lossy(&buf[..len.max(0) as usize])
+                })
+                .collect();
+            let label = texts.iter().position(|t| t == tr!(MenuLabel)).expect("the Label submenu");
+            assert_eq!(texts[label + 1], tr!(MenuTags), "Tags right after Label");
+            let sub = GetSubMenu(menu, label as i32 + 1);
+            assert!(!sub.is_null());
+            let ids: Vec<u32> = (0..GetMenuItemCount(sub)).map(|i| GetMenuItemID(sub, i)).collect();
+            assert_eq!(
+                ids[..2],
+                [cmd::TAG_NEW as u32, cmd::TAG_CLEAR as u32],
+                "as Label: the commands first"
+            );
+            assert_ne!(GetMenuState(sub, 2, MF_BYPOSITION) & MF_SEPARATOR, 0, "then a separator");
+            let want = [cmd::TAG_BASE, cmd::TAG_BASE + 1, cmd::TAG_BASE + 2].map(u32::from);
+            assert_eq!(ids[3..], want);
+            assert_eq!(state(menu, cmd::TAG_BASE), MF_CHECKED);
+            assert_eq!(state(menu, cmd::TAG_BASE + 1), 0, "mixed: no mark");
+            assert_eq!(state(menu, cmd::TAG_BASE + 2), 0);
+            assert_eq!(item_text(menu, cmd::TAG_BASE + 1), "R&&B");
+            assert_eq!(state(menu, cmd::TAG_CLEAR), 0);
+            for id in [cmd::TAG_NEW, cmd::TAG_CLEAR] {
+                let text = item_text(menu, id);
+                assert!(crate::help::for_menu_text(&text).is_some(), "no help for {text:?}");
+            }
+            assert!(crate::help::for_menu_text(tr!(MenuTags)).is_some());
+            DestroyMenu(menu);
+
+            // no tag known, none on the selection
+            let menu = build_torrent_menu(&TorrentMenu::default());
+            let n = GetMenuItemCount(menu);
+            let sub = (0..n)
+                .map(|i| GetSubMenu(menu, i))
+                .find(|&s| !s.is_null() && GetMenuItemID(s, 0) == cmd::TAG_NEW as u32)
+                .expect("the Tags submenu");
+            assert_eq!(GetMenuItemCount(sub), 2);
+            assert_eq!(state(menu, cmd::TAG_CLEAR), MF_GRAYED);
+            DestroyMenu(menu);
+
+            // the sidebar's menu: Delete Tag only on a tag's row
+            for on_tag in [true, false] {
+                let menu = build_tag_menu(on_tag);
+                assert_eq!(GetMenuItemID(menu, 0), cmd::TAG_NEW as u32);
+                assert_eq!(GetMenuItemID(menu, 1), cmd::TAG_DELETE as u32);
+                assert_eq!(state(menu, cmd::TAG_DELETE), grayed(!on_tag));
+                let text = item_text(menu, cmd::TAG_DELETE);
+                assert!(crate::help::for_menu_text(&text).is_some(), "no help for {text:?}");
+                DestroyMenu(menu);
+            }
+        }
+    }
+
+    /// The menu's state for a selection: each tag's state, Remove All Tags while one has a tag;
+    /// what the menu offered is kept for the command (D76).
+    #[test]
+    fn the_torrent_menu_reads_the_selections_tags() {
+        let l = tagged_list();
+        let id = TorrentId::from_raw;
+        let states = tags::states(&l, &[id(1), id(2)]);
+        assert_eq!(
+            states,
+            [
+                ("Movies".to_owned(), TagState::Mixed),
+                ("tv".to_owned(), TagState::On),
+                ("unused".to_owned(), TagState::Off)
+            ]
+        );
+        assert!(tags::any_tagged(&l, &[id(3), id(2)]));
+        assert!(!tags::any_tagged(&l, &[id(3)]));
+    }
+
+    /// The tree's Tags group (D76): under Labels' rows one row per known tag, used or not, with
+    /// its count (a torrent with two tags counts under each), and No Tag; the group's own row is
+    /// its name alone, as Labels'.
+    #[test]
+    fn the_tree_shows_the_tags_with_their_counts() {
+        let l = tagged_list();
+        let rows = group_rows(&l);
+        assert_eq!(
+            rows,
+            [
+                Filter::Label("linux".into()),
+                Filter::Tag("Movies".into()),
+                Filter::Tag("tv".into()),
+                Filter::Tag("unused".into())
+            ]
+        );
+        let counts = TreeCounts::of(&l);
+        let all = Filter::Category(Category::All);
+        let text = |i: usize, f: &Filter| tree_text(&l, &counts, i, f);
+        assert_eq!(text(0, &all), format!("{} (3)", Category::All.label()));
+        assert_eq!(text(TREE_LABELS, &all), tr!(CatLabels));
+        assert_eq!(text(TREE_LABELS + 1, &Filter::Label(String::new())), format!("{} (1)", tr!(CatNoLabel)));
+        assert_eq!(text(TREE_TAGS, &all), tr!(CatTags));
+        assert_eq!(text(TREE_TAGS + 1, &Filter::Tag(String::new())), format!("{} (1)", tr!(CatNoTag)));
+        let texts: Vec<String> = rows.iter().enumerate().map(|(k, f)| text(TREE_FIXED + k, f)).collect();
+        assert_eq!(texts, ["linux (2)", "Movies (1)", "tv (2)", "unused (0)"]);
+
+        // the selection after the rows changed
+        let mut items: Vec<Filter> = vec![all.clone(); TREE_FIXED];
+        items[TREE_LABELS + 1] = Filter::Label(String::new());
+        items[TREE_TAGS + 1] = Filter::Tag(String::new());
+        items.extend(rows);
+        let tv = Filter::Tag("tv".into());
+        assert_eq!(tree_target(&items, Some(TREE_TAGS), &all), Some(TREE_TAGS), "Tags stays");
+        assert_eq!(tree_target(&items, Some(TREE_FIXED + 1), &all), Some(0), "a deleted tag's row");
+        assert_eq!(tree_target(&items, Some(TREE_FIXED + 3), &tv), Some(TREE_FIXED + 2), "moved down");
+        assert_eq!(tree_target(&items, None, &Filter::Tag(String::new())), Some(TREE_TAGS + 1));
+        assert_eq!(tree_target(&items, Some(TREE_FIXED), &Filter::Tag("gone".into())), None);
+    }
+
+    /// The Tags column (D76): its cell the torrent's tags in order, in the header's menu as the
+    /// last column, off until picked.
+    #[test]
+    fn the_tags_column() {
+        let l = tagged_list();
+        let id = TorrentId::from_raw;
+        let cell = |raw| Column::Tags.text(l.get(id(raw)).unwrap(), l.extra(id(raw)));
+        assert_eq!((cell(1), cell(2), cell(3)), ("Movies, tv".to_owned(), "tv".to_owned(), String::new()));
+        unsafe {
+            let cols = Prefs::default().columns();
+            let menu = build_column_menu(&cols);
+            let last = cmd::COLUMN_BASE + Column::ALL.len() as u16 - 1;
+            assert_eq!(GetMenuItemCount(menu) as usize, Column::ALL.len());
+            assert_eq!(GetMenuItemID(menu, Column::ALL.len() as i32 - 1), last as u32);
+            assert_eq!(item_text(menu, last), tr!(ColTags));
+            assert_eq!(GetMenuState(menu, last as u32, MF_BYCOMMAND) & MF_CHECKED, 0, "off by default");
+            DestroyMenu(menu);
+            let shown: Vec<(Column, i32)> =
+                cols.iter().map(|&(c, w)| if c == Column::Tags { (c, w.abs()) } else { (c, w) }).collect();
+            let menu = build_column_menu(&shown);
+            assert_eq!(GetMenuState(menu, last as u32, MF_BYCOMMAND) & MF_CHECKED, MF_CHECKED);
+            DestroyMenu(menu);
+        }
+    }
+
+    /// What a browser changed through the hosted Web UI reaches the list: a torrent's tags and
+    /// the known tags (D76) beside its label and pause mark; a torrent not seen yet waits for its
+    /// first sight.
+    #[test]
+    fn the_hosted_web_ui_changes_tags() {
+        let mut l = tagged_list();
+        let id = TorrentId::from_raw;
+        let key =
+            |raw: u64| rookparcel_core::InfoHashes::v1(rookparcel_core::Sha1Hash([raw as u8; 20])).key_hex();
+        let keys: HashMap<String, TorrentId> = (1..=3).map(|raw| (key(raw), id(raw))).collect();
+        apply_web_change(&mut l, &keys, &tags::torrent_key(&key(3)), Some("new,tv"));
+        assert_eq!(l.tags_of(id(3)), ["new", "tv"]);
+        assert!(l.tags().iter().any(|t| t == "new"), "made known");
+        apply_web_change(&mut l, &keys, &tags::torrent_key(&key(1)), None);
+        assert!(l.tags_of(id(1)).is_empty());
+        apply_web_change(&mut l, &keys, tags::KNOWN_KEY, Some("a,new,tv"));
+        assert_eq!(l.tags(), ["a", "new", "tv"]);
+        apply_web_change(&mut l, &keys, &tags::torrent_key("ffff"), Some("later"));
+        assert!(!l.tags().iter().any(|t| t == "later"), "not seen yet");
+        apply_web_change(&mut l, &keys, &format!("torrent.{}.label", key(3)), Some("films"));
+        apply_web_change(&mut l, &keys, &format!("torrent.{}.paused", key(3)), Some("1"));
+        assert_eq!(l.extra(id(3)).label, "films");
+        assert!(l.extra(id(3)).user_paused);
+        apply_web_change(&mut l, &keys, "ui.something", Some("x"));
     }
 
     #[test]

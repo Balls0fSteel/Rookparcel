@@ -28,6 +28,9 @@ pub struct Extra<'a> {
     pub private: bool,
     /// The torrent's own seeding goal, if it overrides the default.
     pub seed_goal: Option<SeedGoal>,
+    /// Its tags (D76), in `tags::cmp` order: `tags` is them joined by `", "`, as qBittorrent
+    /// sends them.
+    pub tags: &'a [String],
 }
 
 /// `ratio_limit` and `seeding_time_limit` (minutes) of a torrent's own goal: -2 without one
@@ -266,7 +269,7 @@ pub fn fields(st: &TorrentStatus, x: &Extra<'_>) -> Vec<Json> {
         st.total_wanted.into(),
         state_str(st).into(),
         st.super_seeding.into(),
-        "".into(),
+        rookparcel_frontend::tags::display(x.tags).into(),
         st.active_duration.into(),
         st.total.into(),
         st.current_tracker.clone().into(),
@@ -365,5 +368,9 @@ mod tests {
         let o = object(&s, &Extra::default());
         assert_eq!(o.get("seq_dl"), Some(&Json::Bool(true)));
         assert_eq!(o.get("f_l_piece_prio"), Some(&Json::Bool(true)));
+        assert_eq!(o.get("tags").and_then(Json::as_str), Some(""));
+        let tags = ["Movies".to_owned(), "tv".to_owned()];
+        let o = object(&s, &Extra { tags: &tags, ..Extra::default() });
+        assert_eq!(o.get("tags").and_then(Json::as_str), Some("Movies, tv"), "qBittorrent's separator");
     }
 }

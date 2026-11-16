@@ -408,6 +408,8 @@ impl Core {
             RunProgram::new(added, finished)
         });
         let w = wake.clone();
+        let mut list = TorrentList::new();
+        crate::tags::load_into(&mut list, &prefs);
         let mut core = Core {
             session: Some(session),
             handle: handle.clone(),
@@ -417,7 +419,7 @@ impl Core {
             wake: wake.clone(),
             clock,
             updates_here: updates,
-            list: TorrentList::new(),
+            list,
             stats: SessionStats::default(),
             save_path: opts.gui.download_dir.clone(),
             prefs,
@@ -592,6 +594,12 @@ impl Core {
     /// The labels in use, for the label menus and the Add dialog.
     pub fn labels(&self) -> Vec<String> {
         self.list.labels().into_iter().map(|(l, _)| l).collect()
+    }
+
+    /// Every known tag (D76), used or not, in order: the sidebar's Tags group takes them with
+    /// their counts from [`TorrentList::tag_counts`].
+    pub fn tags(&self) -> Vec<String> {
+        self.list.tags().to_vec()
     }
 
     /// The name of the torrent in the list with info-hash `key` (`InfoHashes::key_hex`).

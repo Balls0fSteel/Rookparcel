@@ -26,6 +26,7 @@ use rookparcel_frontend::properties::{self, Changes, Field, Fields, Properties, 
 use rookparcel_frontend::scheduler::Mode;
 use rookparcel_frontend::seeding::SeedGoal;
 use rookparcel_frontend::status::Category;
+use rookparcel_frontend::tags::{self, TagError};
 use rookparcel_frontend::{actions, export, fmt, tr};
 
 use super::api::Request;
@@ -62,12 +63,14 @@ fn not_found() -> CmdError {
 }
 
 /// The view filter of a client, for `"all": true`: the same rules as the `view` subscription
-/// (`native.rs`): a category or a label, and a case-insensitive name search.
+/// (`native.rs`): a category, a label or a tag, and a case-insensitive name search.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ViewFilter {
     pub category: Option<Category>,
     /// `Some("")` means "no label".
     pub label: Option<String>,
+    /// A tag (D76); `Some("")` means "no tag" (torrents without any).
+    pub tag: Option<String>,
     /// Lower-case; empty for none.
     pub search: String,
 }
@@ -85,6 +88,12 @@ impl ViewFilter {
                 return false;
             }
         }
+        if let Some(t) = &self.tag {
+            let have = st.tags_of(&e.hash);
+            if if t.is_empty() { !have.is_empty() } else { !have.contains(t) } {
+                return false;
+            }
+        }
         self.search.is_empty() || e.status.name.to_lowercase().contains(&self.search)
     }
 }
@@ -99,18 +108,30 @@ pub enum Selection {
 }
 
 impl Selection {
-    /// `{"ids":[...]}` or `{"all":true,"filter":{"category":...,"label":...,"search":...}}`.
+    /// `{"ids":[...]}` or `{"all":true,"filter":{"category":...,"label":...,"tag":...,
+    /// "search":...}}` (a tag before a label before a category, as the view's filter).
     pub fn parse(body: &Json) -> Result<Selection, &'static str> {
         if body.get("all").and_then(Json::as_bool) == Some(true) {
             let f = body.get("filter");
-            let label = f.and_then(|f| f.get("label")).and_then(Json::as_str).map(str::to_owned);
+            // a tag (D76) names the view alone, its name as the tags read it ("" for none; a
+            // name they refuse as ",", which no tag is, so it matches nothing)
+            let tag = f.and_then(|f| f.get("tag")).and_then(Json::as_str).map(|t| match t.trim() {
+                "" => String::new(),
+                t => tags::normalize(t).unwrap_or_else(|_| ",".to_owned()),
+            });
+            let label = match tag {
+                Some(_) => None,
+                None => f.and_then(|f| f.get("label")).and_then(Json::as_str).map(str::to_owned),
+            };
             let category = match f.and_then(|f| f.get("category")).and_then(Json::as_str) {
-                Some(id) if label.is_none() => Some(category_from_id(id).ok_or("unknown category")?),
+                Some(id) if label.is_none() && tag.is_none() => {
+                    Some(category_from_id(id).ok_or("unknown category")?)
+                }
                 _ => None,
             };
             let search =
                 f.and_then(|f| f.get("search")).and_then(Json::as_str).unwrap_or("").trim().to_lowercase();
-            return Ok(Selection::All(ViewFilter { category, label, search }));
+            return Ok(Selection::All(ViewFilter { category, label, tag, search }));
         }
         match body.get("ids") {
             Some(Json::Arr(v)) => {
@@ -296,6 +317,105 @@ pub fn label(shared: &Shared, ids: &[TorrentId], label: &str) -> Result<(), CmdE
     }
     shared.save(&mut st);
     Ok(())
+}
+
+// ---- tags (D76) ----------------------------------------------------------------------------
+
+/// The names of a comma-separated list (the shim's `tags`), trimmed, the empty ones dropped.
+/// Nothing is checked here: every name goes through `tags::normalize` where it is used.
+pub fn tag_names(list: &str) -> Vec<String> {
+    list.split(',').map(str::trim).filter(|n| !n.is_empty()).map(str::to_owned).collect()
+}
+
+/// A refused tag name as a command's error: 400 for an invalid one, 409 for one more than
+/// `tags::MAX_TAGS`, with the GUIs' message.
+pub fn tag_error(e: TagError) -> CmdError {
+    err(if e == TagError::TooMany { 409 } else { 400 }, e.text())
+}
+
+/// Makes each of `names` known (an existing one is fine); the names as the tags keep them and
+/// the first refusal, if any. The State lock is held.
+fn create_all(st: &mut State, names: &[String]) -> (Vec<String>, Option<TagError>) {
+    let mut made = Vec::new();
+    let mut first = None;
+    for n in names {
+        match st.create_tag(n) {
+            Ok(t) => made.push(t),
+            Err(e) => {
+                first.get_or_insert(e);
+            }
+        }
+    }
+    (made, first)
+}
+
+/// The cached hashes of `ids`.
+fn hashes_of(st: &State, ids: &[TorrentId]) -> Vec<String> {
+    ids.iter().filter_map(|id| st.torrents.get(id).map(|e| e.hash.clone())).collect()
+}
+
+/// New Tag (`createTags`): makes `names` known, with no torrent. The names made; `Err` with
+/// the first refusal (the others are made all the same).
+pub fn create_tags(shared: &Shared, names: &[String]) -> Result<Vec<String>, TagError> {
+    let mut st = shared.lock();
+    let (made, first) = create_all(&mut st, names);
+    shared.save(&mut st);
+    first.map_or(Ok(made), Err)
+}
+
+/// Delete Tag (`deleteTags`): each of `names` is no longer known and every torrent loses it.
+/// How many were known.
+pub fn delete_tags(shared: &Shared, names: &[String]) -> usize {
+    let mut st = shared.lock();
+    let mut n = 0;
+    for name in names.iter().filter_map(|t| tags::normalize(t).ok()) {
+        n += usize::from(st.delete_tag(&name));
+    }
+    if n > 0 {
+        shared.save(&mut st);
+    }
+    n
+}
+
+/// Gives the torrents each of `names` (made known when new); a name refused is skipped, and
+/// the first refusal is the answer once the rest are on.
+pub fn add_tags(shared: &Shared, ids: &[TorrentId], names: &[String]) -> Result<(), TagError> {
+    let mut st = shared.lock();
+    let (made, first) = create_all(&mut st, names);
+    for hash in hashes_of(&st, ids) {
+        let mut v = st.tags_of(&hash).to_vec();
+        v.extend(made.iter().cloned());
+        st.set_tags(&hash, &v);
+    }
+    shared.save(&mut st);
+    first.map_or(Ok(()), Err)
+}
+
+/// Takes `names` off the torrents (`None`: every tag, Remove All Tags); the tags stay known.
+pub fn remove_tags(shared: &Shared, ids: &[TorrentId], names: Option<&[String]>) {
+    let names: Option<Vec<String>> =
+        names.map(|v| v.iter().filter_map(|t| tags::normalize(t).ok()).collect());
+    let mut st = shared.lock();
+    for hash in hashes_of(&st, ids) {
+        let v: Vec<String> = match &names {
+            None => Vec::new(),
+            Some(off) => st.tags_of(&hash).iter().filter(|t| !off.contains(t)).cloned().collect(),
+        };
+        st.set_tags(&hash, &v);
+    }
+    shared.save(&mut st);
+}
+
+/// The shim's `setTags` (qBittorrent 5.1): the torrents get exactly `names` (each made known
+/// when new; a refused one is left out).
+pub fn set_tags(shared: &Shared, ids: &[TorrentId], names: &[String]) -> Result<(), TagError> {
+    let mut st = shared.lock();
+    let (made, first) = create_all(&mut st, names);
+    for hash in hashes_of(&st, ids) {
+        st.set_tags(&hash, &made);
+    }
+    shared.save(&mut st);
+    first.map_or(Ok(()), Err)
 }
 
 /// Set Download Location: moves the torrents' files (`move_storage`), skipping those already
@@ -494,13 +614,13 @@ pub fn properties_json(p: &Properties) -> Json {
         .with("fields", fields)
 }
 
-/// The `GET`'s selection: `ids=<hash>,<hash>`, or `all=1` with the view's `category`, `label`
-/// and `search`, as a command's `{"all":true,"filter":{...}}` (the page's Ctrl+A).
+/// The `GET`'s selection: `ids=<hash>,<hash>`, or `all=1` with the view's `category`, `label`,
+/// `tag` and `search`, as a command's `{"all":true,"filter":{...}}` (the page's Ctrl+A).
 fn query_selection(q: &[(String, String)]) -> Result<Selection, CmdError> {
     let get = |k: &str| q.iter().rev().find(|(n, _)| n == k).map(|(_, v)| v.as_str());
     if matches!(get("all"), Some("1" | "true")) {
         let mut f = Json::obj();
-        for k in ["category", "label", "search"] {
+        for k in ["category", "label", "tag", "search"] {
             if let Some(v) = get(k) {
                 f.set(k, v);
             }
@@ -890,6 +1010,9 @@ pub struct AddOptions {
     pub upload_limit: u32,
     /// The torrent's own seeding goal (the shim's `ratioLimit` / `seedingTimeLimit`).
     pub seed_goal: Option<SeedGoal>,
+    /// Tags to give it (D76), made known when new; a name `tags::normalize` refuses (or a new
+    /// one past `tags::MAX_TAGS`) is skipped.
+    pub tags: Vec<String>,
     /// A magnet: wait for its metadata in the session, then show the dialog
     /// ([`add_awaiting`]); the other choices come with [`finish_awaiting`].
     pub dialog: bool,
@@ -914,6 +1037,19 @@ impl AddOptions {
         }
         let limit =
             |k: &str| body.get(k).and_then(Json::as_i64).map_or(0, |v| v.clamp(0, u32::MAX as i64) as u32);
+        // `tags`: a list of names, or one comma-separated string; each must be a valid tag
+        let tags = match body.get("tags") {
+            None | Some(Json::Null) => Vec::new(),
+            Some(Json::Str(s)) => tag_names(s),
+            Some(Json::Arr(v)) => v
+                .iter()
+                .map(|t| t.as_str().map(str::to_owned).ok_or("tags must be strings"))
+                .collect::<Result<_, _>>()?,
+            Some(_) => return Err("tags must be a list"),
+        };
+        if tags.iter().any(|t| tags::normalize(t).is_err()) {
+            return Err("invalid tag");
+        }
         Ok(AddOptions {
             save: text("save"),
             name: text("name"),
@@ -927,6 +1063,7 @@ impl AddOptions {
             download_limit: limit("download_limit"),
             upload_limit: limit("upload_limit"),
             seed_goal: None,
+            tags,
             dialog: flag("dialog")?.unwrap_or(false),
         })
     }
@@ -1002,6 +1139,10 @@ pub fn add(shared: &Shared, source: Source, o: &AddOptions) -> Result<String, Cm
     }
     if !label.is_empty() {
         st.set_label_keyed(&hash, key.as_deref(), label);
+    }
+    if !o.tags.is_empty() {
+        // `torrent.<key>.tags`, taken at its first sight (a refused name is skipped)
+        let _ = st.add_tags_keyed(&hash, key.as_deref(), &o.tags);
     }
     if let (Some(goal), Some(key)) = (o.seed_goal, &key) {
         SeedGoal::store_override(&mut st.options, key, Some(goal));
@@ -1133,6 +1274,10 @@ pub fn finish_awaiting(shared: &Shared, hash: &str, o: &AddOptions, cancel: bool
     };
     if !label.is_empty() {
         st.set_label(hash, label);
+    }
+    if !o.tags.is_empty() {
+        let key = st.key_of(hash);
+        let _ = st.add_tags_keyed(hash, key.as_deref(), &o.tags);
     }
     st.meta.insert(hash.to_owned(), meta_of(&ti));
     let seed_only = st.scheduler.mode() == Mode::SeedOnly;
@@ -1433,6 +1578,12 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
         return match endpoint {
             "session/limits" => Ok(Response::json(&session_limits(&shared.lock()))),
             "session/stats" => Ok(Response::json(&session_stats(&shared.lock()))),
+            // the known tags (D76), in order
+            "tags" => {
+                let st = shared.lock();
+                let names: Vec<Json> = st.tags.iter().map(|t| Json::Str(t.clone())).collect();
+                Ok(Response::json(&Json::obj().with("tags", Json::Arr(names)).with("max", tags::MAX_TAGS)))
+            }
             "add" => {
                 let st = shared.lock();
                 let labels: Vec<Json> = st.categories.keys().map(|l| Json::Str(l.clone())).collect();
@@ -1534,6 +1685,22 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
         }
         "session/limits" => {
             set_session_limits(shared, &json_body(req)?)?;
+            Ok(no_content())
+        }
+        // New Tag on the Tags group (D76): the name as kept, 400 / 409 with the GUIs' message
+        "tags/create" => {
+            let body = json_body(req)?;
+            let name = body.get("name").and_then(Json::as_str).ok_or_else(|| err(400, "missing name"))?;
+            let made = create_tags(shared, &[name.to_owned()]).map_err(tag_error)?;
+            Ok(Response::json(&Json::obj().with("name", made.into_iter().next().unwrap_or_default())))
+        }
+        // Delete Tag: every torrent loses it; 404 for a tag that is not known
+        "tags/delete" => {
+            let body = json_body(req)?;
+            let name = body.get("name").and_then(Json::as_str).ok_or_else(|| err(400, "missing name"))?;
+            if delete_tags(shared, &[name.to_owned()]) == 0 {
+                return Err(err(404, "no such tag"));
+            }
             Ok(no_content())
         }
         "session/shutdown" => {
@@ -1653,6 +1820,17 @@ fn torrent_command(shared: &Shared, cmd: &str, body: &Json) -> Result<(), CmdErr
             limits(shared, &ids, down, up);
         }
         "label" => label(shared, &ids, body.get("label").and_then(Json::as_str).unwrap_or(""))?,
+        // Tags ▸ (D76): a tag on (made known when new), off, or every tag off
+        "add-tag" | "remove-tag" => {
+            let name = body.get("tag").and_then(Json::as_str).ok_or_else(|| err(400, "missing tag"))?;
+            let tag = tags::normalize(name).map_err(tag_error)?;
+            if cmd == "add-tag" {
+                add_tags(shared, &ids, &[tag]).map_err(tag_error)?;
+            } else {
+                remove_tags(shared, &ids, Some(&[tag]));
+            }
+        }
+        "clear-tags" => remove_tags(shared, &ids, None),
         "location" => location(shared, &ids, body.get("path").and_then(Json::as_str).unwrap_or(""))?,
         "super-seed" => super_seed(shared, &ids, body.get("on").and_then(Json::as_bool).unwrap_or(true)),
         "sequential" | "first-last" => {

@@ -810,6 +810,116 @@ fn alternative_limits_are_off_and_shutdown_tells_the_host() {
     assert!(t.web.shutdown_requested());
 }
 
+// ---- tags (D76), both ways ----------------------------------------------------------------------
+
+/// The shim's tag list.
+fn known_tags(t: &Harness, sid: &str) -> String {
+    t.get(sid, "/api/v2/torrents/tags").json().to_json()
+}
+
+/// A torrent's `tags` field (`"a, b"`).
+fn tags_field(t: &Harness, sid: &str, hash: &str) -> String {
+    s(first(&t.get(sid, &format!("/api/v2/torrents/info?hashes={hash}")).json()).get("tags")).to_owned()
+}
+
+impl Ws {
+    /// Reads messages until a `tick` whose Tags group (`tags`, `no_tag`) satisfies `f`.
+    fn tags_until(&mut self, what: &str, f: impl Fn(&str, i64) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            let m = self.recv();
+            if let (Some(g), Some(n)) = (m.get("tags"), m.get("no_tag").and_then(Json::as_i64)) {
+                if s(m.get("t")) == "tick" && f(&g.to_json(), n) {
+                    return;
+                }
+            }
+            assert!(Instant::now() < deadline, "no tick with {what}: {}", m.to_json());
+        }
+    }
+}
+
+/// A browser's tag changes (the native commands and the shim's) reach the host as its
+/// `torrent.<key>.tags` and `tags.list`; the host's changes show in the shim and in the page's
+/// Tags group, and nothing goes back to it.
+#[test]
+fn tags_go_to_the_host_as_its_keys_and_come_back() {
+    let t = Harness::start("tags", Prefs::default(), Some(PASS));
+    let sid = t.login();
+    let hashes = t.hashes(&sid);
+    let (a, b) = (&hashes[0], &hashes[1]);
+    assert_eq!(known_tags(&t, &sid), "[]");
+
+    // the page's Tags ▸: the torrent's key and the known list
+    assert_eq!(t.pa(&sid, "/pa/torrents/add-tag", &format!(r#"{{"ids":["{a}"],"tag":"tv"}}"#)).status, 204);
+    assert_eq!(t.host.value_of(&format!("torrent.{a}.tags")), Some(Some("tv".to_owned())));
+    assert_eq!(t.host.value_of("tags.list"), Some(Some("tv".to_owned())));
+    // the shim's addTags takes the same path
+    assert_eq!(t.post(&sid, "/api/v2/torrents/addTags", &format!("hashes={a}&tags=Movies")).status, 200);
+    assert_eq!(t.host.value_of(&format!("torrent.{a}.tags")), Some(Some("Movies,tv".to_owned())));
+    assert_eq!(t.host.value_of("tags.list"), Some(Some("Movies,tv".to_owned())));
+    assert_eq!(tags_field(&t, &sid, a), "Movies, tv");
+    // New Tag: the list only
+    t.host.clear();
+    assert_eq!(t.pa(&sid, "/pa/tags/create", r#"{"name":"spare"}"#).status, 200);
+    assert_eq!(t.host.changes(), [("tags.list".to_owned(), Some("Movies,spare,tv".to_owned()))]);
+    // Remove All Tags: the key goes; Delete Tag: the list and every torrent that had it
+    assert_eq!(t.pa(&sid, "/pa/torrents/add-tag", &format!(r#"{{"ids":["{b}"],"tag":"tv"}}"#)).status, 204);
+    assert_eq!(t.post(&sid, "/api/v2/torrents/removeTags", &format!("hashes={a}")).status, 200);
+    assert_eq!(t.host.value_of(&format!("torrent.{a}.tags")), Some(None));
+    t.host.clear();
+    assert_eq!(t.pa(&sid, "/pa/tags/delete", r#"{"name":"tv"}"#).status, 204);
+    assert_eq!(t.host.value_of(&format!("torrent.{b}.tags")), Some(None));
+    assert_eq!(t.host.value_of("tags.list"), Some(Some("Movies,spare".to_owned())));
+
+    // the host's changes: the shim and the page's group follow, nothing is journaled back
+    let (mut ws, hello) = Ws::connect(&t, &sid);
+    assert_eq!(hello.get("tags").map(Json::to_json).as_deref(), Some(r#"["Movies","spare"]"#));
+    ws.send_text(r#"{"t":"view","filter":{"tag":"film"},"columns":["name","tags"],"window":[0,10]}"#);
+    t.host.clear();
+    t.web.options_changed(&[
+        ("tags.list".to_owned(), Some("film,Movies,spare,x".to_owned())),
+        (format!("torrent.{b}.tags"), Some("film,x".to_owned())),
+    ]);
+    assert_eq!(known_tags(&t, &sid), r#"["film","Movies","spare","x"]"#);
+    assert_eq!(tags_field(&t, &sid, b), "film, x");
+    ws.tags_until("film and x on b", |g, no_tag| {
+        g.contains(r#"["film",1]"#) && g.contains(r#"["x",1]"#) && no_tag == 2
+    });
+    // the host deletes x (its list, then the torrent's key): gone from both
+    t.web.options_changed(&[
+        ("tags.list".to_owned(), Some("film,Movies,spare".to_owned())),
+        (format!("torrent.{b}.tags"), Some("film".to_owned())),
+    ]);
+    assert_eq!(known_tags(&t, &sid), r#"["film","Movies","spare"]"#);
+    ws.tags_until("x gone", |g, _| !g.contains(r#""x""#) && g.contains(r#"["film",1]"#));
+    // a torrent the host has not shown yet: its names are known at once
+    t.web.options_changed(&[("torrent.ffff.tags".to_owned(), Some("later".to_owned()))]);
+    assert!(known_tags(&t, &sid).contains(r#""later""#));
+    assert!(t.host.changes().is_empty(), "{:?}", t.host.changes());
+}
+
+/// The host's tags at start: `tags.list` (an unused tag too), and a torrent's
+/// `torrent.<key>.tags`, taken at its first sight (a name not in the list becomes known then)
+/// without writing anything back. The key of a torrent that is gone brings nothing back (a tag
+/// deleted since stays deleted).
+#[test]
+fn the_hosts_tags_are_there_from_the_start() {
+    let first = {
+        let t = Harness::start("start-tag-hashes", Prefs::default(), Some(PASS));
+        let sid = t.login();
+        t.hashes(&sid)[0].clone()
+    };
+    let mut options = Prefs::default();
+    options.set("tags.list", "unused,tv");
+    options.set(format!("torrent.{first}.tags").as_str(), "tv,new");
+    options.set(format!("torrent.{}.tags", "f".repeat(40)).as_str(), "gone");
+    let t = Harness::start("start-tags", options, Some(PASS));
+    let sid = t.login();
+    t.wait_for(&sid, &first, "the host's tags", |x| s(x.get("tags")) == "new, tv");
+    assert_eq!(known_tags(&t, &sid), r#"["new","tv","unused"]"#);
+    assert!(t.host.changes().is_empty(), "{:?}", t.host.changes());
+}
+
 // ---- the start ------------------------------------------------------------------------------------
 
 #[test]

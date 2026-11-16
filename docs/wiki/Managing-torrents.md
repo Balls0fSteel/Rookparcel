@@ -1,6 +1,6 @@
 # Managing torrents
 
-This page covers what you do with torrents once they are in the list: starting and stopping them, the queue, removing them with or without their files, checking them again, moving their files, labels, per-torrent speed limits, and the right-click menu that holds all of it.
+This page covers what you do with torrents once they are in the list: starting and stopping them, the queue, removing them with or without their files, checking them again, moving their files, labels and tags, per-torrent speed limits, and the right-click menu that holds all of it.
 
 Every action works on the selected torrents. Select several with <kbd>Ctrl</kbd>+click or <kbd>Shift</kbd>+click, or all of them with <kbd>Ctrl</kbd>+<kbd>A</kbd>, and act on them in one go.
 
@@ -31,6 +31,7 @@ Right-click a torrent (or press <kbd>Shift</kbd>+<kbd>F10</kbd>) for this menu:
 | **Advanced > Download First and Last Pieces First** | downloads both ends of each wanted file first | |
 | **Bandwidth Allocation > Set Download Limit / Set Upload Limit** | its own speed limits | |
 | **Label** | gives it a label, a new one, or none | |
+| **Tags** | gives it tags or takes them off | |
 | **Properties** | trackers, limits, seeding goal and more | <kbd>Enter</kbd> |
 
 The sections below explain each group. Most of these are also on the toolbar; see [The main window](The-main-window#the-toolbar).
@@ -116,6 +117,22 @@ The menu ticks the label the selected torrents share. You can also give a label 
 
 With **Append the torrent's label** on next to **Move completed downloads to:** (Preferences > Directories), a finished labelled torrent moves into a folder named after its label. See [Disk and storage](Disk-and-storage).
 
+## Tags
+
+*New in 1.2.61, not in a published release yet.*
+
+A torrent has one label, but it can have any number of tags besides it, such as "4K", "keep" and "Linux ISOs". Tags work as qBittorrent's do. Each tag appears under **Tags** in the category list, below the labels, with a count; a torrent with several tags is counted under each. **No Tag** shows the torrents without any tag.
+
+- **Tags > New Tag...** asks for a name and gives the new tag to the selected torrents.
+- **Tags >** *a tag* gives that tag to the selected torrents. A tag every selected torrent has is ticked; choosing it takes it off them all. A tag only some of them have is not ticked (the macOS app shows a mixed mark), and choosing it gives it to all.
+- **Tags > Remove All Tags** takes every tag off the selected torrents. The tags themselves stay.
+
+A tag stays in the category list when no torrent has it any more, with a count of 0. To get rid of it, right-click it in the category list and choose **Delete Tag**: Rookparcel asks "Delete the tag "*name*"? Every torrent that has it loses it." The torrents themselves stay. **New Tag...** in that menu makes a tag without giving it to any torrent.
+
+A name cannot be empty or contain a comma, a tab or a line break. Spaces at either end are dropped, and a name longer than 128 bytes is cut. Names are case-sensitive: `tv` and `TV` are two tags. There can be at most 1024 tags.
+
+The **Tags** column shows a torrent's tags; it is hidden at first (see [The main window](The-main-window#columns)). The search box matches torrent names only, not tags; click a tag in the category list instead. The Add New Torrent window has no tags: give them from the right-click menu once the torrent is in the list. Apps that use the qBittorrent API, such as Sonarr, can give tags too ([Sonarr, Radarr and Prowlarr](Sonarr-Radarr-and-Prowlarr#categories-labels-and-tags)).
+
 ## Speed limits for one torrent
 
 **Bandwidth Allocation > Set Download Limit** and **Set Upload Limit** offer **Unlimited**, 10, 25, 50, 100, 250, 500, 1000, 2500 and 5000 kB/s. The current choice is ticked. For any other number, use [Properties](Torrent-details-and-files#torrent-properties). The global limits in Preferences still apply on top. See [Speed limits and scheduler](Speed-limits-and-scheduler).
@@ -148,7 +165,7 @@ Both are greyed out when every selected torrent is finished. Each torrent keeps 
 
 ## In the Web UI
 
-- The same right-click menu, except that **Open Containing Folder** is greyed out ("not from a browser"), and **Copy Magnet Link** and **Export .torrent...** sit just before **Advanced**.
+- The same right-click menu, except that **Open Containing Folder** is greyed out ("not from a browser"), and **Copy Magnet Link** and **Export .torrent...** sit just before **Advanced**. **Tags** lists **New Tag...** and **Remove All Tags** first, then the tags.
 - **Export .torrent...** downloads the file through the browser, into its download folder. With several torrents, the browser downloads each file in turn, at most 50 per click.
 - **Copy Magnet Link** needs the browser's clipboard access. A page opened over plain `http://` from another computer has none, so the page shows the links instead, under "Copy the link below:", for you to copy by hand.
 - **Set Download Location** asks for a folder on the server, typed as a path.

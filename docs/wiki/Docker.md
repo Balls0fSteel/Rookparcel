@@ -42,7 +42,7 @@ Options after the image name are added to that command, and an option given agai
 
 | Folder | What it holds |
 |---|---|
-| `/config` | Everything nox keeps: the torrent list and each torrent's progress, the DHT state, the Web UI's login and preferences (`webui.json`), labels and the RSS Downloader. Keep it on a volume, or a restart begins with an empty list. |
+| `/config` | Everything nox keeps: the torrent list and each torrent's progress, the DHT state, the Web UI's login and preferences (`webui.json`), labels, tags and the RSS Downloader. Keep it on a volume, or a restart begins with an empty list. |
 | `/downloads` | The default download folder. |
 
 Both are volumes. For Sonarr, Radarr and Prowlarr, mount your media folder instead at the same path the apps use, and save into it ([below](#sonarr-radarr-and-prowlarr-in-containers)).

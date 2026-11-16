@@ -990,6 +990,9 @@ unsafe fn paint_status(hwnd: HWND) {
         if SendMessageW(hwnd, SB_ISSIMPLE, 0, 0) != 0 {
             let mut text =
                 SIMPLE_TEXT.with(|t| t.borrow().get(&(hwnd as usize)).cloned()).unwrap_or_default();
+            // an item with no help (a tag's, a label's) leaves it empty: DrawTextW must still get
+            // a real string, not an empty Vec's dangling pointer, which it reads and crashes on
+            text.push(0);
             let mut text_rc = RECT {
                 left: client.left + pad,
                 top: client.top,
@@ -999,7 +1002,7 @@ unsafe fn paint_status(hwnd: HWND) {
             DrawTextW(
                 hdc,
                 text.as_mut_ptr(),
-                text.len() as i32,
+                text.len() as i32 - 1,
                 &mut text_rc,
                 DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX,
             );

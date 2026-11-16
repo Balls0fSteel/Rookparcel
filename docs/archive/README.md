@@ -1,6 +1,6 @@
 # Planning and changelog history
 
-Last updated: 2026-11-16_122332_1794828212
+Last updated: 2026-11-16_162657_1794842817
 
 Start with [PLAN.md](../../PLAN.md) and [CHANGELOG.md](../../CHANGELOG.md). Active decision rationale is in [DECISIONS.md](../DECISIONS.md); detailed unfinished work is in [BACKLOG.md](../BACKLOG.md).
 
@@ -91,3 +91,4 @@ Keep archives as plain Markdown so Git diffs, repository browsing and targeted s
 | [Changelog, 2026-11-15 (1.2.55)](CHANGELOG-2026-11-15-v1.2.55-2026-11-16_001242_1794784362.md) | `2026-11-15_140244_1794747764` | 1 entry moved verbatim from the root changelog on 2026-11-16_001242_1794784362: settings not taken on trust (1.2.55, D70 part 1). |
 | [Changelog, 2026-11-15 (the settings fixture test, 1.2.56)](CHANGELOG-2026-11-15-v1.2.56-fixture-test-2026-11-16_122332_1794828212.md) | `2026-11-15_140719_1794748039` through `2026-11-15_143820_1794749900` | 3 entries moved verbatim from the root changelog on 2026-11-16_122332_1794828212: the settings fixture test (D70 layer 3, tests only), the start comparing the settings with how the last version read them (1.2.56, D70 part 2), and CI red on 1.2.56 from two version-dependent tests. |
 | [Changelog, 2026-11-15 (1.2.57 and its release)](CHANGELOG-2026-11-15-v1.2.57-release-2026-11-16_140743_1794834463.md) | `2026-11-15_174308_1794760988` through `2026-11-15_180859_1794762539` | 2 entries moved verbatim from the root changelog on 2026-11-16_140743_1794834463: the release review's findings in the settings guard (1.2.57) and release 1.2.57 published with the site's news and the wiki. |
+| [Changelog, 2026-11-15 and 2026-11-16 (1.2.58, the Mac sidebar symbols)](CHANGELOG-2026-11-15-v1.2.58-mac-sidebar-2026-11-16_162657_1794842817.md) | `2026-11-15_232343_1794781423` through `2026-11-16_001242_1794784362` | 2 entries moved verbatim from the root changelog on 2026-11-16_162657_1794842817: Preferences > Advanced > UI Lock with the lock's off switch and a narrower PIN dialog (1.2.58, D71), and the Mac's dark Preferences sidebar symbols found to be the VM's drawing (documentation only). |

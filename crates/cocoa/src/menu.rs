@@ -7,7 +7,7 @@
 //! a [`Command`] through `RPTarget`; AppKit's own (Hide, Minimize, Cut, Full Screen, ...) send
 //! their standard action to the first responder (nil target), so they work wherever the focus
 //! is: Edit's items in the search field, Minimize on any window. The lists that change (File >
-//! Profiles, Torrent > Label) are rebuilt each time they open ([`needs_update`]).
+//! Profiles, Torrent > Label, Torrent > Tags) are rebuilt each time they open ([`needs_update`]).
 
 use std::ffi::CStr;
 
@@ -63,8 +63,11 @@ pub enum Role {
     Profiles,
     /// Torrent > Label: rebuilt when it opens.
     Labels,
-    /// Slice H: the sidebar's context menu, filled for the Feeds row clicked (`rss`).
-    Feeds,
+    /// Torrent > Tags (D76): rebuilt when it opens.
+    Tags,
+    /// The sidebar's context menu, filled for the row clicked: the Feeds rows' (slice H, `rss`)
+    /// and the Tags rows' (D76, `sidebar`).
+    Sidebar,
 }
 
 /// A menu item.
@@ -168,7 +171,7 @@ pub fn tree() -> Vec<Item> {
         sub(tr!(MenuFile), file, Role::Plain),
         sub(tr!(MacMenuEdit), edit, Role::Plain),
         sub(tr!(MacMenuView), view, Role::Plain),
-        sub(tr!(MacMenuTorrent), torrent(&[], true), Role::Plain),
+        sub(tr!(MacMenuTorrent), torrent(&[], &[], true), Role::Plain),
         sub(tr!(MenuOptions), options, Role::Plain),
         sub(tr!(MacMenuWindow), window, Role::Window),
         sub(tr!(MenuHelp), help, Role::Help),
@@ -204,8 +207,8 @@ pub fn locked_tree() -> Vec<Item> {
 }
 
 /// The Torrent menu, and the list's context menu (`shortcuts` off: a context menu shows none).
-/// `labels` are the label submenu's names.
-pub fn torrent(labels: &[String], shortcuts: bool) -> Vec<Item> {
+/// `labels` are the label submenu's names, `tags` the tags submenu's.
+pub fn torrent(labels: &[String], tags: &[String], shortcuts: bool) -> Vec<Item> {
     use Command::*;
     let k = |key: Option<Key>| if shortcuts { key } else { None };
     let limits = |make: fn(u16) -> Command| -> Vec<Item> {
@@ -252,6 +255,7 @@ pub fn torrent(labels: &[String], shortcuts: bool) -> Vec<Item> {
             Role::Plain,
         ),
         sub(tr!(MenuLabel), label_items(labels), Role::Labels),
+        sub(tr!(MenuTags), tag_items(tags), Role::Tags),
         Item::Sep,
         c(Properties, tr!(MenuProperties), k(cmd("i"))),
     ]
@@ -273,6 +277,29 @@ pub fn label_items(labels: &[String]) -> Vec<Item> {
         key: None,
     }));
     items
+}
+
+/// Torrent > Tags' items (D76), in Label's order: New Tag and Remove All Tags, then a check
+/// item per known tag (`app::state` checks it, or marks it mixed).
+pub fn tag_items(tags: &[String]) -> Vec<Item> {
+    let mut items =
+        vec![c(Command::NewTag, tr!(MenuNewTag), None), c(Command::ClearTags, tr!(MenuRemoveAllTags), None)];
+    if !tags.is_empty() {
+        items.push(Item::Sep);
+    }
+    // a tag is the user's text, shown as it is (no `&` handling)
+    items.extend(tags.iter().enumerate().map(|(i, t)| Item::Cmd {
+        cmd: Command::Tag(i as u16),
+        title: t.clone(),
+        key: None,
+    }));
+    items
+}
+
+/// The sidebar's Tags rows' context menu (D76): New Tag and Delete Tag; validation greys Delete
+/// Tag on the Tags heading and No Tag (`sidebar::menu_on_tag`), as on Win32, GTK and the Web page.
+pub fn sidebar_tag_items() -> Vec<Item> {
+    vec![c(Command::SidebarNewTag, tr!(MenuNewTag), None), c(Command::DeleteTag, tr!(MenuDeleteTag), None)]
 }
 
 /// File > Profiles' items: each profile (`None`: the default one), then New Profile and Open
@@ -437,7 +464,7 @@ mod sys {
             Item::Sub { title, items, role } => {
                 let i = new_item(title, None, None, mtm);
                 let sub = build(title, items, mtm);
-                if matches!(role, Role::Profiles | Role::Labels) {
+                if matches!(role, Role::Profiles | Role::Labels | Role::Tags) {
                     sub.setDelegate(Some(ProtocolObject::from_ref(&*target(mtm))));
                     LIVE.with(|l| l.borrow_mut().push((sub.clone(), *role)));
                 }
@@ -514,7 +541,8 @@ mod sys {
         }
     }
 
-    /// `menuNeedsUpdate:` from `RPTarget`: rebuilds a live list (profiles, labels).
+    /// `menuNeedsUpdate:` from `RPTarget`: rebuilds a live list (profiles, labels, tags, the
+    /// sidebar's menu).
     pub fn needs_update(menu: &NSMenu) {
         let Some(role) =
             LIVE.with(|l| l.borrow().iter().find(|(m, _)| std::ptr::eq(&**m, menu)).map(|(_, r)| *r))
@@ -525,7 +553,8 @@ mod sys {
         let items = match role {
             Role::Profiles => super::profiles(&crate::app::profile_names()),
             Role::Labels => super::label_items(&crate::app::labels()),
-            Role::Feeds => crate::rss::sidebar_menu_items(),
+            Role::Tags => super::tag_items(&crate::app::tags()),
+            Role::Sidebar => crate::sidebar::menu_items(),
             _ => return,
         };
         fill(menu, &items, mtm);
@@ -552,6 +581,7 @@ mod tests {
                     | Command::SearchAllSources
                     | Command::ManageSources
                     | Command::Label(_)
+                    | Command::Tag(_)
                     | Command::Profile(_)
                     // a torrent dialog's controls (slice F)
                     | Command::Dialog(_)
@@ -569,6 +599,9 @@ mod tests {
                     | Command::FeedDelete
                     | Command::FeedRss
                     | Command::FeedDownload
+                    // D76: the sidebar's Tags rows' context menu
+                    | Command::SidebarNewTag
+                    | Command::DeleteTag
             )
         };
         for c in crate::commands::ALL {
@@ -582,9 +615,10 @@ mod tests {
         }
         // the context menu shows no shortcuts
         let mut ctx = Vec::new();
-        commands(&torrent(&["a".into()], false), &mut ctx);
+        commands(&torrent(&["a".into()], &["t".into()], false), &mut ctx);
         assert!(ctx.iter().all(|(_, k)| k.is_none()));
         assert!(ctx.contains(&(Command::Label(0), None)));
+        assert!(ctx.contains(&(Command::Tag(0), None)));
     }
 
     #[test]
@@ -606,6 +640,8 @@ mod tests {
         walk(&tree());
         walk(&dock(false, false, true));
         walk(&locked_tree());
+        walk(&tag_items(&["tv".into()]));
+        walk(&sidebar_tag_items());
     }
 
     fn cmds(items: &[Item]) -> Vec<Command> {
@@ -686,7 +722,7 @@ mod tests {
     #[test]
     fn wave_1_items_sit_in_the_torrent_menu() {
         for shortcuts in [true, false] {
-            let t = torrent(&[], shortcuts);
+            let t = torrent(&[], &[], shortcuts);
             // Copy Magnet Link and Export .torrent: a group of their own just before Advanced
             let at = t
                 .iter()
@@ -707,6 +743,37 @@ mod tests {
         // in the menu bar's Torrent menu, once each
         let all = cmds(&tree());
         for c in [Command::Sequential, Command::FirstLast, Command::CopyMagnet, Command::ExportTorrent] {
+            assert_eq!(all.iter().filter(|x| **x == c).count(), 1, "{c:?}");
+        }
+    }
+
+    /// D76: Tags ▸ right after Label ▸, in the menu bar and the context menu, and its items.
+    #[test]
+    fn the_tags_submenu_follows_label() {
+        for shortcuts in [true, false] {
+            let t = torrent(&["l".into()], &["Movies".into(), "R&B".into()], shortcuts);
+            let at = t.iter().position(|i| matches!(i, Item::Sub { role: Role::Labels, .. })).expect("Label");
+            let Item::Sub { title, items, role } = &t[at + 1] else { panic!("Tags follows Label") };
+            assert_eq!((title.as_str(), *role), (text(tr!(MenuTags)).as_str(), Role::Tags));
+            // Label's order: the commands, a separator, the names
+            assert_eq!(cmds(items), [Command::NewTag, Command::ClearTags, Command::Tag(0), Command::Tag(1)]);
+            assert!(matches!(&items[2], Item::Sep));
+            // the user's names as they are
+            assert!(matches!(&items[3], Item::Cmd { cmd: Command::Tag(0), title, .. } if title == "Movies"));
+            assert!(matches!(&items[4], Item::Cmd { cmd: Command::Tag(1), title, .. } if title == "R&B"));
+            assert!(cmds(&t).iter().all(|c| c.needs_selection()));
+        }
+        // no tags yet: only New Tag and Remove All Tags, no separator
+        assert_eq!(cmds(&tag_items(&[])), [Command::NewTag, Command::ClearTags]);
+        assert_eq!(tag_items(&[]).len(), 2);
+        let Item::Cmd { title, .. } = &tag_items(&[])[0] else { panic!() };
+        assert_eq!(title, &text(tr!(MenuNewTag)));
+        assert!(title.ends_with('\u{2026}'));
+        // the sidebar's menu: Delete Tag always there (validation greys it off a tag's row)
+        assert_eq!(cmds(&sidebar_tag_items()), [Command::SidebarNewTag, Command::DeleteTag]);
+        // once in the menu bar
+        let all = cmds(&tree());
+        for c in [Command::NewTag, Command::ClearTags] {
             assert_eq!(all.iter().filter(|x| **x == c).count(), 1, "{c:?}");
         }
     }

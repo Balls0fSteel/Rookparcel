@@ -132,7 +132,9 @@
   const colById = new Map();
   let layout = store.get("pa.columns", { order: [], widths: {}, hidden: null });
   let sort = store.get("pa.sort", ["name", false]);
-  let filter = store.get("pa.filter", { category: "all", label: null });
+  // one of: a category, a label (not null), a tag (not null; "" for No Tag, D76)
+  let filter = store.get("pa.filter", { category: "all", label: null, tag: null });
+  if (filter.tag === undefined) filter.tag = null;
   let search = "";
   let total = 0;
   let winFirst = 0;
@@ -149,6 +151,8 @@
   let detailId = null;
   let labels = [];
   let labelCounts = new Map(); // label ("" for none) to its torrent count
+  let tags = []; // the known tags (D76), in the server's order
+  let tagCounts = new Map(); // tag ("" for none) to its torrent count
   let pool = [];
   let scrollRaf = 0;
   let hidden = document.hidden;
@@ -311,10 +315,22 @@
     for (const c of columns) colById.set(c.id, c);
     // the saved order first (dropping ids the server no longer knows), then new columns
     const order = (layout.order || []).filter((id) => colById.has(id));
-    for (const c of columns) if (!order.includes(c.id)) order.push(c.id);
+    const fresh = [];
+    for (const c of columns) {
+      if (!order.includes(c.id)) {
+        order.push(c.id);
+        fresh.push(c);
+      }
+    }
     layout.order = order;
     if (!layout.widths) layout.widths = {};
-    if (!Array.isArray(layout.hidden)) layout.hidden = columns.filter((c) => !c.visible).map((c) => c.id);
+    if (!Array.isArray(layout.hidden)) {
+      layout.hidden = columns.filter((c) => !c.visible).map((c) => c.id);
+    } else {
+      // a column this saved layout has not seen yet (a newer server's, as Tags was) starts as
+      // the server has it: hidden unless shown by default
+      for (const c of fresh) if (!c.visible && !layout.hidden.includes(c.id)) layout.hidden.push(c.id);
+    }
     if (!colById.has(sort && sort[0])) sort = ["name", false];
   }
 
@@ -485,6 +501,14 @@
     setConn("");
     labels = m.labels || [];
     labelCounts = new Map();
+    tags = m.tags || [];
+    tagCounts = new Map();
+    // the stored filter names a tag or label the server no longer has (deleted while this page
+    // was closed): show every torrent, as when it goes away while the page is open
+    if ((filter.tag && !tags.includes(filter.tag)) || (filter.label && !labels.includes(filter.label))) {
+      filter = { category: "all", label: null, tag: null };
+      store.set("pa.filter", filter);
+    }
     confirmDelete = m.confirm_delete !== false;
     setServerTheme(m.theme);
     updateNotice(m.update);
@@ -507,8 +531,7 @@
     if (!hello) return;
     const [first, count] = neededWindow();
     sentWindow = [first, count];
-    const f = { category: filter.label != null ? "all" : filter.category || "all", label: filter.label ?? null, search };
-    send({ t: "view", filter: f, sort, columns: viewColumns(), window: [first, count] });
+    send({ t: "view", filter: viewFilter(), sort, columns: viewColumns(), window: [first, count] });
   }
   function neededWindow() {
     const visFirst = Math.floor(body.scrollTop / rowH);
@@ -551,6 +574,7 @@
     if (m.cells) for (const id in m.cells) cells.set(id, m.cells[id]);
     if (m.counts) updateCounts(m.counts);
     if (m.labels) updateLabels(m.labels, m.no_label);
+    if (m.tags) updateTags(m.tags, m.no_tag);
     if (m.rss !== undefined) rssChanged(m.rss);
     if (m.search !== undefined) searchChanged(m.search);
     if (m.adds !== undefined) addsChanged(m.adds);
@@ -598,7 +622,8 @@
       if (!empty) {
         const e = document.createElement("div");
         e.className = "empty";
-        e.textContent = search || filter.label != null || filter.category !== "all" ? T("WebNoMatch") : T("WebNoTorrents");
+        const filtered = search || filter.label != null || filter.tag != null || filter.category !== "all";
+        e.textContent = filtered ? T("WebNoMatch") : T("WebNoTorrents");
         body.appendChild(e);
       }
     } else if (empty) empty.remove();
@@ -1257,13 +1282,65 @@
       it.append(t, n);
       tree.appendChild(it);
     }
+    // the Tags group (D76) under the labels: "No Tag" first, then every known tag; its menu
+    // (New Tag..., Delete Tag) on a right click or a long press
+    const tg = document.createElement("div");
+    tg.className = "group";
+    tg.dataset.tags = "";
+    tg.textContent = T("CatTags");
+    tree.appendChild(tg);
+    for (const name of ["", ...tags]) {
+      const it = document.createElement("div");
+      it.className = "item";
+      it.dataset.tag = name;
+      const t = document.createElement("span");
+      t.className = "t";
+      t.textContent = name || T("CatNoTag");
+      t.title = t.textContent;
+      const n = document.createElement("span");
+      n.className = "n";
+      n.textContent = tagCounts.has(name) ? String(tagCounts.get(name)) : "";
+      it.append(t, n);
+      tree.appendChild(it);
+    }
     rssRenderTree();
     markTree();
   }
   function markTree() {
     for (const it of $("tree").querySelectorAll(".item")) {
-      const on = filter.label != null ? it.dataset.label === filter.label : it.dataset.cat === filter.category;
+      const on =
+        filter.tag != null
+          ? it.dataset.tag === filter.tag
+          : filter.label != null
+            ? it.dataset.label === filter.label
+            : it.dataset.cat === filter.category;
       it.classList.toggle("on", on);
+    }
+  }
+  /// Shows every torrent again (the selected label or tag went away).
+  function showAll() {
+    filter = { category: "all", label: null, tag: null };
+    store.set("pa.filter", filter);
+    markTree();
+    body.scrollTop = 0;
+    sentWindow = null;
+    sendView();
+  }
+  /// The tick's Tags group (D76): the names when they changed (another browser, the window
+  /// hosting this page or the qBittorrent shim may add or delete one), then every count.
+  function updateTags(list, noTag) {
+    tagCounts = new Map([["", noTag], ...list]);
+    const names = list.map((x) => x[0]);
+    if (names.length !== tags.length || names.some((t, i) => t !== tags[i])) {
+      tags = names;
+      renderTree();
+      if (filter.tag && !tags.includes(filter.tag)) showAll();
+      return;
+    }
+    for (const it of $("tree").querySelectorAll(".item[data-tag]")) {
+      const n = tagCounts.get(it.dataset.tag);
+      const text = n === undefined ? "" : String(n);
+      if (it.lastChild.textContent !== text) it.lastChild.textContent = text;
     }
   }
   /// The tick's Labels branch: the names when they changed (another client or the qBittorrent
@@ -1274,15 +1351,8 @@
     if (names.length !== labels.length || names.some((l, i) => l !== labels[i])) {
       labels = names;
       renderTree();
-      if (filter.label && !labels.includes(filter.label)) {
-        // the selected label went away: show everything
-        filter = { category: "all", label: null };
-        store.set("pa.filter", filter);
-        markTree();
-        body.scrollTop = 0;
-        sentWindow = null;
-        sendView();
-      }
+      // the selected label went away: show everything
+      if (filter.label && !labels.includes(filter.label)) showAll();
       return;
     }
     for (const it of $("tree").querySelectorAll(".item[data-label]")) {
@@ -1302,10 +1372,9 @@
   $("tree").addEventListener("click", (ev) => {
     const it = ev.target.closest(".item");
     if (!it) return;
-    filter =
-      it.dataset.label !== undefined
-        ? { category: "all", label: it.dataset.label }
-        : { category: it.dataset.cat, label: null };
+    if (it.dataset.tag !== undefined) filter = { category: "all", label: null, tag: it.dataset.tag };
+    else if (it.dataset.label !== undefined) filter = { category: "all", label: it.dataset.label, tag: null };
+    else filter = { category: it.dataset.cat, label: null, tag: null };
     store.set("pa.filter", filter);
     markTree();
     setDrawer(false);
@@ -1313,6 +1382,50 @@
     sentWindow = null;
     sendView();
   });
+  // the Tags group's menu (D76): New Tag... (a tag with no torrent yet) and Delete Tag (the
+  // tag under the pointer; every torrent loses it). A long press on a phone opens it too.
+  $("tree").addEventListener("contextmenu", (ev) => {
+    const it = ev.target.closest(".item[data-tag], .group[data-tags]");
+    if (!it) return;
+    ev.preventDefault();
+    const name = it.dataset.tag || "";
+    openMenu(
+      [
+        { label: T("MenuNewTag"), run: newTag },
+        { label: T("MenuDeleteTag"), dis: !name, run: () => deleteTag(name) },
+      ],
+      ev.clientX,
+      ev.clientY,
+    );
+  });
+  /// The message for a refused tag command: the server's (a name the tags refuse, too many)
+  /// or the generic one.
+  function tagFailed(e) {
+    if (e && e.message === "forbidden") return;
+    alert((e && e.msg) || T("WebTagsNotSet"));
+  }
+  /// Asks for a new tag's name; null when cancelled or blank.
+  function askTagName() {
+    const name = prompt(T("NewTagPrompt"));
+    return name && name.trim() ? name.trim() : null;
+  }
+  async function newTag() {
+    const name = askTagName();
+    if (name === null) return;
+    try {
+      await pa("tags/create", { name });
+    } catch (e) {
+      tagFailed(e);
+    }
+  }
+  async function deleteTag(name) {
+    if (!confirm(T("AskDeleteTag", { name }))) return;
+    try {
+      await pa("tags/delete", { name });
+    } catch (e) {
+      tagFailed(e);
+    }
+  }
 
   // ---- status bar ----------------------------------------------------------------------
   function updateStatus(s) {
@@ -1369,7 +1482,10 @@
   // ---- commands -------------------------------------------------------------------------
   /// The view's filter as the server sees it (the `view` subscription's).
   function viewFilter() {
-    return { category: filter.label != null ? "all" : filter.category || "all", label: filter.label ?? null, search };
+    const tag = filter.tag ?? null;
+    const label = tag === null ? filter.label ?? null : null;
+    const category = tag !== null || label !== null ? "all" : filter.category || "all";
+    return { category, label, tag, search };
   }
   /// The selection for a command body: with Ctrl+A, "all" with the view's filter, so the
   /// server acts on every matching torrent, not just the loaded window; else the ids.
@@ -1466,6 +1582,22 @@
         }
         break;
       }
+      // Tags ▸ (D76): a tag's item puts it on every selected torrent, or takes it off when all
+      // of them have it (its check mark); New Tag... makes one and gives it to them
+      case "tag":
+        path = arg.on ? "torrents/add-tag" : "torrents/remove-tag";
+        body.tag = arg.name;
+        break;
+      case "tag_new": {
+        const name = askTagName();
+        if (name === null) return;
+        path = "torrents/add-tag";
+        body.tag = name;
+        break;
+      }
+      case "tags_clear":
+        path = "torrents/clear-tags";
+        break;
       case "location": {
         const dir = prompt(T("WebSetLocation"));
         if (!dir || !dir.trim()) return;
@@ -1479,7 +1611,8 @@
     try {
       await pa(path, body);
     } catch (e) {
-      /* shown by pa() */
+      // shown by pa(); a tag the server refused gets its message in a box
+      if (name.startsWith("tag")) tagFailed(e);
     }
   }
   document.querySelectorAll("#toolbar [data-cmd]").forEach((b) => {
@@ -1537,6 +1670,15 @@
           ...labels.map((l) => ({ label: l, key: "label:" + l, run: () => command("label", l) })),
         ],
       },
+      {
+        label: T("MenuTags"),
+        sub: [
+          { label: T("MenuNewTag"), run: () => command("tag_new") },
+          { label: T("MenuRemoveAllTags"), key: "tags:", run: () => command("tags_clear") },
+          ...(tags.length ? ["-"] : []),
+          ...tags.map((t) => ({ label: t, key: "tag:" + t, run: (it) => command("tag", { name: t, on: !it.chk }) })),
+        ],
+      },
       "-",
       { label: T("MenuProperties"), run: () => openProps(false) },
     ];
@@ -1585,6 +1727,12 @@
     checks.set("label:", false);
     for (const l of labels) checks.set("label:" + l, label === l);
     const grey = new Map([["label:", label === ""]]);
+    // tags (D76): `tags` is the names joined by ", " (a name holds no comma); a tag is checked
+    // when every selected torrent has it, Remove All Tags greyed when none has any
+    const tagsOf = info.map((t) => new Set(t.tags ? t.tags.split(", ") : []));
+    for (const name of tags) checks.set("tag:" + name, tagsOf.every((s) => s.has(name)));
+    checks.set("tags:", false);
+    grey.set("tags:", tagsOf.every((s) => s.size === 0));
     // the download order means nothing once every torrent is finished (a seed's state ends in
     // UP); Export needs a torrent with its metadata (a magnet without has no size yet)
     const finished = info.every((t) => /UP$/.test(t.state || "") || t.state === "uploading");
@@ -5127,6 +5275,7 @@
     if (!s.all) return "ids=" + s.ids.join(",");
     const q = new URLSearchParams({ all: "1", category: s.filter.category, search: s.filter.search });
     if (s.filter.label != null) q.set("label", s.filter.label);
+    if (s.filter.tag != null) q.set("tag", s.filter.tag);
     return q.toString();
   }
   async function openProps(dblclick) {

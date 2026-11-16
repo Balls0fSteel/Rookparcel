@@ -50,7 +50,7 @@ Answer **No** and turn HTTPS on at the server instead (`--webui-https`), unless 
 Nearly everything works as in a local window, acting on the server:
 
 - Adding torrents: `.torrent` files from this computer are sent to the server; magnet links too.
-- Start, stop, pause, force start, remove (also with the data, deleted on the server), recheck, queue order, labels, speed limits, trackers, file priorities, renaming, Torrent Properties.
+- Start, stop, pause, force start, remove (also with the data, deleted on the server), recheck, queue order, labels, tags, speed limits, trackers, file priorities, renaming, Torrent Properties.
 - The detail tabs, with the server's peers, pieces, files and speed graph.
 - **Copy Magnet Link** and **Export .torrent...** (*new in 1.2.59, not in a published release yet*). An exported `.torrent` file is saved on this computer.
 - **Preferences:** the engine's settings (connection, bandwidth, BitTorrent, queueing and the like) are the server's. What you change there is applied on the server and kept there.
@@ -64,7 +64,7 @@ What is different:
 | Creating torrents | A torrent you create here cannot be seeded by the server, since the files are on this computer. |
 | IP filter | The server's own IP filter applies; the window's is not sent. |
 | **Preferences > Web UI** | A remote window cannot serve the Web UI: "A remote window cannot serve the Web UI; use the local window's Preferences." |
-| Labels, RSS feeds, window settings | Kept on this computer, separately for each server (see below). |
+| Labels, tags, RSS feeds, window settings | Kept on this computer, separately for each server (see below). |
 | Scheduler, RSS Downloader, seeding goal, `.torrent` folders | The window's own run while it is open and act on the server's torrents, in addition to anything nox does itself. |
 
 The server keeps downloading after you close the window.
@@ -97,7 +97,7 @@ The firewall on the server must let the Web UI's port in.
 | | Windows | GTK (Linux, BSD) |
 |---|---|---|
 | Connection details and accepted certificates | `remote.ini` beside `rookparcel.ini` in the settings folder | `remote.ini` in `~/.config/rookparcel/gtk` |
-| The window's settings, labels and RSS feeds per server | `remote\<host>_<port>` in the settings folder | `~/.config/rookparcel/gtk/remote/<host>_<port>` |
+| The window's settings, labels, tags and RSS feeds per server | `remote\<host>_<port>` in the settings folder | `~/.config/rookparcel/gtk/remote/<host>_<port>` |
 
 These never mix with your local window's settings. See [Where Rookparcel keeps its files](Where-Rookparcel-keeps-its-files).
 

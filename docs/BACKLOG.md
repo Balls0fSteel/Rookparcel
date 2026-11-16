@@ -516,7 +516,7 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   `removeCategories` now clears the window's label), and the live run against the Windows GUI
   passed (2026-10-29, `tools/arr-test` README). Still to run: a magnet
   grab with real peers, "First" priority / Force Start, and a mobile qBittorrent remote. Other shim
-  gaps: logs, automatic management and cookies (tags are accepted as no-ops since 1.1.8).
+  gaps: logs, automatic management and cookies (tags are real since 1.2.61, D76; no-ops from 1.1.8).
   The shim's `search/*` is in since 1.1.19 (WEBUI.md): try it with a real qBittorrent remote
   app; its searches are in memory only, `descrLink` is empty and every source offers the
   same fixed categories.
@@ -1250,6 +1250,24 @@ Found and left:
 - **Text:** "block list" is a newly coined term in all 34 machine-translated tables; it wants a native speaker's review.
 - **Formats:** no zip support (gzip only).
 - **Fetch:** the list is fetched whole each time. No `ETag` / `If-Modified-Since`, which the fetch helper supports and RSS uses.
+
+## Tags (D76; built 2026-11-16, 1.2.61)
+
+2026-11-16_160533_1794841533. Open:
+
+- **Add New Torrent:** no tag field; tags are given afterwards from the torrent menu (or by the API's `tags` on add).
+- **Windows, GTK:** a tag only some of the selected torrents have shows unchecked in Torrent menu > Tags (no third state in a Win32 menu or a GMenu); only the Mac shows a mixed mark.
+- **Text:** the tag words are machine-translated in 34 tables and want a native review. Weakest: es / ca "Marcas" / "Marques", pt-PT "Marcadores", el "Σημάνσεις", tr "İşaretler", hu "Jelölők", ro "Marcaje", zh "标记" / "標記". Accelerator clashes in the torrent menu: German `Ta&gs` with `Ei&genschaften`, Italian `Ta&g` with `Sposta &giù nella coda`.
+- **Hosted Web UI, simultaneous New Tag:** `tags.list` travels whole between the window and the Web UI it serves. Both write it only when their known tags change (1.2.61), but an unused tag made in the window and another made in a browser before the window's change reaches the daemon (the window hands its changes over once a second) can lose one of the two, on one side or both. A real fix needs a three-way merge against the last list exchanged (or per-name changes); left as it is. Tags a torrent has are not lost (each side keeps every tag a torrent has).
+- **Past 1024 names:** when the known list is read again with every torrent's tags (`set_known_tags`, the daemon's `reload_known_tags`) and they come to more than 1024 distinct names, the list is cut at 1024 and a torrent can keep a tag that is not in it: the Tags column shows it, no menu or sidebar row offers it.
+- **Mac, `Tag(i)`:** Tags ▸'s items carry an index into the known tags and resolve it against the live list at click time; a tag made or deleted elsewhere (a hosted change) between the menu opening and the click can toggle the neighbouring tag. Rare; Label ▸'s `Label(i)` works the same.
+- **GTK, category list:** a right-click on a tag row selects that row first, so the list filters by it before the menu opens (as a feed's row does there); the other interfaces open the menu without changing the filter.
+- **API, duplicate add:** `torrents/add` with `tags` for a torrent already in the list adds the tags to it (a `category` sets its label likewise); qBittorrent leaves a duplicate's tags alone. Documented in WEBUI.md, not changed.
+- **Icons:** no tag icons; the label icon is reused in the menus and the category list.
+- **Sonarr / Radarr:** Sonarr 4.0.20 and Radarr cannot send tags, so the arr test replayed Sonarr's `addTags` call by hand. A run with a Sonarr build that has "Add Series Tags" is outstanding.
+- **qBittorrent API:** the shim's tag calls follow qBittorrent's source and docs; not compared against a live qBittorrent.
+- **Windows, hosted Web UI:** the round trip of tag changes between the window and the Web UI it serves is unit-tested only, not clicked live.
+- **macOS:** the VM lost some scripted menu clicks during the tag checks, believed to be the VM's accessibility events, not the app.
 
 ## Settings guard (D70; 2026-11-15, 1.2.55-)
 

@@ -41,6 +41,7 @@ use rookparcel_frontend::scheduler::{Mode, Schedule, Scheduler};
 use rookparcel_frontend::search::{Source as SearchSource, load_sources, store_sources};
 use rookparcel_frontend::seeding::{SeedGoal, SeedingGoal};
 use rookparcel_frontend::status::{self, status_icon};
+use rookparcel_frontend::tags::{self, TagState};
 use rookparcel_frontend::torrent_folders::{self, TorrentFiles, TorrentFolders, Watcher};
 use rookparcel_frontend::tracker_list::{self, TrackerList};
 use rookparcel_frontend::ui_lock::{self, Form};
@@ -108,6 +109,10 @@ struct App {
     feed_rows: Vec<ItemRow>,
     /// The feed a Feeds row's menu is for (`None`: the Feeds row).
     menu_feed: Option<FeedId>,
+    /// The tag a Tags row's menu is for (`None`: the Tags heading or No Tag; D76).
+    menu_tag: Option<String>,
+    /// The tags of Torrent menu > Tags' items, by their actions' index (`win.tag-<i>`; D76).
+    menu_tags: Vec<String>,
     /// The update check (Preferences > General > Privacy, Help > Check for Updates) with the
     /// status bar's notice, and "Update to beta versions".
     updates: Checker,
@@ -792,6 +797,8 @@ fn item(menu: &gio::Menu, text: &str, action: &str) {
 /// What the torrent context menu shows besides its actions' states.
 struct MenuState {
     labels: Vec<String>,
+    /// Tags ▸'s tags, in order; item `i` is `win.tag-<i>` (D76).
+    tags: Vec<String>,
     /// One finished torrent: "Open Containing Folder" names its own folder.
     single_done: bool,
 }
@@ -860,10 +867,28 @@ fn torrent_menu(m: &MenuState) -> gio::Menu {
     }
     label.append_section(None, &names);
     more.append_submenu(Some(&gtk_mnemonic(tr!(MenuLabel))), &label);
+    more.append_submenu(Some(&gtk_mnemonic(tr!(MenuTags))), &tags_menu(&m.tags));
     menu.append_section(None, &more);
     let props = gio::Menu::new();
     item(&props, tr!(MenuProperties), "win.properties");
     menu.append_section(None, &props);
+    menu
+}
+
+/// Torrent menu > Tags (D76), in Label's order: New Tag... and Remove All Tags, then a check
+/// item per known tag (`win.tag-<i>`, its state set by [`menu_state`]).
+fn tags_menu(tags: &[String]) -> gio::Menu {
+    let menu = gio::Menu::new();
+    let actions = gio::Menu::new();
+    item(&actions, tr!(MenuNewTag), "win.tag-new");
+    item(&actions, tr!(MenuRemoveAllTags), "win.tag-clear");
+    menu.append_section(None, &actions);
+    let names = gio::Menu::new();
+    for (i, t) in tags.iter().enumerate() {
+        // the user's text: neither its `&` nor its `_` is a mnemonic
+        names.append(Some(&gtk_mnemonic(&tags::menu_text(t))), Some(&format!("win.tag-{i}")));
+    }
+    menu.append_section(None, &names);
     menu
 }
 
@@ -903,7 +928,25 @@ fn menu_state() -> Option<MenuState> {
         set("export-torrent", None, actions::any_has_metadata(&a.list, &ids));
         // the server's folders are not on this computer
         set("open-folder", None, !crate::remote::is_remote());
-        MenuState { labels: labels(a), single_done: ids.len() == 1 && st.is_some_and(|s| s.is_finished) }
+        // Tags ▸ (D76): a check item per tag, its action made the first time it is needed; a
+        // mixed tag (some of the torrents have it) shows unchecked, as GMenu has no third state
+        let states = tags::states(&a.list, &ids);
+        for (i, (_, state)) in states.iter().enumerate() {
+            let name = format!("tag-{i}");
+            if a.window.lookup_action(&name).is_none() {
+                let action = gio::SimpleAction::new_stateful(&name, None, &false.to_variant());
+                action.connect_activate(move |_, _| toggle_tag(i));
+                a.window.add_action(&action);
+            }
+            set(&name, Some((*state == TagState::On).to_variant()), true);
+        }
+        set("tag-clear", None, tags::any_tagged(&a.list, &ids));
+        a.menu_tags = states.into_iter().map(|(t, _)| t).collect();
+        MenuState {
+            labels: labels(a),
+            tags: a.menu_tags.clone(),
+            single_done: ids.len() == 1 && st.is_some_and(|s| s.is_finished),
+        }
     })
 }
 
@@ -1219,6 +1262,18 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
                 popup_menu(&feed_menu(feed), ui.sidebar.widget.upcast_ref(), widget, x, y);
             }
         }),
+        Rc::new(|tag, widget, x, y| {
+            let deletable = tag.is_some();
+            with_app(|a| {
+                a.menu_tag = tag;
+                if let Some(d) = a.window.lookup_action("tag-delete").and_downcast::<gio::SimpleAction>() {
+                    d.set_enabled(deletable);
+                }
+            });
+            if let Some(ui) = ui() {
+                popup_menu(&tag_group_menu(), ui.sidebar.widget.upcast_ref(), widget, x, y);
+            }
+        }),
     );
     // a feed's items, in the torrent list's place while a feed is picked
     let feed_text: crate::table::CellText = Rc::new(|row, column| {
@@ -1454,7 +1509,12 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
             window: window.clone(),
             session: Some(session),
             handle: handle.clone(),
-            list: TorrentList::new(),
+            list: {
+                // the known tags (D76), before the torrents come
+                let mut list = TorrentList::new();
+                tags::load_into(&mut list, &prefs);
+                list
+            },
             stats: SessionStats::default(),
             prefs,
             save_path,
@@ -1482,6 +1542,8 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
             feed_view: None,
             feed_rows: Vec::new(),
             menu_feed: None,
+            menu_tag: None,
+            menu_tags: Vec::new(),
             updates: Checker::new(
                 opts.gui.check_updates && updates_here(),
                 std::time::Instant::now(),
@@ -2212,6 +2274,10 @@ fn on_alerts() {
                                 let l = l.to_owned();
                                 a.list.set_label(st.id, &l);
                             }
+                            // its tags (D76); a name new to the known ones is written back
+                            if tags::on_first_sight(&mut a.list, &mut a.prefs, st.id, &key) {
+                                save_prefs(a);
+                            }
                             if a.prefs.get_bool(&format!("torrent.{key}.paused"), false) {
                                 a.list.set_user_paused(st.id, true);
                             }
@@ -2245,6 +2311,7 @@ fn on_alerts() {
                     a.downloading.remove(&id);
                     let key = info_hashes.key_hex();
                     a.prefs.remove(&format!("torrent.{key}.label"));
+                    tags::forget_torrent(&mut a.prefs, &key);
                     a.prefs.remove(&format!("torrent.{key}.paused"));
                     SeedGoal::forget(&mut a.prefs, &key);
                 }
@@ -2628,6 +2695,44 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
         }
     });
     window.add_action(&label);
+    // Torrent menu > Tags (D76); the tags' own items (`tag-<i>`) are made by `menu_state`
+    simple("tag-new", || {
+        input(tr!(NewTagTitle), tr!(NewTagPrompt), "", |name| {
+            let ids = selected();
+            let r = with_app(|a| {
+                let r = tags::add(&mut a.list, &mut a.prefs, &ids, &name);
+                save_prefs(a);
+                r
+            });
+            if let Some(Err(e)) = r {
+                error(&e.text(), "");
+            }
+            refresh();
+        })
+    });
+    simple("tag-clear", || {
+        let ids = selected();
+        with_app(|a| {
+            tags::clear(&mut a.list, &mut a.prefs, &ids);
+            save_prefs(a);
+        });
+        refresh();
+    });
+    // the category list's Tags group (D76): New Tag... only makes the tag, Delete Tag asks first
+    simple("tag-create", || {
+        input(tr!(NewTagTitle), tr!(NewTagPrompt), "", |name| {
+            let r = with_app(|a| {
+                let r = tags::create(&mut a.list, &mut a.prefs, &name);
+                save_prefs(a);
+                r
+            });
+            if let Some(Err(e)) = r {
+                error(&e.text(), "");
+            }
+            refresh();
+        })
+    });
+    simple("tag-delete", delete_tag);
     for (name, download) in [("dl-limit", true), ("ul-limit", false)] {
         let a = gio::SimpleAction::new_stateful(name, Some(glib::VariantTy::UINT32), &0u32.to_variant());
         a.connect_activate(move |_, v| {
@@ -2845,6 +2950,55 @@ fn show_properties() {
             a.handle.post_torrent_updates();
         });
         request_detail();
+    });
+}
+
+/// Torrent menu > Tags > a tag's item (`win.tag-<i>`, D76): on for every selected torrent, or
+/// off when they all have it.
+fn toggle_tag(i: usize) {
+    let ids = selected();
+    with_app(|a| {
+        if let Some(name) = a.menu_tags.get(i).cloned() {
+            tags::toggle(&mut a.list, &mut a.prefs, &ids, &name);
+            save_prefs(a);
+        }
+    });
+    refresh();
+}
+
+/// The category list's menu on the Tags group (D76): New Tag... and Delete Tag (`win.tag-delete`
+/// is enabled for a tag's row only).
+fn tag_group_menu() -> gio::Menu {
+    let menu = gio::Menu::new();
+    let actions = gio::Menu::new();
+    item(&actions, tr!(MenuNewTag), "win.tag-create");
+    item(&actions, tr!(MenuDeleteTag), "win.tag-delete");
+    menu.append_section(None, &actions);
+    menu
+}
+
+/// The Tags group's Delete Tag (D76): after asking, the tag the menu was opened on is no longer
+/// known and every torrent loses it; a list filtered by it shows all torrents again.
+fn delete_tag() {
+    let Some((window, Some(name))) = with_app(|a| (a.window.clone(), a.menu_tag.clone())) else { return };
+    let d = gtk::AlertDialog::builder()
+        .message(tr!(AskDeleteTag, name = name.as_str()))
+        .buttons([tr!(BtnCancel), tr!(BtnOk)])
+        .cancel_button(0)
+        .default_button(1)
+        .modal(true)
+        .build();
+    d.choose(Some(&window), None::<&gio::Cancellable>, move |r| {
+        if r != Ok(1) {
+            return;
+        }
+        with_app(|a| {
+            if tags::delete(&mut a.list, &mut a.prefs, &name) {
+                save_prefs(a);
+            }
+        });
+        // the sidebar follows the list's filter (All when the deleted tag was shown)
+        refresh();
     });
 }
 
@@ -4513,7 +4667,7 @@ mod tests {
     /// and Export .torrent sit in the top level, in their own section, before Advanced.
     #[test]
     fn the_torrent_menu_has_the_d73_items() {
-        let menu = torrent_menu(&MenuState { labels: Vec::new(), single_done: false });
+        let menu = torrent_menu(&MenuState { labels: Vec::new(), tags: Vec::new(), single_done: false });
         let mut items = Vec::new();
         menu_actions(menu.upcast_ref(), "", &mut items);
         let at = |action: &str| items.iter().position(|(_, a)| a == action).unwrap();
@@ -4540,5 +4694,59 @@ mod tests {
         assert!(sections.iter().any(|s| actions_of(s) == ["win.copy-magnet", "win.export-torrent"]));
         // the two check items' actions are the ones `add_actions` makes from FLAG_ITEMS
         assert_eq!(FLAG_ITEMS.map(|(n, _)| format!("win.{n}")), ["win.sequential", "win.first-last"]);
+    }
+
+    /// D76: Tags follows Label and has its order: New Tag... and Remove All Tags, then a check
+    /// item per tag; a tag's `&` and `_` are its own text.
+    #[test]
+    fn the_torrent_menu_has_the_tags_submenu() {
+        let tags = vec!["R&B".to_owned(), "my_tag".to_owned()];
+        let menu = torrent_menu(&MenuState { labels: vec!["x".into()], tags, single_done: false });
+        let mut items = Vec::new();
+        menu_actions(menu.upcast_ref(), "", &mut items);
+        let at = |action: &str| items.iter().position(|(_, a)| a == action).unwrap();
+        let tags_menu = gtk_mnemonic(tr!(MenuTags));
+        for action in ["win.tag-0", "win.tag-1", "win.tag-new", "win.tag-clear"] {
+            assert_eq!(items[at(action)].0, tags_menu, "{action}");
+        }
+        assert!(at("win.label") < at("win.tag-new"));
+        // Label's order: the commands first, then the names
+        assert!(at("win.tag-new") < at("win.tag-clear") && at("win.tag-clear") < at("win.tag-0"));
+        assert!(at("win.tag-0") < at("win.tag-1"));
+        let sub = tags_menu_model(&menu);
+        let texts: Vec<String> = (0..sub.n_items())
+            .filter_map(|i| sub.item_link(i, "section"))
+            .flat_map(|s| {
+                (0..s.n_items())
+                    .filter_map(|i| s.item_attribute_value(i, "label", None).and_then(|v| v.get::<String>()))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert_eq!(texts.len(), 4, "{texts:?}");
+        assert_eq!(texts[2..], ["R&B".to_owned(), "my__tag".to_owned()]);
+        let group = tag_group_menu();
+        let mut items = Vec::new();
+        menu_actions(group.upcast_ref(), "", &mut items);
+        let actions: Vec<&str> = items.iter().map(|(_, a)| a.as_str()).collect();
+        assert_eq!(actions, ["win.tag-create", "win.tag-delete"]);
+    }
+
+    /// The Tags submenu of the torrent menu.
+    fn tags_menu_model(menu: &gio::Menu) -> gio::MenuModel {
+        fn find(m: &gio::MenuModel, title: &str) -> Option<gio::MenuModel> {
+            for i in 0..m.n_items() {
+                if let Some(sub) = m.item_link(i, "submenu") {
+                    let label = m.item_attribute_value(i, "label", None).and_then(|v| v.get::<String>());
+                    if label.as_deref() == Some(title) {
+                        return Some(sub);
+                    }
+                }
+                if let Some(found) = m.item_link(i, "section").and_then(|s| find(&s, title)) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        find(menu.upcast_ref(), &gtk_mnemonic(tr!(MenuTags))).unwrap()
     }
 }

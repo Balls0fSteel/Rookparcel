@@ -114,6 +114,9 @@ strings! {
     ColDate = "Date";
     ColFeed = "Feed";
     ColUrl = "URL";
+    /// The torrent list (D76): the torrent's tags, names it can have any number of (unlike its
+    /// one label), separated by commas.
+    ColTags = "Tags";
 
     // ---- Trackers tab: a tracker's status
 
@@ -274,6 +277,18 @@ strings! {
     /// Torrent menu (D73): saves the selected torrents' .torrent files where you choose; keep
     /// ".torrent" as it is.
     MenuExportTorrent = "E&xport .torrent...";
+    /// Torrent menu (D76): the submenu of tags, names a torrent can have any number of (unlike
+    /// its one label). Its items are the tags, each checked when every selected torrent has it.
+    MenuTags = "Ta&gs";
+    /// Torrent menu > Tags (D76): asks for a new tag's name and gives the tag to the selected
+    /// torrents. Also in the category list's menu on the Tags group, where it only makes the
+    /// tag.
+    MenuNewTag = "&New Tag...";
+    /// Torrent menu > Tags (D76): takes every tag off the selected torrents; the tags stay.
+    MenuRemoveAllTags = "&Remove All Tags";
+    /// The category list's menu on a tag (D76): deletes the tag itself, which takes it off
+    /// every torrent that has it.
+    MenuDeleteTag = "&Delete Tag";
 
     // ---- Toolbar buttons (tooltips)
 
@@ -294,6 +309,10 @@ strings! {
     CatLabels = "Labels";
     CatNoLabel = "No Label";
     CatFeeds = "Feeds";
+    /// The group of tags (D76), under Labels: each row is a tag with its torrent count.
+    CatTags = "Tags";
+    /// The row of the torrents without any tag (D76), as "No Label" is for labels.
+    CatNoTag = "No Tag";
 
     // ---- Detail tabs and the General tab
 
@@ -567,6 +586,8 @@ strings! {
     StatsCacheHits = "Read Cache Hits:";
     /// Message heading for Torrent menu > Export .torrent; the error follows on its own.
     CannotExport = "Could not export {name}";
+    /// The category list's Delete Tag (D76): {name} is the tag.
+    AskDeleteTag = "Delete the tag \"{name}\"? Every torrent that has it loses it.";
 
     // ---- Small dialogs: Add Torrent from URL, New Label, folder pickers, file filters
 
@@ -590,6 +611,14 @@ strings! {
     /// The folder picker of Torrent menu > Export .torrent when several torrents are selected:
     /// each is saved there as "<its name>.torrent".
     ExportFolderTitle = "Select the folder to export the .torrent files to";
+    /// The title of Torrent menu > Tags > New Tag's small window (D76).
+    NewTagTitle = "New Tag";
+    NewTagPrompt = "Enter the name of the new tag:";
+    /// A tag name refused (D76): empty, or with a comma (it separates tags in lists), a tab or a
+    /// line break.
+    TagInvalid = "A tag cannot be empty or contain a comma, a tab or a line break.";
+    /// A new tag refused (D76): {max} is the most tags there can be (1024).
+    TagTooMany = "There can be at most {max} tags. Delete one before making another.";
 
     // ---- Add New Torrent
 
@@ -1229,6 +1258,9 @@ strings! {
     /// opened over https or from this computer): a small window shows the links, selected, to
     /// copy with Ctrl+C.
     CopyMagnetManual = "Copy the link below:";
+    /// A change of tags the server refused or did not answer (D76): adding, removing, making or
+    /// deleting a tag.
+    WebTagsNotSet = "The tags could not be changed.";
 
     // ---- Create New Torrent: choices and errors
 

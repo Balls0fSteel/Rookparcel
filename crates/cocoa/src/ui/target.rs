@@ -121,6 +121,8 @@ fn validate_menu_item(item: &NSMenuItem) -> bool {
     let (enabled, checked) = crate::app::state(cmd);
     item.setState(match checked {
         Some(true) => NSControlStateValueOn,
+        // D76: a tag some of the selected torrents have
+        Some(false) if enabled && crate::torrent_menu::mixed(cmd) => NSControlStateValueMixed,
         Some(false) | None => NSControlStateValueOff,
     });
     if let Some(title) = crate::app::title(cmd) {

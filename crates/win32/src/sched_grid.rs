@@ -154,17 +154,19 @@ unsafe fn layout(hwnd: HWND) -> Layout {
 
 /// How wide `s` is in `dc`'s font.
 unsafe fn text_width(dc: HDC, s: &str) -> i32 {
-    let w: Vec<u16> = s.encode_utf16().collect();
+    // NUL-terminated, so an empty text still hands DrawTextW a real string (an empty Vec's
+    // pointer dangles; theme.rs's status bar crashed on one)
+    let w: Vec<u16> = s.encode_utf16().chain(Some(0)).collect();
     let mut r = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-    unsafe { DrawTextW(dc, w.as_ptr(), w.len() as i32, &mut r, DT_CALCRECT | DT_SINGLELINE) };
+    unsafe { DrawTextW(dc, w.as_ptr(), w.len() as i32 - 1, &mut r, DT_CALCRECT | DT_SINGLELINE) };
     r.right - r.left
 }
 
 unsafe fn text(dc: HDC, s: &str, rc: &RECT, flags: u32) {
-    let w: Vec<u16> = s.encode_utf16().collect();
+    let w: Vec<u16> = s.encode_utf16().chain(Some(0)).collect();
     let mut r = *rc;
     let flags = flags | DT_SINGLELINE | DT_VCENTER | rtl(DT_RTLREADING);
-    unsafe { DrawTextW(dc, w.as_ptr(), w.len() as i32, &mut r, flags) };
+    unsafe { DrawTextW(dc, w.as_ptr(), w.len() as i32 - 1, &mut r, flags) };
 }
 
 /// Paints the whole control into a memory bitmap, then copies it to the window in one go: the

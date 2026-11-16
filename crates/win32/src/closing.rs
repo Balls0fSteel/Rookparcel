@@ -307,9 +307,11 @@ unsafe fn text_height(label: HWND, text: &str, width: i32) -> i32 {
     unsafe {
         let dc = GetDC(label);
         let old = SelectObject(dc, send(label, WM_GETFONT, 0, 0) as HGDIOBJ);
-        let w: Vec<u16> = text.encode_utf16().collect();
+        // NUL-terminated: an empty text still hands DrawTextW a real string, not an empty Vec's
+        // dangling pointer
+        let w: Vec<u16> = text.encode_utf16().chain(Some(0)).collect();
         let mut r = RECT { left: 0, top: 0, right: width, bottom: 0 };
-        DrawTextW(dc, w.as_ptr(), w.len() as i32, &mut r, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
+        DrawTextW(dc, w.as_ptr(), w.len() as i32 - 1, &mut r, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
         SelectObject(dc, old);
         ReleaseDC(label, dc);
         r.bottom - r.top

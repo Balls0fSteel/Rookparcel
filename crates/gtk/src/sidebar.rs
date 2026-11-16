@@ -1,7 +1,7 @@
 //! The category list on the left, µTorrent 2.2.1's tree as a flat list: Torrents, Downloading,
 //! Completed, Active and Inactive with their counts, then the Labels: "No Label" and every
-//! label in use, then the Feeds (all feeds' items, then each feed's), as the Win32 tree shows
-//! them.
+//! label in use, then the Tags (D76): "No Tag" and every known tag, then the Feeds (all feeds'
+//! items, then each feed's), as the Win32 tree shows them.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -25,12 +25,19 @@ pub enum Pick {
 /// row), the widget and where.
 pub type FeedMenu = Rc<dyn Fn(Option<FeedId>, &gtk::Widget, f64, f64)>;
 
+/// Called for a right click on the Tags group (D76): the tag of the row (picked first; `None`
+/// for the Tags heading and No Tag), the widget and where.
+pub type TagMenu = Rc<dyn Fn(Option<String>, &gtk::Widget, f64, f64)>;
+
 pub struct Sidebar {
     pub widget: gtk::ListBox,
-    /// What each row picks, by row index (`None` for the Labels heading).
+    /// What each row picks, by row index (`None` for the Labels and Tags headings).
     rows: RefCell<Vec<(Option<Pick>, gtk::Label)>>,
-    /// The labels and feeds the rows were built for.
+    /// The Tags heading's row index.
+    tags_heading: Cell<usize>,
+    /// The labels, tags and feeds the rows were built for.
     labels: RefCell<Vec<String>>,
+    tags: RefCell<Vec<String>>,
     feeds: RefCell<Vec<(FeedId, String)>>,
     /// The row picked last.
     current: RefCell<Pick>,
@@ -40,15 +47,17 @@ pub struct Sidebar {
 
 impl Sidebar {
     /// `on_select` gets what each row the user picks shows; `feed_menu` the right clicks on the
-    /// Feeds rows.
-    pub fn new(on_select: impl Fn(Pick) + 'static, feed_menu: FeedMenu) -> Rc<Sidebar> {
+    /// Feeds rows, `tag_menu` those on the Tags group.
+    pub fn new(on_select: impl Fn(Pick) + 'static, feed_menu: FeedMenu, tag_menu: TagMenu) -> Rc<Sidebar> {
         let widget = gtk::ListBox::new();
         widget.set_selection_mode(gtk::SelectionMode::Single);
         widget.add_css_class("navigation-sidebar");
         let sidebar = Rc::new(Sidebar {
             widget,
             rows: RefCell::default(),
+            tags_heading: Cell::new(usize::MAX),
             labels: RefCell::default(),
+            tags: RefCell::default(),
             feeds: RefCell::default(),
             current: RefCell::new(Pick::Torrents(Filter::default())),
             rebuilding: Cell::new(false),
@@ -71,15 +80,24 @@ impl Sidebar {
         click.connect_pressed(move |g, _, x, y| {
             let Some(s) = weak.upgrade() else { return };
             let Some(row) = s.widget.row_at_y(y as i32) else { return };
-            let pick = s.rows.borrow().get(row.index() as usize).and_then(|(p, _)| p.clone());
-            let Some(Pick::Feed(feed)) = pick else { return };
-            s.widget.select_row(Some(&row));
-            if let Some(w) = g.widget() {
-                feed_menu(feed, &w, x, y);
+            let index = row.index() as usize;
+            let pick = s.rows.borrow().get(index).and_then(|(p, _)| p.clone());
+            let Some(w) = g.widget() else { return };
+            match pick {
+                Some(Pick::Feed(feed)) => {
+                    s.widget.select_row(Some(&row));
+                    feed_menu(feed, &w, x, y);
+                }
+                Some(Pick::Torrents(Filter::Tag(tag))) => {
+                    s.widget.select_row(Some(&row));
+                    tag_menu((!tag.is_empty()).then_some(tag), &w, x, y);
+                }
+                None if index == s.tags_heading.get() => tag_menu(None, &w, x, y),
+                _ => {}
             }
         });
         sidebar.widget.add_controller(click);
-        sidebar.rebuild(&[], &[]);
+        sidebar.rebuild(&[], &[], &[]);
         sidebar
     }
 
@@ -88,12 +106,18 @@ impl Sidebar {
         self.current.borrow().clone()
     }
 
-    /// Updates the counts; rebuilds the rows when the labels in use or the feeds changed.
+    /// Updates the counts; rebuilds the rows when the labels in use, the known tags or the
+    /// feeds changed.
     pub fn update(&self, list: &TorrentList, feeds: &[(FeedId, String)]) {
         let labels = list.labels();
         let names: Vec<String> = labels.iter().map(|(l, _)| l.clone()).collect();
-        if *self.labels.borrow() != names || *self.feeds.borrow() != feeds {
-            self.rebuild(&names, feeds);
+        let tags = list.tag_counts();
+        let changed = *self.labels.borrow() != names
+            || *self.feeds.borrow() != feeds
+            || !self.tags.borrow().iter().eq(tags.iter().map(|(t, _)| t));
+        if changed {
+            let tag_names: Vec<String> = tags.iter().map(|(t, _)| t.clone()).collect();
+            self.rebuild(&names, &tag_names, feeds);
         }
         let labelled: usize = labels.iter().map(|(_, n)| n).sum();
         for (pick, label) in self.rows.borrow().iter() {
@@ -106,6 +130,13 @@ impl Sidebar {
                     let n = labels.iter().find(|(x, _)| x == l).map_or(0, |(_, n)| *n);
                     format!("{l} ({n})")
                 }
+                Some(Pick::Torrents(Filter::Tag(t))) if t.is_empty() => {
+                    format!("{} ({})", tr!(CatNoTag), list.untagged())
+                }
+                Some(Pick::Torrents(Filter::Tag(t))) => {
+                    let n = tags.iter().find(|(x, _)| x == t).map_or(0, |(_, n)| *n);
+                    format!("{t} ({n})")
+                }
                 _ => continue,
             };
             if label.text() != text {
@@ -114,7 +145,7 @@ impl Sidebar {
         }
     }
 
-    fn rebuild(&self, labels: &[String], feeds: &[(FeedId, String)]) {
+    fn rebuild(&self, labels: &[String], tags: &[String], feeds: &[(FeedId, String)]) {
         self.rebuilding.set(true);
         while let Some(row) = self.widget.row_at_index(0) {
             self.widget.remove(&row);
@@ -150,6 +181,15 @@ impl Sidebar {
         for l in labels {
             add(Some(Pick::Torrents(Filter::Label(l.clone()))), l, UiIcon::Labels, true, false);
         }
+        // the Tags group (D76): no symbol of its own yet, the Labels' stand in
+        // after the categories, the Labels heading, No Label and the labels
+        let tags_heading = Category::ALL.len() + 2 + labels.len();
+        add(None, tr!(CatTags), UiIcon::Labels, false, true);
+        let no_tag = Some(Pick::Torrents(Filter::Tag(String::new())));
+        add(no_tag, tr!(CatNoTag), UiIcon::NoLabel, true, false);
+        for t in tags {
+            add(Some(Pick::Torrents(Filter::Tag(t.clone()))), t, UiIcon::Labels, true, false);
+        }
         // the Feeds row lists every feed's items, as the Win32 tree's Feeds node
         add(Some(Pick::Feed(None)), tr!(CatFeeds), UiIcon::Feeds, false, true);
         for (id, name) in feeds {
@@ -163,6 +203,8 @@ impl Sidebar {
         }
         *self.rows.borrow_mut() = rows;
         *self.labels.borrow_mut() = labels.to_vec();
+        *self.tags.borrow_mut() = tags.to_vec();
+        self.tags_heading.set(tags_heading);
         *self.feeds.borrow_mut() = feeds.to_vec();
         self.widget.select_row(self.widget.row_at_index(index.unwrap_or(0) as i32).as_ref());
         self.rebuilding.set(false);

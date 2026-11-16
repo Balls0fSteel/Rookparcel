@@ -59,13 +59,13 @@ Several names are separated with `;`; `*` matches anything. Prefer naming the ho
 
 To run nox itself in a container beside the apps, see [Docker](Docker): its image, a Compose file with the shared media folder, and the user IDs.
 
-## Categories and labels
+## Categories, labels and tags
 
 A qBittorrent category is a **label** in Rookparcel. The torrents an app adds get its category as their label, so you see them under that label in the categories list ([Managing torrents](Managing-torrents)). Changing a torrent's label in Rookparcel changes its category for the app too; an app only tracks torrents in its own category.
 
 When the app gives no download folder of its own, a torrent goes to its category's save folder if the category has one, and otherwise to Rookparcel's default download folder.
 
-Rookparcel has no tags. Sonarr's series tags are accepted and dropped without an error.
+A qBittorrent tag is a **tag** in Rookparcel (*new in 1.2.61, not in a published release yet*; before, tags were accepted and dropped). A torrent can have any number of them besides its label; they show under **Tags** in the categories list and in the **Tags** column ([Managing torrents](Managing-torrents#tags)). With Sonarr's **Add Series Tags** on, a grab gets the series' tags. Radarr sends no tags. A name with a comma or a control character is skipped without an error, and names are case-sensitive, as in qBittorrent.
 
 ## Download folders and paths
 

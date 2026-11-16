@@ -106,7 +106,7 @@ A password on the command line is visible to other local users in the process li
 
 | Option | Meaning |
 |---|---|
-| `--import qbittorrent` or `utorrent` | `run` only: adds the torrents of qBittorrent or µTorrent at the start, with their data where it is (checked first), statistics, priorities, trackers and labels. The other client must not be running; its files are only read. See [Importing from uTorrent and qBittorrent](Importing-from-uTorrent-and-qBittorrent). |
+| `--import qbittorrent` or `utorrent` | `run` only: adds the torrents of qBittorrent or µTorrent at the start, with their data where it is (checked first), statistics, priorities, trackers, labels and qBittorrent's tags. The other client must not be running; its files are only read. See [Importing from uTorrent and qBittorrent](Importing-from-uTorrent-and-qBittorrent). |
 | `--import-dir DIR` | The other client's folder when it is not in the usual place. |
 | `--verbose` (`-v`) | Prints tracker and peer events. |
 | `--no-update-check` | `run` only: does not ask the project website for newer releases. |

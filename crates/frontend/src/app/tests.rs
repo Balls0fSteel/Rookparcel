@@ -175,6 +175,57 @@ fn a_removed_torrent_takes_its_preferences_along() {
     assert!(core.events().view);
 }
 
+/// D76: the known tags at start, a torrent's tags at its first sight, the Tags menu's commands,
+/// and the torrent's key leaving with it while its tags stay known.
+#[test]
+fn tags_through_the_preferences_and_the_menu() {
+    let mut s = Setup::new();
+    let (k1, k2) = (hash(7).key_hex(), hash(8).key_hex());
+    s.prefs.set("tags.list", "unused");
+    s.prefs.set(&format!("torrent.{k1}.tags"), "tv,Movies");
+    let mut core = s.start("tags");
+    assert_eq!(core.tags(), ["unused"]);
+    core.handle_alerts(vec![Alert::StateUpdate(vec![status(7, 7, "a", false), status(8, 8, "b", false)])]);
+    let (a, b) = (TorrentId::from_raw(7), TorrentId::from_raw(8));
+    assert_eq!(core.list().tags_of(a), ["Movies", "tv"]);
+    assert_eq!(core.tags(), ["Movies", "tv", "unused"]);
+    assert_eq!(core.prefs().get("tags.list"), Some("Movies,tv,unused"));
+    assert!(core.events().sidebar);
+
+    // Tags ▸'s items one by one, by their place among the known tags
+    use crate::tags::TagState;
+    let items: Vec<Option<TagState>> = (0..4).map(|i| core.tag_state(&[a, b], i)).collect();
+    assert_eq!(items, [Some(TagState::Mixed), Some(TagState::Mixed), Some(TagState::Off), None]);
+    assert_eq!(core.tag_state(&[a], 1), Some(TagState::On));
+    assert!(core.can_clear_tags(&[a, b]));
+    assert!(!core.can_clear_tags(&[b]));
+    core.toggle_tag(&[a, b], "tv");
+    assert_eq!(core.list().tags_of(b), ["tv"]);
+    assert_eq!(core.prefs().get(&format!("torrent.{k2}.tags")), Some("tv"));
+    core.toggle_tag(&[a, b], "tv");
+    assert!(core.list().tags_of(b).is_empty());
+    assert_eq!(core.create_tag(&[b], " new "), Ok("new".to_owned()));
+    assert_eq!(core.create_tag(&[], "a,b"), Err(crate::tags::TagError::Invalid));
+    assert_eq!(core.list().tags_of(b), ["new"]);
+    core.add_tag(&[a], "unused").unwrap();
+    core.remove_tag(&[a], "Movies");
+    assert_eq!(core.list().tags_of(a), ["unused"]);
+    core.clear_tags(&[a]);
+    assert!(core.prefs().get(&format!("torrent.{k1}.tags")).is_none());
+    // Delete Tag from the sidebar, while the list shows it
+    core.show_torrents(crate::model::Filter::Tag("new".into()));
+    assert!(core.delete_tag("new"));
+    assert!(core.list().tags_of(b).is_empty());
+    assert_eq!(core.list().filter(), &crate::model::Filter::Category(crate::status::Category::All));
+    assert_eq!(core.prefs().get("tags.list"), Some("Movies,tv,unused"));
+
+    // removed: its key goes, the tags stay known
+    core.add_tag(&[b], "tv").unwrap();
+    core.handle_alerts(vec![Alert::TorrentRemoved { id: b, info_hashes: hash(8) }]);
+    assert!(core.prefs().get(&format!("torrent.{k2}.tags")).is_none());
+    assert!(core.tags().contains(&"tv".to_owned()));
+}
+
 #[test]
 fn only_a_download_seen_running_is_reported_completed() {
     let mut core = Setup::new().start("finished");

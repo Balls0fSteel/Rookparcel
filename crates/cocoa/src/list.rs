@@ -1,4 +1,4 @@
-//! The torrent list over `Core`'s `TorrentList` (GTK `list.rs`): the 24 columns of
+//! The torrent list over `Core`'s `TorrentList` (GTK `list.rs`): the 25 columns of
 //! `frontend::columns` in the prefs' order, widths and visibility (`prefs.columns()`, written
 //! back as they change), the state icon before the name, the Done bar, sorting kept in prefs,
 //! the selection driving the detail tabs, double-click, Return, ⌫, the context menu (the Torrent
@@ -125,7 +125,7 @@ pub fn build(
     hooks.key = Some(Box::new(key));
     hooks.menu = Some(Box::new(|_ids| {
         let mtm = MainThreadMarker::new()?;
-        Some(menu::build("", &menu::torrent(&crate::app::labels(), false), mtm))
+        Some(menu::build("", &menu::torrent(&crate::app::labels(), &crate::app::tags(), false), mtm))
     }));
     let sort = sort.and_then(|(col, desc)| cols.iter().position(|&c| c == col).map(|i| (i, !desc)));
     let (scroll, view, source) = table::table(TableKind("torrents"), specs, hooks, sort, mtm);

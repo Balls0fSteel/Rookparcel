@@ -127,7 +127,12 @@ moves rows; 60 hashes is nothing), the cells of rows whose `version` changed (th
 `Entry::version` the compat `sync/maindata` already keeps), the category counts and the status
 bar, plus `labels` (every label the daemon knows, from its category map and the torrents, with
 its torrent count, sorted by name) and `no_label` whenever either changed since this client's
-last tick; a fresh socket gets them with its first tick. A row in the window that did not change is not sent. Cells are strings in the client's
+last tick; a fresh socket gets them with its first tick. Tags (D76) work the same way: `hello`
+carries `tags` (the known names, in `frontend::tags::cmp` order), a `tick` carries `tags` as
+`[[name, count], ...]` (a torrent with several tags counts under each; an unused tag with 0)
+and `no_tag` whenever either changed, and the `view` filter takes `"tag": "<name>"` (`""`: the
+torrents without a tag) in place of a label or category; a name the tags refuse gives an
+empty view. A row in the window that did not change is not sent. Cells are strings in the client's
 column order; a column change re-sends the window.
 
 A `tick` also carries `"rss": n` when the RSS Downloader changed, `"search": n` when the
@@ -207,8 +212,8 @@ without it; a browser cannot send a custom header cross-site without a CORS pref
 the server never grants) and pass the shim's `Origin` / `Referer` rule (403
 `{"error":"origin not allowed"}`); a request without an `Origin` (curl) passes on the header
 alone. A body naming torrents carries `"ids": [hashes]` or instead `"all": true` with the
-client's view filter (`"filter": {"category": ..., "label": ..., "search": ...}`, the same
-shape as the `view` subscription), applied server-side, so Ctrl+A under a filter acts on
+client's view filter (`"filter": {"category": ..., "label": ..., "tag": ..., "search": ...}`,
+the same shape as the `view` subscription; the `GET`s' `all=1` takes `tag=` too), applied server-side, so Ctrl+A under a filter acts on
 every matching torrent, not the loaded window. Unknown ids are skipped; a body whose ids name
 nothing is 404. The shim's `torrents/*` handlers call the same functions.
 
@@ -220,6 +225,11 @@ nothing is 404. The shim's `torrents/*` handlers call the same functions.
 | `/pa/torrents/queue` | `{"ids":[...],"move":"up"\|"down"\|"top"\|"bottom"}` | queue positions (several torrents keep their relative order) |
 | `/pa/torrents/limits` | `{"ids":[...],"down":0,"up":0}` (either optional) | bytes per second, 0 unlimited |
 | `/pa/torrents/label` | `{"ids":[...],"label":"..."}` | a new label is created; empty removes it |
+| `/pa/torrents/add-tag`, `remove-tag` | `{"ids":[...],"tag":"..."}` | Tags ▸ (D76): the tag on every torrent named (made known when new) or off; 400 `{"error"}` with `TagInvalid` for a name `frontend::tags::normalize` refuses, 409 with `TagTooMany` for a new one past 1024 |
+| `/pa/torrents/clear-tags` | `{"ids":[...]}` | Remove All Tags; the tags stay known |
+| `/pa/tags` (`GET`) | | `{"tags":[names],"max":1024}`, the known tags in order |
+| `/pa/tags/create` | `{"name":"..."}` | New Tag on the Tags group: `200 {"name"}` (the name as kept: trimmed, cut to 128 bytes); an existing tag is no error; 400 / 409 as `add-tag` |
+| `/pa/tags/delete` | `{"name":"..."}` | Delete Tag: every torrent loses it (those added but not reported by the engine yet too); 404 for a tag that is not known |
 | `/pa/torrents/location` | `{"ids":[...],"path":"..."}` | `move_storage` (Set Download Location) |
 | `/pa/torrents/super-seed` | `{"ids":[...],"on":true}` | Initial Seeding |
 | `/pa/torrents/sequential`, `first-last` | `{"ids":[...],"on":true}` (`on` defaults to true) | Download in Sequential Order (`SEQUENTIAL_DOWNLOAD`), Download First and Last Pieces First (`FIRST_LAST_PIECES`), D72: set on or off for every torrent named; the page sends off only when every selected torrent has the flag (its check mark, from `torrents/info`'s `seq_dl` / `f_l_piece_prio`) |
@@ -251,6 +261,27 @@ is not `http`, `https` or `udp`), `addTrackers` (each URL in a new tier after th
 (D73) gives the `.torrent` as `/pa/torrents/export` does (404 for an unknown hash, 409 for a
 magnet without its metadata). `magnet_uri` in `torrents/info` stays without trackers (the
 status carries no tracker list); the page's Copy Magnet Link has them.
+
+Tags (D76) are qBittorrent's, every name checked by `frontend::tags::normalize` (trimmed, not
+empty, no comma or control character, cut to 128 bytes, case-sensitive; at most 1024 known):
+`GET torrents/tags` answers the known names as a JSON array, in order. POST only, answered
+`200` with an empty body: `createTags` (`tags`, comma-separated; 400 without it), `deleteTags`
+(`tags`; every torrent loses them), `addTags` (`hashes`, `|`-separated or `all`, and `tags`;
+a new name is made known; 400 without either), `removeTags` (`hashes`, optional `tags`: none
+takes every tag off, as qBittorrent does) and qBittorrent 5.1's `setTags` (`hashes`, `tags`:
+exactly these). A name refused, or a new one past 1024, is skipped and the call still answers
+200, as qBittorrent skips the names it refuses. `torrents/add` takes `tags` (comma-separated,
+made known). A torrent that is already in the list gets the tags added to those it has, as a
+`category` adds its label there; qBittorrent leaves an existing torrent's tags alone on a
+duplicate add. `torrents/info` and `sync/maindata` carry each torrent's `tags` as qBittorrent
+sends them, joined by `", "`; `torrents/info?tag=<name>` lists the torrents with that tag
+(`tag=`: those without any; a name the tags refuse: none). `sync/maindata` sends every known
+tag as `tags` in a full update, then the new ones as `tags` and the deleted ones as
+`tags_removed` against what that client was sent at its last rid. A torrent's tags are kept in
+`options` as `torrent.<key>.tags` and the known ones as `tags.list` (the GUIs' keys,
+`frontend::tags`): in `webui.json` under nox, in the host's preferences hosted. A torrent's
+first sight reads its key (a name not known yet becomes known), its removal deletes it; `run
+--import qbittorrent` hands the imported tags over the same way.
 
 The shim's `app/preferences` and `setPreferences` carry "Do not download files named" (D74) as
 `excluded_file_names_enabled` (`files.exclude`) and `excluded_file_names`
@@ -408,7 +439,14 @@ category searches everything.
 ### Page layout
 
 Desktop (the 2.2.1 window): toolbar; category tree on the left with counts; the list; the detail
-tabs below; the status bar. Splitters by drag, layout persisted in `localStorage`. Light theme by
+tabs below; the status bar. The tree's Tags group (D76) sits under the Labels: No Tag, then
+every known tag with its count, a click filtering the list; its context menu (a right click,
+a long press on a phone) has New Tag... (`prompt`) and Delete Tag (asked first with
+`AskDeleteTag`). The torrent menu's Tags ▸ follows Label ▸: New Tag..., Remove All Tags, then
+a check item per tag, checked when every selected torrent has it (from `torrents/info`'s
+`tags`, as the other check marks); a checked item takes the tag off, any other puts it on.
+A refused name shows the server's message in a box. Names reach the page only through
+`textContent`. The Tags column is off by default and sorts by the tag lists. Splitters by drag, layout persisted in `localStorage`. Light theme by
 default, dark by `prefers-color-scheme`, or one of the themes below.
 
 ### Themes (D63)
@@ -725,7 +763,17 @@ held: queue them) and `shutdown()`.
   replaces the login (a new hash ends every session, SEC-24) and re-reads the settings and
   options the Preferences pages show. The key is `InfoHashes::key_hex` (the v1 hash, else the
   full v2 one); the Web UI keys torrents by their v1-compatible hash, so it keeps a second
-  index. A torrent's first sight takes the host's label and pause mark.
+  index. A torrent's first sight takes the host's label and pause mark. Tags (D76) take the
+  same path: a browser's change writes `torrent.<key>.tags` and `tags.list` into the mirror
+  (journaled to the host, which applies them with `frontend::tags::apply_change`); the host's
+  changes to those keys reach `options_changed`, which sets the torrent's tags (or makes the
+  names of a torrent not seen yet known) and, for `tags.list`, reads the known tags again
+  once the whole batch is in, so a deleted tag leaves. The first sight takes the host's
+  `torrent.<key>.tags` without writing anything back (the host tidies its own keys). At start
+  the known tags are `tags.list` only (a key of a torrent that is gone brings nothing back).
+  `tags.list` travels whole, and each side writes it only when its known tags change (the
+  journal leaves out a value set to what it is); a New Tag in the window and one in a browser
+  in the same second can still lose one of the two (BACKLOG "Tags").
 - **Nothing on disk, nothing to the engine but commands.** No `webui.json`, no `rss.dat`: the
   login comes from `webui.username` / `webui.password` in the options (a temporary password
   when there is none, as nox makes one), the label list from the `torrent.*.label` keys. A

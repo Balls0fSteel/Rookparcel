@@ -25,6 +25,8 @@ pub enum Filter {
     Category(Category),
     /// Torrents with this label; the empty label means "no label".
     Label(String),
+    /// Torrents with this tag (D76); the empty tag means "no tag" (torrents without any).
+    Tag(String),
 }
 
 impl Default for Filter {
@@ -39,6 +41,10 @@ pub struct TorrentList {
     /// Torrents the user paused (rather than stopped).
     paused: HashSet<TorrentId>,
     labels: HashMap<TorrentId, String>,
+    /// Each tagged torrent's tags (D76), in [`crate::tags::cmp`] order, never empty.
+    tags: HashMap<TorrentId, Vec<String>>,
+    /// Every known tag, in [`crate::tags::cmp`] order (at most [`crate::tags::MAX_TAGS`]).
+    known_tags: Vec<String>,
     /// Every row in sort order (as of the last refresh).
     order: Vec<TorrentId>,
     /// `order` filtered.
@@ -207,6 +213,7 @@ impl TorrentList {
         }
         self.paused.remove(&id);
         self.labels.remove(&id);
+        self.tags.remove(&id);
         self.dirty = true;
         self.generation += 1;
     }
@@ -266,10 +273,150 @@ impl TorrentList {
         self.rows.len() - self.labels.keys().filter(|id| self.rows.contains_key(id)).count()
     }
 
+    // ---- tags (D76; the selection's commands are `crate::tags`'s) -----------------------------
+
+    /// Every known tag (used or not), in [`crate::tags::cmp`] order.
+    pub fn tags(&self) -> &[String] {
+        &self.known_tags
+    }
+
+    /// A torrent's tags, in order (empty: none).
+    pub fn tags_of(&self, id: TorrentId) -> &[String] {
+        self.tags.get(&id).map_or(&[], Vec::as_slice)
+    }
+
+    /// Every known tag with the number of torrents that have it (0 for an unused one), in
+    /// order: the sidebar's Tags group. A torrent with several tags counts under each.
+    pub fn tag_counts(&self) -> Vec<(String, usize)> {
+        let mut n: HashMap<&str, usize> = HashMap::new();
+        for (id, tags) in &self.tags {
+            if self.rows.contains_key(id) {
+                for t in tags {
+                    *n.entry(t.as_str()).or_default() += 1;
+                }
+            }
+        }
+        self.known_tags.iter().map(|t| (t.clone(), n.get(t.as_str()).copied().unwrap_or(0))).collect()
+    }
+
+    /// How many torrents have no tag: the sidebar's No Tag row.
+    pub fn untagged(&self) -> usize {
+        self.rows.len() - self.tags.keys().filter(|id| self.rows.contains_key(id)).count()
+    }
+
+    /// Makes the valid, new names of `tags` known while there is room; true when one was added.
+    fn learn_tags<'a>(&mut self, tags: impl IntoIterator<Item = &'a String>) -> bool {
+        let mut added = false;
+        for t in tags {
+            if self.known_tags.len() >= crate::tags::MAX_TAGS {
+                break;
+            }
+            if let Err(at) = self.known_tags.binary_search_by(|k| crate::tags::cmp(k, t)) {
+                self.known_tags.insert(at, t.clone());
+                added = true;
+            }
+        }
+        added
+    }
+
+    /// Replaces the known tags (the preferences' `tags.list` at start, or as the Web UI changed
+    /// it): `tags` normalized, plus every tag a torrent has.
+    pub fn set_known_tags(&mut self, tags: Vec<String>) {
+        let mut known: Vec<String> = tags.iter().filter_map(|t| crate::tags::normalize(t).ok()).collect();
+        known.extend(self.tags.values().flatten().cloned());
+        crate::tags::sort(&mut known);
+        known.truncate(crate::tags::MAX_TAGS);
+        if known != self.known_tags {
+            self.known_tags = known;
+            self.dirty = true;
+            self.generation += 1;
+        }
+    }
+
+    /// Sets a torrent's tags (none clears them): each name normalized, invalid ones and
+    /// duplicates dropped, new ones made known while fewer than [`crate::tags::MAX_TAGS`] are
+    /// (a new name that does not fit is dropped too). True when they changed.
+    pub fn set_tags(&mut self, id: TorrentId, tags: &[String]) -> bool {
+        let mut v: Vec<String> = tags.iter().filter_map(|t| crate::tags::normalize(t).ok()).collect();
+        crate::tags::sort(&mut v);
+        let learned = self.learn_tags(&v);
+        let known = &self.known_tags;
+        v.retain(|t| known.binary_search_by(|k| crate::tags::cmp(k, t)).is_ok());
+        if v.as_slice() == self.tags_of(id) {
+            if learned {
+                self.dirty = true;
+                self.generation += 1;
+            }
+            return false;
+        }
+        if v.is_empty() {
+            self.tags.remove(&id);
+        } else {
+            self.tags.insert(id, v);
+        }
+        if self.sort.is_some_and(|(c, _)| c == Column::Tags) && self.rows.contains_key(&id) {
+            self.moved.insert(id);
+        }
+        self.refilter |= matches!(self.filter, Filter::Tag(_));
+        self.dirty = true;
+        self.generation += 1;
+        true
+    }
+
+    /// Gives a torrent the tag `tag` (made known when new and there is room). True when it
+    /// changed.
+    pub fn add_tag(&mut self, id: TorrentId, tag: &str) -> bool {
+        let mut v = self.tags_of(id).to_vec();
+        v.push(tag.to_owned());
+        self.set_tags(id, &v)
+    }
+
+    /// Takes the tag `tag` off a torrent (it stays known). True when it had it.
+    pub fn remove_tag(&mut self, id: TorrentId, tag: &str) -> bool {
+        let v: Vec<String> = self.tags_of(id).iter().filter(|t| *t != tag).cloned().collect();
+        self.set_tags(id, &v)
+    }
+
+    /// Makes `name` a known tag, with no torrent; its normalized name (an existing tag is no
+    /// error). `Err` for an invalid name, or a new one with [`crate::tags::MAX_TAGS`] known.
+    pub fn create_tag(&mut self, name: &str) -> Result<String, crate::tags::TagError> {
+        let tag = crate::tags::normalize(name)?;
+        if self.known_tags.binary_search_by(|k| crate::tags::cmp(k, &tag)).is_ok() {
+            return Ok(tag);
+        }
+        if !self.learn_tags([&tag]) {
+            return Err(crate::tags::TagError::TooMany);
+        }
+        self.dirty = true;
+        self.generation += 1;
+        Ok(tag)
+    }
+
+    /// Deletes the known tag `name`: every torrent loses it, and a list filtered by it shows
+    /// all torrents again. The torrents that had it (for their preferences); `None` when it was
+    /// not known.
+    pub fn delete_tag(&mut self, name: &str) -> Option<Vec<TorrentId>> {
+        let at = self.known_tags.iter().position(|t| t == name)?;
+        self.known_tags.remove(at);
+        let lost: Vec<TorrentId> =
+            self.tags.iter().filter(|(_, v)| v.iter().any(|t| t == name)).map(|(&id, _)| id).collect();
+        for &id in &lost {
+            let v: Vec<String> = self.tags_of(id).iter().filter(|t| *t != name).cloned().collect();
+            self.set_tags(id, &v);
+        }
+        if matches!(&self.filter, Filter::Tag(t) if t == name) {
+            self.set_filter(Filter::Category(Category::All));
+        }
+        self.dirty = true;
+        self.generation += 1;
+        Some(lost)
+    }
+
     pub fn extra(&self, id: TorrentId) -> RowExtra<'_> {
         RowExtra {
             user_paused: self.paused.contains(&id),
             label: self.labels.get(&id).map_or("", String::as_str),
+            tags: self.tags_of(id),
         }
     }
 
@@ -406,8 +553,9 @@ impl TorrentList {
         self.removed = false;
         if reorder || self.refilter {
             self.refilter = false;
-            let (rows, labels, search) = (&self.rows, &self.labels, self.search.as_str());
+            let (rows, labels, tags, search) = (&self.rows, &self.labels, &self.tags, self.search.as_str());
             let label = |id: &TorrentId| labels.get(id).map_or("", String::as_str);
+            // the search looks at names only, never at labels or tags
             let found = |id: &TorrentId| name_matches(&rows[id].name, search);
             let view: Vec<TorrentId> = match &self.filter {
                 Filter::Category(Category::All) if search.is_empty() => self.order.clone(),
@@ -417,6 +565,15 @@ impl TorrentList {
                 Filter::Label(l) => {
                     self.order.iter().copied().filter(|id| label(id) == l && found(id)).collect()
                 }
+                Filter::Tag(t) if t.is_empty() => {
+                    self.order.iter().copied().filter(|id| !tags.contains_key(id) && found(id)).collect()
+                }
+                Filter::Tag(t) => self
+                    .order
+                    .iter()
+                    .copied()
+                    .filter(|id| tags.get(id).is_some_and(|v| v.iter().any(|x| x == t)) && found(id))
+                    .collect(),
             };
             if view != self.view {
                 self.previous_view = std::mem::replace(&mut self.view, view);
@@ -559,6 +716,8 @@ mod tests {
             .filter(|&id| match l.filter() {
                 Filter::Category(c) => c.contains(l.get(id).unwrap()),
                 Filter::Label(x) => l.extra(id).label == x,
+                Filter::Tag(t) if t.is_empty() => l.tags_of(id).is_empty(),
+                Filter::Tag(t) => l.tags_of(id).contains(t),
             })
             .filter(|&id| l.get(id).unwrap().name.to_lowercase().contains(l.search()))
             .collect();
@@ -611,6 +770,7 @@ mod tests {
             Some((Column::Status, false)),
             Some((Column::Size, true)),
             Some((Column::Label, false)),
+            Some((Column::Tags, true)),
         ];
         let filters = [
             Filter::Category(Category::All),
@@ -618,7 +778,10 @@ mod tests {
             Filter::Category(Category::Active),
             Filter::Label("x".into()),
             Filter::Label(String::new()),
+            Filter::Tag("a".into()),
+            Filter::Tag(String::new()),
         ];
+        let tag_sets: [&[&str]; 4] = [&[], &["a"], &["b", "a"], &["B"]];
         let searches = ["", "", "T1", "ep2", "t3 EP1"];
         for round in 0..400 {
             match r.next(10) {
@@ -628,6 +791,11 @@ mod tests {
                 2 => l.remove(TorrentId::from_raw(1 + r.next(400))),
                 3 => l.set_label(TorrentId::from_raw(1 + r.next(400)), ["", "x", "y"][r.next(3) as usize]),
                 4 => l.set_user_paused(TorrentId::from_raw(1 + r.next(400)), r.next(2) == 0),
+                5 if r.next(2) == 0 => {
+                    let tags: Vec<String> =
+                        tag_sets[r.next(4) as usize].iter().map(|t| (*t).to_owned()).collect();
+                    l.set_tags(TorrentId::from_raw(1 + r.next(400)), &tags);
+                }
                 _ => {
                     let n = r.next(20);
                     let rows: Vec<_> = (0..n)
@@ -651,6 +819,12 @@ mod tests {
                 }
                 let unlabeled = l.ids().filter(|&id| l.extra(id).label.is_empty()).count();
                 assert_eq!(l.unlabeled(), unlabeled, "round {round}");
+                let untagged = l.ids().filter(|&id| l.tags_of(id).is_empty()).count();
+                assert_eq!(l.untagged(), untagged, "round {round}");
+                for (t, n) in l.tag_counts() {
+                    let have = l.ids().filter(|&id| l.tags_of(id).contains(&t)).count();
+                    assert_eq!(n, have, "round {round}: {t}");
+                }
             }
         }
     }
@@ -683,6 +857,79 @@ mod tests {
         l.refresh();
         assert_eq!(l.view().len(), 2);
         assert!(name_matches("abc", "") && !name_matches("ab", "abc") && name_matches("xABCx", "abc"));
+    }
+
+    /// D76: the sidebar's Tags group (every known tag with its count, No Tag) and its filter.
+    #[test]
+    fn tags_count_and_filter() {
+        let mut l = TorrentList::new();
+        let id = TorrentId::from_raw;
+        let tags = |v: &[&str]| v.iter().map(|t| (*t).to_owned()).collect::<Vec<_>>();
+        l.update([st(1, "Ubuntu tv", 0, false), st(2, "b", 0, false), st(3, "c", 0, true)]);
+        l.set_known_tags(tags(&["unused", "tv"]));
+        let g = l.generation();
+        assert!(l.set_tags(id(1), &tags(&["tv", "linux", " tv "])));
+        assert!(l.generation() > g);
+        assert!(!l.set_tags(id(1), &tags(&["linux", "tv"])), "the same tags");
+        assert_eq!(l.tags_of(id(1)), ["linux", "tv"]);
+        assert!(l.add_tag(id(2), "tv"));
+        assert!(!l.add_tag(id(2), "tv"));
+        assert!(!l.add_tag(id(2), "a,b"), "an invalid name is dropped");
+        assert_eq!(l.tags(), ["linux", "tv", "unused"]);
+        assert_eq!(
+            l.tag_counts(),
+            [("linux".to_owned(), 1), ("tv".to_owned(), 2), ("unused".to_owned(), 0)],
+            "several tags count under each"
+        );
+        assert_eq!(l.untagged(), 1);
+        assert_eq!(Column::Tags.text(l.get(id(1)).unwrap(), l.extra(id(1))), "linux, tv");
+
+        l.set_filter(Filter::Tag("tv".into()));
+        l.refresh();
+        assert_eq!(l.view(), [id(1), id(2)]);
+        // the name search on top; it never matches a tag
+        l.set_search("linux");
+        l.refresh();
+        assert!(l.view().is_empty());
+        l.set_search("");
+        l.set_filter(Filter::Tag(String::new()));
+        l.refresh();
+        assert_eq!(l.view(), [id(3)]);
+        // a tag change moves a row into or out of the filtered view
+        assert!(l.remove_tag(id(2), "tv"));
+        l.refresh();
+        assert_eq!(l.view(), [id(2), id(3)]);
+
+        // sorted by the column: untagged first, then by the tag list
+        l.set_filter(Filter::Category(Category::All));
+        l.set_sort(Some((Column::Tags, false)));
+        l.refresh();
+        assert_eq!(l.view(), [id(2), id(3), id(1)]);
+        l.set_tags(id(3), &tags(&["a"]));
+        l.refresh();
+        assert_eq!(l.view(), [id(2), id(3), id(1)]);
+        l.set_tags(id(3), &tags(&["z"]));
+        l.refresh();
+        assert_eq!(l.view(), [id(2), id(1), id(3)], "re-placed when its key changed");
+
+        // deleting a tag takes it off every torrent and leaves its filter
+        l.set_filter(Filter::Tag("tv".into()));
+        let mut lost = l.delete_tag("tv").unwrap();
+        lost.sort();
+        assert_eq!(lost, [id(1)]);
+        assert_eq!(l.tags_of(id(1)), ["linux"]);
+        assert_eq!(l.filter(), &Filter::Category(Category::All));
+        assert!(l.delete_tag("tv").is_none());
+        assert_eq!(l.create_tag(" new "), Ok("new".to_owned()));
+        assert_eq!(l.create_tag(""), Err(crate::tags::TagError::Invalid));
+        assert_eq!(l.tags(), ["a", "linux", "new", "unused", "z"]);
+        // a removed torrent's tags go with it; the tag stays known
+        l.remove(id(3));
+        assert!(l.tags_of(id(3)).is_empty());
+        assert_eq!(l.tag_counts().last(), Some(&("z".to_owned(), 0)));
+        // known tags set again keep those in use
+        l.set_known_tags(Vec::new());
+        assert_eq!(l.tags(), ["linux"]);
     }
 
     #[test]

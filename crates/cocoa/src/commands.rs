@@ -3,7 +3,7 @@
 //! runs it in one place. A menu item or toolbar item carries its command as its `tag`
 //! ([`Command::tag`]), which `RPTarget` turns back into the command.
 //!
-//! Commands with a value (a label, a profile, a speed limit, an Auto Shutdown mode, a search
+//! Commands with a value (a label, a tag, a profile, a speed limit, an Auto Shutdown mode, a search
 //! source) carry an index into a list their menu was built from.
 //!
 //! Pure Rust, compiled and tested on every system.
@@ -68,6 +68,12 @@ pub enum Command {
     RemoveLabel,
     /// An index into the label list the menu was built from (`app::labels`).
     Label(u16),
+    /// Tags ▸ (D76): toggles the tag at this index of the menu state's tags (`Core::tags`).
+    Tag(u16),
+    /// Tags ▸ > New Tag: the selection gets a new (or existing) tag.
+    NewTag,
+    /// Tags ▸ > Remove All Tags.
+    ClearTags,
     Properties,
     // ---- Options
     Rss,
@@ -148,6 +154,11 @@ pub enum Command {
     /// refused, while the lock is switched off (D71); the PIN itself is set in Preferences >
     /// Advanced > UI Lock.
     Lock,
+    // tags (D76): the sidebar's Tags rows' context menu
+    /// New Tag on the Tags rows: makes a tag known, with no torrent.
+    SidebarNewTag,
+    /// Delete Tag on a tag's row, after its question.
+    DeleteTag,
 }
 
 /// The Files tab's commands (slice D), apart from [`ALL`], whose menus they are not in.
@@ -162,7 +173,7 @@ pub const FILES: [Command; 7] = [
 ];
 
 /// Every command: those without a value, then those with one (at index 0).
-pub const ALL: [Command; 71] = [
+pub const ALL: [Command; 76] = [
     Command::About,
     Command::CheckUpdates,
     Command::Preferences,
@@ -226,10 +237,15 @@ pub const ALL: [Command; 71] = [
     Command::FeedRss,
     Command::FeedDownload,
     Command::Lock,
+    Command::NewTag,
+    Command::ClearTags,
+    Command::SidebarNewTag,
+    Command::DeleteTag,
     Command::Profile(0),
     Command::DownLimit(0),
     Command::UpLimit(0),
     Command::Label(0),
+    Command::Tag(0),
     Command::AutoShutdown(0),
     Command::SearchSource(0),
     Command::Dialog(0),
@@ -336,6 +352,12 @@ impl Command {
             FirstLast => (85, 0),
             CopyMagnet => (86, 0),
             ExportTorrent => (87, 0),
+            // wave 3 (D76: kinds 88-92, after wave 1's)
+            Tag(i) => (88, i),
+            NewTag => (89, 0),
+            ClearTags => (90, 0),
+            SidebarNewTag => (91, 0),
+            DeleteTag => (92, 0),
         }
     }
 
@@ -431,6 +453,12 @@ impl Command {
             85 => plain(FirstLast),
             86 => plain(CopyMagnet),
             87 => plain(ExportTorrent),
+            // wave 3
+            88 => Some(Tag(v)),
+            89 => plain(NewTag),
+            90 => plain(ClearTags),
+            91 => plain(SidebarNewTag),
+            92 => plain(DeleteTag),
             _ => None,
         }
     }
@@ -476,6 +504,9 @@ impl Command {
                 | NewLabel
                 | RemoveLabel
                 | Label(_)
+                | Tag(_)
+                | NewTag
+                | ClearTags
                 | Properties
         )
     }
@@ -566,9 +597,32 @@ mod tests {
             assert!(c.needs_selection(), "{c:?} acts on the selected torrents");
             assert!(!c.works_locked(), "{c:?}");
         }
-        // the rest of the free range stays unknown
-        for kind in 88..=99 {
+        // the rest of the free range stays unknown (88-92 are wave 3's)
+        for kind in 93..=99 {
             assert_eq!(Command::from_tag(kind << SHIFT), None, "{kind}");
+        }
+    }
+
+    #[test]
+    fn the_tags_kinds_are_their_own() {
+        use Command::*;
+        for (c, kind, selection) in [
+            (Tag(0), 88, true),
+            (NewTag, 89, true),
+            (ClearTags, 90, true),
+            (SidebarNewTag, 91, false),
+            (DeleteTag, 92, false),
+        ] {
+            assert_eq!(c.tag() >> SHIFT, kind, "{c:?}");
+            assert_eq!(Command::from_tag(c.tag()), Some(c));
+            assert!(ALL.contains(&c));
+            assert_eq!(c.needs_selection(), selection, "{c:?}");
+            assert!(!c.works_locked(), "{c:?}");
+        }
+        // a tag's item carries its index; the plain ones take no value
+        assert_eq!(Command::from_tag(Tag(1023).tag()), Some(Tag(1023)));
+        for c in [NewTag, ClearTags, SidebarNewTag, DeleteTag] {
+            assert_eq!(Command::from_tag(c.tag() + 1), None, "{c:?}");
         }
     }
 

@@ -55,6 +55,7 @@ pub fn column_id(c: Column) -> &'static str {
         Column::SeedsPeers => "seeds_peers",
         Column::SaveAs => "save_as",
         Column::Wasted => "wasted",
+        Column::Tags => "tags",
     }
 }
 
@@ -155,6 +156,10 @@ pub struct Client {
     rows_stale: bool,
     /// The label list and counts as last sent (`labels` and `no_label` in a tick).
     labels_sent: Option<(Json, usize)>,
+    /// `State::tags_version` the list's known tags were last set from (D76).
+    tags_synced: u64,
+    /// The tag list and counts as last sent (`tags` and `no_tag` in a tick).
+    tags_sent: Option<(Json, usize)>,
     /// `State::rss_version` as last sent (`rss` in a tick).
     rss_sent: u64,
     /// `State::search_version` as last sent (`search` in a tick).
@@ -183,6 +188,8 @@ impl Client {
             rows: Vec::new(),
             rows_stale: true,
             labels_sent: None,
+            tags_synced: 0,
+            tags_sent: None,
             rss_sent: 0,
             search_sent: 0,
             adds_sent: 0,
@@ -244,6 +251,8 @@ impl Client {
             .with("columns", Json::Arr(columns))
             .with("categories", Json::Arr(categories))
             .with("labels", Json::Arr(labels))
+            // the known tags (D76); their counts come with the ticks
+            .with("tags", Json::Arr(st.tags.iter().map(|t| Json::Str(t.clone())).collect()))
             .with("detail", detail)
             .with("confirm_delete", st.prefs.confirm_delete)
             // the server's theme and the list to pick from (D63)
@@ -461,9 +470,16 @@ impl Client {
                     self.list.update(std::iter::once(e.status.clone()));
                     self.list.set_label(*id, st.torrent_categories.get(&e.hash).map_or("", String::as_str));
                     self.list.set_user_paused(*id, st.user_paused.contains(&e.hash));
+                    self.list.set_tags(*id, st.tags_of(&e.hash));
                 }
             }
             self.synced = st.next_version;
+        }
+        // the known tags after the torrents' own, so a deleted tag (off every torrent by now)
+        // leaves the list too
+        if self.tags_synced != st.tags_version {
+            self.list.set_known_tags(st.tags.clone());
+            self.tags_synced = st.tags_version;
         }
         if self.list.refresh() || self.rows_stale {
             self.rows_stale = false;
@@ -543,6 +559,10 @@ impl Client {
             out.set("labels", labels);
             out.set("no_label", no_label);
         }
+        if let Some((tags, no_tag)) = self.tags_update() {
+            out.set("tags", tags);
+            out.set("no_tag", no_tag);
+        }
         out.set("status", status_bar(st));
         // a newer Rookparcel, every tick while there is one: left out, the page hides its link
         if let Some(u) = super::update::json(st) {
@@ -584,6 +604,25 @@ impl Client {
             return None;
         }
         self.labels_sent = Some(now.clone());
+        Some(now)
+    }
+
+    /// The Tags group of the tree (D76) when it changed since the last tick: every known tag
+    /// with the number of torrents that have it (a torrent with several counts under each), in
+    /// the tags' order, and the count of torrents without a tag.
+    fn tags_update(&mut self) -> Option<(Json, usize)> {
+        let tags = Json::Arr(
+            self.list
+                .tag_counts()
+                .into_iter()
+                .map(|(t, n)| Json::Arr(vec![Json::Str(t), n.into()]))
+                .collect(),
+        );
+        let now = (tags, self.list.untagged());
+        if self.tags_sent.as_ref() == Some(&now) {
+            return None;
+        }
+        self.tags_sent = Some(now.clone());
         Some(now)
     }
 
@@ -896,9 +935,16 @@ fn error(msg: &str) -> Json {
 fn parse_view(msg: &Json) -> Result<View, &'static str> {
     let filter = msg.get("filter");
     let label = filter.and_then(|f| f.get("label")).and_then(Json::as_str);
-    let filter_kind = match label {
-        Some(l) => Filter::Label(l.to_owned()),
-        None => {
+    // a tag (D76) before a label: its name as the tags read it, "" for the torrents without
+    // any (a name they refuse as ",", which no tag is, so the view is empty)
+    let tag = filter.and_then(|f| f.get("tag")).and_then(Json::as_str).map(|t| match t.trim() {
+        "" => String::new(),
+        t => rookparcel_frontend::tags::normalize(t).unwrap_or_else(|_| ",".to_owned()),
+    });
+    let filter_kind = match (tag, label) {
+        (Some(t), _) => Filter::Tag(t),
+        (None, Some(l)) => Filter::Label(l.to_owned()),
+        (None, None) => {
             let id = filter.and_then(|f| f.get("category")).and_then(Json::as_str).unwrap_or("all");
             Filter::Category(category_from_id(id).ok_or("unknown category")?)
         }
@@ -1013,7 +1059,7 @@ mod tests {
         assert_eq!(c.detail(), None);
         let hello = c.hello(&st);
         assert_eq!(hello.get("t"), Some(&Json::from("hello")));
-        assert_eq!(hello.get("columns").map(|c| matches!(c, Json::Arr(v) if v.len() == 24)), Some(true));
+        assert_eq!(hello.get("columns").map(|c| matches!(c, Json::Arr(v) if v.len() == 25)), Some(true));
         // the theme and the list to pick from (D63): the built-ins, system first
         assert_eq!(hello.get("theme"), Some(&Json::from("system")));
         let Some(Json::Arr(themes)) = hello.get("themes") else { panic!("{hello:?}") };

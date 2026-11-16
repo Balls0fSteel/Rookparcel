@@ -2,7 +2,7 @@
 //! `set_limit`, `toggle_super_seeding`, `set_download_location`, `set_paused`, `remove`,
 //! `menu_state`, `super_seed_state`, `selection_changed`, the Files tab's actions,
 //! `show_properties`' logic, `apply_options`, `load_ip_filter`), and the download order, Copy
-//! Magnet Link and Export .torrent (D72, D73).
+//! Magnet Link and Export .torrent (D72, D73), and the Tags commands (D76, on [`crate::tags`]).
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -18,6 +18,7 @@ use crate::export::ExportTarget;
 use crate::model::Filter;
 use crate::options::{GuiOptions, Options};
 use crate::properties::{Changes, Properties, TorrentProps};
+use crate::tags::{self, TagError, TagState};
 use crate::tr;
 
 /// A torrent command of the toolbar, the Torrent menu and the context menu.
@@ -92,7 +93,8 @@ impl Core {
         self.ev.detail = true;
     }
 
-    /// The sidebar picked a category or label: the list shows those torrents (not feed items).
+    /// The sidebar picked a category, label or tag: the list shows those torrents (not feed
+    /// items).
     pub fn show_torrents(&mut self, filter: Filter) {
         self.list.set_filter(filter);
         self.show_feed(None);
@@ -207,6 +209,56 @@ impl Core {
         self.save_prefs();
     }
 
+    // ---- tags (D76) -------------------------------------------------------------------------
+
+    /// Gives `ids` the tag `name` (made known when new), kept in the preferences. `Err` (its
+    /// [`TagError::text`] to show) for an invalid name, or a new one with
+    /// [`tags::MAX_TAGS`] known.
+    pub fn add_tag(&mut self, ids: &[TorrentId], name: &str) -> Result<(), TagError> {
+        let r = tags::add(&mut self.list, &mut self.prefs, ids, name);
+        self.save_prefs();
+        r
+    }
+
+    /// Takes the tag `name` off `ids` (it stays known).
+    pub fn remove_tag(&mut self, ids: &[TorrentId], name: &str) {
+        tags::remove(&mut self.list, &mut self.prefs, ids, name);
+        self.save_prefs();
+    }
+
+    /// A tag's item in Tags ▸: on for all unless every torrent of `ids` has it, then off.
+    pub fn toggle_tag(&mut self, ids: &[TorrentId], name: &str) {
+        tags::toggle(&mut self.list, &mut self.prefs, ids, name);
+        self.save_prefs();
+    }
+
+    /// Tags ▸ > Remove All Tags: `ids` lose every tag (the tags stay known).
+    pub fn clear_tags(&mut self, ids: &[TorrentId]) {
+        tags::clear(&mut self.list, &mut self.prefs, ids);
+        self.save_prefs();
+    }
+
+    /// New Tag: makes `name` known; with a selection (Tags ▸ > New Tag...) `ids` get it too,
+    /// from the sidebar none do. Its normalized name, or the error to show.
+    pub fn create_tag(&mut self, ids: &[TorrentId], name: &str) -> Result<String, TagError> {
+        let tag = tags::create(&mut self.list, &mut self.prefs, name)?;
+        if !ids.is_empty() {
+            tags::add(&mut self.list, &mut self.prefs, ids, &tag)?;
+        }
+        self.save_prefs();
+        Ok(tag)
+    }
+
+    /// Delete Tag (the sidebar): `name` is no longer known and every torrent loses it; a list
+    /// showing that tag shows all torrents again. False when it was not known.
+    pub fn delete_tag(&mut self, name: &str) -> bool {
+        let deleted = tags::delete(&mut self.list, &mut self.prefs, name);
+        if deleted {
+            self.save_prefs();
+        }
+        deleted
+    }
+
     /// Bandwidth Allocation: the download or upload limit of `ids`, bytes per second (0: none).
     pub fn set_limit(&mut self, ids: &[TorrentId], download: bool, bytes: u32) {
         for &id in ids {
@@ -317,6 +369,20 @@ impl Core {
             first_last: actions::all_flagged(&self.list, ids, TorrentFlags::FIRST_LAST_PIECES),
             can_export: actions::any_has_metadata(&self.list, ids),
         })
+    }
+
+    /// Tags ▸'s item `i` for `ids` (D76): the state of the `i`-th known tag across them
+    /// (checked when [`TagState::On`], a mixed mark or none for [`TagState::Mixed`]); `None`
+    /// past the known tags. Only that tag is looked at: a menu validated item by item does not
+    /// go over every tag for each (the tags are apart from [`Core::menu_state`] for that).
+    pub fn tag_state(&self, ids: &[TorrentId], i: usize) -> Option<TagState> {
+        let tag = self.list.tags().get(i)?;
+        Some(tags::state(&self.list, ids, tag))
+    }
+
+    /// Tags ▸ > Remove All Tags is enabled for `ids`: some torrent of them has a tag (D76).
+    pub fn can_clear_tags(&self, ids: &[TorrentId]) -> bool {
+        tags::any_tagged(&self.list, ids)
     }
 
     /// What Open Containing Folder shows for the first of `ids`: its file or folder (the GUI

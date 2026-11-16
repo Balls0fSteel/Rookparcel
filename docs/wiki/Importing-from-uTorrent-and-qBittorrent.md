@@ -8,7 +8,8 @@ For each torrent, Rookparcel takes:
 
 - the data, which stays where it is: nothing is copied or moved;
 - the statistics, the file priorities (skipped files stay skipped) and the trackers;
-- the label: qBittorrent's category, or its first tag when there is no category; µTorrent's label;
+- the label: qBittorrent's category, or µTorrent's label;
+- qBittorrent's tags, as tags (*new in 1.2.61, not in a published release yet*; before, the first tag became the label of a torrent without a category). A tag name with a comma or a control character is left out;
 - a stopped or paused state;
 - from qBittorrent, the torrent's own share limits (ratio and seeding time), which become its own [seeding goal](Torrent-details-and-files#torrent-properties).
 
@@ -30,7 +31,7 @@ After the import, do not run both programs on the same torrents: they would both
 3. Rookparcel asks: "Import 47 torrents from qBittorrent? Their data stays where it is and qBittorrent's files are not changed. Torrents already in the list are left out." The question lists the folders the data is in. Check them, then click **Yes**.
 4. A message says how many were added, for example "Added 45 torrents from qBittorrent. 2 were left out; the Logger tab lists why."
 
-The torrents appear in the list and start checking. Their labels show under **Labels** in the category list.
+The torrents appear in the list and start checking. Their labels show under **Labels** in the category list, and qBittorrent's tags under **Tags**.
 
 ## Where Rookparcel looks
 

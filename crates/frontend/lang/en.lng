@@ -102,6 +102,10 @@ ColFormat=Format
 ColDate=Date
 ColFeed=Feed
 ColUrl=URL
+
+# The torrent list (D76): the torrent's tags, names it can have any number of (unlike its
+# one label), separated by commas.
+ColTags=Tags
 TrackerWorking=Working
 
 # {message} is the tracker's own message.
@@ -277,6 +281,22 @@ MenuCopyMagnet=Copy &Magnet Link
 # Torrent menu (D73): saves the selected torrents' .torrent files where you choose; keep
 # ".torrent" as it is.
 MenuExportTorrent=E&xport .torrent...
+
+# Torrent menu (D76): the submenu of tags, names a torrent can have any number of (unlike
+# its one label). Its items are the tags, each checked when every selected torrent has it.
+MenuTags=Ta&gs
+
+# Torrent menu > Tags (D76): asks for a new tag's name and gives the tag to the selected
+# torrents. Also in the category list's menu on the Tags group, where it only makes the
+# tag.
+MenuNewTag=&New Tag...
+
+# Torrent menu > Tags (D76): takes every tag off the selected torrents; the tags stay.
+MenuRemoveAllTags=&Remove All Tags
+
+# The category list's menu on a tag (D76): deletes the tag itself, which takes it off
+# every torrent that has it.
+MenuDeleteTag=&Delete Tag
 ToolAddTorrent=Add Torrent
 ToolAddUrl=Add Torrent from URL
 ToolCreate=Create New Torrent
@@ -291,6 +311,12 @@ ToolPreferences=Preferences
 CatLabels=Labels
 CatNoLabel=No Label
 CatFeeds=Feeds
+
+# The group of tags (D76), under Labels: each row is a tag with its torrent count.
+CatTags=Tags
+
+# The row of the torrents without any tag (D76), as "No Label" is for labels.
+CatNoTag=No Tag
 TabGeneral=General
 TabTrackers=Trackers
 TabPeers=Peers
@@ -630,6 +656,9 @@ StatsCacheHits=Read Cache Hits:
 
 # Message heading for Torrent menu > Export .torrent; the error follows on its own.
 CannotExport=Could not export {name}
+
+# The category list's Delete Tag (D76): {name} is the tag.
+AskDeleteTag=Delete the tag "{name}"? Every torrent that has it loses it.
 BtnOk=OK
 BtnCancel=Cancel
 BtnApply=&Apply
@@ -653,6 +682,17 @@ ExportTitle=Export .torrent
 # The folder picker of Torrent menu > Export .torrent when several torrents are selected:
 # each is saved there as "<its name>.torrent".
 ExportFolderTitle=Select the folder to export the .torrent files to
+
+# The title of Torrent menu > Tags > New Tag's small window (D76).
+NewTagTitle=New Tag
+NewTagPrompt=Enter the name of the new tag:
+
+# A tag name refused (D76): empty, or with a comma (it separates tags in lists), a tab or a
+# line break.
+TagInvalid=A tag cannot be empty or contain a comma, a tab or a line break.
+
+# A new tag refused (D76): {max} is the most tags there can be (1024).
+TagTooMany=There can be at most {max} tags. Delete one before making another.
 AddTitle=Add New Torrent
 AddSaveIn=Save In
 AddName=&Name
@@ -1400,6 +1440,10 @@ PrefThemeUnavailable=This Windows cannot show the dark theme; the light one is u
 # opened over https or from this computer): a small window shows the links, selected, to
 # copy with Ctrl+C.
 CopyMagnetManual=Copy the link below:
+
+# A change of tags the server refused or did not answer (D76): adding, removing, making or
+# deleting a tag.
+WebTagsNotSet=The tags could not be changed.
 
 # Piece size: pick one from the total size.
 CreateAutoDetect=(auto detect)
@@ -2218,6 +2262,10 @@ help.MenuSequential=Downloads the selected torrents' pieces in order, from the s
 help.MenuFirstLast=Downloads the first and last pieces of each wanted file before the rest, so a player can read a video's header and index early. Each end is 1 % of the file, at least one piece. Skipped files are left alone.
 help.MenuCopyMagnet=Puts the selected torrents' magnet links on the clipboard, one per line, with their info-hashes, names and trackers.
 help.MenuExportTorrent=Saves the selected torrents' .torrent files: one to a file you name, several into a folder you pick, each under its own name, numbered when the name is taken. A torrent added from a magnet link has none until its metadata has arrived.
+help.MenuTags=Lists every tag; picking one gives it to all the selected torrents, or takes it off them when they all have it. A torrent can have any number of tags besides its label, and the category list shows each tag with its torrents.
+help.MenuNewTag=Asks for a new tag's name. From Tags in the torrent menu the selected torrents get it; from the category list the tag is only made. A name cannot be empty or contain a comma; a name longer than 128 bytes is cut.
+help.MenuRemoveAllTags=Takes every tag off the selected torrents. The tags themselves stay in the category list.
+help.MenuDeleteTag=Deletes the tag: it leaves the category list and every torrent that has it loses it. The torrents themselves stay.
 help.MenuOpenFile=Opens the selected file in its default program, as a double click in the file manager would. A file not on disk yet does nothing.
 help.MenuPrioritizeByOrder=Gives the selected files falling priorities in their order in the torrent, so they finish one after another; skipped ones are downloaded again. With the filter on, it orders all the torrent's files.
 help.MenuRelocate=Picks a new place for the selected file and moves it there, or, when it is not on disk, uses the file found there; a Force Re-check counts its pieces.

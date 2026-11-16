@@ -11,6 +11,7 @@
 //! * [`columns`]: the torrent list's columns (titles, widths, cell text, sort order).
 //! * [`detail`]: the Trackers, Peers and Files tabs' columns and cell text.
 //! * [`model`]: the filtered, sorted torrent list behind a virtual list view.
+//! * [`tags`]: tags (D76): the names, the preferences and a selection's Tags commands.
 //! * [`prefs`]: a small `key=value` preferences file for layout and frontend options.
 //! * [`settings`]: the engine settings by libtorrent name (the Advanced preferences table).
 //! * [`secret`]: the proxy password sealed with DPAPI in the preferences file (Windows).
@@ -84,6 +85,7 @@ pub mod settings;
 pub mod setup_guide;
 pub mod statistics;
 pub mod status;
+pub mod tags;
 pub mod torrent_folders;
 pub mod tracker_list;
 pub mod typeahead;

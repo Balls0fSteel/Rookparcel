@@ -1657,9 +1657,9 @@ fn websocket_handshake_and_frames() {
     let t = Harness::start("ws");
     let sid = t.login();
     let (mut ws, hello) = Ws::connect(&t, &sid);
-    // hello: the 24 columns with ids, titles and widths, the categories, no labels yet
+    // hello: the 25 columns with ids, titles and widths, the categories, no labels yet
     let Some(Json::Arr(cols)) = hello.get("columns") else { panic!("{}", hello.to_json()) };
-    assert_eq!(cols.len(), 24);
+    assert_eq!(cols.len(), 25);
     assert_eq!(s(cols[0].get("id")), "name");
     assert_eq!(s(cols[0].get("title")), "Name");
     assert_eq!(cols[0].get("width").and_then(Json::as_i64), Some(220));
@@ -5434,4 +5434,347 @@ fn the_kept_block_list_is_in_force_at_start() {
     assert_eq!(t.pa(&sid, "/pa/prefs", &body).status, 204);
     assert!(!t.dir.join("state").join("ipfilter-url.dat").exists());
     assert!(!t.dir.join("state").join("ipfilter-url.txt").exists());
+}
+
+// ---- tags (D76) --------------------------------------------------------------------------------
+
+fn strings(j: &Json) -> Vec<String> {
+    match j {
+        Json::Arr(v) => v.iter().map(|x| s(Some(x)).to_owned()).collect(),
+        _ => panic!("not a list: {}", j.to_json()),
+    }
+}
+
+/// `torrents/tags`: the known tags, in order.
+fn known_tags(t: &Harness, sid: &str) -> Vec<String> {
+    let r = t.get(sid, "/api/v2/torrents/tags");
+    assert_eq!(r.status, 200);
+    strings(&r.json())
+}
+
+/// A torrent's `tags` field in `torrents/info` (`"a, b"`).
+fn tags_field(t: &Harness, sid: &str, hash: &str) -> String {
+    s(t.wait_for(sid, hash, "the torrent", |_| true).get("tags")).to_owned()
+}
+
+/// The hashes `torrents/info?tag=` lists (`tag` already encoded), sorted.
+fn tagged(t: &Harness, sid: &str, tag: &str) -> Vec<String> {
+    let list = t.get(sid, &format!("/api/v2/torrents/info?tag={tag}")).json();
+    let mut v: Vec<String> = match &list {
+        Json::Arr(v) => v.iter().map(|x| s(x.get("hash")).to_owned()).collect(),
+        _ => panic!("{}", list.to_json()),
+    };
+    v.sort();
+    v
+}
+
+/// Polls `sync/maindata` from `rid` until a diff satisfies `f`; that diff.
+fn maindata_until(t: &Harness, sid: &str, rid: &mut i64, what: &str, f: impl Fn(&Json) -> bool) -> Json {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let m = t.maindata(sid, *rid);
+        *rid = m.get("rid").and_then(Json::as_i64).unwrap();
+        if f(&m) {
+            return m;
+        }
+        assert!(Instant::now() < deadline, "no diff with {what}: {}", m.to_json());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// The qBittorrent shim's tags as Sonarr, Radarr and qBittorrent's own Web UI use them: POST
+/// only, `createTags` / `deleteTags` / `addTags` / `removeTags` (no names: all) / `setTags`, the
+/// `tags` of `torrents/add`, the `tags` field (`"a, b"`), the `tag` filter of `torrents/info`
+/// (empty: untagged), `sync/maindata`'s `tags` and `tags_removed` across rids, names the tags
+/// refuse skipped, at most 1024 tags; then all of it after a restart (`webui.json`).
+#[test]
+fn shim_tags_and_their_restart() {
+    let dir = temp_dir("shim-tags");
+    let (a, b, c);
+    let long = "l".repeat(200);
+    {
+        let mut t = Harness::start_with(dir.clone(), Harness::settings());
+        let sid = t.login();
+        a = add_stopped(&t, &sid, "tags-alpha", false);
+        b = add_stopped(&t, &sid, "tags-bravo", false);
+        let (ha, hb) = (a.clone(), b.clone());
+        let mut both = vec![ha.clone(), hb.clone()];
+        both.sort();
+        assert!(known_tags(&t, &sid).is_empty());
+        assert_eq!(tags_field(&t, &sid, &a), "");
+        let full = t.maindata(&sid, 0);
+        assert_eq!(full.get("tags"), Some(&Json::Arr(Vec::new())), "a full update lists the tags");
+        let mut rid = full.get("rid").and_then(Json::as_i64).unwrap();
+
+        // POST only, the parameters required
+        for e in ["createTags", "deleteTags", "addTags", "removeTags", "setTags"] {
+            assert_eq!(t.get(&sid, &format!("/api/v2/torrents/{e}?hashes={a}&tags=x")).status, 405, "{e}");
+        }
+        assert_eq!(t.post(&sid, "/api/v2/torrents/createTags", "").status, 400);
+        assert_eq!(t.post(&sid, "/api/v2/torrents/deleteTags", "").status, 400);
+        assert_eq!(t.post(&sid, "/api/v2/torrents/addTags", "tags=x").status, 400, "no hashes");
+        assert_eq!(t.post(&sid, "/api/v2/torrents/addTags", &format!("hashes={a}")).status, 400, "no tags");
+        assert_eq!(t.post(&sid, "/api/v2/torrents/setTags", &format!("hashes={a}")).status, 400);
+        assert!(known_tags(&t, &sid).is_empty(), "nothing made by a refused call");
+
+        // createTags: trimmed, empty, a comma (the list's separator), control characters skipped,
+        // an over-long name cut to 128 bytes; still 200, as qBittorrent answers
+        let form = format!("tags={}", enc(&format!(" tv ,Movies,,a\tb,c\nd,\u{7f},{long}")));
+        let r = t.post(&sid, "/api/v2/torrents/createTags", &form);
+        assert_eq!((r.status, r.text().as_str()), (200, ""));
+        assert_eq!(known_tags(&t, &sid), ["l".repeat(128), "Movies".to_owned(), "tv".to_owned()]);
+        let m = maindata_until(&t, &sid, &mut rid, "the new tags", |m| m.get("tags").is_some());
+        assert_eq!(strings(m.get("tags").unwrap()).len(), 3);
+        assert!(m.get("tags_removed").is_none());
+        // nothing changed: no tags in the next diff
+        let m = t.maindata(&sid, rid);
+        rid = m.get("rid").and_then(Json::as_i64).unwrap();
+        assert!(m.get("tags").is_none() && m.get("tags_removed").is_none(), "{}", m.to_json());
+
+        // addTags: a new name is made known; the row's `tags` moves in the diff
+        let r =
+            t.post(&sid, "/api/v2/torrents/addTags", &format!("hashes={a}&tags=tv,new,{}", enc("x,y\u{1}")));
+        assert_eq!(r.status, 200);
+        assert_eq!(tags_field(&t, &sid, &a), "new, tv, x");
+        let m = maindata_until(&t, &sid, &mut rid, "a's tags", |m| {
+            m.get("torrents").and_then(|ts| ts.get(&ha)).and_then(|r| r.get("tags")).is_some()
+        });
+        assert_eq!(s(m.get("torrents").and_then(|ts| ts.get(&ha)).and_then(|r| r.get("tags"))), "new, tv, x");
+        let added = strings(m.get("tags").expect("the new tags with it"));
+        assert_eq!(added, ["new", "x"]);
+        // `hashes=all`, and `|`-separated
+        assert_eq!(t.post(&sid, "/api/v2/torrents/addTags", "hashes=all&tags=Movies").status, 200);
+        assert_eq!(tags_field(&t, &sid, &b), "Movies");
+        assert_eq!(
+            t.post(&sid, "/api/v2/torrents/addTags", &format!("hashes={a}|{b}&tags=both")).status,
+            200
+        );
+        assert_eq!(tags_field(&t, &sid, &b), "both, Movies");
+
+        // the `tag` filter: one tag, an empty one is untagged, a refused name matches nothing
+        assert_eq!(tagged(&t, &sid, "tv"), [ha.as_str()]);
+        assert_eq!(tagged(&t, &sid, "Movies"), both);
+        assert_eq!(tagged(&t, &sid, "movies"), Vec::<String>::new(), "case-sensitive");
+        assert!(tagged(&t, &sid, "").is_empty());
+        assert!(tagged(&t, &sid, "nope").is_empty() && tagged(&t, &sid, "a%2Cb").is_empty());
+        let cat = t.get(&sid, &format!("/api/v2/torrents/info?tag=tv&hashes={b}")).json();
+        assert_eq!(cat, Json::Arr(Vec::new()), "with the other filters");
+
+        // removeTags: the names given; none at all removes every tag (qBittorrent's way)
+        assert_eq!(
+            t.post(&sid, "/api/v2/torrents/removeTags", &format!("hashes={a}&tags=tv,nope")).status,
+            200
+        );
+        assert_eq!(tags_field(&t, &sid, &a), "both, Movies, new, x");
+        assert_eq!(t.post(&sid, "/api/v2/torrents/removeTags", &format!("hashes={b}")).status, 200);
+        assert_eq!(tags_field(&t, &sid, &b), "");
+        assert_eq!(tagged(&t, &sid, ""), [hb.as_str()]);
+        assert!(known_tags(&t, &sid).contains(&"tv".to_owned()), "a tag stays known without torrents");
+
+        // deleteTags: gone from the list and from every torrent; `tags_removed` in the diff
+        let r = t.post(&sid, "/api/v2/torrents/deleteTags", "tags=new,x,unknown");
+        assert_eq!(r.status, 200);
+        assert_eq!(tags_field(&t, &sid, &a), "both, Movies");
+        assert!(!known_tags(&t, &sid).iter().any(|t| t == "new" || t == "x"));
+        let m = maindata_until(&t, &sid, &mut rid, "removed tags", |m| m.get("tags_removed").is_some());
+        let mut removed = strings(m.get("tags_removed").unwrap());
+        removed.sort();
+        assert_eq!(removed, ["new", "x"]);
+        // `both` came since the last diff
+        assert_eq!(m.get("tags").map(strings), Some(vec!["both".to_owned()]), "{}", m.to_json());
+        // a full update (rid 0) lists the tags as they are
+        let full = strings(t.maindata(&sid, 0).get("tags").unwrap());
+        assert_eq!(full, known_tags(&t, &sid));
+
+        // setTags (qBittorrent 5.1): exactly these
+        assert_eq!(
+            t.post(&sid, "/api/v2/torrents/setTags", &format!("hashes={a}|{b}&tags=tv,fresh")).status,
+            200
+        );
+        assert_eq!(
+            (tags_field(&t, &sid, &a), tags_field(&t, &sid, &b)),
+            ("fresh, tv".into(), "fresh, tv".into())
+        );
+        assert_eq!(t.post(&sid, "/api/v2/torrents/setTags", &format!("hashes={b}&tags=")).status, 200);
+        assert_eq!(tags_field(&t, &sid, &b), "");
+
+        // torrents/add's `tags`: made known, given to the new torrent
+        let (bytes, hash) = torrent_built("tags-charlie", Some("udp://127.0.0.1:9/own"), false);
+        let (body, boundary) = multipart(&[("paused", "true"), ("tags", "added, tv,a\u{1}")], &bytes);
+        let r = t.req("POST", "/api/v2/torrents/add", &[("Cookie", &sid)], Body::Multipart(&body, boundary));
+        assert_eq!((r.status, r.text().as_str()), (200, "Ok."));
+        c = hash;
+        t.wait_for(&sid, &c, "charlie's tags", |x| s(x.get("tags")) == "added, tv");
+        assert!(known_tags(&t, &sid).contains(&"added".to_owned()));
+        assert_eq!(tagged(&t, &sid, "tv").len(), 2);
+
+        // removing a torrent takes its tags with it; the tags stay
+        let (bytes, gone) = torrent_built("tags-gone", None, false);
+        let (body, boundary) = multipart(&[("paused", "true"), ("tags", "only-gone")], &bytes);
+        let r = t.req("POST", "/api/v2/torrents/add", &[("Cookie", &sid)], Body::Multipart(&body, boundary));
+        assert_eq!(r.status, 200);
+        t.wait_for(&sid, &gone, "the doomed torrent", |x| s(x.get("tags")) == "only-gone");
+        assert_eq!(
+            t.post(&sid, "/api/v2/torrents/delete", &format!("hashes={gone}&deleteFiles=false")).status,
+            200
+        );
+        t.wait_for_gone(&sid, &gone);
+        assert!(known_tags(&t, &sid).contains(&"only-gone".to_owned()));
+        let stored = std::fs::read_to_string(t.dir.join("state").join(STATE_FILE)).unwrap();
+        assert!(!stored.contains(&format!("torrent.{gone}.tags")), "{stored}");
+        assert!(stored.contains(&format!("torrent.{a}.tags")), "{stored}");
+        // keep the directory for the second run: the harness removes this one instead
+        t.dir = temp_dir("shim-tags-scratch");
+    }
+    // the restart: the known tags (one with no torrent too) and each torrent's
+    let t = Harness::start_with(dir, Harness::settings());
+    let sid = t.login();
+    t.wait_for(&sid, &a, "alpha's tags", |x| s(x.get("tags")) == "fresh, tv");
+    t.wait_for(&sid, &c, "charlie's tags", |x| s(x.get("tags")) == "added, tv");
+    t.wait_for(&sid, &b, "bravo restored", |x| s(x.get("name")) == "tags-bravo");
+    assert_eq!(tags_field(&t, &sid, &b), "");
+    let known = known_tags(&t, &sid);
+    for name in ["added", "both", "fresh", "Movies", "only-gone", "tv"] {
+        assert!(known.iter().any(|k| k == name), "{name} in {known:?}");
+    }
+    assert!(known.contains(&"l".repeat(128)));
+
+    // at most 1024: the rest of a long list is skipped, a known tag still goes on
+    let names: Vec<String> = (0..1100).map(|i| format!("n{i}")).collect();
+    let r = t.post(&sid, "/api/v2/torrents/createTags", &format!("tags={}", names.join(",")));
+    assert_eq!(r.status, 200);
+    assert_eq!(known_tags(&t, &sid).len(), 1024);
+    assert_eq!(t.post(&sid, "/api/v2/torrents/addTags", &format!("hashes={b}&tags=one-more,tv")).status, 200);
+    assert_eq!(tags_field(&t, &sid, &b), "tv");
+    assert!(!known_tags(&t, &sid).contains(&"one-more".to_owned()));
+}
+
+/// The native tag endpoints (D76): `GET /pa/tags`, `tags/create` and `tags/delete`, and
+/// `torrents/add-tag` / `remove-tag` / `clear-tags` with ids or "all" under a tag filter; the
+/// GUIs' messages for a refused name, CSRF-checked; `/pa/add`'s `tags`; the WebSocket's
+/// `hello`, the tick's `tags` / `no_tag`, the view filtered by a tag and the Tags column.
+#[test]
+fn native_tags_and_the_tags_group() {
+    let t = Harness::start("native-tags");
+    let sid = t.login();
+    let a = add_stopped(&t, &sid, "native-tag-a", false);
+    let b = add_stopped(&t, &sid, "native-tag-b", false);
+    let get_tags = || {
+        let r = t.get(&sid, "/pa/tags");
+        assert_eq!(r.status, 200, "{}", r.text());
+        let j = r.json();
+        assert_eq!(j.get("max").and_then(Json::as_i64), Some(1024));
+        strings(j.get("tags").unwrap())
+    };
+    assert!(get_tags().is_empty());
+
+    // New Tag: the name as kept; the GUIs' message for one refused
+    let r = t.pa(&sid, "/pa/tags/create", r#"{"name":"  film "}"#);
+    assert_eq!((r.status, s(r.json().get("name"))), (200, "film"));
+    for bad in [r#"{"name":""}"#, r#"{"name":"a,b"}"#, r#"{"name":"a\tb"}"#, r#"{"name":"x\u0000"}"#, r#"{}"#]
+    {
+        let r = t.pa(&sid, "/pa/tags/create", bad);
+        assert_eq!(r.status, 400, "{bad}: {}", r.text());
+    }
+    let r = t.pa(&sid, "/pa/tags/create", r#"{"name":"a,b"}"#);
+    assert!(s(r.json().get("error")).contains("comma"), "{}", r.text());
+    // the CSRF header, as for every native command
+    let origin = format!("http://{}", t.host());
+    let r = t.req(
+        "POST",
+        "/pa/tags/create",
+        &[("Cookie", &sid), ("Origin", &origin)],
+        Body::Json(r#"{"name":"csrf"}"#),
+    );
+    assert_eq!(r.status, 403);
+    assert_eq!(t.get(&sid, "/pa/tags/create").status, 405);
+    assert_eq!(get_tags(), ["film"]);
+
+    // Tags ▸: on (a new one made known), off, all off
+    let r = t.pa(&sid, "/pa/torrents/add-tag", &format!(r#"{{"ids":["{a}","{b}"],"tag":"film"}}"#));
+    assert_eq!(r.status, 204, "{}", r.text());
+    let r = t.pa(&sid, "/pa/torrents/add-tag", &format!(r#"{{"ids":["{a}"],"tag":" tv "}}"#));
+    assert_eq!(r.status, 204);
+    assert_eq!(tags_field(&t, &sid, &a), "film, tv");
+    assert_eq!(get_tags(), ["film", "tv"]);
+    let r = t.pa(&sid, "/pa/torrents/add-tag", &format!(r#"{{"ids":["{a}"],"tag":"x,y"}}"#));
+    assert_eq!(r.status, 400);
+    assert_eq!(t.pa(&sid, "/pa/torrents/add-tag", &format!(r#"{{"ids":["{a}"]}}"#)).status, 400);
+    let none = r#"{"ids":["0000000000000000000000000000000000000000"],"tag":"film"}"#;
+    assert_eq!(t.pa(&sid, "/pa/torrents/add-tag", none).status, 404);
+    // "all" under the view's tag filter: only a has tv
+    let r = t.pa(&sid, "/pa/torrents/remove-tag", r#"{"all":true,"filter":{"tag":"tv"},"tag":"film"}"#);
+    assert_eq!(r.status, 204);
+    assert_eq!((tags_field(&t, &sid, &a), tags_field(&t, &sid, &b)), ("tv".into(), "film".into()));
+    // "No Tag" ("" under the filter): none now; Properties' GET takes the tag too
+    let p = t.get(&sid, "/pa/torrents/properties?all=1&category=all&search=&tag=film").json();
+    assert_eq!(p.get("count").and_then(Json::as_i64), Some(1), "{}", p.to_json());
+    let r = t.pa(&sid, "/pa/torrents/clear-tags", &format!(r#"{{"ids":["{a}"]}}"#));
+    assert_eq!(r.status, 204);
+    assert_eq!(tags_field(&t, &sid, &a), "");
+    let p = t.get(&sid, "/pa/torrents/properties?all=1&tag=").json();
+    assert_eq!(p.get("count").and_then(Json::as_i64), Some(1), "No Tag: {}", p.to_json());
+    assert_eq!(get_tags(), ["film", "tv"], "the tags stay known");
+
+    // the Add dialog's `tags`
+    let (bytes, c) = torrent_named("native-tag-c", None);
+    let r = t.pa_upload(&sid, "/pa/add", r#"{"start":false,"tags":["tv","new one"]}"#, &bytes);
+    assert_eq!(r.status, 204, "{}", r.text());
+    t.wait_for(&sid, &c, "c's tags", |x| s(x.get("tags")) == "new one, tv");
+    let (bytes, _) = torrent_named("native-tag-d", None);
+    assert_eq!(t.pa_upload(&sid, "/pa/add", r#"{"start":false,"tags":["a,b"]}"#, &bytes).status, 400);
+    assert_eq!(t.pa_upload(&sid, "/pa/add", r#"{"start":false,"tags":[1]}"#, &bytes).status, 400);
+
+    // the WebSocket: the known tags in the hello, the group's counts in a tick, the view
+    // filtered by a tag (sorted by the Tags column), the cells
+    let (mut ws, hello) = Ws::connect(&t, &sid);
+    assert_eq!(strings(hello.get("tags").unwrap()), ["film", "new one", "tv"]);
+    let cols = match hello.get("columns") {
+        Some(Json::Arr(v)) => v.clone(),
+        _ => panic!(),
+    };
+    let tags_col = cols.iter().find(|c| s(c.get("id")) == "tags").expect("the Tags column");
+    assert_eq!(tags_col.get("visible"), Some(&Json::Bool(false)), "off by default");
+    ws.send_text(r#"{"t":"view","filter":{"tag":"tv"},"sort":["tags",false],"columns":["name","tags"],"window":[0,10]}"#);
+    let rows = ws.recv_json();
+    assert_eq!(s(rows.get("t")), "rows", "{}", rows.to_json());
+    assert_eq!(ids_of(&rows), [c.as_str()]);
+    let cell = rows.get("cells").and_then(|x| x.get(&c)).and_then(|x| x.get("c")).unwrap();
+    assert_eq!(strings(cell), ["native-tag-c", "new one, tv"]);
+    let pair = |n: &str, k: usize| Json::Arr(vec![Json::from(n), Json::from(k)]);
+    let tick = ws.tick_until("the Tags group", |m| m.get("tags").is_some());
+    assert_eq!(tick.get("tags"), Some(&Json::Arr(vec![pair("film", 1), pair("new one", 1), pair("tv", 1)])));
+    assert_eq!(tick.get("no_tag").and_then(Json::as_i64), Some(1));
+    // a tag goes on: the counts move, the view takes the row
+    let r = t.pa(&sid, "/pa/torrents/add-tag", &format!(r#"{{"ids":["{a}"],"tag":"tv"}}"#));
+    assert_eq!(r.status, 204);
+    let tick =
+        ws.tick_until("tv on two", |m| m.get("tags").is_some_and(|g| g.to_json().contains(r#"["tv",2]"#)));
+    assert_eq!(tick.get("no_tag").and_then(Json::as_i64), Some(0));
+    ws.tick_until("a in the view", |m| m.get("total").and_then(Json::as_i64) == Some(2));
+    // "No Tag" as the filter, and a name the tags refuse (an empty view)
+    ws.send_text(r#"{"t":"view","filter":{"tag":""},"columns":["name"],"window":[0,10]}"#);
+    let rows = ws.recv_json();
+    assert_eq!(rows.get("total").and_then(Json::as_i64), Some(0), "{}", rows.to_json());
+    ws.send_text(r#"{"t":"view","filter":{"tag":"a,b"},"columns":["name"],"window":[0,10]}"#);
+    assert_eq!(ws.recv_json().get("total").and_then(Json::as_i64), Some(0));
+
+    // Delete Tag: off every torrent, gone from the group; a second time is 404
+    assert_eq!(t.pa(&sid, "/pa/tags/delete", r#"{"name":"tv"}"#).status, 204);
+    assert_eq!(t.pa(&sid, "/pa/tags/delete", r#"{"name":"tv"}"#).status, 404);
+    assert_eq!(t.pa(&sid, "/pa/tags/delete", r#"{}"#).status, 400);
+    assert_eq!(get_tags(), ["film", "new one"]);
+    assert_eq!(tags_field(&t, &sid, &c), "new one");
+    ws.tick_until("tv gone", |m| m.get("tags").is_some_and(|g| !g.to_json().contains(r#""tv""#)));
+
+    // at most 1024: New Tag and a new tag on a torrent are 409 with the GUIs' message
+    let names: Vec<String> = (0..1030).map(|i| format!("m{i}")).collect();
+    assert_eq!(t.post(&sid, "/api/v2/torrents/createTags", &format!("tags={}", names.join(","))).status, 200);
+    assert_eq!(get_tags().len(), 1024);
+    let r = t.pa(&sid, "/pa/tags/create", r#"{"name":"over"}"#);
+    assert_eq!(r.status, 409, "{}", r.text());
+    assert!(s(r.json().get("error")).contains("1024"), "{}", r.text());
+    let r = t.pa(&sid, "/pa/torrents/add-tag", &format!(r#"{{"ids":["{a}"],"tag":"over"}}"#));
+    assert_eq!(r.status, 409);
+    assert_eq!(t.pa(&sid, "/pa/tags/create", r#"{"name":"film"}"#).status, 200, "a known one is fine");
 }

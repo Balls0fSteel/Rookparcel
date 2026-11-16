@@ -9,8 +9,9 @@
 //!
 //! * qBittorrent: `<hash>.fastresume` already is a libtorrent resume record (`resume.rs` reads
 //!   its keys); `<hash>.torrent` gives the info dictionary. `qBt-name` is the name,
-//!   `qBt-category` (or the first tag) the label. `save_path` is where the data is now, so a
-//!   torrent qBittorrent keeps in its incomplete folder stays there. `qBt-ratioLimit` and
+//!   `qBt-category` the label, `qBt-tags` the tags (D76: the valid names, made known; before
+//!   1.2.61 the first tag was the label of a torrent without a category). `save_path` is where
+//!   the data is now, so a torrent qBittorrent keeps in its incomplete folder stays there. `qBt-ratioLimit` and
 //!   `qBt-seedingTimeLimit` become the torrent's own seeding goal ([`qbittorrent_goal`]); its
 //!   stopped state is libtorrent's `paused` without `auto_managed` ([`qbittorrent_flags`]).
 //!   Checked against qBittorrent's `bencoderesumedatastorage.cpp` (v4_6_x and master, 5.x).
@@ -135,6 +136,8 @@ pub struct Import {
     /// [`InfoHashes::key_hex`]: the frontends' preference keys (`torrent.<key>.label`).
     pub key: String,
     pub label: String,
+    /// The tags (D76; `torrent.<key>.tags`), valid and in order.
+    pub tags: Vec<String>,
     /// µTorrent's Paused rather than Stopped (the frontend's `torrent.<key>.paused`).
     pub user_paused: bool,
     /// The torrent's own seeding goal (`torrent.<key>.seed_ratio` and `.seed_time`), when the
@@ -183,6 +186,10 @@ pub fn prepare(found: &mut Found, prefs: &mut Prefs, known: impl Fn(&str) -> boo
         }
         if !t.label.is_empty() {
             prefs.set(&format!("torrent.{}.label", t.key), &t.label);
+        }
+        if !t.tags.is_empty() {
+            crate::tags::learn(prefs, &t.tags);
+            prefs.set(&crate::tags::torrent_key(&t.key), crate::tags::join(&t.tags));
         }
         if t.user_paused {
             prefs.set_bool(&format!("torrent.{}.paused", t.key), true);
@@ -397,8 +404,12 @@ fn qbittorrent_torrent(path: &Path) -> Result<Import, (Option<String>, String)> 
     let mut rec = Entry::from_node(root);
     let qbt_name = root.dict_find_str("qBt-name").unwrap_or_default().to_owned();
     let save_path = root.dict_find_str("save_path").unwrap_or_default().to_owned();
-    let tag = root.dict_find_list("qBt-tags").and_then(|l| l.list_at(0)).and_then(|n| n.str_value());
-    let label = root.dict_find_str("qBt-category").filter(|c| !c.is_empty()).or(tag).unwrap_or_default();
+    let label = root.dict_find_str("qBt-category").unwrap_or_default();
+    let mut tags: Vec<String> = root
+        .dict_find_list("qBt-tags")
+        .map(|l| l.list_iter().filter_map(|n| crate::tags::normalize(n.str_value()?).ok()).collect())
+        .unwrap_or_default();
+    crate::tags::sort(&mut tags);
     let seed_goal = qbittorrent_goal(root);
     // only libtorrent's keys go on; the engine ignores the rest anyway
     rec.dict_mut().retain(|k, _| !k.starts_with(b"qBt-"));
@@ -430,6 +441,7 @@ fn qbittorrent_torrent(path: &Path) -> Result<Import, (Option<String>, String)> 
                 name: name.unwrap_or_else(|| hashes.key_hex()),
                 key: hashes.key_hex(),
                 label: label.to_owned(),
+                tags,
                 user_paused: false,
                 seed_goal,
                 params: p,
@@ -442,6 +454,7 @@ fn qbittorrent_torrent(path: &Path) -> Result<Import, (Option<String>, String)> 
     Ok(Import {
         key: hashes.key_hex(),
         label: label.to_owned(),
+        tags,
         user_paused: false,
         seed_goal,
         params: params(finish_record(rec, &meta), &save_path),
@@ -633,6 +646,7 @@ fn utorrent_torrent(dir: &Path, file: &str, r: Node<'_>) -> Result<Import, Strin
                 name: p.name.clone().unwrap_or_else(|| hashes.key_hex()),
                 key: hashes.key_hex(),
                 label,
+                tags: Vec::new(),
                 user_paused: started == 3,
                 seed_goal: None,
                 params: p,
@@ -714,6 +728,7 @@ fn utorrent_torrent(dir: &Path, file: &str, r: Node<'_>) -> Result<Import, Strin
     Ok(Import {
         key: hashes.key_hex(),
         label,
+        tags: Vec::new(),
         user_paused: started == 3,
         seed_goal: None,
         params: params(finish_record(rec, &meta), &save_path),
@@ -904,7 +919,14 @@ mod tests {
         *rec.key("paused") = Entry::Int(1);
         *rec.key("auto_managed") = Entry::Int(0);
         *rec.key("qBt-category") = Entry::Bytes(Vec::new());
-        *rec.key("qBt-tags") = Entry::List(vec![Entry::Bytes(b"flac".to_vec())]);
+        // tags as qBittorrent writes them, with names this list refuses or tidies (D76)
+        *rec.key("qBt-tags") = Entry::List(
+            ["flac", "Lossless", " flac ", "a,b", "", "line\nbreak", "24-bit"]
+                .iter()
+                .map(|t| Entry::Bytes(t.as_bytes().to_vec()))
+                .chain([Entry::Int(5)])
+                .collect(),
+        );
         *rec.key("qBt-name") = Entry::Bytes(b"Best Album".to_vec());
         *rec.key("qBt-ratioLimit") = Entry::Int(1500);
         *rec.key("qBt-seedingTimeLimit") = Entry::Int(-2);
@@ -930,13 +952,17 @@ mod tests {
         assert_eq!(found.torrents.len(), 2);
         // sorted by name: the magnet's name is its hash
         let (magnet, album) = (&found.torrents[0], &found.torrents[1]);
-        assert_eq!((album.name.as_str(), album.label.as_str()), ("Best Album", "flac"));
+        // tags are tags now, not the label of a torrent without a category
+        assert_eq!((album.name.as_str(), album.label.as_str()), ("Best Album", ""));
+        assert_eq!(album.tags, ["24-bit", "flac", "Lossless"]);
+        assert!(e_tags_gone(album));
         assert_eq!(album.params.save_path, "/data/music");
         let e = decoded(album);
         assert!(e.get("qBt-name").is_none());
         assert_eq!(e.get("name").unwrap().as_str(), Some("Best Album"));
         assert!(e.get("pieces").is_none());
         assert_eq!(magnet.label, "linux");
+        assert!(magnet.tags.is_empty());
         assert!(matches!(magnet.params.source, TorrentSource::InfoHash(_)));
         // stopped stays stopped (in the record), queued stays in the queue; no pause marks
         assert_eq!(
@@ -962,7 +988,21 @@ mod tests {
         assert_eq!(goal, Some(SeedGoal { ratio_pct: 0, minutes: 0 }));
         assert!(prefs.get(&format!("torrent.{}.paused", "09".repeat(20))).is_none());
         assert!(add[0].params.flags.contains(TorrentFlags::DUPLICATE_IS_ERROR));
+        assert!(prefs.get(&crate::tags::torrent_key(&hex)).is_none());
+        assert!(prefs.get(crate::tags::KNOWN_KEY).is_none(), "no tags from a torrent left out");
+
+        // not in the list: its tags are written and become known, beside those known already
+        let mut found = read(Client::QBittorrent, &data).unwrap();
+        let mut prefs = Prefs::from_text("tags.list=flac,old\n");
+        prepare(&mut found, &mut prefs, |_| false);
+        assert_eq!(prefs.get(&crate::tags::torrent_key(&hex)), Some("24-bit,flac,Lossless"));
+        assert_eq!(prefs.get(crate::tags::KNOWN_KEY), Some("24-bit,flac,Lossless,old"));
         let _ = std::fs::remove_dir_all(&data);
+    }
+
+    /// The record handed on keeps no `qBt-` key (the tags among them).
+    fn e_tags_gone(t: &Import) -> bool {
+        decoded(t).get("qBt-tags").is_none()
     }
 
     /// qBittorrent on libtorrent 2.1 writes file-version 2 (packed `pieces`, `verified`): the
@@ -1056,6 +1096,7 @@ mod tests {
                     name: i.to_string(),
                     key: i.to_string(),
                     label: String::new(),
+                    tags: Vec::new(),
                     user_paused: false,
                     seed_goal: None,
                     params: AddTorrentParams::new(

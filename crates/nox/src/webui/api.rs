@@ -544,6 +544,11 @@ fn serve_inner(shared: &Shared, req: &Request) -> Response {
             | "torrents/createCategory"
             | "torrents/editCategory"
             | "torrents/removeCategories"
+            | "torrents/createTags"
+            | "torrents/deleteTags"
+            | "torrents/addTags"
+            | "torrents/removeTags"
+            | "torrents/setTags"
             | "torrents/setLocation"
             | "torrents/editTracker"
             | "torrents/addTrackers"
@@ -869,10 +874,43 @@ fn serve_inner(shared: &Shared, req: &Request) -> Response {
                 Err(e) => Response::text(e.status, e.msg),
             }
         }
-        "torrents/tags" => Response::json(&Json::Arr(Vec::new())),
-        // µTorrent has no tags: accepted and dropped, so a Sonarr with series tags does not log
-        // a failure at every grab (docs/INTEGRATIONS.md gap 5); the list stays empty
-        "torrents/addTags" | "torrents/removeTags" | "torrents/createTags" | "torrents/deleteTags" => {
+        // tags (D76), as qBittorrent's: comma-separated `tags`, every name checked by
+        // `tags::normalize`; an invalid name (or a new one past `tags::MAX_TAGS`) is skipped and
+        // the call still answers 200, as qBittorrent skips the names it refuses
+        "torrents/tags" => {
+            let st = shared.lock();
+            Response::json(&Json::Arr(st.tags.iter().map(|t| Json::Str(t.clone())).collect()))
+        }
+        "torrents/createTags" | "torrents/deleteTags" => {
+            let Some(list) = p.get("tags") else { return Response::text(400, "missing tags") };
+            let names = commands::tag_names(list);
+            if endpoint == "torrents/createTags" {
+                let _ = commands::create_tags(shared, &names);
+            } else {
+                commands::delete_tags(shared, &names);
+            }
+            Response::ok()
+        }
+        "torrents/addTags" | "torrents/removeTags" | "torrents/setTags" => {
+            if p.get("hashes").is_none() {
+                return Response::text(400, "missing hashes");
+            }
+            let list = p.get("tags");
+            if list.is_none() && endpoint != "torrents/removeTags" {
+                return Response::text(400, "missing tags");
+            }
+            let names = commands::tag_names(list.unwrap_or(""));
+            let ids = selected(&shared.lock(), &p); // (the guard goes before the command locks)
+            match endpoint {
+                "torrents/addTags" => {
+                    let _ = commands::add_tags(shared, &ids, &names);
+                }
+                "torrents/setTags" => {
+                    let _ = commands::set_tags(shared, &ids, &names);
+                }
+                // no names: every tag comes off, as qBittorrent's removeTags does
+                _ => commands::remove_tags(shared, &ids, (!names.is_empty()).then_some(names.as_slice())),
+            }
             Response::ok()
         }
         e if e.starts_with("rss/") => {
@@ -1015,6 +1053,7 @@ fn extra<'a>(st: &'a State, e: &Entry) -> Extra<'a> {
         last_activity: e.last_activity,
         private: e.status.private.unwrap_or_else(|| st.meta.get(&e.hash).is_some_and(|m| m.private)),
         seed_goal: SeedGoal::load_override(&st.options, &e.status.info_hashes.key_hex()),
+        tags: st.tags_of(&e.hash),
     }
 }
 
@@ -1307,6 +1346,8 @@ pub struct Snapshot {
     torrents: HashMap<String, (u64, Vec<Json>)>,
     categories_version: u64,
     categories: BTreeMap<String, String>,
+    tags_version: u64,
+    tags: Vec<String>,
     server_state: Vec<(String, Json)>,
 }
 
@@ -1382,10 +1423,24 @@ fn maindata(shared: &Shared, key: &str, rid: i64) -> Response {
                 out.set("categories_removed", Json::Arr(removed));
             }
         }
-        None => {
-            out.set("categories", categories_json(&st.categories));
-            out.set("tags", Json::Arr(Vec::new()));
+        None => out.set("categories", categories_json(&st.categories)),
+    }
+    // tags (D76): every one in a full update, then the new ones as `tags` and the deleted ones
+    // as `tags_removed`
+    let names = |v: Vec<&String>| Json::Arr(v.into_iter().map(|t| Json::Str(t.clone())).collect());
+    match &old {
+        Some(o) if o.tags_version == st.tags_version => {}
+        Some(o) => {
+            let added: Vec<&String> = st.tags.iter().filter(|t| !o.tags.contains(t)).collect();
+            if !added.is_empty() {
+                out.set("tags", names(added));
+            }
+            let removed: Vec<&String> = o.tags.iter().filter(|t| !st.tags.contains(t)).collect();
+            if !removed.is_empty() {
+                out.set("tags_removed", names(removed));
+            }
         }
+        None => out.set("tags", names(st.tags.iter().collect())),
     }
     let server_state = transfer_fields(st, true);
     match &old {
@@ -1403,6 +1458,8 @@ fn maindata(shared: &Shared, key: &str, rid: i64) -> Response {
         torrents: snap_torrents,
         categories_version: st.categories_version,
         categories: st.categories.clone(),
+        tags_version: st.tags_version,
+        tags: st.tags.clone(),
         server_state,
     };
     if let Some(s) = st.sessions.get_mut(key) {
@@ -1528,6 +1585,11 @@ fn torrents_info(shared: &Shared, p: &Params) -> Response {
     let st = shared.lock();
     let filter = p.get("filter").unwrap_or("all");
     let category = p.get("category");
+    // `tag`: an empty one means untagged; a name the tags refuse matches nothing (D76)
+    let tag: Option<Option<String>> = p.get("tag").map(|t| match t.trim() {
+        "" => None,
+        t => Some(rookparcel_frontend::tags::normalize(t).unwrap_or_default()),
+    });
     let wanted: Option<Vec<String>> =
         p.get("hashes").map(|h| h.split('|').map(|x| x.trim().to_ascii_lowercase()).collect());
     let mut rows: Vec<Vec<Json>> = st
@@ -1537,6 +1599,11 @@ fn torrents_info(shared: &Shared, p: &Params) -> Response {
         .filter(|e| wanted.as_ref().is_none_or(|w| w.contains(&e.hash)))
         .filter(|e| {
             category.is_none_or(|c| st.torrent_categories.get(&e.hash).map_or("", String::as_str) == c)
+        })
+        .filter(|e| match &tag {
+            None => true,
+            Some(None) => st.tags_of(&e.hash).is_empty(),
+            Some(Some(t)) => st.tags_of(&e.hash).iter().any(|x| x == t),
         })
         .map(|e| torrent::fields(&e.status, &extra(&st, e)))
         .collect();
@@ -1870,6 +1937,8 @@ fn add(shared: &Shared, p: &Params) -> Response {
         download_limit: lim("dlLimit"),
         upload_limit: lim("upLimit"),
         seed_goal,
+        // comma-separated, made known when new (D76)
+        tags: commands::tag_names(p.get("tags").unwrap_or("")),
         dialog: false,
     };
     for source in sources {

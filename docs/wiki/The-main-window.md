@@ -10,7 +10,7 @@ This page walks through Rookparcel's main window: the menus, the toolbar and its
 |---|---|---|
 | Menu bar | top | **File**, **Options** and **Help** |
 | Toolbar | under the menus | buttons for the common actions, and the search box at the right |
-| Category list | left | shows the torrents by state or by label, and your RSS feeds |
+| Category list | left | shows the torrents by state, label or tag, and your RSS feeds |
 | Torrent list | middle | one row per torrent |
 | Detail tabs | under the list | the selected torrent's details: General, Trackers, Peers, Pieces, Files, Speed, Logger |
 | Status bar | bottom | the network state, DHT, and the total speeds |
@@ -66,9 +66,11 @@ The list on the left narrows the torrent list. Each entry shows how many torrent
 | **Inactive** | torrents moving no data right now |
 | **Labels** > **No Label** | torrents without a label |
 | **Labels** > *a label* | torrents with that label; one entry per label in use |
+| **Tags** > **No Tag** | torrents without any tag |
+| **Tags** > *a tag* | torrents with that tag; one entry per tag, also for a tag no torrent has (0) |
 | **Feeds** | your RSS feeds; picking one shows its items in the list |
 
-Labels are made and given from the torrent list's right-click menu. See [Managing torrents](Managing-torrents#labels). The Feeds branch has its own right-click menu; see [RSS Downloader](RSS-Downloader).
+Labels are made and given from the torrent list's right-click menu. See [Managing torrents](Managing-torrents#labels). Tags are given the same way; right-click the **Tags** branch for **New Tag...**, or a tag for **Delete Tag**. See [Managing torrents](Managing-torrents#tags) (*tags are new in 1.2.61, not in a published release yet*). The Feeds branch has its own right-click menu; see [RSS Downloader](RSS-Downloader).
 
 ## The torrent list
 
@@ -103,6 +105,7 @@ Right-click the column headers to show or hide columns. **Name** is always shown
 | **Seeds/Peers** | seeds per peer in the swarm | no |
 | **Save As** | the folder its files are in | no |
 | **Wasted** | data thrown away (failed checks, duplicates) | no |
+| **Tags** | its tags, separated by commas (*new in 1.2.61*) | no |
 
 ### Sorting
 

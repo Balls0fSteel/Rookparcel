@@ -1158,8 +1158,13 @@ fn import_torrents(
     let found = import::read(client, &dir)?;
     let mut prefs = rookparcel_frontend::prefs::Prefs::from_text("");
     let done = import::finish(client, found, &mut prefs, |_| false);
-    let (mut labels, mut paused) = (Vec::new(), Vec::new());
+    let (mut labels, mut tags, mut paused) = (Vec::new(), Vec::new(), Vec::new());
     for (k, v) in prefs.entries() {
+        // qBittorrent's tags (D76): `torrent.<key>.tags`, the names `tags.list` has too
+        if let Some(key) = rookparcel_frontend::tags::key_of(k) {
+            tags.push((key.to_owned(), rookparcel_frontend::tags::parse_list(v)));
+            continue;
+        }
         let Some(key) = k.strip_prefix("torrent.") else { continue };
         if let Some(hash) = key.strip_suffix(".label") {
             labels.push((hash.to_owned(), v.to_owned()));
@@ -1171,7 +1176,7 @@ fn import_torrents(
         println!("* {line}");
     }
     if let Some(w) = web {
-        w.assign_imported(&labels, &paused, &done.log);
+        w.assign_imported(&labels, &tags, &paused, &done.log);
     }
     for mut p in done.add {
         // one restored from the state directory stays as it is, without an error

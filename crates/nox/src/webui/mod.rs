@@ -62,6 +62,7 @@ use rookparcel_frontend::options::GuiOptions;
 use rookparcel_frontend::scheduler::{Mode, Schedule, Scheduler};
 use rookparcel_frontend::scrape::Scrapes;
 use rookparcel_frontend::seeding::{SeedGoal, SeedingGoal};
+use rookparcel_frontend::tags::{self, TagError};
 use rookparcel_frontend::torrent_folders::{self, Poller, TorrentFiles, TorrentFolders};
 use rookparcel_frontend::tr;
 use rookparcel_frontend::tracker_list::{self, TrackerList};
@@ -599,6 +600,16 @@ pub(crate) struct State {
     pub categories_version: u64,
     /// Torrent hash -> category.
     pub torrent_categories: HashMap<String, String>,
+    /// The known tags (D76), in `tags::cmp` order, at most `tags::MAX_TAGS`: `tags.list` in
+    /// `options` and every tag a torrent has. A tag exists without torrents until deleted.
+    pub tags: Vec<String>,
+    /// Bumped when [`State::tags`] changed: the page's Tags group and `sync/maindata`'s `tags`
+    /// / `tags_removed` follow it.
+    pub tags_version: u64,
+    /// Torrent hash -> its tags (never empty), in `tags::cmp` order. Stored in `options` as
+    /// `torrent.<key>.tags` (`webui.json` under nox, the host's preferences hosted), read at
+    /// a torrent's first sight.
+    pub torrent_tags: HashMap<String, Vec<String>>,
     pub meta: HashMap<String, Meta>,
     /// Torrents with metadata whose status does not say whether they are private (restored
     /// from a record older than 1.2.30) and without an entry in `meta` yet: asked of the engine
@@ -1173,6 +1184,10 @@ impl WebUi {
                 rookparcel_frontend::add::remember_dir(&mut options, d);
             }
         }
+        // the known tags (D76): `tags.list` only, as the GUIs read it. A torrent's
+        // `torrent.<key>.tags` (an import's, an add's) makes its names known at its first
+        // sight; a key of a torrent that is gone must not bring a deleted tag back
+        let known_tags = tags::load_known(&options);
         // hosted: the host handles its pending magnets after a restart
         let awaiting = match hosted {
             Some(_) => rookparcel_frontend::add::AwaitingMetadata::default(),
@@ -1222,6 +1237,9 @@ impl WebUi {
                 categories,
                 categories_version: 1,
                 torrent_categories,
+                tags: known_tags,
+                tags_version: 1,
+                torrent_tags: HashMap::new(),
                 meta: HashMap::new(),
                 meta_wanted: VecDeque::new(),
                 options,
@@ -1375,14 +1393,26 @@ impl WebUi {
     }
 
     /// `run --import`: the imported torrents' labels (by hash; a torrent with one already keeps
-    /// it), their µTorrent Paused marks and the Logger lines, saved at once.
-    pub fn assign_imported(&self, labels: &[(String, String)], paused: &[String], log: &[String]) {
+    /// it), their tags (by `InfoHashes::key_hex`, the import's `torrent.<key>.tags`: added to
+    /// those a torrent has, made known; D76), their µTorrent Paused marks and the Logger lines,
+    /// saved at once.
+    pub fn assign_imported(
+        &self,
+        labels: &[(String, String)],
+        tags: &[(String, Vec<String>)],
+        paused: &[String],
+        log: &[String],
+    ) {
         let mut st = self.shared.lock();
         for (hash, label) in labels {
             if st.torrent_categories.contains_key(hash) {
                 continue;
             }
             st.set_label(hash, label);
+        }
+        for (key, names) in tags {
+            // a v1 torrent's key is its hash; another one is found by its key
+            let _ = st.add_tags_keyed(key, Some(key), names);
         }
         for hash in paused {
             st.set_user_paused(hash, true);
@@ -1460,11 +1490,18 @@ impl WebUi {
         }
         st.options.apply_changes(changes);
         let mut other = false;
+        let mut known_changed = false;
         if changes.iter().any(|(k, _)| k.starts_with("search.")) {
             // the host's search sources: an open search window reloads them
             st.search_version += 1;
         }
         for (key, value) in changes {
+            if let Some(list) = st.host_tags_change(key, value.as_deref()) {
+                // `tags.list` is read once every change is in: a deleted tag leaves the
+                // torrents first
+                known_changed |= list;
+                continue;
+            }
             if let Some(k) = key.strip_prefix("torrent.") {
                 if let Some(k) = k.strip_suffix(".label") {
                     let label = value.as_deref().unwrap_or("");
@@ -1513,6 +1550,10 @@ impl WebUi {
                 }
                 _ => other = true,
             }
+        }
+        if known_changed {
+            // the host's known tags (New Tag, Delete Tag), plus every tag a torrent has
+            st.reload_known_tags();
         }
         if other {
             // the Preferences pages show the host's values
@@ -1612,6 +1653,11 @@ impl WebUi {
                         st.by_key.remove(&key);
                         let had_goal = SeedGoal::forget(&mut st.options, &key);
                         let forget = st.torrent_categories.remove(&e.hash).is_some() | had_goal;
+                        // its tags leave with it (D76); the tags stay known
+                        st.torrent_tags.remove(&e.hash);
+                        let tags_key = tags::torrent_key(&key);
+                        let forget = forget | st.options.get(&tags_key).is_some();
+                        st.options.remove(&tags_key);
                         if hosted {
                             // the host drops its own keys too; removing an absent key is not
                             // journaled, and an empty journal is not handed on
@@ -1942,11 +1988,235 @@ impl State {
                         self.label_cached(&hash, &label);
                     }
                     if self.options.get_bool(&format!("torrent.{key}.paused"), false) {
-                        self.user_paused.insert(hash);
+                        self.user_paused.insert(hash.clone());
                     }
+                }
+                // first sight, nox and hosted: the tags kept for it (D76)
+                self.tags_first_sight(&hash, &key);
+            }
+        }
+    }
+
+    /// A torrent's first sight: the tags `options` keeps for it (`torrent.<key>.tags`) go into
+    /// the lists, a name not known yet becomes known. Under nox an untidy value (a name the
+    /// list refuses, or one that did not fit) and a new name are written back, as
+    /// `tags::on_first_sight` does for the GUIs; hosted the host does that for its own keys.
+    fn tags_first_sight(&mut self, hash: &str, key: &str) {
+        let k = tags::torrent_key(key);
+        let Some(text) = self.options.get(&k).map(str::to_owned) else { return };
+        let before = self.tags_version;
+        self.tags_cached(hash, &tags::parse_list(&text));
+        if self.hosted {
+            return;
+        }
+        if self.tags_version != before {
+            self.store_known_tags();
+        }
+        let now = self.torrent_tags.get(hash).map(|v| tags::join(v)).unwrap_or_default();
+        if now != text {
+            self.store_torrent_tags(hash, key);
+        }
+    }
+
+    /// Whether `name` is a known tag.
+    pub(crate) fn is_known_tag(&self, name: &str) -> bool {
+        self.tags.binary_search_by(|k| tags::cmp(k, name)).is_ok()
+    }
+
+    /// A torrent's tags (empty: none).
+    pub(crate) fn tags_of(&self, hash: &str) -> &[String] {
+        self.torrent_tags.get(hash).map_or(&[], Vec::as_slice)
+    }
+
+    /// Makes the new names of `names` (valid already) known while fewer than `tags::MAX_TAGS`
+    /// are; true (and `tags_version` bumped) when one was added. Nothing is stored.
+    fn learn_tags<'a>(&mut self, names: impl IntoIterator<Item = &'a String>) -> bool {
+        let mut added = false;
+        for t in names {
+            if self.tags.len() >= tags::MAX_TAGS {
+                break;
+            }
+            if let Err(at) = self.tags.binary_search_by(|k| tags::cmp(k, t)) {
+                self.tags.insert(at, t.clone());
+                added = true;
+            }
+        }
+        if added {
+            self.tags_version += 1;
+        }
+        added
+    }
+
+    /// Hosted: one of the host's preferences changes when it is a tag's (D76; `None` for any
+    /// other key). A torrent's `torrent.<key>.tags` sets its tags in the lists (one not seen
+    /// yet: its names become known, and it takes them at its first sight); `Some(true)` for
+    /// `tags.list`, which the caller reads with [`State::reload_known_tags`] once every change
+    /// of the batch is in. Nothing is stored (the mirror has them already).
+    fn host_tags_change(&mut self, key: &str, value: Option<&str>) -> Option<bool> {
+        if key == tags::KNOWN_KEY {
+            return Some(true);
+        }
+        let k = tags::key_of(key)?;
+        let names = tags::parse_list(value.unwrap_or(""));
+        match self.by_key.get(k).and_then(|id| self.torrents.get(id)).map(|e| e.hash.clone()) {
+            Some(hash) => {
+                self.tags_cached(&hash, &names);
+            }
+            None => {
+                self.learn_tags(&names);
+            }
+        }
+        Some(false)
+    }
+
+    /// The known tags again from `options`' `tags.list` plus every tag a torrent has (the host
+    /// changed them: a deleted tag leaves once no torrent has it).
+    fn reload_known_tags(&mut self) {
+        let mut known = tags::parse_list(self.options.get(tags::KNOWN_KEY).unwrap_or_default());
+        known.extend(self.torrent_tags.values().flatten().cloned());
+        tags::sort(&mut known);
+        known.truncate(tags::MAX_TAGS);
+        if known != self.tags {
+            self.tags = known;
+            self.tags_version += 1;
+        }
+    }
+
+    /// Writes the known tags into `options` as `tags.list` (none removes the key).
+    fn store_known_tags(&mut self) {
+        if self.tags.is_empty() {
+            self.options.remove(tags::KNOWN_KEY);
+        } else {
+            self.options.set(tags::KNOWN_KEY, tags::join(&self.tags));
+        }
+    }
+
+    /// Writes a cached torrent's tags into `options` as `torrent.<key>.tags` (none removes it).
+    fn store_torrent_tags(&mut self, hash: &str, key: &str) {
+        let k = tags::torrent_key(key);
+        match self.torrent_tags.get(hash) {
+            Some(v) => {
+                let text = tags::join(v);
+                self.options.set(&k, text);
+            }
+            None => self.options.remove(&k),
+        }
+    }
+
+    /// Sets a cached torrent's tags in the lists: each name normalized, duplicates dropped, a
+    /// new name made known while there is room (one that does not fit is dropped), and bumps
+    /// its version. Nothing is stored. True when its tags changed.
+    fn tags_cached(&mut self, hash: &str, names: &[String]) -> bool {
+        let mut v: Vec<String> = names.iter().filter_map(|t| tags::normalize(t).ok()).collect();
+        tags::sort(&mut v);
+        self.learn_tags(&v);
+        v.retain(|t| self.is_known_tag(t));
+        if v.as_slice() == self.tags_of(hash) {
+            return false;
+        }
+        if v.is_empty() {
+            self.torrent_tags.remove(hash);
+        } else {
+            self.torrent_tags.insert(hash.to_owned(), v);
+        }
+        self.touch(hash);
+        true
+    }
+
+    /// Sets a cached torrent's tags (none clears them, [`State::tags_cached`]'s rules) and
+    /// writes them into `options` as `torrent.<key>.tags`, with `tags.list` when a name became
+    /// known: `webui.json` under nox, the host's keys hosted (the next [`Shared::save`]).
+    /// True when they changed.
+    pub(crate) fn set_tags(&mut self, hash: &str, names: &[String]) -> bool {
+        let before = self.tags_version;
+        let changed = self.tags_cached(hash, names);
+        if self.tags_version != before {
+            self.store_known_tags();
+        }
+        if changed {
+            if let Some(key) = self.key_of(hash) {
+                self.store_torrent_tags(hash, &key);
+            }
+        }
+        changed
+    }
+
+    /// New Tag (the shim's `createTags`): makes `name` known, with no torrent; its normalized
+    /// name. An existing tag is no error. `Err` for an invalid name, or a new one with
+    /// `tags::MAX_TAGS` known.
+    pub(crate) fn create_tag(&mut self, name: &str) -> Result<String, TagError> {
+        let tag = tags::normalize(name)?;
+        if self.is_known_tag(&tag) {
+            return Ok(tag);
+        }
+        if !self.learn_tags([&tag]) {
+            return Err(TagError::TooMany);
+        }
+        self.store_known_tags();
+        Ok(tag)
+    }
+
+    /// Delete Tag: `name` is no longer known and every torrent loses it, those not seen yet too
+    /// (their `torrent.<key>.tags`). False when it was not known.
+    pub(crate) fn delete_tag(&mut self, name: &str) -> bool {
+        let Some(at) = self.tags.iter().position(|t| t == name) else { return false };
+        self.tags.remove(at);
+        self.tags_version += 1;
+        let lost: Vec<String> = self
+            .torrent_tags
+            .iter()
+            .filter(|(_, v)| v.iter().any(|t| t == name))
+            .map(|(h, _)| h.clone())
+            .collect();
+        for h in lost {
+            let v: Vec<String> = self.tags_of(&h).iter().filter(|t| *t != name).cloned().collect();
+            self.set_tags(&h, &v);
+        }
+        // a torrent added with it that the engine has not reported yet, or one that is gone
+        tags::forget_everywhere(&mut self.options, name);
+        self.store_known_tags();
+        true
+    }
+
+    /// Gives a torrent the tags `names` beside those it has (each made known when new; an
+    /// invalid one, or a new one that does not fit, is skipped): one in the cache by `hash`
+    /// (or by `key`), else, for one being added, `torrent.<key>.tags` in `options`, taken at
+    /// its first sight. The first name refused, if any.
+    pub(crate) fn add_tags_keyed(
+        &mut self,
+        hash: &str,
+        key: Option<&str>,
+        names: &[String],
+    ) -> Result<(), TagError> {
+        let mut first_err = None;
+        let mut add = Vec::new();
+        for n in names {
+            match self.create_tag(n) {
+                Ok(t) => add.push(t),
+                Err(e) => {
+                    first_err.get_or_insert(e);
                 }
             }
         }
+        let cached = match self.by_hash.get(hash) {
+            Some(id) => self.torrents.get(id).map(|e| e.hash.clone()),
+            None => key
+                .and_then(|k| self.by_key.get(k))
+                .and_then(|id| self.torrents.get(id))
+                .map(|e| e.hash.clone()),
+        };
+        if let Some(h) = cached {
+            let mut v = self.tags_of(&h).to_vec();
+            v.extend(add);
+            self.set_tags(&h, &v);
+        } else if let (Some(key), false) = (key, add.is_empty()) {
+            let k = tags::torrent_key(key);
+            let mut v = tags::parse_list(self.options.get(&k).unwrap_or_default());
+            v.extend(add);
+            tags::sort(&mut v);
+            self.options.set(&k, tags::join(&v));
+        }
+        first_err.map_or(Ok(()), Err)
     }
 
     /// The host's key (`InfoHashes::key_hex`) of a cached torrent.
@@ -2108,6 +2378,9 @@ impl State {
             categories: BTreeMap::new(),
             categories_version: 1,
             torrent_categories: HashMap::new(),
+            tags: Vec::new(),
+            tags_version: 1,
+            torrent_tags: HashMap::new(),
             meta: HashMap::new(),
             meta_wanted: VecDeque::new(),
             options: rookparcel_frontend::prefs::Prefs::default(),
@@ -2229,5 +2502,155 @@ mod tests {
         st.set_user_paused(&hash, true);
         assert_eq!(st.torrent_categories.get(&hash).map(String::as_str), Some("tv"));
         assert!(st.options.take_changes().is_empty());
+    }
+
+    fn names(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    /// D76: a torrent's first sight takes `torrent.<key>.tags` (its new names made known; under
+    /// nox an untidy value written back), the Web UI's changes land in `options` as
+    /// `torrent.<key>.tags` and `tags.list` (the host's keys hosted), deleting a tag takes it
+    /// off every torrent, those not seen yet too, and the known list stays within the limit.
+    #[test]
+    fn tags_are_kept_as_the_preferences_keys() {
+        let key = Sha1Hash([7; 20]).to_hex();
+        let other = Sha1Hash([8; 20]).to_hex();
+        for hosted in [false, true] {
+            let mut st = State::for_tests();
+            st.hosted = hosted;
+            st.options.set(&tags::torrent_key(&key), " tv,,Movies,a\u{1}b ");
+            st.options.set(tags::KNOWN_KEY, "old");
+            // a torrent removed while the program was closed, with a tag deleted since
+            st.options.set(&tags::torrent_key(&Sha1Hash([6; 20]).to_hex()), "gone");
+            st.options.track_changes();
+            // what a start reads: `tags.list` only
+            st.tags = tags::load_known(&st.options);
+            assert_eq!(st.tags, names(&["old"]), "a gone torrent's key brings nothing back");
+            st.update(status(1, 7), 0);
+            st.update(status(2, 8), 0);
+            assert_eq!(st.tags_of(&key), names(&["Movies", "tv"]));
+            assert!(st.tags_of(&other).is_empty());
+            assert_eq!(st.tags, names(&["Movies", "old", "tv"]), "the first sight makes them known");
+            let tidy = st.options.take_changes();
+            if hosted {
+                assert!(tidy.is_empty(), "the host tidies its own keys: {tidy:?}");
+            } else {
+                assert_eq!(
+                    tidy,
+                    [
+                        (tags::KNOWN_KEY.to_owned(), Some("Movies,old,tv".to_owned())),
+                        (tags::torrent_key(&key), Some("Movies,tv".to_owned())),
+                    ]
+                );
+            }
+
+            // the Web UI's changes: the keys, a new name in `tags.list` too
+            let v0 = st.tags_version;
+            assert!(st.set_tags(&other, &names(&["new", " tv "])));
+            assert!(!st.set_tags(&other, &names(&["tv", "new"])), "the same tags");
+            assert!(st.tags_version > v0);
+            assert_eq!(st.create_tag(" x "), Ok("x".to_owned()));
+            assert_eq!(st.create_tag("x"), Ok("x".to_owned()), "an existing one is fine");
+            for bad in ["", "  ", "a,b", "a\nb", "\t"] {
+                assert_eq!(st.create_tag(bad), Err(TagError::Invalid), "{bad:?}");
+            }
+            assert_eq!(
+                st.options.take_changes(),
+                [
+                    (tags::KNOWN_KEY.to_owned(), Some("Movies,new,old,tv".to_owned())),
+                    (tags::torrent_key(&other), Some("new,tv".to_owned())),
+                    (tags::KNOWN_KEY.to_owned(), Some("Movies,new,old,tv,x".to_owned())),
+                ]
+            );
+            // one being added: its key, read at its first sight
+            let third = Sha1Hash([9; 20]).to_hex();
+            assert_eq!(
+                st.add_tags_keyed(&third, Some(&third), &names(&["tv", "a,b"])),
+                Err(TagError::Invalid)
+            );
+            assert_eq!(st.options.get(&tags::torrent_key(&third)), Some("tv"));
+
+            // Delete Tag: off every torrent, the unseen one's key too
+            assert!(st.delete_tag("tv"));
+            assert!(!st.delete_tag("tv"));
+            assert_eq!(st.tags_of(&key), names(&["Movies"]));
+            assert_eq!(st.tags_of(&other), names(&["new"]));
+            assert_eq!(st.options.get(&tags::torrent_key(&third)), None);
+            assert_eq!(st.options.get(tags::KNOWN_KEY), Some("Movies,new,old,x"));
+            st.update(status(3, 9), 0);
+            assert!(st.tags_of(&third).is_empty());
+            assert_eq!(st.options.get(&tags::torrent_key(&Sha1Hash([6; 20]).to_hex())), Some("gone"));
+            st.options.take_changes();
+
+            // tagging with known names, taking tags off and an existing New Tag leave the known
+            // list alone: `tags.list` is not written (hosted, the mirror journals only what
+            // changed, so a tag the host made meanwhile is not overwritten by these)
+            assert!(st.set_tags(&key, &names(&["Movies", "new", "x"])));
+            assert!(st.set_tags(&other, &[]));
+            assert_eq!(st.create_tag("old"), Ok("old".to_owned()));
+            assert!(st.add_tags_keyed(&key, None, &names(&["old"])).is_ok());
+            let changes = st.options.take_changes();
+            assert!(!changes.is_empty());
+            assert!(changes.iter().all(|(k, _)| k != tags::KNOWN_KEY), "{changes:?}");
+
+            // at most MAX_TAGS known; a known one still goes on
+            for i in 0..tags::MAX_TAGS {
+                let _ = st.create_tag(&format!("t{i}"));
+            }
+            assert_eq!(st.tags.len(), tags::MAX_TAGS);
+            assert_eq!(st.create_tag("one more"), Err(TagError::TooMany));
+            assert!(!st.set_tags(&third, &names(&["one more"])), "a new name past the limit is dropped");
+            assert!(st.set_tags(&third, &names(&["t5"])));
+        }
+    }
+
+    /// Hosted, the host's changes: a torrent's key sets its tags, `tags.list` replaces the known
+    /// ones (a tag a torrent still has stays), a deleted tag leaves.
+    #[test]
+    fn the_hosts_tag_changes_reach_the_lists() {
+        let mut st = State::for_tests();
+        st.hosted = true;
+        st.options.track_changes();
+        st.update(status(1, 7), 0);
+        let key = Sha1Hash([7; 20]).to_hex();
+        // what `WebUi::options_changed` does with them, without a server
+        let apply = |st: &mut State, changes: &[(String, Option<String>)]| {
+            st.options.apply_changes(changes);
+            let mut list = false;
+            for (k, v) in changes {
+                list |= st.host_tags_change(k, v.as_deref()).unwrap_or(false);
+            }
+            if list {
+                st.reload_known_tags();
+            }
+        };
+        apply(
+            &mut st,
+            &[
+                (tags::torrent_key(&key), Some("b,a".to_owned())),
+                (tags::KNOWN_KEY.to_owned(), Some("a,b,c".to_owned())),
+            ],
+        );
+        assert_eq!(st.tags_of(&key), names(&["a", "b"]));
+        assert_eq!(st.tags, names(&["a", "b", "c"]));
+        // the host deletes "a": the list first, then the torrent's key (either order works)
+        apply(
+            &mut st,
+            &[
+                (tags::KNOWN_KEY.to_owned(), Some("b,c".to_owned())),
+                (tags::torrent_key(&key), Some("b".to_owned())),
+            ],
+        );
+        assert_eq!(st.tags_of(&key), names(&["b"]));
+        assert_eq!(st.tags, names(&["b", "c"]));
+        // a torrent not seen yet: its names become known, it takes them at its first sight
+        let later = Sha1Hash([9; 20]).to_hex();
+        apply(&mut st, &[(tags::torrent_key(&later), Some("d".to_owned()))]);
+        assert_eq!(st.tags, names(&["b", "c", "d"]));
+        st.update(status(2, 9), 0);
+        assert_eq!(st.tags_of(&later), names(&["d"]));
+        assert_eq!(st.host_tags_change("torrent.x.label", Some("y")), None);
+        assert!(st.options.take_changes().is_empty(), "nothing goes back");
     }
 }
