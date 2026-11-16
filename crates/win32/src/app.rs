@@ -967,8 +967,7 @@ pub fn run(args: Args) -> i32 {
                 let (added, finished) = opts.gui.run_commands();
                 a.run_program = Some(RunProgram::new(added, finished));
             }
-            // before the filter is loaded below: a kept list of another address is dropped
-            // first (D75); a demo keeps no list and fetches none
+            // before the filter is loaded below (D75); a demo keeps no list and fetches none
             a.demo = args.demo.is_some();
             if !crate::remote_ui::is_remote() {
                 let config = ip_list_config(&opts.gui, a.demo);
@@ -2873,6 +2872,10 @@ fn focus_in_files() -> bool {
 /// sources, Manage Sources.
 unsafe fn search_menu(hwnd: HWND) {
     unsafe {
+        // locked (D69): no menu (its picks reach `on_command`, which refuses them anyway)
+        if is_locked() {
+            return;
+        }
         let Some((arrow, entries)) =
             with_app(|a| (a.search_menu, search_ui::mode_menu(&load_sources(&a.prefs), &a.search_mode)))
         else {
@@ -4300,7 +4303,30 @@ fn command_icon(id: u16) -> Option<UiIcon> {
     })
 }
 
+/// Shows a context menu and returns the command picked (0: none). Locked (D69), no menu opens
+/// and nothing picked counts, also when the lock came while it was open: menus whose commands
+/// are carried out here rather than through `on_command`'s gate (the Tags group's, the feeds',
+/// the Files tab's) must not run then, and a process posting `WM_CONTEXTMENU` to the hidden
+/// window gets nothing. The tray's own locked menu goes through [`popup_always`].
 unsafe fn popup(hwnd: HWND, menu: HMENU, x: i32, y: i32) -> u16 {
+    unsafe { gated_popup(hwnd, menu, x, y, &is_locked) }
+}
+
+/// [`popup`], told by `locked` whether the windows are locked.
+unsafe fn gated_popup(hwnd: HWND, menu: HMENU, x: i32, y: i32, locked: &dyn Fn() -> bool) -> u16 {
+    unsafe {
+        if locked() {
+            DestroyMenu(menu);
+            return 0;
+        }
+        let id = popup_always(hwnd, menu, x, y);
+        if locked() { 0 } else { id }
+    }
+}
+
+/// [`popup`] without the lock's gate: the tray menu, whose locked form offers Show (which asks
+/// for the PIN) and Exit only, both let through by `on_command`.
+unsafe fn popup_always(hwnd: HWND, menu: HMENU, x: i32, y: i32) -> u16 {
     unsafe {
         icons::menu_icons(menu, GetDpiForWindow(hwnd), &command_icon);
         let id =
@@ -4353,7 +4379,7 @@ unsafe fn tray_menu(hwnd: HWND) {
         GetCursorPos(&mut p);
         // Without this the menu does not close when clicking elsewhere.
         SetForegroundWindow(hwnd);
-        let id = popup(hwnd, menu, p.x, p.y);
+        let id = popup_always(hwnd, menu, p.x, p.y);
         if id != 0 {
             on_command(hwnd, id);
         }
@@ -4375,6 +4401,10 @@ unsafe fn menu_point(target: HWND, lparam: LPARAM) -> POINT {
 
 unsafe fn on_context_menu(hwnd: HWND, target: HWND, lparam: LPARAM) {
     unsafe {
+        // locked (D69): no menu of the hidden window (`popup` refuses them all the same)
+        if is_locked() {
+            return;
+        }
         let Some((lv, files_lv, tree, feeds)) =
             with_app(|a| (a.lv, a.pages[Page::Files.index()], a.tree, a.feed_view.is_some()))
         else {
@@ -5569,8 +5599,6 @@ unsafe fn show_preferences_at(hwnd: HWND, page: usize) {
     };
     opts.gui.language = language_choice();
     let dir = data_dir();
-    // the IP filter fields the BitTorrent page's Update Now last fetched with (D75)
-    let ip_tried: RefCell<Option<ip_filter_list::Config>> = RefCell::new(None);
     // the dialog runs its own message loop; the hooks borrow the app only while they run
     let hooks = crate::preferences::Hooks {
         apply: Box::new(|o: &Options| {
@@ -5617,22 +5645,14 @@ unsafe fn show_preferences_at(hwnd: HWND, page: usize) {
             .unwrap_or_default()
         }),
         // Update Now fetches with the page's IP filter fields as they stand, as the Trackers
-        // page's; the timer takes the answer (D75)
+        // page's; the timer takes the answer (D75). Fields not applied yet are a trial: its
+        // list is shown on the page but neither reaches the engine nor replaces the kept copy
+        // until OK or Apply stores them, so Cancel leaves both as they were (F2)
         ip_list: Box::new(|ask: crate::preferences::IpListAsk<'_>| {
             with_app(|a| {
                 let demo = a.demo;
                 let Some(l) = a.ip_list.as_mut() else { return String::new() };
-                if ask.update {
-                    let c = ip_filter_list::Config {
-                        enabled: ask.enabled,
-                        from_url: ask.from_url && !demo,
-                        url: ask.url.trim().to_owned(),
-                    };
-                    l.configure(c.clone());
-                    l.refresh_now();
-                    *ip_tried.borrow_mut() = Some(c);
-                }
-                l.status_for(ask.from_url, ask.url)
+                ip_list_ask(l, &ask, demo)
             })
             .unwrap_or_default()
         }),
@@ -5643,34 +5663,26 @@ unsafe fn show_preferences_at(hwnd: HWND, page: usize) {
         unsafe { update_menu(hwnd) };
     }
     // what Update Now tried without OK or Apply ends with the dialog: the stored fields again
+    // (an IP filter trial is dropped; its rules never reached the engine, F2)
     with_app(|a| {
         let gui = GuiOptions::load(&a.prefs, &a.save_path);
         configure_tracker_list(a, &gui);
         configure_ip_list(a, &gui);
-        // the IP filter's rules too, when a list fetched from what the page tried may be in
-        // force (D75)
-        if ip_tried.take().is_some_and(|c| c != ip_list_config(&gui, a.demo)) {
-            restore_ip_filter(a, &gui);
-        }
     });
 }
 
-/// After the BitTorrent page's Update Now tried fields that were not stored (D75): the engine
-/// gets the rules the stored fields give, none while the filter is off or nothing is kept from
-/// the stored address (whose fetch is due at once).
-fn restore_ip_filter(a: &mut App, gui: &GuiOptions) {
-    match ip_filter_list::list_file(gui, &data_dir()).filter(|_| gui.ip_filter) {
-        Some(path) => {
-            let r = a.handle.load_ip_filter(&path).map_err(|e| e.to_string());
-            log_ip_filter(a, &path, &r);
-        }
-        None => {
-            a.handle.set_ip_filter(IpFilter::new());
-            if !gui.ip_filter {
-                a.detail.push_log(format!("{} {}", now_hms(), tr!(LogIpFilterOff)));
-            }
-        }
+/// The BitTorrent page's IP filter line, and its Update Now (`ask.update`) with the page's
+/// fields as they stand: a trial of fields not stored yet, a plain refresh of the stored ones
+/// (`IpFilterList::try_config`). A demo's list is never fetched from the web.
+fn ip_list_ask(l: &mut IpFilterList, ask: &crate::preferences::IpListAsk<'_>, demo: bool) -> String {
+    if ask.update {
+        l.try_config(ip_filter_list::Config {
+            enabled: ask.enabled,
+            from_url: ask.from_url && !demo,
+            url: ask.url.trim().to_owned(),
+        });
     }
+    l.status_for(ask.from_url, ask.url)
 }
 
 /// The Setup Guide's options (D53): as stored, with the associations and autostart as the
@@ -5820,7 +5832,8 @@ fn apply_options_from(a: &mut App, old: &Options, o: &Options) {
             }
         }
     }
-    // before the filter is loaded: a kept list of another address is dropped first (D75)
+    // the list from the web follows the new fields (D75; an applied Update Now trial becomes
+    // the kept copy), before the filter is loaded
     configure_ip_list(a, &o.gui);
     let dir = data_dir();
     if ip_filter_source(&o.gui, &dir) != ip_filter_source(&old.gui, &dir) {
@@ -5977,10 +5990,16 @@ fn apply_web_change(
 }
 
 /// Loads the configured block list (`ipfilter.dat` in the settings folder by default), or the
-/// copy kept of the list from the web (D75). With nothing fetched from that address yet the
-/// rules in force stay: the fetch brings the new ones.
+/// copy kept of the list from the web (D75). With nothing fetched from that address yet (a
+/// copy of another address is not its list) the rules in force stay, none at start: the fetch
+/// brings the new ones, and the Logger says so.
 fn load_ip_filter(a: &mut App, gui: &GuiOptions) {
-    let Some(path) = ip_filter_list::list_file(gui, &data_dir()) else { return };
+    let Some(path) = ip_filter_list::list_file(gui, &data_dir()) else {
+        if let Some(line) = ip_filter_list::not_loaded_line(gui) {
+            a.detail.push_log(format!("{} {line}", now_hms()));
+        }
+        return;
+    };
     let r = a.handle.load_ip_filter(&path).map_err(|e| e.to_string());
     log_ip_filter(a, &path, &r);
 }
@@ -5997,8 +6016,8 @@ fn ip_list_config(gui: &GuiOptions, demo: bool) -> ip_filter_list::Config {
     ip_filter_list::Config { from_url: c.from_url && !demo, ..c }
 }
 
-/// The IP filter's list from the web follows the preferences (D75): a list kept for another
-/// address is dropped, the new one is fetched by the timer.
+/// The IP filter's list from the web follows the preferences (D75): a new address is fetched by
+/// the timer; the copy kept of another stays, unused, until a list of the new one is saved.
 fn configure_ip_list(a: &mut App, gui: &GuiOptions) {
     let demo = a.demo;
     if let Some(l) = a.ip_list.as_mut() {
@@ -8184,6 +8203,54 @@ mod tests {
         (r.left, r.top, r.right, r.bottom)
     }
 
+    /// F2: the BitTorrent page's Update Now with an address typed and not applied, then Cancel
+    /// (the stored fields again): the list kept of the stored address and its info are what they
+    /// were, and no list reached the engine. The trial's fetch goes to a loopback port nothing
+    /// answers on.
+    #[test]
+    fn update_now_then_cancel_leaves_the_ip_filter_as_it_was() {
+        let dir = std::env::temp_dir().join(format!("rp-win32-ipcancel-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let stored = "https://lists.example/level1.dat";
+        let list = "1.2.3.0 - 1.2.3.255 , 000 , Bad Corp\n";
+        let now = rookparcel_core::util::time::unix_now();
+        let info = format!("url={stored}\nfetched={now}\nrules=1\n");
+        std::fs::write(dir.join(ip_filter_list::CACHE_FILE), list).unwrap();
+        std::fs::write(dir.join(ip_filter_list::INFO_FILE), &info).unwrap();
+        let config = |url: &str| ip_filter_list::Config { enabled: true, from_url: true, url: url.into() };
+        let mut l = IpFilterList::new(Some(dir.clone()), config(stored));
+        let typo = "https://127.0.0.1:9/typo.dat";
+        let ask = |update| crate::preferences::IpListAsk { enabled: true, from_url: true, url: typo, update };
+        // Update Now on the page's address
+        let shown = ip_list_ask(&mut l, &ask(true), false);
+        assert_eq!(shown, tr!(TrackersStatusNone), "not fetched yet");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while ip_list_ask(&mut l, &ask(false), false) == tr!(TrackersStatusNone) {
+            assert!(l.tick(|| None).is_empty(), "a trial logs nothing");
+            assert!(std::time::Instant::now() < deadline, "the trial's fetch never ended");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let before = |text: String| text.split('\u{0}').next().unwrap_or_default().to_owned();
+        let failed = before(tr!(TrackersStatusFailed, error = "\u{0}"));
+        assert!(ip_list_ask(&mut l, &ask(false), false).starts_with(&failed));
+        assert!(l.take_filter().is_none());
+        // Cancel: the stored fields again
+        l.configure(config(stored));
+        assert!(l.take_filter().is_none(), "no list reached the engine");
+        assert_eq!(std::fs::read_to_string(dir.join(ip_filter_list::CACHE_FILE)).unwrap(), list);
+        assert_eq!(std::fs::read_to_string(dir.join(ip_filter_list::INFO_FILE)).unwrap(), info);
+        assert!(!dir.join(ip_filter_list::TRIAL_FILE).exists());
+        let mut gui = Options::load(&Prefs::default(), r"C:\Downloads").gui;
+        (gui.ip_filter, gui.ip_filter_from_url, gui.ip_filter_url) = (true, true, stored.into());
+        assert_eq!(ip_filter_list::list_file(&gui, &dir), Some(dir.join(ip_filter_list::CACHE_FILE)));
+        let kept = before(tr!(IpFilterStatusOk, count = 1, time = "\u{0}"));
+        assert!(l.status().starts_with(&kept), "{}", l.status());
+        // the stored list is fresh: nothing is fetched after Cancel
+        assert!(l.tick(|| None).is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     /// Preferences' Apply loads the IP filter again when any of its source's fields changed
     /// (D75): the switch, the file, the box for the list from the web and its address (trimmed);
     /// a demo's list is never fetched.
@@ -8586,6 +8653,45 @@ mod tests {
         for id in [cmd::ADD, cmd::ADD_URL, cmd::START_ALL, cmd::STOP_ALL] {
             assert!(with_pin.contains(&Some(id)));
         }
+    }
+
+    /// W1: while locked (D69) no context menu opens, and nothing picked in one counts (the
+    /// Tags group's New Tag and Delete Tag, the feeds' and the Files tab's items are carried
+    /// out where the menu returns, not through `on_command`'s gate). Every menu the main window
+    /// shows goes through that gate: `TrackPopupMenu` is called only in `popup_always` and the
+    /// search box's drop-down (which checks the lock itself and whose picks reach
+    /// `on_command`), and `popup_always` only from the gate and the tray's menu (whose locked
+    /// form is Show and Exit).
+    #[test]
+    fn no_context_menu_opens_while_locked() {
+        unsafe {
+            let asked = std::cell::Cell::new(0);
+            let locked = || {
+                asked.set(asked.get() + 1);
+                true
+            };
+            let menu = build_tag_menu(true);
+            assert_eq!(gated_popup(null_mut(), menu, 0, 0, &locked), 0);
+            assert_eq!(asked.get(), 1, "nothing is shown after the answer");
+            assert_eq!(windows_sys::Win32::UI::WindowsAndMessaging::IsMenu(menu), 0, "the menu is gone");
+        }
+        let src = include_str!("app.rs");
+        let fn_at = |at: usize| {
+            let head = &src[..at];
+            let start = head.rfind("\nunsafe fn ").max(head.rfind("\nfn ")).expect("a function");
+            let name = src[start..].split('(').next().unwrap_or_default();
+            name.rsplit(' ').next().unwrap_or_default().to_owned()
+        };
+        let callers =
+            |needle: &str| -> Vec<String> { src.match_indices(needle).map(|(at, _)| fn_at(at)).collect() };
+        assert_eq!(callers(concat!("TrackPopup", "Menu(")), ["search_menu", "popup_always"]);
+        let mut via = callers(concat!("popup_", "always("));
+        via.sort();
+        assert_eq!(via, ["gated_popup", "popup_always", "tray_menu"]);
+        // and `search_menu` opens nothing while locked
+        let search = &src[src.find("\nunsafe fn search_menu(").unwrap()..];
+        let body = &search[..search.find("\n}\n").unwrap()];
+        assert!(body.find("is_locked()").unwrap() < body.find("CreatePopupMenu").unwrap());
     }
 
     /// File > Lock Rookparcel with its shortcut above Exit (D69), gone while the lock is off and

@@ -38,6 +38,12 @@ use crate::proto::proxy::Target;
 use crate::settings::{ProxyType, Settings};
 use crate::util::gzip::{GzipError, inflate_gzip};
 use crate::util::puff::InflateError;
+use crate::util::string::remote_text;
+
+/// The most of a server's reason phrase an error shows, in characters ([`remote_text`]).
+const MAX_REASON_SHOWN: usize = 100;
+/// The most of a URL, host or proxy reply an error shows, in characters.
+const MAX_URL_SHOWN: usize = 300;
 
 /// The slowest average rate, in bytes a second, at which a body streamed by [`http_get_to`]
 /// may arrive: once the head is in, the body has one [`FetchOptions::timeout`] plus a second
@@ -260,18 +266,26 @@ pub enum FetchError {
 
 impl fmt::Display for FetchError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // text a server chose (a reason phrase, a redirect's URL or host) reaches status lines
+        // and the Logger: no control or direction characters, and short (security review,
+        // 2026-11-16)
+        let url = |s: &str| remote_text(s, MAX_URL_SHOWN);
         match self {
-            FetchError::InvalidUrl(u) => write!(f, "{u}: only http:// and https:// URLs are supported"),
-            FetchError::Resolve(h) => write!(f, "{h}: host not found"),
+            FetchError::InvalidUrl(u) => {
+                write!(f, "{}: only http:// and https:// URLs are supported", url(u))
+            }
+            FetchError::Resolve(h) => write!(f, "{}: host not found", url(h)),
             FetchError::Io(e) => write!(f, "{e}"),
-            FetchError::Proxy(e) => write!(f, "{e}"),
+            FetchError::Proxy(e) => write!(f, "{}", url(e)),
             FetchError::Http(e) => f.write_str(e),
-            FetchError::Status(code, msg) if msg.is_empty() => write!(f, "HTTP {code}"),
-            FetchError::Status(code, msg) => write!(f, "HTTP {code} {msg}"),
+            FetchError::Status(code, msg) => match remote_text(msg, MAX_REASON_SHOWN) {
+                msg if msg.trim().is_empty() => write!(f, "HTTP {code}"),
+                msg => write!(f, "HTTP {code} {}", msg.trim()),
+            },
             FetchError::TooLarge => f.write_str("response too large"),
             FetchError::TimedOut => f.write_str("timed out"),
             FetchError::TooManyRedirects => f.write_str("too many redirects"),
-            FetchError::NotPublic(h) => write!(f, "{h}: refused, a local network address"),
+            FetchError::NotPublic(h) => write!(f, "{}: refused, a local network address", url(h)),
         }
     }
 }
@@ -347,7 +361,8 @@ fn http_get_inner(
             return Ok(FetchResponse { url, status: 304, headers: resp.headers, body: Vec::new() });
         }
         if !resp.is_redirect() {
-            return Err(FetchError::Status(resp.status, resp.message));
+            // (kept short and clean: up to 16 KiB of anything may come in a status line)
+            return Err(FetchError::Status(resp.status, remote_text(&resp.message, MAX_REASON_SHOWN)));
         }
         let location = resp.header("location").ok_or(FetchError::Http("redirect without a Location"))?;
         if other_scheme(location) {
@@ -1156,6 +1171,33 @@ mod tests {
         for bad in ["ftp://example.org/x", "magnet:?xt=urn:btih:abc", "nonsense", "http://"] {
             assert!(matches!(http_get(bad, &opts()), Err(FetchError::InvalidUrl(_))), "{bad}");
         }
+    }
+
+    /// Security review 2026-11-16: a server's reason phrase reaches status lines and the Logger
+    /// short and without control or direction characters (a lone CR or LF, an escape sequence,
+    /// a right-to-left override), however long it was sent.
+    #[test]
+    fn a_reason_phrase_is_shown_short_and_clean() {
+        let mut long = b"HTTP/1.1 503 ".to_vec();
+        long.extend("\u{202e}gnp.exe".as_bytes());
+        // (the parser ends the line at a lone CR or LF; the made-up one below has them)
+        long.extend(b"\x1b[2Ja\tb\x0bc\x07");
+        long.extend("x".repeat(8000).as_bytes());
+        long.extend(b"\r\nContent-Length: 0\r\n\r\n");
+        let (base, _rx) = serve(vec![long, b"HTTP/1.1 500 \t\x07\r\nContent-Length: 0\r\n\r\n".to_vec()]);
+        let e = http_get(&base, &opts()).unwrap_err();
+        let FetchError::Status(503, msg) = &e else { panic!("{e:?}") };
+        assert!(msg.chars().count() <= MAX_REASON_SHOWN + 1, "{}", msg.len());
+        let shown = e.to_string();
+        assert!(shown.starts_with("HTTP 503 gnp.exe[2Ja bcxxx") && shown.ends_with("x…"), "{shown}");
+        assert!(!shown.chars().any(|c| c.is_control() || c == '\u{202e}'), "{shown:?}");
+        // nothing left of the phrase: the code alone
+        assert_eq!(http_get(&base, &opts()).unwrap_err().to_string(), "HTTP 500");
+        // one made by hand is shown the same way
+        let e = FetchError::Status(404, format!("Not\u{2067} Found\r\n{}", "y".repeat(500)));
+        assert!(e.to_string().starts_with("HTTP 404 Not Found  yyy") && e.to_string().chars().count() < 120);
+        let e = FetchError::Resolve("evil\u{202e}moc.example".into());
+        assert_eq!(e.to_string(), "evilmoc.example: host not found");
     }
 
     #[test]

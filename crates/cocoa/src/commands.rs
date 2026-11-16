@@ -66,9 +66,10 @@ pub enum Command {
     UpLimit(u16),
     NewLabel,
     RemoveLabel,
-    /// An index into the label list the menu was built from (`app::labels`).
+    /// An index into the label list the menu was built from (`menu::built_label`).
     Label(u16),
-    /// Tags ▸ (D76): toggles the tag at this index of the menu state's tags (`Core::tags`).
+    /// Tags ▸ (D76): toggles the tag at this index of the list the menu was built from
+    /// (`menu::built_tag`), not of the tags as they are when it is picked.
     Tag(u16),
     /// Tags ▸ > New Tag: the selection gets a new (or existing) tag.
     NewTag,

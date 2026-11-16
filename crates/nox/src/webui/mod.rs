@@ -530,7 +530,8 @@ pub(crate) enum Reply {
     Pieces(Bitfield, Vec<u32>, Vec<PartialPiece>),
     Peers(Vec<PeerInfo>),
     /// The torrent's `.torrent` file (`post_torrent_file`); `None` for a magnet whose metadata
-    /// is not in yet. Taken out of the cache by its one reader (`commands::torrent_file`).
+    /// is not in yet. Cached only while an export waits for it, and taken out of the cache when
+    /// the last one is done (`commands::torrent_file`, N4).
     TorrentFile(Option<Arc<[u8]>>),
 }
 
@@ -640,6 +641,10 @@ pub(crate) struct State {
     pub autoload: Poller,
     replies: HashMap<(TorrentId, ReplyKind), (u64, Reply)>,
     serial: u64,
+    /// The exports waiting for a torrent's `.torrent` bytes, by torrent: only these are cached
+    /// from `Alert::TorrentFile` (the `.torrent` folders and the waiting magnets cause the same
+    /// alert, whose bytes must not stay here, N4).
+    exports: HashMap<TorrentId, usize>,
     pub sessions: HashMap<String, ClientSession>,
     pub bans: BanList,
     pub shutdown: bool,
@@ -935,7 +940,8 @@ impl Shared {
     }
 
     /// The IP filter's list from an address (D75) follows the preferences: at start, before
-    /// the filter is loaded, and with a commit (a kept list of another address is forgotten).
+    /// the filter is loaded, and with a commit (a kept list of another address stays on disk,
+    /// unused, until one of the new address is saved).
     /// Hosted: nothing (the host's list).
     pub(crate) fn configure_ip_list(&self, p: &Prefs) {
         if let Some(mut l) = self.ip_list() {
@@ -1252,6 +1258,7 @@ impl WebUi {
                 autoload: Poller::new(),
                 replies: HashMap::new(),
                 serial: 0,
+                exports: HashMap::new(),
                 sessions: HashMap::new(),
                 bans: BanList::default(),
                 shutdown: false,
@@ -1697,10 +1704,7 @@ impl WebUi {
                 }
                 // Export .torrent (`GET /pa/torrents/export`, the shim's `torrents/export`); the
                 // `.torrent` folders and the waiting magnets above see the same alert
-                Alert::TorrentFile { id, data } => {
-                    st.reply(*id, ReplyKind::TorrentFile, Reply::TorrentFile(data.clone()));
-                    replied = true;
-                }
+                Alert::TorrentFile { id, data } => replied |= st.torrent_file_answer(*id, data),
                 _ => {}
             }
             if logged(a) {
@@ -2111,16 +2115,38 @@ impl State {
         tags::sort(&mut v);
         self.learn_tags(&v);
         v.retain(|t| self.is_known_tag(t));
-        if v.as_slice() == self.tags_of(hash) {
+        self.replace_cached(hash, &v)
+    }
+
+    /// A cached torrent's tags become `v`, which is as the cache keeps them (normalized,
+    /// `tags::sort`ed, known); its version bumped when they changed. Nothing is stored.
+    fn replace_cached(&mut self, hash: &str, v: &[String]) -> bool {
+        if v == self.tags_of(hash) {
             return false;
         }
         if v.is_empty() {
             self.torrent_tags.remove(hash);
         } else {
-            self.torrent_tags.insert(hash.to_owned(), v);
+            self.torrent_tags.insert(hash.to_owned(), v.to_vec());
         }
         self.touch(hash);
         true
+    }
+
+    /// [`State::set_tags`] for names that are as the cache keeps them already: normalized,
+    /// `tags::sort`ed (so each once) and known. Nothing is normalized, sorted or learnt again,
+    /// so one request's names cost each torrent no more than its own tags (N1).
+    pub(crate) fn put_tags(&mut self, hash: &str, v: &[String]) -> bool {
+        debug_assert!(
+            v.windows(2).all(|w| tags::cmp(&w[0], &w[1]).is_lt()) && v.iter().all(|t| self.is_known_tag(t))
+        );
+        let changed = self.replace_cached(hash, v);
+        if changed {
+            if let Some(key) = self.key_of(hash) {
+                self.store_torrent_tags(hash, &key);
+            }
+        }
+        changed
     }
 
     /// Sets a cached torrent's tags (none clears them, [`State::tags_cached`]'s rules) and
@@ -2156,26 +2182,31 @@ impl State {
         Ok(tag)
     }
 
-    /// Delete Tag: `name` is no longer known and every torrent loses it, those not seen yet too
-    /// (their `torrent.<key>.tags`). False when it was not known.
-    pub(crate) fn delete_tag(&mut self, name: &str) -> bool {
-        let Some(at) = self.tags.iter().position(|t| t == name) else { return false };
-        self.tags.remove(at);
+    /// Delete Tag for each of `names` (as the tags keep them): no longer known, and every
+    /// torrent loses them, those not seen yet too (their `torrent.<key>.tags`); in one pass over
+    /// the torrents and the stored keys however many names there are (N1). How many were known.
+    pub(crate) fn delete_tags(&mut self, names: &[String]) -> usize {
+        let mut gone: Vec<String> = names.iter().filter(|n| self.is_known_tag(n)).cloned().collect();
+        if gone.is_empty() {
+            return 0;
+        }
+        tags::sort(&mut gone);
+        let is_gone = |t: &str| gone.binary_search_by(|g| tags::cmp(g, t)).is_ok();
+        self.tags.retain(|t| !is_gone(t));
         self.tags_version += 1;
-        let lost: Vec<String> = self
+        let lost: Vec<(String, Vec<String>)> = self
             .torrent_tags
             .iter()
-            .filter(|(_, v)| v.iter().any(|t| t == name))
-            .map(|(h, _)| h.clone())
+            .filter(|(_, v)| v.iter().any(|t| is_gone(t)))
+            .map(|(h, v)| (h.clone(), v.iter().filter(|t| !is_gone(t)).cloned().collect()))
             .collect();
-        for h in lost {
-            let v: Vec<String> = self.tags_of(&h).iter().filter(|t| *t != name).cloned().collect();
-            self.set_tags(&h, &v);
+        for (h, v) in lost {
+            self.put_tags(&h, &v);
         }
-        // a torrent added with it that the engine has not reported yet, or one that is gone
-        tags::forget_everywhere(&mut self.options, name);
+        // a torrent added with them that the engine has not reported yet, or one that is gone
+        tags::forget_all_everywhere(&mut self.options, is_gone);
         self.store_known_tags();
-        true
+        gone.len()
     }
 
     /// Gives a torrent the tags `names` beside those it has (each made known when new; an
@@ -2293,6 +2324,37 @@ impl State {
         self.replies.get(&(id, kind)).map(|(_, r)| r)
     }
 
+    /// An export starts waiting for torrent `id`'s `.torrent` bytes ([`State::torrent_file_answer`]
+    /// caches them for it).
+    pub(crate) fn want_torrent_file(&mut self, id: TorrentId) {
+        *self.exports.entry(id).or_default() += 1;
+    }
+
+    /// An export of torrent `id` is done (answered, timed out or failed): once no other waits,
+    /// the bytes leave the cache.
+    pub(crate) fn torrent_file_done(&mut self, id: TorrentId) {
+        let left = match self.exports.get_mut(&id) {
+            Some(n) => {
+                *n = n.saturating_sub(1);
+                *n
+            }
+            None => 0,
+        };
+        if left == 0 {
+            self.exports.remove(&id);
+            self.replies.remove(&(id, ReplyKind::TorrentFile));
+        }
+    }
+
+    /// `Alert::TorrentFile`: cached only while an export waits for it (N4). True when cached.
+    fn torrent_file_answer(&mut self, id: TorrentId, data: &Option<Arc<[u8]>>) -> bool {
+        if !self.exports.contains_key(&id) {
+            return false;
+        }
+        self.reply(id, ReplyKind::TorrentFile, Reply::TorrentFile(data.clone()));
+        true
+    }
+
     pub(crate) fn reply(&mut self, id: TorrentId, kind: ReplyKind, r: Reply) {
         self.serial += 1;
         self.replies.insert((id, kind), (self.serial, r));
@@ -2393,6 +2455,7 @@ impl State {
             autoload: Poller::new(),
             replies: HashMap::new(),
             serial: 0,
+            exports: HashMap::new(),
             sessions: HashMap::new(),
             bans: BanList::default(),
             shutdown: false,
@@ -2426,6 +2489,37 @@ mod tests {
             name: format!("t{id}"),
             ..TorrentStatus::default()
         }
+    }
+
+    /// N4: a `.torrent` the engine reports is cached only while an export waits for it (the
+    /// `.torrent` folders and the waiting magnets cause the same alert), and leaves the cache
+    /// when the last waiting export is done, answered or timed out.
+    #[test]
+    fn torrent_files_are_cached_only_for_a_waiting_export() {
+        let mut st = State::for_tests();
+        let (a, b) = (TorrentId::from_raw(1), TorrentId::from_raw(2));
+        let bytes: Option<Arc<[u8]>> = Some(Arc::from(&b"d4:infod4:name1:xee"[..]));
+        // nobody asked: not kept
+        assert!(!st.torrent_file_answer(a, &bytes));
+        assert!(st.cached(a, ReplyKind::TorrentFile).is_none());
+        // two exports of `a`, one of `b`
+        st.want_torrent_file(a);
+        st.want_torrent_file(a);
+        st.want_torrent_file(b);
+        assert!(st.torrent_file_answer(a, &bytes));
+        assert!(st.cached(a, ReplyKind::TorrentFile).is_some());
+        st.torrent_file_done(a);
+        assert!(st.cached(a, ReplyKind::TorrentFile).is_some(), "the other export of it still waits");
+        st.torrent_file_done(a);
+        assert!(st.cached(a, ReplyKind::TorrentFile).is_none());
+        assert!(!st.torrent_file_answer(a, &bytes), "a late answer is not kept");
+        // `b` timed out: its answer, had it come, goes with it; one after that is not kept
+        st.torrent_file_done(b);
+        assert!(!st.torrent_file_answer(b, &bytes));
+        assert!(st.replies.is_empty() && st.exports.is_empty());
+        // a stray `done` changes nothing
+        st.torrent_file_done(b);
+        assert!(st.exports.is_empty());
     }
 
     /// A torrent seen with metadata whose status does not say whether it is private (a record
@@ -2572,8 +2666,8 @@ mod tests {
             assert_eq!(st.options.get(&tags::torrent_key(&third)), Some("tv"));
 
             // Delete Tag: off every torrent, the unseen one's key too
-            assert!(st.delete_tag("tv"));
-            assert!(!st.delete_tag("tv"));
+            assert_eq!(st.delete_tags(&names(&["tv"])), 1);
+            assert_eq!(st.delete_tags(&names(&["tv"])), 0);
             assert_eq!(st.tags_of(&key), names(&["Movies"]));
             assert_eq!(st.tags_of(&other), names(&["new"]));
             assert_eq!(st.options.get(&tags::torrent_key(&third)), None);

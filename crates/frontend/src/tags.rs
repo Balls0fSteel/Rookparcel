@@ -333,16 +333,22 @@ pub fn delete(list: &mut TorrentList, prefs: &mut Prefs, name: &str) -> bool {
 
 /// Takes `name` out of every `torrent.<key>.tags` in `prefs` (a key left empty goes).
 pub fn forget_everywhere(prefs: &mut Prefs, name: &str) {
+    forget_all_everywhere(prefs, |t| t == name);
+}
+
+/// Takes every tag `gone` says of out of every `torrent.<key>.tags` in `prefs`, in one pass
+/// however many names go (a key left empty goes).
+pub fn forget_all_everywhere(prefs: &mut Prefs, gone: impl Fn(&str) -> bool) {
     let changed: Vec<(String, Vec<String>)> = prefs
         .entries()
         .filter(|(k, _)| key_of(k).is_some())
         .filter_map(|(k, v)| {
             let tags = parse_list(v);
-            tags.iter().any(|t| t == name).then(|| (k.to_owned(), tags))
+            tags.iter().any(|t| gone(t)).then(|| (k.to_owned(), tags))
         })
         .collect();
     for (k, mut tags) in changed {
-        tags.retain(|t| t != name);
+        tags.retain(|t| !gone(t));
         if tags.is_empty() {
             prefs.remove(&k);
         } else {

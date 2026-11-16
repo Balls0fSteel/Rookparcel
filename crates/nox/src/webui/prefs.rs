@@ -1447,7 +1447,8 @@ fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
 /// `run`: whether the asking session may change the Run Program lines (D67, [`RunGate`]). When
 /// not, the four fields are `readonly` in this answer, the two command lines are left empty
 /// and their page carries the reason; the gate itself is [`commit_request`]'s, whatever a page
-/// shows.
+/// shows. The lists' addresses ([`ADDRESS_FIELDS`]) are sent without their credentials, query
+/// and fragment, hosted not at all (N2).
 pub(crate) fn model(shared: &Shared, st: &State, run: RunGate) -> Json {
     // hosted: the lines are the host's own, which no browser changes ([`HOSTED_NO_RUN`])
     let run_open = run == RunGate::Open && !st.hosted;
@@ -1459,10 +1460,17 @@ pub(crate) fn model(shared: &Shared, st: &State, run: RunGate) -> Json {
         // the qBittorrent API's `autorun_*` go only to a client on this computer: a line can
         // hold an address or a token (D67). Whether they are on is shown.
         let hidden = !run_open && [pref_pages::RUN_ADDED, pref_pages::RUN_FINISHED].contains(&def.id());
+        let mut value = def.get(if hidden { &d } else { &w });
+        // the lists' addresses (D66, D75) may carry a subscription's credentials: sent without
+        // them ([`shown_address`]), as the search sources' (D41); the field left as it is keeps
+        // the stored address ([`keep_addresses`]). Hosted, the host's own: never sent
+        if let (true, Value::Str(url)) = (ADDRESS_FIELDS.contains(&def.id()), &value) {
+            value = Value::Str(if st.hosted { String::new() } else { shown_address(url) });
+        }
         let mut j = Json::obj()
             .with("label", def.label())
             .with("type", def.kind().name())
-            .with("value", json_of(&def.get(if hidden { &d } else { &w })))
+            .with("value", json_of(&value))
             .with("default", json_of(&def.get(&d)));
         match def.kind() {
             Kind::Int { min, max } => {
@@ -1589,6 +1597,31 @@ pub(crate) const HOSTED_NO_IPFILTER_URL: &str =
 
 /// The IP filter's list from an address (D75): its switch and the address.
 const IPFILTER_URL_FIELDS: [&str; 2] = [pref_pages::IPFILTER_FROM_URL, pref_pages::IPFILTER_URL];
+
+/// The addresses the daemon fetches lists from (D75's block list, D66's trackers): a
+/// subscription's user name, password or PIN may be part of them, so [`model`] sends them as
+/// [`shown_address`] gives them, and [`keep_addresses`] reads that form sent back as no change.
+const ADDRESS_FIELDS: [&str; 2] = [pref_pages::IPFILTER_URL, pref_pages::TRACKERS_URL];
+
+/// A stored list address as a page gets it: without the user name and password before the host,
+/// the query and the fragment (`ip_filter_list::redact`, the Logger's form); empty stays empty.
+fn shown_address(url: &str) -> String {
+    if url.trim().is_empty() { String::new() } else { ip_filter_list::redact(url) }
+}
+
+/// A list address sent back as [`shown_address`] showed it (a client that sends every field) is
+/// the stored one: kept, and no change (no current password asked). Any other value replaces
+/// it; an empty one clears it.
+fn keep_addresses(w: &mut Working, st: &State) {
+    for (new, stored) in [
+        (&mut w.prefs.ip_filter_url, &st.prefs.ip_filter_url),
+        (&mut w.prefs.trackers_url, &st.prefs.trackers_url),
+    ] {
+        if *new != *stored && !new.is_empty() && *new == shown_address(stored) {
+            new.clone_from(stored);
+        }
+    }
+}
 
 /// Why the Run Program lines (D67) are refused while a desktop client hosts the Web UI: the
 /// host starts the programs and owns the setting; `POST /pa/prefs` answers 400 with it.
@@ -1894,6 +1927,7 @@ fn commit_read(
     for (def, v) in changes {
         def.set(&mut w, v.clone());
     }
+    keep_addresses(&mut w, st);
     // Run Program (D67) before anything else is looked at, the current password above all: a
     // request from elsewhere learns nothing here, not even whether its password was right
     let now = Working::from_state(st);
@@ -1968,8 +2002,8 @@ fn commit_read(
         if let (Some((file, Err(e))), false) = (&list, from_url) {
             return Err((pref_pages::IPFILTER_PATH.to_owned(), format!("{}: {e}", file.display())));
         }
-        // the list from an address follows before its rules are used: a kept copy of another
-        // address is forgotten, a new address is fetched at the next tick (D75)
+        // the list from an address follows: a new address is fetched at the next tick (D75);
+        // the copy kept of another stays on disk, unused, until a list of this one is saved
         shared.configure_ip_list(&w.prefs);
         let now = unix_now();
         match list {
@@ -1982,8 +2016,12 @@ fn commit_read(
                 st.push_log(None, tr!(LogIpFilterKept, path = file.display(), error = e), now)
             }
             // nothing fetched from the address yet: the rules in force stay, the fetch brings
-            // the new ones
-            None if on => {}
+            // the new ones (said in the Logger)
+            None if on => {
+                if let Some(line) = ip_filter_list::not_loaded_line(&w.prefs.gui()) {
+                    st.push_log(None, line, now);
+                }
+            }
             None => {
                 shared.handle.set_ip_filter(IpFilter::new());
                 st.push_log(None, tr!(LogIpFilterOff).to_owned(), now);
@@ -2267,13 +2305,19 @@ pub(crate) fn restore(shared: &Shared, st: &mut State, loaded_ip_filter: Option<
     if changed {
         shared.apply_limits(st);
     }
-    // the list from an address (D75) first: a kept copy of another address is forgotten
+    // the list from an address (D75) first
     shared.configure_ip_list(&st.prefs);
     // with the list from an address, the copy kept of it, so the filter is in force before any
-    // fetch; none kept yet: the fetch brings the rules
+    // fetch; none kept of this address (a copy of another is not its list): no rules until the
+    // fetch brings them, which the Logger says
     let file = ip_filter_list::list_file(&st.prefs.gui(), &shared.settings_dir);
     if st.prefs.ip_filter {
-        let Some(file) = file else { return };
+        let Some(file) = file else {
+            if let Some(line) = ip_filter_list::not_loaded_line(&st.prefs.gui()) {
+                st.push_log(None, line, unix_now());
+            }
+            return;
+        };
         if loaded_ip_filter != Some(file.as_path()) {
             match shared.handle.load_ip_filter(&file) {
                 Ok(n) => {

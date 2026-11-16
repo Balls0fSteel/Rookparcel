@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use rookparcel_core::fetch::{FetchOptions, FetchProxy, http_get};
+use rookparcel_core::fetch::{FetchError, FetchOptions, FetchProxy, http_get};
 use rookparcel_core::metainfo::is_valid_tracker_url;
 
 use crate::options::GuiOptions;
@@ -209,7 +209,15 @@ pub fn fetch(url: &str, proxy: Option<FetchProxy>) -> Result<Parsed, Reject> {
         return Err(Reject::NotHttps);
     }
     let opts = FetchOptions { proxy, max_size: MAX_BYTES, no_downgrade: true, ..FetchOptions::default() };
-    let resp = http_get(url, &opts).map_err(|e| Reject::Fetch(e.to_string()))?;
+    let resp = http_get(url, &opts).map_err(|e| {
+        Reject::Fetch(match e {
+            // a redirect's target the fetcher could not read: named without what it may carry
+            FetchError::InvalidUrl(u) => {
+                FetchError::InvalidUrl(crate::ip_filter_list::redact(&u)).to_string()
+            }
+            e => e.to_string(),
+        })
+    })?;
     parse_fetched(&resp.body)
 }
 

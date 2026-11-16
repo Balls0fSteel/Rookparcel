@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-16_192246_1794853366
+Last updated: 2026-11-16_213625_1794861385
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D77](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -21,7 +21,8 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 - **Feature plan of 2026-11-16:** six features from the comparison with qBittorrent, Transmission, Deluge and BiglyBT, in four waves for one published release; each wave bumps the patch version, only the last is tagged.
   - All four waves built and checked in all interfaces, not released or pushed: **1.2.59** (D72 download order, D73 Copy Magnet Link / Export .torrent), **1.2.60** (D74 excluded file names, D75 the IP filter's list from an https address, CIDR), **1.2.61** (D76 tags), **1.2.62** (D77 "Append .!ut to incomplete files", recorded; its review's F1-F7 fixed). Hand checks: BACKLOG "Download order, magnet links and export", "Excluded file names and the IP filter address", "Tags", "Append .!ut to incomplete files".
-  - Next: the per-release security review over `v1.2.57..HEAD`, CI, FreeBSD and Fuzz green, then the release per RELEASING.md without pull requests, only when the owner asks.
+  - **1.2.63:** the security review of `v1.2.57..HEAD` done, its fixes in (SECURITY-REVIEW.md; open items in BACKLOG "Security review 1.2.63").
+  - Left, only when the owner asks: push; CI, FreeBSD, Fuzz green; `docs/releases/1.2.63.md` and the site news (RELEASING.md); tag and publish 1.2.63 only, no pull requests. Wiki not pushed; `docs/wiki/Home.md` still names 1.2.57, `BRIEF.md` 1.2.60.
 - **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.

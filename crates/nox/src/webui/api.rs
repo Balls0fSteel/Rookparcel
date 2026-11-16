@@ -909,7 +909,10 @@ fn serve_inner(shared: &Shared, req: &Request) -> Response {
                     let _ = commands::set_tags(shared, &ids, &names);
                 }
                 // no names: every tag comes off, as qBittorrent's removeTags does
-                _ => commands::remove_tags(shared, &ids, (!names.is_empty()).then_some(names.as_slice())),
+                _ => {
+                    let any = !names.names.is_empty() || names.refused.is_some();
+                    commands::remove_tags(shared, &ids, any.then_some(&names))
+                }
             }
             Response::ok()
         }
@@ -1943,7 +1946,7 @@ fn add(shared: &Shared, p: &Params) -> Response {
         upload_limit: lim("upLimit"),
         seed_goal,
         // comma-separated, made known when new (D76)
-        tags: commands::tag_names(p.get("tags").unwrap_or("")),
+        tags: commands::tag_names(p.get("tags").unwrap_or("")).names,
         dialog: false,
     };
     for source in sources {

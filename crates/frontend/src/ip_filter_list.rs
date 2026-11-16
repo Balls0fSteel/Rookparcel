@@ -15,6 +15,18 @@
 //! not a block list (an error page, nothing that parses as a rule) is refused, and the rules in
 //! force and the kept copy stay.
 //!
+//! A new address does not delete the copy: it stays, with the info naming its address, until a
+//! list from the new address has been fetched, checked and saved over it. So a typo in the
+//! address, or a new address whose fetch fails, loses nothing: going back to the old address
+//! uses its copy again. A copy is loaded only for the address it came from ([`list_file`]); at
+//! start with another address configured, no list is in force until the fetch lands, and the
+//! owner logs so ([`not_loaded_line`]).
+//!
+//! Update Now on fields not applied yet (the Windows program's Preferences) is a trial
+//! ([`IpFilterList::try_config`]): its list is fetched into [`TRIAL_FILE`] and shown on the
+//! page's line, but neither reaches the engine nor replaces the copy until those fields are
+//! applied ([`IpFilterList::configure`] with them); Cancel leaves both as they were.
+//!
 //! While the D70 settings guard holds the transfers (`rookparcel_core::fetch::held`), a due
 //! fetch waits; it starts at the first tick after the hold is lifted, and a fetch that failed
 //! because the hold came meanwhile is tried again then, not an hour later.
@@ -46,6 +58,8 @@ pub const RETRY: Duration = Duration::from_secs(3600);
 pub const CACHE_FILE: &str = "ipfilter-url.dat";
 /// Beside it: its address, fetch time and rule count.
 pub const INFO_FILE: &str = "ipfilter-url.txt";
+/// A trial's list ([`IpFilterList::try_config`]) until its fields are applied or dropped.
+pub const TRIAL_FILE: &str = "ipfilter-url.dat.try";
 
 /// Why a fetched list was not used.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -113,16 +127,52 @@ pub fn fetch(url: &str, proxy: Option<FetchProxy>) -> Result<Vec<u8>, Reject> {
 /// (`https://lists.example/level1.gz` for `https://u:p@lists.example/level1.gz?pin=1`), since a
 /// subscription's address often carries its credentials. Only the Preferences field shows it
 /// whole.
+///
+/// The user name and password go before the query and fragment are cut, and deliberately wider
+/// than the fetcher's parser (`parse_url_components`, whose user name and password end at the
+/// first `@`, after a `:`, before the first `/`, `?` or `#`) takes them: a password typed with a
+/// raw `?`, `/`, `#` or `@` (`https://user:pa?ss@lists.example/l.gz`, which the fetcher refuses
+/// or reads as another host) must not show up in part. Everything up to the last `@` is taken as
+/// the user name and password when it holds none of `/ ? #`, or a `:` before the first of them;
+/// otherwise that `@` is in the path or query, and only one before the path counts. A host with
+/// a port and an `@` in its query is then named as what follows that `@`: odd, never a secret.
 pub fn redact(url: &str) -> String {
     let url = url.trim();
     let (scheme, rest) = match url.find("://") {
         Some(i) => (&url[..i + 3], &url[i + 3..]),
         None => ("", url),
     };
+    let rest = match rest.rfind('@') {
+        Some(at) if may_be_userinfo(&rest[..at]) => &rest[at + 1..],
+        _ => rest,
+    };
     let rest = &rest[..rest.find(['?', '#']).unwrap_or(rest.len())];
     let (authority, path) = rest.split_at(rest.find('/').unwrap_or(rest.len()));
     let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
     format!("{scheme}{host}{path}")
+}
+
+/// Whether what comes before an address's last `@` may be its user name and password (see
+/// [`redact`]).
+fn may_be_userinfo(before: &str) -> bool {
+    match before.find(['/', '?', '#']) {
+        None => true,
+        Some(end) => before[..end].contains(':'),
+    }
+}
+
+/// The Logger's line when [`list_file`] gives nothing at start or when the source changes, for
+/// a filter that is on and takes its list from an address: no list from that address is in
+/// force until its fetch lands (rules loaded before stay; at start there are none). A copy kept
+/// of another address (typed and never applied, or a failed fetch of the new one) is not loaded
+/// as if it were this one's. `None` when the filter is off or takes a file.
+pub fn not_loaded_line(gui: &GuiOptions) -> Option<String> {
+    if !(gui.ip_filter && gui.ip_filter_from_url) {
+        return None;
+    }
+    let url = gui.ip_filter_url.trim();
+    let error = if is_list_url(url) { tr!(TrackersStatusNone) } else { tr!(TrackersErrHttps) };
+    Some(tr!(LogIpFilterError, path = redact(url), error = error))
 }
 
 /// The three preferences ([`GuiOptions`]' `ip_filter`, `ip_filter_from_url`, `ip_filter_url`).
@@ -199,19 +249,32 @@ pub fn page_status(
 /// there is a cache), and whether the transfers were held when it failed.
 type Fetched = (String, Result<IpFilterLoad, Reject>, bool);
 
+/// Update Now with fields not applied yet ([`IpFilterList::try_config`]).
+struct Trial {
+    config: Config,
+    /// Fetch at the next tick.
+    due: bool,
+    /// What the fetch brought (the list, its fetch time and rule count; its answer is in
+    /// [`TRIAL_FILE`]), or why not; `None` until it is done.
+    result: Option<Result<(IpFilter, i64, usize), Reject>>,
+}
+
 /// The list from the web and its fetch schedule, for one program.
 pub struct IpFilterList {
     /// The settings folder, where the list is kept; `None` keeps nothing between runs.
     dir: Option<PathBuf>,
     config: Config,
-    /// The address of the last good list, when it was fetched (Unix seconds, 0 = never) and
-    /// its rule count.
+    /// The address of the last good list (the kept copy's, which may be another address than
+    /// the one configured: it stays until a list of that one is saved), when it was fetched
+    /// (Unix seconds, 0 = never) and its rule count.
     fetched_url: String,
     fetched_at: i64,
     rules: usize,
     error: Option<Reject>,
     next: Option<Instant>,
-    running: Option<mpsc::Receiver<Fetched>>,
+    /// The fetch under way, and whether it is the trial's.
+    running: Option<(mpsc::Receiver<Fetched>, bool)>,
+    trial: Option<Trial>,
     /// A new list for the engine.
     ready: Option<IpFilter>,
     fetcher: fn(&str, Option<FetchProxy>) -> Result<Vec<u8>, Reject>,
@@ -230,6 +293,7 @@ impl IpFilterList {
             error: None,
             next: None,
             running: None,
+            trial: None,
             ready: None,
             fetcher: fetch,
             held: rookparcel_core::fetch::held,
@@ -238,6 +302,10 @@ impl IpFilterList {
             l.fetched_url = info.url;
             l.fetched_at = info.at;
             l.rules = info.rules;
+        }
+        // a trial the last run left (its dialog never applied it)
+        if let Some(t) = l.trial_file() {
+            let _ = std::fs::remove_file(t);
         }
         l.configure(config);
         l
@@ -257,39 +325,44 @@ impl IpFilterList {
         self.dir.as_ref().map(|d| d.join(format!("{CACHE_FILE}.part")))
     }
 
-    fn forget_cache(&self) {
-        if let Some(dir) = &self.dir {
-            let _ = std::fs::remove_file(dir.join(CACHE_FILE));
-            let _ = std::fs::remove_file(dir.join(INFO_FILE));
-        }
+    fn trial_file(&self) -> Option<PathBuf> {
+        self.dir.as_ref().map(|d| d.join(TRIAL_FILE))
     }
 
-    /// New preferences. A list fetched from another address than the new one is forgotten at
-    /// once, its copy too (the rules in force stay until the owner loads others), and the new
-    /// address is fetched at the next tick.
+    /// New preferences. The copy kept of another address than the new one stays, unused, until
+    /// a list from the new address is saved over it, and the new address is fetched at the next
+    /// tick; the rules in force stay until the owner loads others. Fields a trial fetched with
+    /// ([`IpFilterList::try_config`]) bring its list: it becomes the kept copy (the owner loads
+    /// it, [`list_file`]); any other fields drop the trial.
     pub fn configure(&mut self, config: Config) {
+        match self.trial.take() {
+            Some(Trial { config: tried, result: Some(Ok((filter, at, rules))), .. })
+                if tried == config && config != self.config =>
+            {
+                self.adopt(&tried.url, filter, at, rules);
+            }
+            Some(_) => self.drop_trial(),
+            None => {}
+        }
         if config == self.config && self.next.is_some() == self.wants_fetch() {
             return;
         }
         let changed = config != self.config;
-        self.config = config;
-        if self.fetched_url != self.config.url {
-            if !self.fetched_url.is_empty() {
-                self.fetched_url.clear();
-                self.fetched_at = 0;
-                self.rules = 0;
-                self.forget_cache();
-            }
+        // an error belongs to its address
+        if config.url != self.config.url || self.fetched_url != config.url {
             self.error = None;
         }
+        self.config = config;
         if !self.wants_fetch() {
             self.next = None;
             let c = &self.config;
             self.error = (c.enabled && c.from_url && !c.url.is_empty()).then_some(Reject::NotHttps);
         } else if changed || self.next.is_none() {
-            // a kept list that is still fresh waits for its day
+            // a kept list of this address that is still fresh waits for its day
             let age = rookparcel_core::util::time::unix_now().saturating_sub(self.fetched_at);
-            let fresh = self.fetched_at > 0 && (0..REFRESH.as_secs() as i64).contains(&age);
+            let fresh = self.fetched_at > 0
+                && self.fetched_url == self.config.url
+                && (0..REFRESH.as_secs() as i64).contains(&age);
             let wait = if fresh { REFRESH - Duration::from_secs(age as u64) } else { Duration::ZERO };
             self.next = Some(Instant::now() + wait);
         }
@@ -306,54 +379,144 @@ impl IpFilterList {
         }
     }
 
+    /// Update Now on a page whose fields are not applied yet: the fields as they stand are
+    /// fetched at the next tick as a trial, whose outcome only [`IpFilterList::status_for`]
+    /// shows. The rules in force and the kept copy stay as they are until
+    /// [`IpFilterList::configure`] gets these fields (OK, Apply: the trial's list becomes the
+    /// copy); other fields (Cancel: the stored ones again) drop it. With the fields in use this
+    /// is [`IpFilterList::refresh_now`].
+    pub fn try_config(&mut self, config: Config) {
+        self.drop_trial();
+        if config == self.config {
+            self.refresh_now();
+            return;
+        }
+        if !(config.enabled && config.from_url && !config.url.is_empty()) {
+            return;
+        }
+        let ok = is_list_url(&config.url);
+        self.trial = Some(Trial { config, due: ok, result: (!ok).then_some(Err(Reject::NotHttps)) });
+    }
+
+    /// Forgets the trial: its file, and its fetch if one is under way (its answer is dropped).
+    fn drop_trial(&mut self) {
+        self.trial = None;
+        if self.running.as_ref().is_some_and(|(_, trial)| *trial) {
+            self.running = None;
+        }
+        if let Some(t) = self.trial_file() {
+            let _ = std::fs::remove_file(t);
+        }
+    }
+
+    /// The trial's list becomes the kept copy of `url` (and the engine's, when there is no copy
+    /// for the owner to load).
+    fn adopt(&mut self, url: &str, filter: IpFilter, at: i64, rules: usize) {
+        self.fetched_url = url.to_owned();
+        self.fetched_at = at;
+        self.rules = rules;
+        self.error = None;
+        let saved = match (self.trial_file(), self.cache()) {
+            (Some(trial), Some(cache)) => std::fs::rename(trial, cache).is_ok() && self.write_info(),
+            _ => false,
+        };
+        if !saved {
+            self.ready = Some(filter);
+        }
+    }
+
     /// Takes a finished fetch and starts one that is due, on a worker thread, unless the
     /// transfers are held. `proxy` is asked only when a fetch starts. Returns lines for the
     /// Logger; a new list waits in [`IpFilterList::take_filter`].
     pub fn tick(&mut self, proxy: impl FnOnce() -> Option<FetchProxy>) -> Vec<String> {
         let mut log = Vec::new();
-        if let Some(rx) = &self.running {
+        if let Some((rx, trial)) = &self.running {
+            let trial = *trial;
             match rx.try_recv() {
                 Ok((url, result, held)) => {
                     self.running = None;
-                    // an answer for an address that is no longer the one set is dropped
-                    if url == self.config.url && self.wants_fetch() {
+                    if trial {
+                        self.trial_done(url, result, held);
+                    } else if url == self.config.url && self.wants_fetch() {
                         self.fetch_done(url, result, held, &mut log);
                     } else if let Some(part) = self.part() {
+                        // an answer for an address that is no longer the one set is dropped
                         let _ = std::fs::remove_file(part);
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => {}
                 Err(mpsc::TryRecvError::Disconnected) => {
                     self.running = None;
-                    self.next = Some(Instant::now() + RETRY);
+                    match self.trial.as_mut().filter(|_| trial) {
+                        Some(t) => t.result = Some(Err(Reject::Fetch(String::new()))),
+                        None => self.next = Some(Instant::now() + RETRY),
+                    }
                 }
             }
         }
+        if self.running.is_some() {
+            return log;
+        }
+        let trial = self.trial.as_ref().filter(|t| t.due).map(|t| t.config.url.clone());
         let due = self.next.is_some_and(|t| Instant::now() >= t);
-        if self.running.is_none() && self.wants_fetch() && due && !(self.held)() {
-            self.next = None;
-            let (tx, rx) = mpsc::channel();
-            let (url, proxy, fetcher, held, part) =
-                (self.config.url.clone(), proxy(), self.fetcher, self.held, self.part());
-            let spawned = std::thread::Builder::new().name("ip-filter-list".into()).spawn(move || {
-                let result = fetcher(&url, proxy).and_then(|body| {
-                    let list = parse_list(&body)?;
-                    // a `.part` this answer could not be written to must not stand in for it
-                    // (one an earlier run left would be kept as this address's list)
-                    if let Some(part) = part.filter(|p| private_file::write(p, &body).is_err()) {
-                        let _ = std::fs::remove_file(part);
-                    }
-                    Ok(list)
-                });
-                let held = result.is_err() && held();
-                let _ = tx.send((url, result, held));
+        let url = match trial {
+            Some(url) => url,
+            None if self.wants_fetch() && due => self.config.url.clone(),
+            None => return log,
+        };
+        if (self.held)() {
+            return log;
+        }
+        let is_trial = self.trial.as_ref().is_some_and(|t| t.due);
+        let part = if is_trial { self.trial_file() } else { self.part() };
+        match self.trial.as_mut().filter(|t| t.due) {
+            Some(t) => t.due = false,
+            None => self.next = None,
+        }
+        let (tx, rx) = mpsc::channel();
+        let (proxy, fetcher, held) = (proxy(), self.fetcher, self.held);
+        let spawned = std::thread::Builder::new().name("ip-filter-list".into()).spawn(move || {
+            let result = fetcher(&url, proxy).and_then(|body| {
+                let list = parse_list(&body)?;
+                // a `.part` this answer could not be written to must not stand in for it
+                // (one an earlier run left would be kept as this address's list)
+                if let Some(part) = part.filter(|p| private_file::write(p, &body).is_err()) {
+                    let _ = std::fs::remove_file(part);
+                }
+                Ok(list)
             });
-            match spawned {
-                Ok(_) => self.running = Some(rx),
-                Err(_) => self.next = Some(Instant::now() + RETRY),
+            let held = result.is_err() && held();
+            let _ = tx.send((url, result, held));
+        });
+        match spawned {
+            Ok(_) => self.running = Some((rx, is_trial)),
+            Err(_) if is_trial => {
+                if let Some(t) = &mut self.trial {
+                    t.result = Some(Err(Reject::Fetch(String::new())));
+                }
             }
+            Err(_) => self.next = Some(Instant::now() + RETRY),
         }
         log
+    }
+
+    /// A trial's fetch is done: kept for the page's line, and for [`IpFilterList::configure`]
+    /// should its fields be applied. Nothing is logged (the page shows it).
+    fn trial_done(&mut self, url: String, result: Result<IpFilterLoad, Reject>, held: bool) {
+        let Some(t) = self.trial.as_mut().filter(|t| t.config.url == url) else {
+            if let Some(f) = self.trial_file() {
+                let _ = std::fs::remove_file(f);
+            }
+            return;
+        };
+        match result {
+            Ok(l) => {
+                t.result = Some(Ok((l.filter, rookparcel_core::util::time::unix_now(), l.rules)));
+            }
+            // the hold came meanwhile: tried again once it is lifted
+            Err(_) if held => t.due = true,
+            Err(e) => t.result = Some(Err(e)),
+        }
     }
 
     fn fetch_done(
@@ -393,13 +556,19 @@ impl IpFilterList {
 
     /// The `.part` the worker wrote becomes the kept list, with its info beside it.
     fn save_cache(&self) {
-        let (Some(dir), Some(part), Some(cache)) = (&self.dir, self.part(), self.cache()) else { return };
+        let (Some(part), Some(cache)) = (self.part(), self.cache()) else { return };
         if std::fs::rename(&part, &cache).is_err() {
             let _ = std::fs::remove_file(&part);
             return;
         }
+        self.write_info();
+    }
+
+    /// [`INFO_FILE`] for the list just saved as [`CACHE_FILE`].
+    fn write_info(&self) -> bool {
+        let Some(dir) = &self.dir else { return false };
         let text = format!("url={}\nfetched={}\nrules={}\n", self.fetched_url, self.fetched_at, self.rules);
-        let _ = private_file::write(&dir.join(INFO_FILE), text.as_bytes());
+        private_file::write(&dir.join(INFO_FILE), text.as_bytes()).is_ok()
     }
 
     /// A list fetched since the last call, for `SessionHandle::set_ip_filter`.
@@ -420,9 +589,15 @@ impl IpFilterList {
         if !from_url || url.is_empty() {
             return String::new();
         }
-        let have = (self.fetched_at > 0 && self.fetched_url == url)
-            .then(|| tr!(IpFilterStatusOk, count = self.rules, time = fmt::date_time(self.fetched_at)));
-        let error = self.error.as_ref().filter(|_| url == self.config.url);
+        let ok = |rules: usize, at: i64| tr!(IpFilterStatusOk, count = rules, time = fmt::date_time(at));
+        let have = (self.fetched_at > 0 && self.fetched_url == url).then(|| ok(self.rules, self.fetched_at));
+        // a trial of this address that is done speaks for it
+        let trial = self.trial.as_ref().filter(|t| t.config.url == url).and_then(|t| t.result.as_ref());
+        let error = match trial {
+            Some(Ok((_, at, rules))) => return ok(*rules, *at),
+            Some(Err(e)) => Some(e),
+            None => self.error.as_ref().filter(|_| url == self.config.url),
+        };
         match (error, have) {
             (Some(e), Some(have)) => format!("{} {have}", tr!(TrackersStatusFailed, error = e.text())),
             (Some(e), None) => tr!(TrackersStatusFailed, error = e.text()),
@@ -570,10 +745,10 @@ mod tests {
         l.refresh_now();
         assert_eq!(run(&mut l).len(), 1);
 
-        // another address: the kept list is forgotten and the new one fetched at once
+        // another address: fetched at once; the kept list stays until the new one is saved
         let other = "https://other.example/list.p2p";
         l.configure(config(other));
-        assert!(!dir.join(CACHE_FILE).exists() && !dir.join(INFO_FILE).exists());
+        assert!(dir.join(CACHE_FILE).exists() && dir.join(INFO_FILE).exists());
         gui.ip_filter_url = other.into();
         assert_eq!(list_file(&gui, &dir), None, "nothing fetched from it yet");
         assert_eq!(l.status(), tr!(TrackersStatusNone));
@@ -734,6 +909,174 @@ mod tests {
         // without the list itself, the info alone is nothing
         std::fs::remove_file(dir.join(CACHE_FILE)).unwrap();
         assert_eq!(list_file(&gui, &dir), None);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A password typed with a raw `?`, `/`, `#` or `@` never shows up, not even in part.
+    #[test]
+    fn a_password_with_odd_characters_is_never_shown() {
+        for (url, shown) in [
+            ("https://user:pa?ss@lists.example/l.gz", "https://lists.example/l.gz"),
+            ("https://user:pa/ss@lists.example/l.gz", "https://lists.example/l.gz"),
+            ("https://user:pa#ss@lists.example/l.gz?pin=1", "https://lists.example/l.gz"),
+            ("https://user:pa@ss@lists.example/l.gz", "https://lists.example/l.gz"),
+            ("https://user:12/34@lists.example:8443/l.gz", "https://lists.example:8443/l.gz"),
+            ("https://u:a/b?c#d@e@lists.example/x/y.p2p?k=v#f", "https://lists.example/x/y.p2p"),
+            ("https://user:pa?ss@lists.example", "https://lists.example"),
+            // an `@` in the path or query of an address without a password is no password
+            ("https://lists.example/a@b/l.gz", "https://lists.example/a@b/l.gz"),
+            ("https://lists.example/l.gz?mail=a@b.example", "https://lists.example/l.gz"),
+            ("https://me@lists.example/a@b", "https://lists.example/a@b"),
+        ] {
+            let got = redact(url);
+            assert_eq!(got, shown, "{url}");
+            for secret in ["pa", "ss", "12", "34", "user", "me@", "u:"] {
+                assert!(!got.contains(secret) || shown.contains(secret), "{url} -> {got}");
+            }
+        }
+    }
+
+    fn other_down(url: &str, _: Option<FetchProxy>) -> Result<Vec<u8>, Reject> {
+        if url == URL { Ok(LIST.as_bytes().to_vec()) } else { Err(Reject::Fetch("timed out".into())) }
+    }
+
+    /// A new address whose fetch fails loses nothing: the copy of the old one stays (unused for
+    /// the new address, used again for the old).
+    #[test]
+    fn a_new_address_keeps_the_old_copy_until_its_own_list_is_saved() {
+        let dir = temp("switch");
+        let mut l = list(IpFilterList::new(Some(dir.clone()), config(URL)).with_fetcher(other_down));
+        run(&mut l);
+        assert!(l.take_filter().is_some());
+        let mut gui = GuiOptions::load(&Prefs::default(), "/dl");
+        (gui.ip_filter, gui.ip_filter_from_url, gui.ip_filter_url) = (true, true, URL.into());
+        assert_eq!(list_file(&gui, &dir), Some(dir.join(CACHE_FILE)));
+        assert!(not_loaded_line(&gui).is_some(), "the filter takes an address");
+
+        // another address, whose fetch fails: no new rules (the old ones stay in force), and
+        // the old copy and its info stay on disk
+        let other = "https://typo.example/level1.dat";
+        l.configure(config(other));
+        let log = run(&mut l);
+        assert_eq!(log, [tr!(LogIpFilterError, path = other, error = "timed out")]);
+        assert!(l.take_filter().is_none());
+        assert_eq!(std::fs::read(dir.join(CACHE_FILE)).unwrap(), LIST.as_bytes());
+        assert!(std::fs::read_to_string(dir.join(INFO_FILE)).unwrap().contains(URL));
+        // a restart with that address: the copy of the other one is not loaded as its list
+        gui.ip_filter_url = other.into();
+        assert_eq!(list_file(&gui, &dir), None);
+        assert_eq!(
+            not_loaded_line(&gui),
+            Some(tr!(LogIpFilterError, path = other, error = tr!(TrackersStatusNone)))
+        );
+        let restarted = list(IpFilterList::new(Some(dir.clone()), config(other)).with_fetcher(other_down));
+        assert_eq!(restarted.status(), tr!(TrackersStatusNone));
+        assert!(restarted.next.is_some_and(|t| t <= Instant::now()), "fetched at once");
+
+        // back to the old address: its copy is used, and it is fresh, so not fetched again
+        l.fetcher = never;
+        l.configure(config(URL));
+        gui.ip_filter_url = URL.into();
+        assert_eq!(list_file(&gui, &dir), Some(dir.join(CACHE_FILE)));
+        assert!(run(&mut l).is_empty());
+        assert!(l.status().contains('3'));
+        assert!(l.next.is_some_and(|t| t > Instant::now() + Duration::from_secs(23 * 3600)));
+        // a file source or the filter off: no line
+        gui.ip_filter_from_url = false;
+        assert_eq!(not_loaded_line(&gui), None);
+        (gui.ip_filter_from_url, gui.ip_filter) = (true, false);
+        assert_eq!(not_loaded_line(&gui), None);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Update Now on fields not applied yet (the Windows program's Preferences): Cancel leaves
+    /// the rules in force and the copy as they were; OK makes the trial's list the copy.
+    #[test]
+    fn a_trial_changes_nothing_until_its_fields_are_applied() {
+        fn other_list(url: &str, _: Option<FetchProxy>) -> Result<Vec<u8>, Reject> {
+            Ok(if url == URL {
+                LIST.as_bytes().to_vec()
+            } else {
+                b"9.9.9.0 - 9.9.9.255 , 000 , X\n".to_vec()
+            })
+        }
+        let dir = temp("trial");
+        let mut l = list(IpFilterList::new(Some(dir.clone()), config(URL)).with_fetcher(other_list));
+        run(&mut l);
+        assert!(l.take_filter().is_some());
+        let before =
+            (std::fs::read(dir.join(CACHE_FILE)).unwrap(), std::fs::read(dir.join(INFO_FILE)).unwrap());
+        let mut gui = GuiOptions::load(&Prefs::default(), "/dl");
+        (gui.ip_filter, gui.ip_filter_from_url, gui.ip_filter_url) = (true, true, URL.into());
+        let other = "https://other.example/list.dat";
+
+        // Update Now with the page's address, then Cancel (the stored fields again)
+        l.try_config(config(other));
+        assert!(run(&mut l).is_empty(), "a trial logs nothing");
+        assert!(l.take_filter().is_none(), "nor reaches the engine");
+        let Some(Trial { result: Some(Ok((_, at, 1))), .. }) = &l.trial else { panic!("no trial list") };
+        assert_eq!(l.status_for(true, other), tr!(IpFilterStatusOk, count = 1, time = fmt::date_time(*at)));
+        assert!(dir.join(TRIAL_FILE).exists());
+        assert_eq!(
+            (std::fs::read(dir.join(CACHE_FILE)).unwrap(), std::fs::read(dir.join(INFO_FILE)).unwrap()),
+            before
+        );
+        l.configure(config(URL));
+        assert!(!dir.join(TRIAL_FILE).exists());
+        assert!(l.take_filter().is_none());
+        assert_eq!(
+            (std::fs::read(dir.join(CACHE_FILE)).unwrap(), std::fs::read(dir.join(INFO_FILE)).unwrap()),
+            before
+        );
+        assert_eq!(list_file(&gui, &dir), Some(dir.join(CACHE_FILE)));
+        assert_eq!(l.status_for(true, other), tr!(TrackersStatusNone));
+        assert!(l.status().contains('3'));
+        // a typo's failed trial: shown on the page, nothing else changes
+        l.fetcher = down;
+        l.try_config(config("https://typo.example/x"));
+        run(&mut l);
+        assert_eq!(
+            l.status_for(true, "https://typo.example/x"),
+            tr!(TrackersStatusFailed, error = "timed out")
+        );
+        assert_eq!(l.error, None);
+        assert!(l.status().contains('3'));
+        // an http address: refused at once, never fetched
+        l.fetcher = never;
+        l.try_config(config("http://plain.example/x"));
+        assert!(run(&mut l).is_empty());
+        assert_eq!(
+            l.status_for(true, "http://plain.example/x"),
+            tr!(TrackersStatusFailed, error = tr!(TrackersErrHttps))
+        );
+        // Update Now with the fields in use is a plain refresh
+        l.fetcher = other_list;
+        l.try_config(config(URL));
+        assert!(l.trial.is_none());
+        assert_eq!(run(&mut l).len(), 1);
+        assert!(l.take_filter().is_some());
+
+        // Update Now, then OK: the trial's list is the copy (the owner loads it), not fetched again
+        l.try_config(config(other));
+        run(&mut l);
+        l.fetcher = never;
+        l.configure(config(other));
+        assert!(!dir.join(TRIAL_FILE).exists());
+        assert!(l.take_filter().is_none(), "the owner loads the copy");
+        gui.ip_filter_url = other.into();
+        let file = list_file(&gui, &dir).expect("the trial's list kept");
+        assert_eq!(IpFilter::load(&file).unwrap().rules, 1);
+        assert!(run(&mut l).is_empty());
+        assert!(l.status().contains('1'));
+        // without a settings folder the engine gets it from the list itself
+        let mut l = list(IpFilterList::new(None, config(URL)).with_fetcher(other_list));
+        run(&mut l);
+        l.take_filter().unwrap();
+        l.try_config(config(other));
+        run(&mut l);
+        assert!(l.take_filter().is_none());
+        l.configure(config(other));
+        assert!(blocked(&l.take_filter().expect("the trial's list"), "9.9.9.9"));
         let _ = std::fs::remove_dir_all(dir);
     }
 }

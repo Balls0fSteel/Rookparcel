@@ -321,10 +321,54 @@ pub fn label(shared: &Shared, ids: &[TorrentId], label: &str) -> Result<(), CmdE
 
 // ---- tags (D76) ----------------------------------------------------------------------------
 
-/// The names of a comma-separated list (the shim's `tags`), trimmed, the empty ones dropped.
-/// Nothing is checked here: every name goes through `tags::normalize` where it is used.
-pub fn tag_names(list: &str) -> Vec<String> {
-    list.split(',').map(str::trim).filter(|n| !n.is_empty()).map(str::to_owned).collect()
+/// The tag names of one request, as the tags keep them, worked out before the State lock is
+/// taken (N1: a request's names are not normalized or sorted again for each torrent): each
+/// normalized (`tags::normalize`), in `tags::sort` order, once, and at most `tags::MAX_TAGS`
+/// (no more can ever be known); with the first refusal among them in the request's order (an
+/// invalid name, or a distinct one past that bound: `TooMany`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TagNames {
+    pub names: Vec<String>,
+    pub refused: Option<TagError>,
+    /// Whether any name was invalid.
+    pub invalid: bool,
+}
+
+impl TagNames {
+    pub fn of<'a>(names: impl IntoIterator<Item = &'a str>) -> TagNames {
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut refused = None;
+        let mut invalid = false;
+        for n in names {
+            match tags::normalize(n) {
+                Ok(t) if seen.contains(&t) => {}
+                Ok(t) if seen.len() < tags::MAX_TAGS => {
+                    seen.insert(t);
+                }
+                Ok(_) => {
+                    refused.get_or_insert(TagError::TooMany);
+                }
+                Err(e) => {
+                    invalid = true;
+                    refused.get_or_insert(e);
+                }
+            }
+        }
+        let mut names: Vec<String> = seen.into_iter().collect();
+        tags::sort(&mut names);
+        TagNames { names, refused, invalid }
+    }
+
+    /// One name (the page's Tags ▸ and Tags group).
+    pub fn one(name: &str) -> TagNames {
+        TagNames::of([name])
+    }
+}
+
+/// The names of a comma-separated list (the shim's `tags`), the empty ones skipped
+/// ([`TagNames`]).
+pub fn tag_names(list: &str) -> TagNames {
+    TagNames::of(list.split(',').filter(|n| !n.trim().is_empty()))
 }
 
 /// A refused tag name as a command's error: 400 for an invalid one, 409 for one more than
@@ -333,12 +377,12 @@ pub fn tag_error(e: TagError) -> CmdError {
     err(if e == TagError::TooMany { 409 } else { 400 }, e.text())
 }
 
-/// Makes each of `names` known (an existing one is fine); the names as the tags keep them and
-/// the first refusal, if any. The State lock is held.
-fn create_all(st: &mut State, names: &[String]) -> (Vec<String>, Option<TagError>) {
-    let mut made = Vec::new();
-    let mut first = None;
-    for n in names {
+/// Makes each of `names` known (an existing one is fine); the names made (as the tags keep
+/// them, sorted, known) and the first refusal, the request's own first. The State lock is held.
+fn create_all(st: &mut State, names: &TagNames) -> (Vec<String>, Option<TagError>) {
+    let mut made = Vec::with_capacity(names.names.len());
+    let mut first = names.refused;
+    for n in &names.names {
         match st.create_tag(n) {
             Ok(t) => made.push(t),
             Err(e) => {
@@ -354,9 +398,40 @@ fn hashes_of(st: &State, ids: &[TorrentId]) -> Vec<String> {
     ids.iter().filter_map(|id| st.torrents.get(id).map(|e| e.hash.clone())).collect()
 }
 
+/// Whether sorted `list` holds `tag` (`tags::cmp` order).
+fn has_tag(list: &[String], tag: &str) -> bool {
+    list.binary_search_by(|t| tags::cmp(t, tag)).is_ok()
+}
+
+/// Two sorted lists of tags as one, each name once.
+fn merged(a: &[String], b: &[String]) -> Vec<String> {
+    let mut out = Vec::with_capacity(a.len() + b.len());
+    let (mut i, mut j) = (0, 0);
+    while i < a.len() && j < b.len() {
+        match tags::cmp(&a[i], &b[j]) {
+            std::cmp::Ordering::Less => {
+                out.push(a[i].clone());
+                i += 1;
+            }
+            std::cmp::Ordering::Greater => {
+                out.push(b[j].clone());
+                j += 1;
+            }
+            std::cmp::Ordering::Equal => {
+                out.push(a[i].clone());
+                i += 1;
+                j += 1;
+            }
+        }
+    }
+    out.extend_from_slice(&a[i..]);
+    out.extend_from_slice(&b[j..]);
+    out
+}
+
 /// New Tag (`createTags`): makes `names` known, with no torrent. The names made; `Err` with
 /// the first refusal (the others are made all the same).
-pub fn create_tags(shared: &Shared, names: &[String]) -> Result<Vec<String>, TagError> {
+pub fn create_tags(shared: &Shared, names: &TagNames) -> Result<Vec<String>, TagError> {
     let mut st = shared.lock();
     let (made, first) = create_all(&mut st, names);
     shared.save(&mut st);
@@ -365,12 +440,9 @@ pub fn create_tags(shared: &Shared, names: &[String]) -> Result<Vec<String>, Tag
 
 /// Delete Tag (`deleteTags`): each of `names` is no longer known and every torrent loses it.
 /// How many were known.
-pub fn delete_tags(shared: &Shared, names: &[String]) -> usize {
+pub fn delete_tags(shared: &Shared, names: &TagNames) -> usize {
     let mut st = shared.lock();
-    let mut n = 0;
-    for name in names.iter().filter_map(|t| tags::normalize(t).ok()) {
-        n += usize::from(st.delete_tag(&name));
-    }
+    let n = st.delete_tags(&names.names);
     if n > 0 {
         shared.save(&mut st);
     }
@@ -379,40 +451,43 @@ pub fn delete_tags(shared: &Shared, names: &[String]) -> usize {
 
 /// Gives the torrents each of `names` (made known when new); a name refused is skipped, and
 /// the first refusal is the answer once the rest are on.
-pub fn add_tags(shared: &Shared, ids: &[TorrentId], names: &[String]) -> Result<(), TagError> {
+pub fn add_tags(shared: &Shared, ids: &[TorrentId], names: &TagNames) -> Result<(), TagError> {
     let mut st = shared.lock();
     let (made, first) = create_all(&mut st, names);
     for hash in hashes_of(&st, ids) {
-        let mut v = st.tags_of(&hash).to_vec();
-        v.extend(made.iter().cloned());
-        st.set_tags(&hash, &v);
+        let have = st.tags_of(&hash);
+        if made.iter().all(|t| has_tag(have, t)) {
+            continue;
+        }
+        let v = merged(have, &made);
+        st.put_tags(&hash, &v);
     }
     shared.save(&mut st);
     first.map_or(Ok(()), Err)
 }
 
 /// Takes `names` off the torrents (`None`: every tag, Remove All Tags); the tags stay known.
-pub fn remove_tags(shared: &Shared, ids: &[TorrentId], names: Option<&[String]>) {
-    let names: Option<Vec<String>> =
-        names.map(|v| v.iter().filter_map(|t| tags::normalize(t).ok()).collect());
+pub fn remove_tags(shared: &Shared, ids: &[TorrentId], names: Option<&TagNames>) {
     let mut st = shared.lock();
     for hash in hashes_of(&st, ids) {
-        let v: Vec<String> = match &names {
+        let have = st.tags_of(&hash);
+        let v: Vec<String> = match names {
             None => Vec::new(),
-            Some(off) => st.tags_of(&hash).iter().filter(|t| !off.contains(t)).cloned().collect(),
+            Some(_) if have.is_empty() => continue,
+            Some(off) => have.iter().filter(|t| !has_tag(&off.names, t)).cloned().collect(),
         };
-        st.set_tags(&hash, &v);
+        st.put_tags(&hash, &v);
     }
     shared.save(&mut st);
 }
 
 /// The shim's `setTags` (qBittorrent 5.1): the torrents get exactly `names` (each made known
 /// when new; a refused one is left out).
-pub fn set_tags(shared: &Shared, ids: &[TorrentId], names: &[String]) -> Result<(), TagError> {
+pub fn set_tags(shared: &Shared, ids: &[TorrentId], names: &TagNames) -> Result<(), TagError> {
     let mut st = shared.lock();
     let (made, first) = create_all(&mut st, names);
     for hash in hashes_of(&st, ids) {
-        st.set_tags(&hash, &made);
+        st.put_tags(&hash, &made);
     }
     shared.save(&mut st);
     first.map_or(Ok(()), Err)
@@ -518,27 +593,26 @@ pub fn magnet_links(shared: &Shared, ids: &[TorrentId], trackers: bool) -> Vec<(
 pub fn torrent_file(shared: &Shared, id: TorrentId) -> Result<(String, Arc<[u8]>), CmdError> {
     let no_metadata = || err(409, tr!(ExportNoMetadata).to_owned());
     let name = {
-        let st = shared.lock();
+        let mut st = shared.lock();
         let e = st.torrents.get(&id).ok_or_else(not_found)?;
         if !e.status.has_metadata {
             return Err(no_metadata());
         }
-        e.status.name.clone()
+        let name = e.status.name.clone();
+        // the answer is cached for this export only (N4)
+        st.want_torrent_file(id);
+        name
     };
     let reply = shared.query(id, ReplyKind::TorrentFile, |h| h.torrent(id).post_torrent_file());
     let mut st = shared.lock();
-    let data = match reply {
-        Some(Reply::TorrentFile(Some(data))) => data,
-        Some(_) => return Err(no_metadata()),
-        None if st.torrents.contains_key(&id) => return Err(err(503, "the engine did not answer in time")),
-        None => return Err(not_found()),
-    };
-    // read once: the bytes leave the cache unless a newer answer replaced them meanwhile
-    let key = (id, ReplyKind::TorrentFile);
-    if matches!(st.replies.get(&key), Some((_, Reply::TorrentFile(Some(d)))) if Arc::ptr_eq(d, &data)) {
-        st.replies.remove(&key);
+    // read once: the bytes leave the cache once no other export waits, whatever the outcome
+    st.torrent_file_done(id);
+    match reply {
+        Some(Reply::TorrentFile(Some(data))) => Ok((name, data)),
+        Some(_) => Err(no_metadata()),
+        None if st.torrents.contains_key(&id) => Err(err(503, "the engine did not answer in time")),
+        None => Err(not_found()),
     }
-    Ok((name, data))
 }
 
 /// The answer to an export: the `.torrent` bytes as a download named after the torrent
@@ -1039,17 +1113,22 @@ impl AddOptions {
             |k: &str| body.get(k).and_then(Json::as_i64).map_or(0, |v| v.clamp(0, u32::MAX as i64) as u32);
         // `tags`: a list of names, or one comma-separated string; each must be a valid tag
         let tags = match body.get("tags") {
-            None | Some(Json::Null) => Vec::new(),
+            None | Some(Json::Null) => TagNames::default(),
             Some(Json::Str(s)) => tag_names(s),
-            Some(Json::Arr(v)) => v
-                .iter()
-                .map(|t| t.as_str().map(str::to_owned).ok_or("tags must be strings"))
-                .collect::<Result<_, _>>()?,
+            Some(Json::Arr(v)) => {
+                let names = v
+                    .iter()
+                    .map(|t| t.as_str().ok_or("tags must be strings"))
+                    .collect::<Result<Vec<_>, _>>()?;
+                TagNames::of(names)
+            }
             Some(_) => return Err("tags must be a list"),
         };
-        if tags.iter().any(|t| tags::normalize(t).is_err()) {
+        if tags.invalid {
             return Err("invalid tag");
         }
+        // (each once; names past `tags::MAX_TAGS` could never be known)
+        let tags = tags.names;
         Ok(AddOptions {
             save: text("save"),
             name: text("name"),
@@ -1083,6 +1162,16 @@ pub fn add(shared: &Shared, source: Source, o: &AddOptions) -> Result<String, Cm
         return add_awaiting(shared, m.clone());
     }
     let (hash, key) = (source.hash(), source.key());
+    // D74 for a `.torrent` added without priorities: the files "Do not download files named"
+    // leaves out, matched on the info already parsed and outside the State lock (N3: a list of
+    // patterns against a torrent of many files)
+    let excluded = match &source {
+        Source::Torrent(_, ti) if o.priorities.is_empty() => {
+            let gui = shared.lock().prefs.gui();
+            exclude::priorities(ti, &gui)
+        }
+        _ => None,
+    };
     let mut st = shared.lock();
     let save_path = o.save.clone().unwrap_or_else(|| st.prefs.save_path.clone());
     let file_priorities = match &source {
@@ -1128,7 +1217,10 @@ pub fn add(shared: &Shared, source: Source, o: &AddOptions) -> Result<String, Cm
     // the auto-load folder, a search result) leaves out the files "Do not download files named"
     // matches: a `.torrent`'s now, a magnet's once its metadata has arrived (`State::excluded`).
     // The page's Add dialog sends the priorities its user chose, which stand.
-    if o.priorities.is_empty() {
+    if let (Some(v), true) = (excluded, params.file_priorities.is_empty()) {
+        // a `.torrent`'s, found above without the lock (as `exclude::apply_to_new` would)
+        params.file_priorities = v;
+    } else if o.priorities.is_empty() && matches!(params.source, TorrentSource::Magnet(_)) {
         // a magnet of a torrent the session has already (restored, or waiting for the page's
         // dialog) leaves that torrent's files alone
         let st = &mut *st;
@@ -1691,14 +1783,14 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
         "tags/create" => {
             let body = json_body(req)?;
             let name = body.get("name").and_then(Json::as_str).ok_or_else(|| err(400, "missing name"))?;
-            let made = create_tags(shared, &[name.to_owned()]).map_err(tag_error)?;
+            let made = create_tags(shared, &TagNames::one(name)).map_err(tag_error)?;
             Ok(Response::json(&Json::obj().with("name", made.into_iter().next().unwrap_or_default())))
         }
         // Delete Tag: every torrent loses it; 404 for a tag that is not known
         "tags/delete" => {
             let body = json_body(req)?;
             let name = body.get("name").and_then(Json::as_str).ok_or_else(|| err(400, "missing name"))?;
-            if delete_tags(shared, &[name.to_owned()]) == 0 {
+            if delete_tags(shared, &TagNames::one(name)) == 0 {
                 return Err(err(404, "no such tag"));
             }
             Ok(no_content())
@@ -1823,11 +1915,14 @@ fn torrent_command(shared: &Shared, cmd: &str, body: &Json) -> Result<(), CmdErr
         // Tags ▸ (D76): a tag on (made known when new), off, or every tag off
         "add-tag" | "remove-tag" => {
             let name = body.get("tag").and_then(Json::as_str).ok_or_else(|| err(400, "missing tag"))?;
-            let tag = tags::normalize(name).map_err(tag_error)?;
+            let tag = TagNames::one(name);
+            if let Some(e) = tag.refused {
+                return Err(tag_error(e));
+            }
             if cmd == "add-tag" {
-                add_tags(shared, &ids, &[tag]).map_err(tag_error)?;
+                add_tags(shared, &ids, &tag).map_err(tag_error)?;
             } else {
-                remove_tags(shared, &ids, Some(&[tag]));
+                remove_tags(shared, &ids, Some(&tag));
             }
         }
         "clear-tags" => remove_tags(shared, &ids, None),
@@ -1875,6 +1970,59 @@ mod tests {
             hashes.push(hash.to_hex());
         }
         (st, hashes)
+    }
+
+    /// N1: a request's tag names are worked out once, before the lock: 40,000 copies of a name
+    /// (an 80 KB `tags=a,a,...`, which held the lock for 11.7 s against 2,000 torrents) come to
+    /// the one name, a list past `tags::MAX_TAGS` distinct names is cut there, and adding,
+    /// setting and removing them for 2,000 torrents takes about what one name does.
+    #[test]
+    fn many_tag_names_cost_what_their_distinct_names_do() {
+        let one = tag_names("a");
+        assert_eq!((one.names.clone(), one.refused), (vec!["a".to_owned()], None));
+        let body = vec!["a"; 40_000].join(",");
+        assert_eq!(tag_names(&body), one);
+        let mixed: Vec<String> = (0..10_000).map(|i| format!(" t{} ", i % 7)).collect();
+        let mixed = tag_names(&format!("{},x\u{1},,", mixed.join(",")));
+        assert_eq!(mixed.names, ["t0", "t1", "t2", "t3", "t4", "t5", "t6"]);
+        assert_eq!((mixed.refused, mixed.invalid), (Some(TagError::Invalid), true));
+        let past: Vec<String> = (0..5_000).map(|i| format!("n{i}")).collect();
+        let past = tag_names(&past.join(","));
+        assert_eq!((past.names.len(), past.refused), (tags::MAX_TAGS, Some(TagError::TooMany)));
+
+        let session = rookparcel_core::Session::start_mock(Default::default(), Default::default());
+        let shared = State::shared_for_tests(session.handle(), std::env::temp_dir());
+        let ids: Vec<TorrentId> = {
+            let mut st = shared.lock();
+            (0..2_000u32)
+                .map(|i| {
+                    let mut h = [9u8; 20];
+                    h[..4].copy_from_slice(&i.to_le_bytes());
+                    let id = TorrentId::from_raw(u64::from(i) + 1);
+                    st.update(
+                        TorrentStatus { id, info_hashes: InfoHashes::v1(Sha1Hash(h)), ..Default::default() },
+                        1,
+                    );
+                    id
+                })
+                .collect()
+        };
+        let start = std::time::Instant::now();
+        add_tags(&shared, &ids, &tag_names(&body)).unwrap();
+        add_tags(&shared, &ids, &tag_names(&body)).unwrap();
+        set_tags(&shared, &ids, &tag_names(&format!("{body},b"))).unwrap();
+        remove_tags(&shared, &ids, Some(&tag_names(&body)));
+        assert!(start.elapsed() < std::time::Duration::from_secs(10), "{:?}", start.elapsed());
+        {
+            let st = shared.lock();
+            assert_eq!(st.tags, ["a", "b"]);
+            let hash = st.torrents[&ids[1999]].hash.clone();
+            assert_eq!(st.tags_of(&hash), ["b"]);
+        }
+        // Delete Tag of many names at once
+        assert_eq!(delete_tags(&shared, &tag_names("b,a,a,zz")), 2);
+        let st = shared.lock();
+        assert!(st.tags.is_empty() && st.torrent_tags.is_empty());
     }
 
     #[test]

@@ -15,7 +15,8 @@
 // through each thread's read cache (`read_cache`, after libtorrent 1.2), which writes, fences
 // and barriers of the storage clear. Incomplete files may carry µTorrent's `.!ut` (D77, not in
 // libtorrent): the suffix is a per-file state of the storage, found on disk by the first job and
-// changed only by barriers, never saved.
+// changed only by barriers, never saved. A file never takes a suffixed name that is another path
+// of the torrent (`Clash`), and is deleted under one only when it holds data known to be ours.
 
 //! Disk I/O: a thread pool doing file reads, writes, piece hashing and file checking for the
 //! network thread.
@@ -27,7 +28,7 @@ pub(crate) mod part_file;
 pub(crate) mod read_cache;
 pub(crate) mod smart;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
@@ -74,11 +75,22 @@ pub(crate) struct Storage {
     /// The drive the save path is on, with the overrides' generation it was found under;
     /// dropped when the save path changes.
     drive: RwLock<Option<(u64, Arc<Drive>)>>,
-    /// D77: per file, the [`Suffix`] its name carries on disk now. Set by [`Storage::init_names`]
-    /// before the first job, by the probe ([`Storage::probe_names`]) and by renames, all of
-    /// which run with no other job of the storage in flight (the check is the storage's first
-    /// job; renames are barriers), so the other jobs read it without a lock.
+    /// D77: per file, the [`Suffix`] its name carries on disk now (the low bits, [`SUFFIX_BITS`]).
+    /// Set by [`Storage::init_names`] before the first job, by the probe
+    /// ([`Storage::probe_names`]) and by renames, all of which run with no other job of the
+    /// storage in flight (the check is the storage's first job; renames are barriers), so the
+    /// other jobs read it without a lock. The high bits: the suffixes the file may not carry
+    /// ([`NO_UT`], [`NO_QB`]: the name would be another path of the torrent, [`Clash`]) and
+    /// whether the file holds data known to be this torrent's ([`OURS`]).
     names: Vec<AtomicU8>,
+    /// D77: the torrent's paths that a suffixed name could take; `None` when no path of the
+    /// torrent ends like one (nearly every torrent). Rebuilt when a rename or a move changes
+    /// the paths.
+    clash: RwLock<Option<Clash>>,
+    /// The torrent's storage before this one (a running torrent's, released before its files
+    /// are deleted with a storage made for that): what it wrote counts as ours too
+    /// ([`Storage::note_data`]).
+    data_from: Mutex<Option<Arc<Storage>>>,
     /// The names were looked for on disk ([`Storage::probe_names`]).
     probed: AtomicBool,
     /// Files whose failed rename to the name they should have was reported; reported again only
@@ -125,6 +137,115 @@ const NAME_MAX: usize = 255;
 /// What [`export_file`] puts after a file's name (the suffix included) while it writes it.
 const EXPORT_EXT: &str = ".pa-export";
 
+/// [`Storage::names`]: the bits of the [`Suffix`].
+const SUFFIX_BITS: u8 = 0b11;
+/// [`Storage::names`]: the file may not carry `.!ut` ([`Clash`]).
+const NO_UT: u8 = 1 << 2;
+/// [`Storage::names`]: the file may not carry `.!qB` ([`Clash`]).
+const NO_QB: u8 = 1 << 3;
+/// [`Storage::names`]: the file holds data known to be this torrent's: the storage wrote to
+/// it, a piece of it passed a check, or the engine knows pieces or blocks of it
+/// ([`Storage::note_data`]). Only such a file is deleted under a suffixed name.
+const OURS: u8 = 1 << 4;
+
+fn forbid_bit(suffix: Suffix) -> u8 {
+    match suffix {
+        Suffix::Plain => 0,
+        Suffix::Ut => NO_UT,
+        Suffix::Qb => NO_QB,
+    }
+}
+
+/// A path as the file systems compare it, for telling whether two of the torrent's paths are
+/// one (D77): `/` for `\`, and case folded, on every system (the torrent's own duplicate names
+/// are found that way too, and a Linux download may be on an NTFS, exFAT or SMB volume). Each
+/// character is folded alone, so a key of `a` followed by `b` is `a`'s key followed by `b`'s.
+/// Windows also ignores a name's trailing dots and spaces. Folding more than a file system
+/// does only keeps a suffix off a file that could have had it.
+fn fold_key(path: &Path) -> String {
+    let s = path.to_string_lossy();
+    let mut out = String::with_capacity(s.len());
+    for (i, part) in s.split(['/', '\\']).enumerate() {
+        if i > 0 {
+            out.push('/');
+        }
+        let part = if cfg!(windows) { part.trim_end_matches(['.', ' ']) } else { part };
+        out.extend(part.chars().flat_map(char::to_uppercase).flat_map(char::to_lowercase));
+    }
+    out
+}
+
+/// Whether a [`fold_key`] ends like a suffixed name or an export's: a file or directory of
+/// the torrent with such a name may be what another file's suffixed name would be.
+fn looks_suffixed(key: &str) -> bool {
+    [".!ut", ".!qb", EXPORT_EXT].iter().any(|e| key.ends_with(e))
+}
+
+/// Whether any element of `path` (separated by `/` or `\`) ends like a suffixed name. (Case
+/// folding never makes a `!` or a `-`: an element without either is passed over unfolded.)
+fn any_looks_suffixed(path: &str) -> bool {
+    path.split(['/', '\\']).any(|p| p.contains(['!', '-']) && looks_suffixed(&fold_key(Path::new(p))))
+}
+
+/// D77: the torrent's paths a suffixed name could collide with: a file `x` may not be stored as
+/// `x.!ut` when the torrent has a file or directory `x.!ut` (or `x.!ut.pa-export`, the name
+/// [`export_file`] would write it under), and so on for `.!qB` (also in another case). Built only
+/// for a torrent with such a path ([`Clash::of`]).
+struct Clash {
+    /// The [`fold_key`]s of the torrent's files and directories that [`looks_suffixed`].
+    taken: HashSet<String>,
+    /// Every file's plain path ([`fold_key`]) and the files at it (two only when a rename gave
+    /// two files one name).
+    bases: HashMap<String, Vec<u32>>,
+}
+
+impl Clash {
+    /// The paths of `fs` in `save_path`; `None` when none [`looks_suffixed`].
+    fn of(fs: &FileStorage, save_path: &str) -> Option<Clash> {
+        let n = fs.num_files();
+        let any = any_looks_suffixed(save_path)
+            || any_looks_suffixed(fs.name())
+            || fs.paths().iter().any(|p| any_looks_suffixed(p))
+            || (0..n).any(|i| any_looks_suffixed(fs.file_name(i)));
+        if !any {
+            return None;
+        }
+        let mut taken = HashSet::new();
+        let mut bases: HashMap<String, Vec<u32>> = HashMap::new();
+        for i in 0..n {
+            let key = fold_key(Path::new(&fs.file_path(i, save_path)));
+            // the file, and the directories it is in
+            let mut end = key.len();
+            loop {
+                let k = &key[..end];
+                if looks_suffixed(k) {
+                    taken.insert(k.to_owned());
+                }
+                match k.rfind('/') {
+                    Some(j) if j > 0 => end = j,
+                    _ => break,
+                }
+            }
+            bases.entry(key).or_default().push(i as u32);
+        }
+        Some(Clash { taken, bases })
+    }
+
+    /// Whether a file at `base` (a [`fold_key`]) may not carry `suffix`: the name, or the name
+    /// an export writes it under first, is a file or directory of the torrent.
+    fn forbids(&self, base: &str, suffix: Suffix) -> bool {
+        if suffix == Suffix::Plain {
+            return false;
+        }
+        let mut k = format!("{base}{}", fold_key(Path::new(suffix.ext())));
+        if self.taken.contains(&k) {
+            return true;
+        }
+        k.push_str(EXPORT_EXT);
+        self.taken.contains(&k)
+    }
+}
+
 /// `path` with `suffix`'s extension after its file name.
 fn with_suffix(path: PathBuf, suffix: Suffix) -> PathBuf {
     if suffix == Suffix::Plain {
@@ -133,6 +254,11 @@ fn with_suffix(path: PathBuf, suffix: Suffix) -> PathBuf {
     let mut s = path.into_os_string();
     s.push(suffix.ext());
     PathBuf::from(s)
+}
+
+/// File `file`'s plain path in `fs` (a torrent's files, renamed or not) under `save_path`.
+fn base_path_in(fs: &FileStorage, save_path: &str, file: usize) -> PathBuf {
+    PathBuf::from(fs.file_path(file, save_path))
 }
 
 fn name_len(path: &Path) -> Option<usize> {
@@ -178,7 +304,7 @@ impl Storage {
         let save_path = RwLock::new(save_path);
         let mapped = RwLock::new(None);
         let drive = RwLock::new(None);
-        Storage {
+        let storage = Storage {
             id,
             save_path,
             info,
@@ -188,9 +314,166 @@ impl Storage {
             part_files,
             drive,
             names: (0..n).map(|_| AtomicU8::new(Suffix::Plain as u8)).collect(),
+            clash: RwLock::new(None),
+            data_from: Mutex::new(None),
             probed: AtomicBool::new(false),
             rename_reported: Mutex::new(vec![false; n]),
+        };
+        storage.rebuild_clash();
+        storage
+    }
+
+    /// D77: finds again which suffixes each file may not carry ([`Clash`]), for the paths the
+    /// files have now. A file whose suffix became one of those and that is not on disk under
+    /// it loses it; one that is keeps it until the next names job renames it.
+    fn rebuild_clash(&self) {
+        let save_path = self.save_path();
+        let mapped = self.mapped();
+        let fs = mapped.as_deref().unwrap_or(self.info.files());
+        let clash = Clash::of(fs, &save_path);
+        let mut slot = self.clash.write().unwrap_or_else(|e| e.into_inner());
+        if clash.is_none() && slot.is_none() {
+            return;
         }
+        for f in 0..self.names.len() {
+            let mut bits = 0;
+            if let Some(c) = &clash {
+                let base = fold_key(&base_path_in(fs, &save_path, f));
+                for s in [Suffix::Ut, Suffix::Qb] {
+                    if c.forbids(&base, s) {
+                        bits |= forbid_bit(s);
+                    }
+                }
+            }
+            self.update_bits(f, |v| (v & !(NO_UT | NO_QB)) | bits);
+        }
+        *slot = clash;
+        drop(slot);
+        for f in 0..self.names.len() {
+            let now = self.suffix(f);
+            if self.forbidden(f, now) && !found(&self.file_path(f)) {
+                self.set_suffix(f, Suffix::Plain);
+            }
+        }
+    }
+
+    fn update_bits(&self, file: usize, change: impl Fn(u8) -> u8) {
+        if let Some(n) = self.names.get(file) {
+            let _ = n.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| Some(change(v)));
+        }
+    }
+
+    /// D77: whether file `file` may not carry `suffix`: its name with it would be another path
+    /// of the torrent ([`Clash`]).
+    fn forbidden(&self, file: usize, suffix: Suffix) -> bool {
+        let bit = forbid_bit(suffix);
+        bit != 0 && self.names.get(file).is_some_and(|n| n.load(Ordering::Relaxed) & bit != 0)
+    }
+
+    /// D77: whether `path` is where another file than `file` is or would be: another file's
+    /// plain path or the name it has now, or a directory of the torrent. Never true for a
+    /// torrent none of whose paths [`looks_suffixed`], where only a rename that gave two files
+    /// one name could make it so.
+    fn clashes(&self, file: usize, path: &Path) -> bool {
+        let clash = self.clash.read().unwrap_or_else(|e| e.into_inner());
+        let Some(c) = clash.as_ref() else { return false };
+        let own = fold_key(&self.base_path(file));
+        self.clashes_in(c, file, &own, path)
+    }
+
+    /// [`Storage::clashes`] in `c`, for file `file` at `own` (its plain path's [`fold_key`]).
+    fn clashes_in(&self, c: &Clash, file: usize, own: &str, path: &Path) -> bool {
+        let k = fold_key(path);
+        let other = |v: Option<&Vec<u32>>, suffix: Option<Suffix>| {
+            v.is_some_and(|v| {
+                v.iter().any(|&j| j as usize != file && suffix.is_none_or(|s| self.suffix(j as usize) == s))
+            })
+        };
+        // another file's plain path or a directory (a file's own plain path is in `taken` too)
+        if (k != own && c.taken.contains(&k)) || other(c.bases.get(&k), None) {
+            return true;
+        }
+        // the name another file has now
+        [Suffix::Ut, Suffix::Qb].into_iter().any(|s| {
+            let ext = fold_key(Path::new(s.ext()));
+            k.strip_suffix(&ext).is_some_and(|stem| other(c.bases.get(stem), Some(s)))
+        })
+    }
+
+    /// D77: whether `path` is a file or directory of the torrent; only paths that
+    /// [`looks_suffixed`] are known.
+    fn taken(&self, path: &Path) -> bool {
+        let clash = self.clash.read().unwrap_or_else(|e| e.into_inner());
+        clash.as_ref().is_some_and(|c| c.taken.contains(&fold_key(path)))
+    }
+
+    /// D77: notes which files hold data known to be this torrent's, so that deleting the
+    /// torrent's files takes them under a suffixed name ([`delete_files`]): those a piece
+    /// `has_piece` says we have overlaps, those a block of `unfinished` (pieces and their
+    /// blocks on disk) lands in, and what `from`, the torrent's storage before this one, wrote
+    /// or noted (security review, 2026-11-16).
+    pub fn note_data(
+        &self,
+        has_piece: &dyn Fn(u32) -> bool,
+        unfinished: &[(u32, Bitfield)],
+        from: Option<Arc<Storage>>,
+    ) {
+        let fs = self.info.files();
+        for f in 0..fs.num_files() {
+            if fs.pad_file_at(f) || fs.file_size(f) == 0 {
+                continue;
+            }
+            let (first, end) = crate::metainfo::file_storage::file_piece_range_inclusive(fs, f);
+            if (first..end).any(has_piece) {
+                self.note_ours(f);
+            }
+        }
+        for (piece, blocks) in unfinished {
+            if *piece >= self.info.num_pieces() {
+                continue;
+            }
+            let size = self.info.piece_size(*piece);
+            for b in (0..blocks.len()).filter(|&b| blocks.get(b)) {
+                let offset = b as u32 * BLOCK_SIZE;
+                if offset >= size {
+                    break;
+                }
+                let len = (size - offset).min(BLOCK_SIZE);
+                for s in fs.map_block(*piece, offset as u64, len as u64) {
+                    self.note_ours(s.file_index);
+                }
+            }
+        }
+        if let Some(from) = from.filter(|s| !std::ptr::eq(Arc::as_ptr(s), self)) {
+            *self.data_from.lock().unwrap_or_else(|e| e.into_inner()) = Some(from);
+        }
+    }
+
+    /// The files `piece` overlaps hold data of ours (it passed a check).
+    fn note_piece(&self, piece: u32) {
+        for s in self.info.files().map_block(piece, 0, self.info.piece_size(piece) as u64) {
+            self.note_ours(s.file_index);
+        }
+    }
+
+    fn note_ours(&self, file: usize) {
+        if let Some(n) = self.names.get(file) {
+            if n.load(Ordering::Relaxed) & OURS == 0 {
+                n.fetch_or(OURS, Ordering::Relaxed);
+            }
+        }
+    }
+
+    /// Whether file `file` holds data known to be ours ([`OURS`]), here or in the storage
+    /// before this one.
+    fn ours(&self, file: usize) -> bool {
+        let here = self.names.get(file).is_some_and(|n| n.load(Ordering::Relaxed) & OURS != 0);
+        here || self
+            .data_from
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .is_some_and(|s| s.ours(file))
     }
 
     pub fn save_path(&self) -> String {
@@ -213,26 +496,37 @@ impl Storage {
     fn base_path(&self, file: usize) -> PathBuf {
         let save_path = self.save_path.read().unwrap_or_else(|e| e.into_inner());
         match &*self.mapped.read().unwrap_or_else(|e| e.into_inner()) {
-            Some(fs) => PathBuf::from(fs.file_path(file, &save_path)),
-            None => PathBuf::from(self.info.files().file_path(file, &save_path)),
+            Some(fs) => base_path_in(fs, &save_path, file),
+            None => base_path_in(self.info.files(), &save_path, file),
         }
     }
 
     /// The suffix file `file`'s name carries on disk now (D77).
     pub fn suffix(&self, file: usize) -> Suffix {
-        self.names.get(file).map_or(Suffix::Plain, |n| Suffix::from_u8(n.load(Ordering::Relaxed)))
+        self.names
+            .get(file)
+            .map_or(Suffix::Plain, |n| Suffix::from_u8(n.load(Ordering::Relaxed) & SUFFIX_BITS))
     }
 
     fn set_suffix(&self, file: usize, suffix: Suffix) {
-        if let Some(n) = self.names.get(file) {
-            n.store(suffix as u8, Ordering::Relaxed);
-        }
+        self.update_bits(file, |v| (v & !SUFFIX_BITS) | suffix as u8);
     }
 
-    /// Whether file `file` (at `base`, its plain path) may carry a suffix: not a pad file or a
-    /// symlink, not empty, and its name still fits [`NAME_MAX`] with one.
+    /// Whether file `file` (at `base`, its plain path) may carry `.!ut`: not a pad file or a
+    /// symlink, not empty, its name still fits [`NAME_MAX`] with one, and that name is no other
+    /// path of the torrent ([`Clash`]).
     fn may_suffix(&self, file: usize, base: &Path) -> bool {
-        !self.skip_file(file) && self.info.files().file_size(file) > 0 && suffix_fits(base)
+        !self.skip_file(file)
+            && self.info.files().file_size(file) > 0
+            && suffix_fits(base)
+            && !self.forbidden(file, Suffix::Ut)
+    }
+
+    /// The suffixes besides its plain name that file `file` (at `base`) may be found under:
+    /// those a name of its length can carry ([`suffix_possible`]) and that are no other path of
+    /// the torrent ([`Clash`]).
+    fn may_find(&self, file: usize, base: &Path, suffix: Suffix) -> bool {
+        suffix == Suffix::Plain || (suffix_possible(base) && !self.forbidden(file, suffix))
     }
 
     /// D77: the names the files should have, before the storage's first job: `incomplete`
@@ -266,7 +560,8 @@ impl Storage {
         let now = self.suffix(f);
         let settled = match now {
             Suffix::Plain => !incomplete,
-            Suffix::Ut => incomplete,
+            // (a `.!ut` that became another path of the torrent by a rename goes)
+            Suffix::Ut => incomplete && !self.forbidden(f, Suffix::Ut),
             Suffix::Qb => false,
         };
         if settled || self.skip_file(f) {
@@ -305,16 +600,20 @@ impl Storage {
             }
             let base = self.base_path(f);
             let now = self.suffix(f);
-            let may = suffix_possible(&base);
-            let mut order = vec![now];
-            for s in [Suffix::Plain, Suffix::Ut, Suffix::Qb] {
-                if !order.contains(&s) && (s == Suffix::Plain || may) {
+            // D77: never a name that is another path of the torrent: not a suffix the file may
+            // not carry, nor (should a rename have made it so) another file's name
+            let mut order = Vec::with_capacity(3);
+            for s in [now, Suffix::Plain, Suffix::Ut, Suffix::Qb] {
+                if !order.contains(&s) && (s == now || self.may_find(f, &base, s)) && !self.forbidden(f, s) {
                     order.push(s);
                 }
             }
             let mut first = None;
             for s in order {
                 let p = with_suffix(base.clone(), s);
+                if self.clashes(f, &p) {
+                    continue;
+                }
                 let Ok(meta) = std::fs::metadata(&p) else { continue };
                 match first {
                     None => {
@@ -332,6 +631,9 @@ impl Storage {
                         p.display()
                     )),
                 }
+            }
+            if first.is_none() && self.forbidden(f, now) {
+                self.set_suffix(f, Suffix::Plain);
             }
             if let Some(s) = first.filter(|&s| s != now) {
                 self.set_suffix(f, s);
@@ -588,6 +890,8 @@ pub(crate) enum Completion {
         storage: u64,
         action: FenceAction,
         error: Option<Error>,
+        /// For the Logger: files a delete took or kept under a suffixed name (D77).
+        log: Vec<String>,
     },
     /// Answer to [`DiskIo::async_set_file_priority`]; on error the change stopped at that file.
     FilePriority {
@@ -1347,12 +1651,17 @@ impl Worker {
                         // libtorrent ignores this error too; the header is rewritten next time.
                         let _ = part.release();
                     }
-                    let error = match fence.action {
-                        FenceAction::Release => None,
-                        FenceAction::Delete => delete_files(&storage).err(),
-                        FenceAction::DeletePartFile => delete_part_file(&storage).err().map(Error::from),
+                    let (error, log) = match fence.action {
+                        FenceAction::Release => (None, Vec::new()),
+                        FenceAction::Delete => {
+                            let (r, log) = delete_files(&storage);
+                            (r.err(), log)
+                        }
+                        FenceAction::DeletePartFile => {
+                            (delete_part_file(&storage).err().map(Error::from), Vec::new())
+                        }
                     };
-                    ctx.send(Completion::Fenced { storage: id, action: fence.action, error });
+                    ctx.send(Completion::Fenced { storage: id, action: fence.action, error, log });
                 }
             }
             Job::Barrier { storage, barrier } => {
@@ -1496,6 +1805,7 @@ fn write_block(
                 .map_err(|e| io_error(storage, slice.file_index, e))?;
             write_at(&file, &data[pos..pos + n], slice.offset)
                 .map_err(|e| io_error(storage, slice.file_index, e))?;
+            storage.note_ours(slice.file_index);
         }
         pos += n;
     }
@@ -1714,8 +2024,11 @@ fn check_files(
         } else {
             ResumeFiles::Mismatch
         };
+        // the pieces the resume data has are ours (those of a file that is gone go below)
+        let have_files = |have: &Bitfield| storage.note_data(&|p| have.get(p as usize), &[], None);
         match files {
             ResumeFiles::Match => {
+                have_files(&have);
                 return Ok(CheckResult {
                     have,
                     resume_failed: false,
@@ -1739,6 +2052,7 @@ fn check_files(
                         have.set(piece as usize, false);
                     }
                 }
+                have_files(&have);
                 return Ok(CheckResult { have, resume_failed: false, inconsistent: None, missing, names });
             }
             ResumeFiles::Mismatch => resume_failed = true,
@@ -1796,7 +2110,10 @@ fn check_files(
                 hasher.update(block);
             }
             match hasher.verdict(&storage.info, piece, true) {
-                HashVerdict::Passed => have.set(piece as usize, true),
+                HashVerdict::Passed => {
+                    have.set(piece as usize, true);
+                    storage.note_piece(piece);
+                }
                 HashVerdict::Failed => {}
                 HashVerdict::Inconsistent => {
                     inconsistent = Some(piece);
@@ -1888,11 +2205,18 @@ fn resume_files(storage: &Storage, have: &Bitfield, sizes: &[Option<u64>]) -> Re
 }
 
 /// Deletes the torrent's files, then the directories that became empty (deepest first),
-/// never the save path itself.
-fn delete_files(storage: &Storage) -> Result<(), Error> {
+/// never the save path itself. Returns the Logger lines too.
+///
+/// D77: a file is deleted under a suffixed name (`.!ut`, `.!qB`) only when it holds data known
+/// to be this torrent's ([`OURS`]: written by it, a piece of it checked, or pieces or blocks
+/// of it the engine has): the probe takes a same-named partial file in the folder for the
+/// file's, and that may be another client's, untouched by this torrent. A file under its
+/// plain name is deleted as it always was.
+fn delete_files(storage: &Storage) -> (Result<(), Error>, Vec<String>) {
     let fs = storage.info.files();
     let mut dirs = std::collections::BTreeSet::new();
     let mut first_error = None;
+    let mut log = Vec::new();
     let save = PathBuf::from(storage.save_path());
     storage.probe_names(false);
     for f in 0..fs.num_files() {
@@ -1900,14 +2224,25 @@ fn delete_files(storage: &Storage) -> Result<(), Error> {
             continue;
         }
         let path = storage.file_path(f);
-        // D77: the name the file has, and a `.!ut` one of ours left beside it (an incomplete
+        let (suffix, ours) = (storage.suffix(f), storage.ours(f));
+        // the name the file has, and a `.!ut` one of ours left beside it (an incomplete
         // file's while the plain one is used); a plain file beside a `.!ut` one is not ours
-        let mut paths = vec![path.clone()];
-        if storage.suffix(f) != Suffix::Ut && storage.may_suffix(f, &storage.base_path(f)) {
-            paths.push(with_suffix(storage.base_path(f), Suffix::Ut));
+        let mut paths = Vec::new();
+        if suffix == Suffix::Plain || ours {
+            paths.push((path.clone(), suffix != Suffix::Plain));
+        } else if found(&path) {
+            log.push(format!("\"{}\" is not known to be this torrent's data and is kept", path.display()));
         }
-        for p in paths {
+        let base = storage.base_path(f);
+        if ours && suffix != Suffix::Ut && storage.may_suffix(f, &base) {
+            let leftover = with_suffix(base, Suffix::Ut);
+            if !storage.clashes(f, &leftover) {
+                paths.push((leftover, true));
+            }
+        }
+        for (p, suffixed) in paths {
             match std::fs::remove_file(&p) {
+                Ok(()) if suffixed => log.push(format!("deleted \"{}\"", p.display())),
                 Ok(()) => {}
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {}
                 Err(e) => {
@@ -1930,7 +2265,7 @@ fn delete_files(storage: &Storage) -> Result<(), Error> {
     if let Err(e) = delete_part_file(storage) {
         first_error.get_or_insert(Error::from(e));
     }
-    first_error.map_or(Ok(()), Err)
+    (first_error.map_or(Ok(()), Err), log)
 }
 
 /// Deletes the part file. One still open elsewhere forgets its pieces, so it is not written
@@ -2000,10 +2335,7 @@ fn export_file(storage: &Storage, ctx: &Ctx, part: &PartFile, f: usize) -> Resul
             )
             .map_err(|e| io_error(storage, f, e));
     }
-    // (a suffix is given only where this name still fits, `suffix_fits`)
-    let mut tmp = path.clone().into_os_string();
-    tmp.push(EXPORT_EXT);
-    let tmp = PathBuf::from(tmp);
+    let tmp = export_temp(storage, &path);
     // what an earlier interrupted export left
     let _ = std::fs::remove_file(&tmp);
     let file = std::cell::RefCell::new(None);
@@ -2033,6 +2365,24 @@ fn export_file(storage: &Storage, ctx: &Ctx, part: &PartFile, f: usize) -> Resul
         let _ = std::fs::remove_file(&tmp);
     }
     r.map_err(|e| io_error(storage, f, e))
+}
+
+/// The name [`export_file`] writes `path` under: `path` with [`EXPORT_EXT`] (a suffix is given
+/// only where that still fits, [`suffix_fits`]), unless a file or directory of the torrent has
+/// that name, which the export would delete first and then take: then `.1.pa-export`,
+/// `.2.pa-export`, ... beside it, the first such name the torrent has no path of (each ends
+/// like an export, so [`Storage::taken`] knows it if the torrent has it).
+fn export_temp(storage: &Storage, path: &Path) -> PathBuf {
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(EXPORT_EXT);
+    let tmp = PathBuf::from(tmp);
+    if !storage.taken(&tmp) {
+        return tmp;
+    }
+    (1u32..)
+        .map(|n| path.with_file_name(format!(".{n}{EXPORT_EXT}")))
+        .find(|p| !storage.taken(p))
+        .expect("the torrent has fewer paths than names")
 }
 
 /// Frees the part file's pieces that overlap no file kept in it, then flushes the header (which
@@ -2210,9 +2560,28 @@ fn rename_file(storage: &Storage, ctx: &Ctx, file: usize, name: &str) -> Result<
     } else {
         PathBuf::from(storage.save_path()).join(name)
     };
-    // D77: the suffix goes on top of the new name, unless the new name is too long for one
+    // D77: the torrent's paths with the new name, when one of them may collide with a suffixed
+    // name ([`Clash`]): the new name may not be another file's (its plain one, the one it has
+    // now) or a directory of the torrent, and keeps no suffix that would make it one
+    let had_clash = storage.clash.read().unwrap_or_else(|e| e.into_inner()).is_some();
+    let next = (had_clash || any_looks_suffixed(&new_base.to_string_lossy())).then(|| {
+        let mut next_fs = storage.mapped().map_or_else(|| fs.clone(), |m| (*m).clone());
+        next_fs.rename_file(file, name);
+        let save_path = storage.save_path();
+        let own = fold_key(&base_path_in(&next_fs, &save_path, file));
+        (Clash::of(&next_fs, &save_path), own)
+    });
+    let next = next.as_ref().and_then(|(c, own)| c.as_ref().map(|c| (c, own.as_str())));
+    let clashes = |p: &Path| next.is_some_and(|(c, own)| storage.clashes_in(c, file, own, p));
+    let forbids = |s: Suffix| next.is_some_and(|(c, own)| c.forbids(own, s));
+    if clashes(&new_base) {
+        let e = io::Error::new(io::ErrorKind::AlreadyExists, "another file of the torrent has that name");
+        return fail(&new_base, e);
+    }
+    // D77: the suffix goes on top of the new name, unless the new name is too long for one or
+    // would be another path of the torrent with it
     let mut suffix = match storage.suffix(file) {
-        s if s != Suffix::Plain && suffix_fits(&new_base) => s,
+        s if s != Suffix::Plain && suffix_fits(&new_base) && !forbids(s) => s,
         _ => Suffix::Plain,
     };
     match old.try_exists() {
@@ -2253,22 +2622,30 @@ fn rename_file(storage: &Storage, ctx: &Ctx, file: usize, name: &str) -> Result<
         // D77: not on disk, so the new name is where to look for it (Relocate to a file that is
         // there): under the plain name, then with `.!ut`, then `.!qB`, the first found is used
         // under the name it has; a check counts it, and the names follow its pieces
+        // (never a name that is another path of the torrent: another file's, which it would
+        // then share)
         Ok(false) => {
             let may = suffix_possible(&new_base);
             let there = [Suffix::Plain, Suffix::Ut, Suffix::Qb]
                 .into_iter()
-                .filter(|&s| s == Suffix::Plain || may)
-                .find(|&s| found(&with_suffix(new_base.clone(), s)));
-            if let Some(s) = there {
+                .filter(|&s| s == Suffix::Plain || (may && !forbids(s)))
+                .map(|s| (s, with_suffix(new_base.clone(), s)))
+                .find(|(_, p)| !clashes(p) && found(p));
+            if let Some((s, _)) = there {
                 suffix = s;
             }
         }
         Err(e) => return fail(&old, e),
     }
-    let mut mapped = storage.mapped.write().unwrap_or_else(|e| e.into_inner());
-    let files = mapped.get_or_insert_with(|| Arc::new(fs.clone()));
-    Arc::make_mut(files).rename_file(file, name);
+    {
+        let mut mapped = storage.mapped.write().unwrap_or_else(|e| e.into_inner());
+        let files = mapped.get_or_insert_with(|| Arc::new(fs.clone()));
+        Arc::make_mut(files).rename_file(file, name);
+    }
     storage.set_suffix(file, suffix);
+    if next.is_some() || had_clash {
+        storage.rebuild_clash();
+    }
     // a failed rename to the name it should have is reported anew under the new one
     if let Some(r) = storage.rename_reported.lock().unwrap_or_else(|e| e.into_inner()).get_mut(file) {
         *r = false;
@@ -2308,6 +2685,13 @@ fn set_names(storage: &Storage, ctx: &Ctx, incomplete: &[bool]) -> (Vec<NameFail
         // (most files have the name they should: no path is built for them)
         let Some((now, want, base)) = storage.name_change(f, inc) else { continue };
         let (from, to) = (with_suffix(base.clone(), now), with_suffix(base, want));
+        // D77: never to another path of the torrent (only a rename that gave two files one name
+        // makes one the name a file should have): as a name taken by another file, not retried
+        if storage.clashes(f, &to) {
+            let e = io::Error::new(io::ErrorKind::AlreadyExists, "another file of the torrent has that name");
+            report(f, &from, &to, e, &mut pending);
+            continue;
+        }
         match from.try_exists() {
             // nothing on disk under that name: the name alone changes
             Ok(false) => {
@@ -2410,12 +2794,13 @@ fn move_storage(
 
     // D77: a file of the torrent at `root` under any name it may have there (plain, `.!ut`,
     // `.!qB`), the name it has here first
+    // (not under a suffix that makes it another path of the torrent: the paths are the same
+    // relative to any root, [`Clash`])
     let there = |i: usize, root: &str| {
         let base = PathBuf::from(fs.file_path(i, root));
-        let may = suffix_possible(&base);
         let mut order = vec![storage.suffix(i)];
         order.extend(
-            [Suffix::Plain, Suffix::Ut, Suffix::Qb].into_iter().filter(|&s| s == Suffix::Plain || may),
+            [Suffix::Plain, Suffix::Ut, Suffix::Qb].into_iter().filter(|&s| storage.may_find(i, &base, s)),
         );
         order.into_iter().map(|s| with_suffix(base.clone(), s)).find(|p| found(p))
     };
@@ -2451,6 +2836,9 @@ fn move_storage(
     let set_save_path = |p: &str| {
         *storage.save_path.write().unwrap_or_else(|e| e.into_inner()) = p.to_owned();
         *storage.drive.write().unwrap_or_else(|e| e.into_inner()) = None;
+        // D77: the torrent's paths are elsewhere now (a file renamed to an absolute path
+        // stays where it is)
+        storage.rebuild_clash();
     };
     // D77: the files at the new path go by the names they have there
     let probe_again = || {

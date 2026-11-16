@@ -874,7 +874,7 @@ fn a_magnet_without_the_dialog_leaves_out_excluded_files_once_its_metadata_came(
 }
 
 /// D75: the IP filter comes from the file or from the kept copy of the list from the web, which
-/// a start loads before any fetch; another address drops the copy.
+/// a start loads before any fetch; another address leaves the copy, unused, for its own address.
 #[test]
 fn the_ip_filter_comes_from_the_file_or_the_kept_list() {
     use crate::ip_filter_list::{CACHE_FILE, INFO_FILE};
@@ -910,13 +910,19 @@ fn the_ip_filter_comes_from_the_file_or_the_kept_list() {
     core.apply_options(&o);
     let loads = core.detail().log.iter().filter(|l| l.contains(&cache.display().to_string())).count();
     assert_eq!(loads, 2);
-    // another address: the copy is gone, nothing is loaded until its list comes
-    o.gui.ip_filter_url = "https://other.example/list.p2p".into();
+    // another address: nothing is loaded until its list comes, as the Logger says; the copy of
+    // the old one stays, unused, until a list of the new one is saved (F2)
+    let other = "https://other.example/list.p2p";
+    o.gui.ip_filter_url = other.into();
     core.apply_options(&o);
-    assert!(!cache.exists() && !dir.join(INFO_FILE).exists());
+    assert!(cache.exists() && std::fs::read_to_string(dir.join(INFO_FILE)).unwrap().contains(url));
     assert_eq!(core.ip_filter_status(), tr!(TrackersStatusNone));
-    let errors = core.detail().log.iter().filter(|l| l.contains("other.example")).count();
-    assert_eq!(errors, 0, "nothing to load yet is no error");
+    assert!(logged(&core, &tr!(LogIpFilterError, path = other, error = tr!(TrackersStatusNone))));
+    // back: the copy again
+    o.gui.ip_filter_url = url.into();
+    core.apply_options(&o);
+    let loads = core.detail().log.iter().filter(|l| l.contains(&cache.display().to_string())).count();
+    assert_eq!(loads, 3);
     // off
     o.gui.ip_filter = false;
     core.apply_options(&o);

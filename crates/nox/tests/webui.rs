@@ -5151,14 +5151,13 @@ fn export_and_magnet_links() {
         );
         assert_eq!(r.status, 403, "{path}");
     }
-    // a cross-site page cannot read the export either: its Origin is refused before the login
-    let r = t.req(
-        "GET",
-        &format!("/pa/torrents/export?id={hash}"),
-        &[("Cookie", &sid), ("Origin", "http://evil.example")],
-        Body::None,
-    );
-    assert_eq!(r.status, 403);
+    // a cross-site page cannot read the export or the magnet links (private trackers'
+    // passkeys) either: its Origin is refused before the login
+    for path in [format!("/pa/torrents/export?id={hash}"), format!("/pa/torrents/magnet?ids={hash}")] {
+        let r = t.req("GET", &path, &[("Cookie", &sid), ("Origin", "http://evil.example")], Body::None);
+        assert_eq!(r.status, 403, "{path}");
+        assert!(!r.text().contains("magnet:"), "{path}: {}", r.text());
+    }
     let x = t.wait_for(&sid, &hash, "untouched", |_| true);
     assert!(!flag_of(&x, "seq_dl") && !flag_of(&x, "f_l_piece_prio"));
 }
@@ -5486,7 +5485,8 @@ fn the_ip_filter_address_changes_only_with_the_current_password() {
 }
 
 /// At start the copy kept of the list from an address is in force before any fetch (a copy of
-/// today is not fetched again), and the status line names it; another address forgets it.
+/// today is not fetched again), and the status line names it; another address whose fetch fails
+/// does not delete it (F2), and going back uses it again.
 #[test]
 fn the_kept_block_list_is_in_force_at_start() {
     let dir = temp_dir("ipfilter-kept");
@@ -5514,12 +5514,83 @@ fn the_kept_block_list_is_in_force_at_start() {
         "{lines:?}"
     );
     assert!(!lines.iter().any(|l| l.contains("127.0.0.1:9")), "nothing fetched: {lines:?}");
-    // another address: the copy of the old one goes
+    // another address (nothing answers there): the copy of the old one stays, naming its own
+    // address, until a list of the new one is saved; it is not the new address's list
     let body =
         format!(r#"{{"ipfilter.url":"https://127.0.0.1:9/other.p2p","webui.current_password":"{PASS}"}}"#);
     assert_eq!(t.pa(&sid, "/pa/prefs", &body).status, 204);
-    assert!(!t.dir.join("state").join("ipfilter-url.dat").exists());
-    assert!(!t.dir.join("state").join("ipfilter-url.txt").exists());
+    wait_until("the failed fetch of the new address", || {
+        s(t.get(&sid, "/pa/prefs/ipfilter").json().get("status")).starts_with("The last download failed")
+    });
+    assert!(t.dir.join("state").join("ipfilter-url.dat").exists());
+    let info = std::fs::read_to_string(t.dir.join("state").join("ipfilter-url.txt")).unwrap();
+    assert!(info.contains(&format!("url={BLOCK_LIST_URL}")), "{info}");
+    let status = s(t.get(&sid, "/pa/prefs/ipfilter").json().get("status")).to_owned();
+    assert!(!status.contains("2 rules"), "{status}");
+    // back to the old address: its copy is in force again, not fetched (it is fresh)
+    let body = format!(r#"{{"ipfilter.url":"{BLOCK_LIST_URL}","webui.current_password":"{PASS}"}}"#);
+    assert_eq!(t.pa(&sid, "/pa/prefs", &body).status, 204);
+    let status = s(t.get(&sid, "/pa/prefs/ipfilter").json().get("status")).to_owned();
+    assert!(status.starts_with("2 rules, downloaded "), "{status}");
+}
+
+/// N2: the block list's address may carry a subscription's credentials, so the page gets it
+/// without them; the field left as it is (or sent back as shown) keeps the stored address and
+/// asks no password, a new address (with the password) replaces it, an empty one clears it.
+/// The trackers' address (D66) is sent the same way.
+#[test]
+fn the_list_addresses_are_sent_without_their_credentials() {
+    let t = Harness::start("ipfilter-redacted");
+    let sid = t.login();
+    let secret = "https://me:s3cr3t@127.0.0.1:9/level1.dat?pin=4711";
+    let shown = "https://127.0.0.1:9/level1.dat";
+    let body = format!(
+        r#"{{"ipfilter.from_url":true,"ipfilter.url":"{secret}","trackers.url":"{secret}","webui.current_password":"{PASS}"}}"#
+    );
+    assert_eq!(t.pa(&sid, "/pa/prefs", &body).status, 204);
+    let stored = || {
+        let file = std::fs::read_to_string(t.dir.join("state").join(STATE_FILE)).unwrap();
+        (
+            file.contains(&format!(r#""ipfilter.url":"{secret}""#)),
+            file.contains(&format!(r#""trackers.url":"{secret}""#)),
+        )
+    };
+    assert_eq!(stored(), (true, true));
+    let m = t.get(&sid, "/pa/prefs").json();
+    let value = |id: &str| s(m.get("fields").unwrap().get(id).unwrap().get("value")).to_owned();
+    assert_eq!((value("ipfilter.url"), value("trackers.url")), (shown.to_owned(), shown.to_owned()));
+    let all = m.to_json();
+    assert!(!all.contains("s3cr3t") && !all.contains("4711") && !all.contains("me:s3"), "{all}");
+    assert!(!t.get(&sid, "/api/v2/app/preferences").text().contains("s3cr3t"));
+
+    // left as it is: another field saved, the address kept
+    assert_eq!(t.pa(&sid, "/pa/prefs", r#"{"files.exclude":true}"#).status, 204);
+    assert_eq!(stored(), (true, true));
+    // sent back as shown (a client sending every field): no change, so no password either
+    let body = format!(r#"{{"ipfilter.url":"{shown}","trackers.url":"{shown}","files.exclude":false}}"#);
+    let r = t.pa(&sid, "/pa/prefs", &body);
+    assert_eq!(r.status, 204, "{}", r.text());
+    assert_eq!(stored(), (true, true));
+    // a new address: the password, then it replaces the stored one
+    let other = "https://you:pw2@127.0.0.1:9/other.p2p";
+    let r = t.pa(&sid, "/pa/prefs", &format!(r#"{{"ipfilter.url":"{other}"}}"#));
+    assert_eq!(r.status, 400);
+    assert!(r.text().contains("webui.current_password"), "{}", r.text());
+    let body = format!(r#"{{"ipfilter.url":"{other}","webui.current_password":"{PASS}"}}"#);
+    assert_eq!(t.pa(&sid, "/pa/prefs", &body).status, 204);
+    let file = std::fs::read_to_string(t.dir.join("state").join(STATE_FILE)).unwrap();
+    assert!(file.contains(&format!(r#""ipfilter.url":"{other}""#)), "{file}");
+    let m = t.get(&sid, "/pa/prefs").json();
+    assert_eq!(
+        s(m.get("fields").unwrap().get("ipfilter.url").unwrap().get("value")),
+        "https://127.0.0.1:9/other.p2p"
+    );
+    // cleared: cleared
+    let body = format!(r#"{{"ipfilter.url":"","webui.current_password":"{PASS}"}}"#);
+    assert_eq!(t.pa(&sid, "/pa/prefs", &body).status, 204);
+    let file = std::fs::read_to_string(t.dir.join("state").join(STATE_FILE)).unwrap();
+    assert!(!file.contains("other.p2p"), "{file}");
+    assert!(stored().1, "the trackers' address is its own");
 }
 
 // ---- tags (D76) --------------------------------------------------------------------------------
@@ -5566,6 +5637,39 @@ fn maindata_until(t: &Harness, sid: &str, rid: &mut i64, what: &str, f: impl Fn(
         assert!(Instant::now() < deadline, "no diff with {what}: {}", m.to_json());
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// N5 (the 1.2.62 review's gaps): the tags and the IP filter's list need a login, their
+/// commands are POST only, and a cross-site page reads no status line.
+#[test]
+fn tags_and_the_ip_filter_list_need_a_login_and_their_method() {
+    let t = Harness::start("n5-gaps");
+    let sid = t.login();
+    let a = add_stopped(&t, &sid, "n5-alpha", false);
+    // no login: refused, and nothing changes
+    for e in ["createTags", "addTags", "setTags", "removeTags", "deleteTags"] {
+        let r =
+            t.req("POST", &format!("/api/v2/torrents/{e}"), &[], Body::Form(&format!("hashes={a}&tags=x")));
+        assert_eq!(r.status, 403, "{e}");
+    }
+    assert_eq!(t.req("GET", "/api/v2/torrents/tags", &[], Body::None).status, 403);
+    assert_eq!(t.req("GET", "/pa/tags", &[], Body::None).status, 403);
+    assert!(known_tags(&t, &sid).is_empty());
+    assert_eq!(tags_field(&t, &sid, &a), "");
+    // the commands are POST only
+    for path in ["/pa/prefs/ipfilter/update", "/pa/tags/delete"] {
+        assert_eq!(t.get(&sid, path).status, 405, "{path}");
+    }
+    // a cross-site page reads no status line
+    let r = t.req(
+        "GET",
+        "/pa/prefs/ipfilter",
+        &[("Cookie", &sid), ("Origin", "http://evil.example")],
+        Body::None,
+    );
+    assert_eq!(r.status, 403);
+    assert!(!r.text().contains("status"), "{}", r.text());
+    assert_eq!(t.get(&sid, "/pa/prefs/ipfilter").status, 200);
 }
 
 /// The qBittorrent shim's tags as Sonarr, Radarr and qBittorrent's own Web UI use them: POST

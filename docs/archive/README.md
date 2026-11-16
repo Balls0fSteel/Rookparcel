@@ -1,6 +1,6 @@
 # Planning and changelog history
 
-Last updated: 2026-11-16_193121_1794853881
+Last updated: 2026-11-16_213625_1794861385
 
 Start with [PLAN.md](../../PLAN.md) and [CHANGELOG.md](../../CHANGELOG.md). Active decision rationale is in [DECISIONS.md](../DECISIONS.md); detailed unfinished work is in [BACKLOG.md](../BACKLOG.md).
 
@@ -93,3 +93,4 @@ Keep archives as plain Markdown so Git diffs, repository browsing and targeted s
 | [Changelog, 2026-11-15 (1.2.57 and its release)](CHANGELOG-2026-11-15-v1.2.57-release-2026-11-16_140743_1794834463.md) | `2026-11-15_174308_1794760988` through `2026-11-15_180859_1794762539` | 2 entries moved verbatim from the root changelog on 2026-11-16_140743_1794834463: the release review's findings in the settings guard (1.2.57) and release 1.2.57 published with the site's news and the wiki. |
 | [Changelog, 2026-11-15 and 2026-11-16 (1.2.58, the Mac sidebar symbols)](CHANGELOG-2026-11-15-v1.2.58-mac-sidebar-2026-11-16_162657_1794842817.md) | `2026-11-15_232343_1794781423` through `2026-11-16_001242_1794784362` | 2 entries moved verbatim from the root changelog on 2026-11-16_162657_1794842817: Preferences > Advanced > UI Lock with the lock's off switch and a narrower PIN dialog (1.2.58, D71), and the Mac's dark Preferences sidebar symbols found to be the VM's drawing (documentation only). |
 | [Changelog, 2026-11-16 (1.2.59, feature wave 1)](CHANGELOG-2026-11-16-v1.2.59-2026-11-16_193121_1794853881.md) | `2026-11-16_122332_1794828212` | 1 entry moved verbatim from the root changelog on 2026-11-16_193121_1794853881: download order (D72) and Copy Magnet Link / Export .torrent (D73), feature wave 1 (1.2.59). |
+| [Changelog, 2026-11-16 (1.2.60, feature wave 2)](CHANGELOG-2026-11-16-v1.2.60-2026-11-16_213625_1794861385.md) | `2026-11-16_140743_1794834463` | 1 entry moved verbatim from the root changelog on 2026-11-16_213625_1794861385: excluded file names (D74) and the IP filter's block list from an https address with CIDR lines (D75), feature wave 2 (1.2.60). |

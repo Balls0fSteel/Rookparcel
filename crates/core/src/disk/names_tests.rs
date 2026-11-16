@@ -178,6 +178,17 @@ impl Rig {
         self.storage = self.disk.new_storage(self.storage.save_path(), self.info.clone(), prio);
         self.storage.init_names(incomplete);
     }
+
+    /// Deletes the files with the storage; the Logger lines.
+    fn delete(&self) -> Vec<String> {
+        self.disk.async_fence(&self.storage, FenceAction::Delete);
+        loop {
+            if let Completion::Fenced { error, log, .. } = next(&self.rx) {
+                assert!(error.is_none(), "{error:?}");
+                break log;
+            }
+        }
+    }
 }
 
 #[test]
@@ -609,17 +620,413 @@ fn deleting_removes_suffixed_files_and_our_leftovers() {
     std::fs::write(r.path("c"), &r.contents[2]).unwrap();
     std::fs::write(r.path("c.!ut"), b"left over").unwrap();
     std::fs::write(r.dir.join("keep.txt"), b"not the torrent's").unwrap();
-    // a storage made for the delete, with names the engine would guess
+    // a storage made for the delete, with names the engine would guess, and the pieces and
+    // blocks the torrent has (some of every file)
     r.storage.init_names(&[false; 3]);
-    r.disk.async_fence(&r.storage, FenceAction::Delete);
-    loop {
-        if let Completion::Fenced { error, .. } = next(&r.rx) {
-            assert!(error.is_none(), "{error:?}");
-            break;
-        }
-    }
+    r.storage.note_data(&|p| [0, 3, 6].contains(&p), &[], None);
+    let log = r.delete();
     assert!(!r.dir.join("test").exists(), "every file gone, and the folder");
     assert!(r.dir.join("keep.txt").exists());
+    assert_eq!(log.len(), 2, "{log:?}");
+    assert!(log.iter().any(|l| l.contains("a.!ut")) && log.iter().any(|l| l.contains("c.!ut")), "{log:?}");
+}
+
+/// Security review 2026-11-16: a torrent that never wrote anything, removed with its data,
+/// leaves another client's partial files of the same names (`y.!qB`, `z.!ut`) alone: the probe
+/// takes them for the torrent's, but nothing says they are. A plain file of the name is
+/// deleted as it always was.
+#[test]
+fn deleting_keeps_suffixed_files_not_known_to_be_ours() {
+    let r = rig("names-delete-foreign", FILES, Vec::new());
+    std::fs::create_dir_all(r.dir.join("test")).unwrap();
+    std::fs::write(r.path("a.!qB"), b"another client's partial").unwrap();
+    std::fs::write(r.path("b.!ut"), b"another client's partial").unwrap();
+    std::fs::write(r.path("c"), b"a plain file of the name").unwrap();
+    std::fs::write(r.path("c.!ut"), b"another client's partial").unwrap();
+    r.storage.init_names(&[false; 3]);
+    let log = r.delete();
+    assert_eq!(r.listing(), ["a.!qB", "b.!ut", "c.!ut"]);
+    assert_eq!(log.len(), 2, "{log:?}");
+    assert!(log.iter().all(|l| l.contains("kept")), "{log:?}");
+
+    // the option on, a storage made for the delete: the same
+    let r = rig("names-delete-foreign-on", FILES, Vec::new());
+    std::fs::create_dir_all(r.dir.join("test")).unwrap();
+    std::fs::write(r.path("a.!ut"), b"another client's partial").unwrap();
+    r.storage.init_names(&[true; 3]);
+    r.delete();
+    assert_eq!(r.listing(), ["a.!ut"]);
+}
+
+/// The other side of the above: our own partial files go with the data, whether the storage
+/// that wrote them deletes them, one made for the delete knows pieces or blocks of them, or
+/// that one was handed the storage that wrote them (a running torrent's, released first).
+#[test]
+fn our_own_partial_files_are_deleted_with_the_data() {
+    // written by this storage (nothing passed for c yet: one block of piece 5 is c's)
+    let r = rig("names-delete-ours", FILES, Vec::new());
+    r.storage.init_names(&[true; 3]);
+    r.check(CheckMode::Full);
+    r.write(&[0, 1]);
+    let block = r.all[6 * BLOCK_SIZE as usize..7 * BLOCK_SIZE as usize].to_vec();
+    r.disk.async_write(&r.storage, 6, 0, block);
+    assert!(matches!(next(&r.rx), Completion::Write { error: None, .. }));
+    assert_eq!(r.listing(), ["a.!ut", "c.!ut"]);
+    std::fs::write(r.path("b.!qB"), b"another client's").unwrap();
+    let log = r.delete();
+    assert_eq!(r.listing(), ["b.!qB"], "{log:?}");
+    assert_eq!(log.iter().filter(|l| l.starts_with("deleted")).count(), 2, "{log:?}");
+
+    // a storage made for the delete: the pieces and blocks the engine has of them
+    let mut r = rig("names-delete-ours-later", FILES, Vec::new());
+    r.storage.init_names(&[true; 3]);
+    r.check(CheckMode::Full);
+    r.write(&[0, 1, 6]);
+    assert_eq!(r.listing(), ["a.!ut", "c.!ut"]);
+    r.restart(&[true; 3]);
+    let mut blocks = Bitfield::new(1, false);
+    blocks.set(0, true);
+    r.storage.note_data(&|p| p == 0, &[(6, blocks)], None);
+    r.delete();
+    assert!(r.listing().is_empty());
+
+    // one handed the storage that wrote them, which knows of no piece
+    let mut r = rig("names-delete-ours-from", FILES, Vec::new());
+    r.storage.init_names(&[true; 3]);
+    r.check(CheckMode::Full);
+    r.write(&[3]);
+    assert_eq!(r.listing(), ["b.!ut"]);
+    let old = r.storage.clone();
+    r.restart(&[true; 3]);
+    r.storage.note_data(&|_| false, &[], Some(old.clone()));
+    // (the storage itself is no evidence for itself)
+    old.note_data(&|_| false, &[], Some(old.clone()));
+    r.delete();
+    assert!(r.listing().is_empty());
+
+    // a check that matched a file: it is ours
+    let r = rig("names-delete-checked", FILES, Vec::new());
+    std::fs::create_dir_all(r.dir.join("test")).unwrap();
+    std::fs::write(r.path("a.!qB"), &r.contents[0]).unwrap();
+    std::fs::write(r.path("c.!qB"), b"not c's data").unwrap();
+    r.storage.init_names(&[false; 3]);
+    assert_eq!(wanted(&r.check(CheckMode::Full).have), [0, 1]);
+    r.delete();
+    assert_eq!(r.listing(), ["c.!qB"]);
+}
+
+/// The torrent's paths in `r` as the file systems compare them: no two files at one, and
+/// none at a directory of the torrent.
+fn assert_distinct(r: &Rig, when: &str) {
+    let fs = r.info.files();
+    let mut seen = std::collections::HashMap::new();
+    let mut dirs = std::collections::HashSet::new();
+    for f in 0..fs.num_files() {
+        let mut d = r.storage.base_path(f);
+        while d.pop() && d.starts_with(&r.dir) {
+            dirs.insert(fold_key(&d));
+        }
+    }
+    for f in 0..fs.num_files() {
+        if fs.pad_file_at(f) {
+            continue;
+        }
+        let key = fold_key(&r.storage.file_path(f));
+        assert!(!dirs.contains(&key), "{when}: file {f} at a directory: {key}");
+        if let Some(g) = seen.insert(key.clone(), f) {
+            panic!("{when}: files {g} and {f} both at {key}");
+        }
+    }
+}
+
+/// The reviewer's reproductions: files `x` and `x.!ut` (and `X.!UT`, one name on Windows and
+/// macOS) of one torrent. `x`, incomplete, may not take `.!ut`, which is the other file's name:
+/// it stays plain, whichever completes first, and nothing is written over the other.
+#[test]
+fn a_file_never_takes_another_files_name_with_the_suffix() {
+    for other in ["x.!ut", "X.!UT", "x.!ut.pa-export"] {
+        let mut r = rig("names-sibling", &[("x", 32768), (other, 32768)], Vec::new());
+        r.storage.init_names(&[true, true]);
+        assert_eq!(r.storage.suffix(0), Suffix::Plain, "{other}");
+        assert_eq!(r.storage.suffix(1), Suffix::Ut);
+        assert!(r.check(CheckMode::Full).have.none_set());
+        // the second file completes first; x has nothing on disk yet
+        r.write(&[2, 3]);
+        assert_eq!(r.listing(), [format!("{other}.!ut")]);
+        assert_eq!(r.names(&[true, false]), (Vec::new(), false));
+        assert_eq!(r.listing(), [other]);
+        assert_distinct(&r, other);
+        // now x's pieces: under its plain name, beside the other
+        r.write(&[0, 1]);
+        let mut both = vec!["x", other];
+        both.sort();
+        assert_eq!(r.listing(), both);
+        assert_eq!(r.read(2), r.piece_data(2), "{other}: the other file is intact");
+        assert_eq!(r.read(0), r.piece_data(0));
+        assert_eq!(r.names(&[false, false]), (Vec::new(), false));
+        assert_eq!(std::fs::read(r.path("x")).unwrap(), r.contents[0]);
+        assert_eq!(std::fs::read(r.path(other)).unwrap(), r.contents[1]);
+        assert!(r.check(CheckMode::Full).have.all_set());
+    }
+}
+
+/// The same at a restart: resume data with `x.!ut` complete and `x` not gave both files one
+/// name at once.
+#[test]
+fn a_restart_never_gives_two_files_one_name() {
+    let r = rig("names-sibling-restart", &[("x", 32768), ("x.!ut", 32768)], Vec::new());
+    std::fs::create_dir_all(r.dir.join("test")).unwrap();
+    std::fs::write(r.path("x.!ut"), &r.contents[1]).unwrap();
+    r.storage.init_names(&[true, false]);
+    assert_ne!(r.storage.file_path(0), r.storage.file_path(1));
+    let have = r.have(&[2, 3]);
+    let res = r.check(CheckMode::Resume(have.clone()));
+    assert!(!res.resume_failed && res.have == have, "{:?}", res.missing);
+    assert_distinct(&r, "after the check");
+    r.write(&[0, 1]);
+    assert_eq!(r.read(2), r.piece_data(2), "the other file is intact");
+    assert_eq!(r.listing(), ["x", "x.!ut"]);
+    assert!(r.check(CheckMode::Full).have.all_set());
+}
+
+/// With the option off (the default), a file not on disk is never found under another file's
+/// name: `x.!qB`, a complete file of the torrent, is not taken for `x`'s partial and renamed to
+/// `x`. Nor under a directory's.
+#[test]
+fn the_probe_never_takes_another_files_name() {
+    let mut r = rig("names-sibling-qb", &[("x", 32768), ("x.!qB", 32768)], Vec::new());
+    std::fs::create_dir_all(r.dir.join("test")).unwrap();
+    std::fs::write(r.path("x.!qB"), &r.contents[1]).unwrap();
+    r.storage.init_names(&[false, false]);
+    let have = r.have(&[2, 3]);
+    let res = r.check(CheckMode::Resume(have.clone()));
+    assert_eq!(res.have, have);
+    assert_eq!(r.storage.suffix(0), Suffix::Plain);
+    assert_eq!(r.names(&[false, false]), (Vec::new(), false));
+    assert_eq!(r.listing(), ["x.!qB"]);
+    assert_eq!(std::fs::read(r.path("x.!qB")).unwrap(), r.contents[1]);
+    // a full check: the same
+    r.restart(&[false, false]);
+    assert_eq!(wanted(&r.check(CheckMode::Full).have), [2, 3]);
+    assert_eq!(r.storage.suffix(0), Suffix::Plain);
+    r.write(&[0, 1]);
+    assert_eq!(r.listing(), ["x", "x.!qB"]);
+
+    // a directory named like the suffixed file
+    let mut r = rig("names-sibling-dir", &[("x", 32768), ("x.!ut/y", 32768)], Vec::new());
+    r.storage.init_names(&[true, true]);
+    assert_eq!(r.storage.suffix(0), Suffix::Plain);
+    r.check(CheckMode::Full);
+    r.write(&[0, 2, 3]);
+    assert_eq!(r.listing(), ["x", "x.!ut/y.!ut"]);
+    assert_eq!(r.names(&[true, false]), (Vec::new(), false));
+    r.write(&[1]);
+    assert_eq!(r.names(&[false, false]), (Vec::new(), false));
+    assert_eq!(r.listing(), ["x", "x.!ut/y"]);
+    assert!(r.check(CheckMode::Full).have.all_set());
+}
+
+/// A part file's export writes a file under its name plus `.pa-export` first, deleting what is
+/// there: never another file of the torrent of that name.
+#[test]
+fn an_export_never_takes_another_files_name() {
+    let files: &[(&str, usize)] = &[("a", 40_000), ("b", 50_000), ("b.pa-export", 30_000)];
+    let mut r = rig("names-export-sibling", files, vec![4, 0, 4]);
+    r.storage.init_names(&[false; 3]);
+    r.check(CheckMode::Full);
+    r.write(&[0, 1, 2, 5, 6, 7]);
+    assert_eq!(r.listing(), ["a", "b.pa-export"]);
+    r.disk.async_set_file_priority(&r.storage, vec![4, 4, 4]);
+    r.write(&[3, 4]);
+    assert_eq!(r.listing(), ["a", "b", "b.pa-export"]);
+    assert_eq!(std::fs::read(r.path("b.pa-export")).unwrap(), r.contents[2]);
+    assert_eq!(std::fs::read(r.path("b")).unwrap(), r.contents[1]);
+    assert!(r.check(CheckMode::Full).have.all_set());
+}
+
+/// A user's rename to a name whose `.!ut` is another file of the torrent: the file goes plain;
+/// to another file's name (the one it has now, or its plain one): refused, and never taken
+/// for the file's.
+#[test]
+fn a_user_rename_never_takes_another_files_name() {
+    let files: &[(&str, usize)] = &[("a", 40_000), ("b", 50_000), ("z.!ut", 30_000)];
+    let mut r = rig("names-rename-sibling", files, Vec::new());
+    r.storage.init_names(&[true; 3]);
+    r.check(CheckMode::Full);
+    r.write(&[0, 1, 6]);
+    assert_eq!(r.listing(), ["a.!ut", "z.!ut.!ut"]);
+    // a, incomplete, renamed to z: `z.!ut` is file 2's name, so it is plain
+    r.disk.async_rename_file(&r.storage, 0, "test/z".into());
+    assert!(renamed(&r.rx).1.is_none());
+    assert_eq!(r.storage.suffix(0), Suffix::Plain);
+    assert_eq!(r.listing(), ["z", "z.!ut.!ut"]);
+    assert_distinct(&r, "renamed");
+    // b (not on disk) to file 2's plain name, or to the name it has now: refused
+    for name in ["test/z.!ut", "test/Z.!UT", "test/z.!ut.!ut"] {
+        r.disk.async_rename_file(&r.storage, 1, name.into());
+        let (_, e) = renamed(&r.rx);
+        assert!(e.is_some_and(|(_, e)| e.to_string().contains("another file")), "{name}");
+    }
+    // file 2 renamed to y: z may carry `.!ut` again (the names job gives it)
+    r.disk.async_rename_file(&r.storage, 2, "test/y".into());
+    assert!(renamed(&r.rx).1.is_none());
+    assert_eq!(r.listing(), ["y.!ut", "z"]);
+    assert!(r.storage.may_suffix(0, &r.storage.base_path(0)));
+    assert_eq!(r.names(&[true, true, true]), (Vec::new(), false));
+    assert_eq!(r.listing(), ["y.!ut", "z.!ut"]);
+    r.write(&[2, 3, 4, 5, 7]);
+    assert_eq!(r.names(&[false; 3]), (Vec::new(), false));
+    assert_eq!(r.listing(), ["b", "y", "z"]);
+    for (i, n) in ["z", "b", "y"].iter().enumerate() {
+        assert_eq!(std::fs::read(r.path(n)).unwrap(), r.contents[i], "{n}");
+    }
+}
+
+#[test]
+fn paths_are_compared_as_the_file_systems_do() {
+    assert_eq!(fold_key(Path::new("A/B.!UT")), "a/b.!ut");
+    assert_eq!(fold_key(Path::new("a\\B")), "a/b");
+    assert_eq!(fold_key(Path::new("/x/ΣΑ/straße")), "/x/σα/strasse");
+    assert_eq!(fold_key(Path::new("x.!ut. .")), if cfg!(windows) { "x.!ut" } else { "x.!ut. ." });
+    assert!(looks_suffixed("x.!qb") && looks_suffixed("x.!ut.pa-export") && !looks_suffixed("x.ut"));
+    assert!(any_looks_suffixed("d.!UT/x") && any_looks_suffixed("c:\\d\\X.PA-EXPORT"));
+    assert!(!any_looks_suffixed("d/x!") && !any_looks_suffixed("a-b/c") && !any_looks_suffixed(""));
+}
+
+/// xorshift64*: a fixed sequence for the property test, without a dependency.
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 >> 12;
+        self.0 ^= self.0 << 25;
+        self.0 ^= self.0 >> 27;
+        self.0.wrapping_mul(0x2545_f491_4f6c_dd1d)
+    }
+
+    fn below(&mut self, n: usize) -> usize {
+        (self.next() % n as u64) as usize
+    }
+}
+
+/// Security review 2026-11-16, property style: torrents of files named like each other's
+/// suffixed names (`n`, `n.!ut`, `n.!qB`, `n.!ut.pa-export`, other cases, directories named so),
+/// with files of other clients under those names on disk, the option on and off, downloaded with
+/// names jobs in between and restarted with names that disagree with the pieces: at every step
+/// no two files are at one path and none is at a directory, and every file ends with its data.
+#[test]
+fn files_named_like_suffixed_ones_never_share_a_path() {
+    const POOL: &[&str] = &[
+        "n",
+        "n.!ut",
+        "n.!qB",
+        "n.!ut.pa-export",
+        "n.pa-export",
+        "N.!UT",
+        "n.!QB",
+        "n.!ut.!ut",
+        "n.!ut.!qB",
+        "n.!qB.pa-export",
+        "n.!ut/m",
+        "n.!qB/m.!ut",
+        "d/n",
+        "d/n.!ut",
+        "D/N.!Ut",
+        "d.!ut/n",
+        "m",
+        "m.!ut",
+    ];
+    let mut rng = Rng(0x5eed_d77f_1e5a_0001);
+    for case in 0..40 {
+        let on = case % 2 == 0;
+        let mut names: Vec<&str> = Vec::new();
+        for _ in 0..2 + rng.below(5) {
+            let n = POOL[rng.below(POOL.len())];
+            if !names.contains(&n) {
+                names.push(n);
+            }
+        }
+        let files: Vec<(&str, usize)> = names.iter().map(|&n| (n, 1 + rng.below(40_000))).collect();
+        let when = |s: &str| format!("case {case} {files:?} on {on}: {s}");
+        let mut r = rig("names-prop", &files, Vec::new());
+        let fs = r.info.files();
+        let n = fs.num_files();
+        let flags = |r: &Rig, have: &Bitfield| if on { r.incomplete(have) } else { vec![false; n] };
+        r.storage.init_names(&flags(&r, &r.have(&[])));
+        assert_distinct(&r, &when("new"));
+
+        // another client's files (or this one's) under the names, some whole, some not
+        let mut dirs = std::collections::HashSet::new();
+        for f in 0..n {
+            let mut d = r.storage.base_path(f);
+            while d.pop() {
+                dirs.insert(fold_key(&d));
+            }
+        }
+        let mut placed = Vec::new();
+        for f in 0..n {
+            if rng.below(3) != 0 {
+                continue;
+            }
+            let s = [Suffix::Plain, Suffix::Ut, Suffix::Qb][rng.below(3)];
+            let p = with_suffix(r.storage.base_path(f), s);
+            if dirs.contains(&fold_key(&p)) || found(&p) {
+                continue;
+            }
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            let data = &r.contents[f];
+            std::fs::write(&p, &data[..if rng.below(2) == 0 { data.len() } else { data.len() / 2 }]).unwrap();
+            placed.push(p);
+        }
+        let res = r.check(CheckMode::Full);
+        assert_distinct(&r, &when("checked"));
+        let mut have = res.have.clone();
+        r.names(&flags(&r, &have));
+        assert_distinct(&r, &when("names after the check"));
+
+        // the rest of the pieces in a random order, names jobs now and then
+        let mut missing: Vec<u32> = (0..r.info.num_pieces()).filter(|&p| !have.get(p as usize)).collect();
+        while !missing.is_empty() {
+            let p = missing.swap_remove(rng.below(missing.len()));
+            r.write(&[p]);
+            have.set(p as usize, true);
+            if rng.below(2) == 0 {
+                r.names(&flags(&r, &have));
+                assert_distinct(&r, &when(&format!("names after piece {p}")));
+            }
+        }
+        r.names(&vec![false; n]);
+        assert_distinct(&r, &when("complete"));
+        let data_ok = |r: &Rig, s: &str| {
+            for f in 0..n {
+                let on_disk = std::fs::read(r.storage.file_path(f)).unwrap();
+                assert!(on_disk.len() >= files[f].1, "{}", when(s));
+                assert_eq!(&on_disk[..files[f].1], &r.contents[f][..], "{}: file {f}", when(s));
+            }
+        };
+        data_ok(&r, "complete");
+        // (a file put there that no file of the torrent took is gone before the restarts: one
+        // under the name a restart expects is taken first, as it should be)
+        let used: Vec<String> = (0..n).map(|f| fold_key(&r.storage.file_path(f))).collect();
+        for p in placed.iter().filter(|p| !used.contains(&fold_key(p))) {
+            let _ = std::fs::remove_file(p);
+        }
+
+        // restarts with names that disagree with the pieces (a crash, the option turned)
+        for _ in 0..2 {
+            let guess: Vec<bool> = (0..n).map(|_| rng.below(2) == 0).collect();
+            r.restart(&guess);
+            assert_distinct(&r, &when("restarted"));
+            let res = r.check(CheckMode::Resume(have.clone()));
+            assert!(!res.resume_failed && res.have.all_set(), "{}", when("resume"));
+            assert_distinct(&r, &when("resume checked"));
+            r.names(&guess);
+            assert_distinct(&r, &when("names after a restart"));
+            data_ok(&r, "restarted");
+        }
+        r.names(&vec![false; n]);
+        assert!(r.check(CheckMode::Full).have.all_set(), "{}", when("full check"));
+    }
 }
 
 #[test]

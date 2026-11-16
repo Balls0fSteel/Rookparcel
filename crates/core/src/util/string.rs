@@ -337,10 +337,89 @@ pub fn redact_url_credentials(url: &str) -> String {
     format!("{}{shown}{}", &url[..rest_at], &rest[at..])
 }
 
+/// Whether `c` is a Unicode format character (general category Cf: direction marks,
+/// embeddings, overrides and isolates, zero-width characters, the byte order mark, invisible
+/// operators, tags) or a line or paragraph separator. Rookparcel's own, without a Unicode table.
+fn is_format(c: char) -> bool {
+    matches!(
+        c as u32,
+        0xad | 0x600..=0x605
+            | 0x61c
+            | 0x6dd
+            | 0x70f
+            | 0x890..=0x891
+            | 0x8e2
+            | 0x180e
+            | 0x200b..=0x200f
+            | 0x2028..=0x202e
+            | 0x2060..=0x2064
+            | 0x2066..=0x206f
+            | 0xfeff
+            | 0xfff9..=0xfffb
+            | 0x110bd
+            | 0x110cd
+            | 0x13430..=0x1343f
+            | 0x1bca0..=0x1bca3
+            | 0x1d173..=0x1d17a
+            | 0xe0001
+            | 0xe0020..=0xe007f
+    )
+}
+
+/// Text a remote side sent (a server's HTTP reason phrase, a host name from a redirect), fit
+/// for an error message, a status line or a log line: control and format characters dropped
+/// ([`is_format`]: no direction override can turn the text around, nothing invisible stays),
+/// a line break or tab as a space, and cut to `max` characters with `…`. Rookparcel's own.
+pub fn remote_text(s: &str, max: usize) -> String {
+    let mut out = String::new();
+    let mut chars = 0;
+    for c in s.chars() {
+        let c = match c {
+            '\t' | '\n' | '\r' => ' ',
+            c if c.is_control() || is_format(c) => continue,
+            c => c,
+        };
+        if chars == max {
+            out.push('…');
+            break;
+        }
+        out.push(c);
+        chars += 1;
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     //! Ported from libtorrent-rasterbar 2.0.11 test/test_string.cpp.
     use super::*;
+
+    #[test]
+    fn remote_text_is_cut_and_has_no_controls() {
+        // Rookparcel's own
+        assert_eq!(remote_text("Not Found", 100), "Not Found");
+        assert_eq!(remote_text("", 100), "");
+        assert_eq!(remote_text("a\r\nb\tc\rd\ne", 100), "a  b c d e");
+        assert_eq!(remote_text("x\u{0}\u{7}\u{1b}[31my\u{7f}\u{85}z", 100), "x[31myz");
+        // direction marks, embeddings, overrides and isolates, invisible ones
+        let bidi =
+            "a\u{200e}\u{200f}\u{202a}\u{202b}\u{202c}\u{202d}\u{202e}\u{2066}\u{2067}\u{2068}\u{2069}b";
+        assert_eq!(remote_text(bidi, 100), "ab");
+        let invisible = "a\u{200b}\u{200c}\u{200d}\u{2028}\u{2029}\u{2060}\u{feff}\u{ad}\u{61c}\u{e0041}b";
+        assert_eq!(remote_text(invisible, 100), "ab");
+        // cut at a character, not a byte: "é" is two bytes
+        let long = "é".repeat(150);
+        let cut = remote_text(&long, 100);
+        assert_eq!(cut.chars().count(), 101);
+        assert!(cut.ends_with('…') && cut.starts_with(&"é".repeat(100)));
+        assert_eq!(remote_text(&"x".repeat(100), 100), "x".repeat(100), "exactly the limit: not cut");
+        // a 16 KiB phrase of controls and text
+        let big = "\u{202e}ab\r".repeat(4096);
+        let t = remote_text(&big, 100);
+        assert!(t.chars().count() <= 101 && !t.contains(['\r', '\u{202e}']), "{t}");
+        // what stays is kept as sent: other scripts, emoji, spaces
+        assert_eq!(remote_text("Nem található 🙂", 100), "Nem található 🙂");
+    }
 
     #[test]
     fn url_credentials_are_redacted_for_display() {

@@ -611,7 +611,7 @@ impl Core {
                 }
             }
         }
-        // before the filter is loaded: a kept list of another address is dropped first
+        // before the filter is loaded (D75; a copy kept of another address stays, unused)
         self.configure_ip_list(&o.gui);
         let dir = self.dirs.settings.clone();
         let source = |g: &GuiOptions| {
@@ -640,9 +640,15 @@ impl Core {
 
     /// Loads the configured block list (`ipfilter.dat` in the settings folder by default), or
     /// the copy kept of the list from the web (D75). With nothing fetched from that address yet
-    /// the rules in force stay: the fetch brings the new ones.
+    /// (a copy of another address is not its list) the rules in force stay, none at start: the
+    /// fetch brings the new ones, and the Logger says so.
     pub(super) fn load_ip_filter(&mut self, gui: &GuiOptions) {
-        let Some(path) = crate::ip_filter_list::list_file(gui, &self.dirs.settings) else { return };
+        let Some(path) = crate::ip_filter_list::list_file(gui, &self.dirs.settings) else {
+            if let Some(line) = crate::ip_filter_list::not_loaded_line(gui) {
+                self.log(line);
+            }
+            return;
+        };
         let r = self.handle.load_ip_filter(&path).map_err(|e| e.to_string());
         self.log_ip_filter(&path, &r);
     }

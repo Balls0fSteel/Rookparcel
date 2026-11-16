@@ -399,7 +399,7 @@ impl Core {
         // a demo keeps no list from the web, and so no cache of one
         let cache = (!demo).then(|| dirs.settings.join(tracker_list::CACHE_FILE));
         let trackers = remote.is_none().then(|| TrackerList::new(cache, tracker_config(&opts.gui, demo)));
-        // before the filter is loaded: a kept list of another address is dropped first
+        // before the filter is loaded (D75)
         let ip_list = remote.is_none().then(|| {
             IpFilterList::new((!demo).then(|| dirs.settings.clone()), ip_list_config(&opts.gui, demo))
         });

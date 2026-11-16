@@ -270,7 +270,10 @@ empty, no comma or control character, cut to 128 bytes, case-sensitive; at most 
 a new name is made known; 400 without either), `removeTags` (`hashes`, optional `tags`: none
 takes every tag off, as qBittorrent does) and qBittorrent 5.1's `setTags` (`hashes`, `tags`:
 exactly these). A name refused, or a new one past 1024, is skipped and the call still answers
-200, as qBittorrent skips the names it refuses. `torrents/add` takes `tags` (comma-separated,
+200, as qBittorrent skips the names it refuses. A request's names are normalized, sorted and
+deduplicated once, before the cache's lock is taken, and kept to the first 1024 distinct ones
+(no more can ever be known), so a long list of repeated names costs each torrent no more than
+the names it brings. `torrents/add` takes `tags` (comma-separated,
 made known). A torrent that is already in the list gets the tags added to those it has, as a
 `category` adds its label there; qBittorrent leaves an existing torrent's tags alone on a
 duplicate add. `torrents/info` and `sync/maindata` carry each torrent's `tags` as qBittorrent
@@ -562,6 +565,15 @@ shim's `app/preferences` shows `add_trackers_enabled` and `add_trackers`; `setPr
 ignores them. A Web UI hosted by a desktop program leaves the page out: the program owns the
 list.
 
+Both list addresses (`trackers.url` and `ipfilter.url`, below) may carry a subscription's
+user name, password or PIN, so `GET /pa/prefs` sends them as the Logger names them: without
+what comes before the host's `@`, the query and the fragment (`frontend::ip_filter_list::redact`),
+as the search sources' addresses are sent. The page sends only the fields that changed, so a
+field left as it is keeps the stored address; an address sent back exactly as shown counts as
+no change (and asks no password); any other value replaces it, an empty one clears it. To drop
+the credentials while keeping the rest, clear the field, apply, then type the address again.
+Hosted, neither address is sent at all.
+
 The IP filter's block list from an address (D75, Preferences > BitTorrent > IP Filter):
 `ipfilter.from_url` and `ipfilter.url` are security fields for the same reason (the server
 fetches the address, and what it returns decides whom it talks to); with the filter on, the
@@ -571,7 +583,12 @@ the box ticked the list replaces the file, whose field greys (`disabled_by`). Th
 is kept beside `webui.json` (`ipfilter-url.dat` and `ipfilter-url.txt`) and loaded at start
 before any fetch; it is fetched again once a day, through the session's proxy, not while the
 D70 guard holds the transfers (only the page's own save confirms the settings). Until a first
-fetch the rules in force stay, so turning it on is no error. `POST /pa/prefs/ipfilter/update`
+fetch the rules in force stay, so turning it on is no error. A new address leaves the copy of
+the old one (and `ipfilter-url.txt`, which names its address) on disk until a list of the new
+one has been fetched, checked and saved: a typo or a failed fetch loses nothing, and going back
+to the old address uses its copy again. A copy is loaded only for the address it came from: at
+start with another address set, no list is in force until the fetch lands, and the Logger says
+so. `POST /pa/prefs/ipfilter/update`
 fetches the saved address now (never one from the request; the page applies itself first);
 `GET /pa/prefs/ipfilter` answers `{"status"}`, the line `GET /pa/prefs` carries as
 `ipfilter_status`. SIGHUP reloads the kept copy (it fetches nothing); `--ip-filter` still names a

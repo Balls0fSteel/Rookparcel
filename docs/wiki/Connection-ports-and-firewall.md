@@ -184,13 +184,14 @@ While the address is in use, it replaces the file: the file box and **Reload** a
 - **Formats.** The three formats above, plain or gzip-compressed. Zip archives are not supported. A download can be up to 32 MiB.
 - **How often.** Once a day, and an hour after a download that failed. **Update Now** downloads it at any time.
 - **At start.** Rookparcel keeps the last good download in its settings folder (`ipfilter-url.dat`) and puts it in force at once at the next start, before it downloads anything.
+- **A new address.** The copy of the old address's list stays in the settings folder until a list from the new address has been downloaded and checked, so a typo or a failed download loses nothing, and going back to the old address uses its copy again. A copy is used only for the address it came from: started with a new address, Rookparcel has no block list in force until the new one arrives, and the Logger says so. In the Windows program, **Update Now** with an address you have not applied yet only tries it: the line shows the result, and nothing changes until **OK** or **Apply**.
 - **When a download fails** or brings something that is not a block list (an error page, for example), the rules already in force stay, and the status line says "The last download failed: ...". The Logger writes the error too.
 - **Status line.** "N rules, downloaded" with the date and time, or "The list has not been downloaded yet." until the first download succeeds. Until then, the rules already in force stay.
 - **The settings check.** While Rookparcel holds the transfers after a version change, until you confirm the settings ([Updating Rookparcel](Updating-Rookparcel)), the download waits too.
 
 Use an address you trust: whoever controls the list decides which peers Rookparcel refuses to talk to.
 
-In the Web UI, changing the box or the address needs the current password (**Current password:** on the Web UI page), because the server downloads whatever address is set. The Web UI that the Windows program serves leaves the address out: it belongs to the window's own Preferences. The qBittorrent-compatible API cannot change it.
+In the Web UI, changing the box or the address needs the current password (**Current password:** on the Web UI page), because the server downloads whatever address is set. The page shows the address without a user name, password or query (a subscription's credentials often sit there); left as it is, the stored address is kept. To remove the credentials, clear the box, apply, then type the address again. The Web UI that the Windows program serves leaves the address out: it belongs to the window's own Preferences. The qBittorrent-compatible API cannot change it.
 
 ### Trackers and the DHT
 

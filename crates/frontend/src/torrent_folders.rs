@@ -125,12 +125,22 @@ pub fn file_name(name: &str) -> String {
     if s.is_empty() {
         return "torrent".to_owned();
     }
-    let stem = s.split('.').next().unwrap_or_default().trim_end().to_ascii_uppercase();
-    let device = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || (stem.len() == 4
-            && (stem.starts_with("COM") || stem.starts_with("LPT"))
-            && stem.as_bytes()[3].is_ascii_digit());
-    if device { format!("_{s}") } else { s.to_owned() }
+    let stem = s.split('.').next().unwrap_or_default().trim_end();
+    if is_device_name(stem) { format!("_{s}") } else { s.to_owned() }
+}
+
+/// Whether `stem` (a file name's part before its first dot) is a Windows device name, in any
+/// case: CON, PRN, AUX, NUL, CONIN$, CONOUT$, and COM or LPT with a digit or a superscript
+/// one, two or three (`COM¹`, which a byte-length test misses: the superscript is two bytes).
+fn is_device_name(stem: &str) -> bool {
+    let upper = stem.to_ascii_uppercase();
+    if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$") {
+        return true;
+    }
+    let mut chars = upper.chars();
+    let prefix: String = chars.by_ref().take(3).collect();
+    (prefix == "COM" || prefix == "LPT")
+        && matches!((chars.next(), chars.next()), (Some('0'..='9' | '¹' | '²' | '³'), None))
 }
 
 /// The file names a copy of torrent `name` may have in a folder: `<name>.torrent`, then
@@ -701,6 +711,48 @@ mod tests {
         assert_eq!(file_name("con"), "_con");
         assert_eq!(file_name("Com1.txt"), "_Com1.txt");
         assert_eq!(file_name("console"), "console");
+        // every reserved name, in any case, with or without an extension
+        for name in [
+            "CON",
+            "prn",
+            "Aux",
+            "nul",
+            "COM0",
+            "com9",
+            "LPT0",
+            "lpt5",
+            "COM¹",
+            "com²",
+            "COM³",
+            "LPT¹",
+            "lpt²",
+            "LPT³",
+            "CONIN$",
+            "conout$",
+            "Conin$.log",
+            "COM¹.torrent",
+            "lpt³ .txt",
+            "nul.tar.gz",
+        ] {
+            assert_eq!(file_name(name), format!("_{name}"), "{name}");
+        }
+        for name in [
+            "COM",
+            "COM10",
+            "LPT¹2",
+            "COM⁴",
+            "COMx",
+            "CONIN",
+            "CONOUT",
+            "CONIN$$",
+            "XCON",
+            "COM¹x",
+            "LP",
+            "Ä",
+            "conin$x.log",
+        ] {
+            assert_eq!(file_name(name), name, "{name}");
+        }
         let long = "é".repeat(150);
         let s = file_name(&long);
         assert!(s.len() <= 200 && s.chars().all(|c| c == 'é'));

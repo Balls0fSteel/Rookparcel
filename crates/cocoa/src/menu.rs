@@ -261,8 +261,27 @@ pub fn torrent(labels: &[String], tags: &[String], shortcuts: bool) -> Vec<Item>
     ]
 }
 
+thread_local! {
+    /// The labels and the tags the Label and Tags items were last built from ([`label_items`],
+    /// [`tag_items`]): `Command::Label(i)` and `Command::Tag(i)` name the `i`-th of these, not
+    /// of the lists as they are when the item is validated or picked, which a tag or label
+    /// learned while the menu is open would shift onto a neighbour (M1; Win32's `menu_tags`).
+    static BUILT: std::cell::RefCell<(Vec<String>, Vec<String>)> = std::cell::RefCell::default();
+}
+
+/// The label `Command::Label(i)` stands for in the menu last built.
+pub fn built_label(i: u16) -> Option<String> {
+    BUILT.with(|b| b.borrow().0.get(usize::from(i)).cloned())
+}
+
+/// The tag `Command::Tag(i)` stands for in the menu last built.
+pub fn built_tag(i: u16) -> Option<String> {
+    BUILT.with(|b| b.borrow().1.get(usize::from(i)).cloned())
+}
+
 /// Torrent > Label's items: New Label, Remove Label, then the labels.
 pub fn label_items(labels: &[String]) -> Vec<Item> {
+    BUILT.with(|b| b.borrow_mut().0 = labels.to_vec());
     let mut items = vec![
         c(Command::NewLabel, tr!(MenuNewLabel), None),
         c(Command::RemoveLabel, tr!(MenuRemoveLabel), None),
@@ -282,6 +301,7 @@ pub fn label_items(labels: &[String]) -> Vec<Item> {
 /// Torrent > Tags' items (D76), in Label's order: New Tag and Remove All Tags, then a check
 /// item per known tag (`app::state` checks it, or marks it mixed).
 pub fn tag_items(tags: &[String]) -> Vec<Item> {
+    BUILT.with(|b| b.borrow_mut().1 = tags.to_vec());
     let mut items =
         vec![c(Command::NewTag, tr!(MenuNewTag), None), c(Command::ClearTags, tr!(MenuRemoveAllTags), None)];
     if !tags.is_empty() {
@@ -776,5 +796,39 @@ mod tests {
         for c in [Command::NewTag, Command::ClearTags] {
             assert_eq!(all.iter().filter(|x| **x == c).count(), 1, "{c:?}");
         }
+    }
+
+    /// M1: Tags ▸'s and Label ▸'s items name the tags and labels the menu was built from: a
+    /// tag learned while it is open (sorting before the one picked) shifts nothing.
+    #[test]
+    fn the_items_name_what_the_menu_was_built_from() {
+        let built = torrent(&["films".into(), "tv".into()], &["Movies".into(), "TV".into()], false);
+        let tags = built.iter().find_map(|i| match i {
+            Item::Sub { role: Role::Tags, items, .. } => Some(items),
+            _ => None,
+        });
+        let tags = tags.expect("Tags");
+        let title_of = |cmd: Command| {
+            tags.iter().find_map(|i| match i {
+                Item::Cmd { cmd: c, title, .. } if *c == cmd => Some(title.clone()),
+                _ => None,
+            })
+        };
+        // "Music" became known while the menu was open (the live list is now Movies, Music,
+        // TV): the second item still shows and means TV
+        let live = ["Movies", "Music", "TV"];
+        assert_eq!(title_of(Command::Tag(1)).as_deref(), Some("TV"));
+        assert_eq!(built_tag(1).as_deref(), Some("TV"));
+        assert_eq!(built_tag(0).as_deref(), Some("Movies"));
+        assert_eq!(built_tag(2), None, "past the menu's tags");
+        assert_eq!(
+            (built_label(0).as_deref(), built_label(1).as_deref(), built_label(2)),
+            (Some("films"), Some("tv"), None)
+        );
+        // the next build (the menu opened again) takes the list as it is then
+        let _ = tag_items(&live.map(String::from));
+        assert_eq!(built_tag(1).as_deref(), Some("Music"));
+        let _ = label_items(&[]);
+        assert_eq!(built_label(0), None);
     }
 }

@@ -287,6 +287,76 @@ only show a lower round trip, with the same effect as a zero delay.
   `qbittorrent_flags` are private behind a file-based entry. The new runs are one short local
   run each.
 
+## Release 1.2.63 (since v1.2.57)
+
+Date: 2026-11-16_213625_1794861385. Scope: `git diff v1.2.57..HEAD` (1.2.58-1.2.62) without the
+translations and window layouts: D71 (UI Lock page), D72 download order, D73 Copy Magnet Link
+and Export .torrent (`frontend::export`, nox's export routes), D74 excluded names
+(`frontend::patterns`, `exclude`), D75 the block list from an https address and CIDR lines
+(`frontend::ip_filter_list`, `net/ip_filter.rs`, nox's `/pa/prefs/ipfilter*`), D76 tags
+(`frontend::tags`, nox's `/pa/tags*` and the shim's tag calls, the qBittorrent import), D77
+`.!ut` / `.!qB` names (`disk/mod.rs`, the probe, renames, delete, export, the importers), remote
+protocol 20. Method as above: three read-only reviewers (the daemon and Web UI, the engine and
+shared code, the desktop programs), every finding reproduced or checked here; the daemon probed
+live on loopback (403, 405, Origin and Host checks on every new endpoint); the `ip_filter` fuzz
+target run 90 s (982,822 runs, CIDR lines reached, no artifacts). Nothing critical or high.
+
+### Found and fixed
+
+| Severity | Where | Problem | Fix | Test |
+|---|---|---|---|---|
+| Medium | `disk/mod.rs` probe, `set_names`, `rename_file`, `export_file` (D77) | Reproduced. A torrent holding both `x` and `x.!ut` (option on), `x` and `X.!UT` (Windows), or `x` and `x.!qB` (option off, the default) made two of its files resolve to one path: one file's data overwrote or replaced the other's. Within the torrent's own files; a recheck recovered it. | A per-storage collision index (`Clash`, paths case-folded on every platform, built only when a path of the torrent ends like a suffixed or export name) forbids a suffix whose path is another file or directory of the torrent (`NO_UT`, `NO_QB`); the probe, `set_names`, `rename_file` and the export's temporary name (`export_temp`) never take another file's path. | `disk::names_tests`: `a_file_never_takes_another_files_name_with_the_suffix`, `a_restart_never_gives_two_files_one_name`, `the_probe_never_takes_another_files_name`, `an_export_never_takes_another_files_name`, `a_user_rename_never_takes_another_files_name`, `paths_are_compared_as_the_file_systems_do`, and the randomised `files_named_like_suffixed_ones_never_share_a_path` |
+| Low | `disk/mod.rs` `delete_files` (D77) | Reproduced. Remove and Delete Data deleted a same-named `.!ut` / `.!qB` file the torrent never wrote (another client's partial in the save folder). | A file under a suffixed name is deleted only with evidence it is this torrent's (`OURS`: written by this or the running storage, a piece passed a check, pieces or blocks the engine has, `Storage::note_data`); otherwise kept, and a Logger line says so. | `deleting_keeps_suffixed_files_not_known_to_be_ours`, `our_own_partial_files_are_deleted_with_the_data` |
+| Low | nox tag endpoints and the shim's tag calls | Names × torrents work under the State lock: an 80 KB `tags=a,a,...` against 2,000 torrents held it 11.7 s (debug build). | Names normalised, sorted, deduplicated and capped at 1024 once per request, before the lock (`tag_names`); `put_tags` and `delete_tags` do one pass. | `many_tag_names_cost_what_their_distinct_names_do` |
+| Low | nox `prefs::model` (`GET /pa/prefs`) | The block-list address and the tracker-list address were sent whole, credentials included, to every session; hosted, the host's addresses. | Sent as `ip_filter_list::redact` gives them, empty when hosted; the shown form sent back counts as no change and keeps the stored value (`keep_addresses`). | `the_list_addresses_are_sent_without_their_credentials` |
+| Low | nox adds; `frontend::patterns` | Excluded-names matching and a second `.torrent` parse ran under the State lock, the matcher O(pattern × name) in the worst case. | Computed before the lock from the parsed torrent; a bit-parallel matcher with the old one's results (checked exhaustively against it for short inputs). | `the_same_answers_as_backtracking`, `a_hostile_list_against_hostile_names_stays_fast` |
+| Info | nox `Alert::TorrentFile` | Exported `.torrent` replies (and those of the `.torrent` folders and waiting magnets) stayed in the reply cache. | Cached only while an export waits, dropped when the last is done. | `torrent_files_are_cached_only_for_a_waiting_export` |
+| Low | `frontend::ip_filter_list`, Win32 Preferences (D75) | Update Now with another address, then Cancel, deleted the kept copy of the old list and left the filter empty without a word; a new address whose fetch failed lost the old copy after a restart. | The old copy stays until the new address's list is saved; a copy is loaded only for its own address, else a Logger line; Win32's Update Now on unapplied fields is a trial (`try_config`, `ipfilter-url.dat.try`) that changes nothing until applied. | `a_new_address_keeps_the_old_copy_until_its_own_list_is_saved`, `a_trial_changes_nothing_until_its_fields_are_applied`, Win32 `update_now_then_cancel_leaves_the_ip_filter_as_it_was` |
+| Low | Win32 `popup` (D69) | Context menus, the new Tags group's among them, whose picks are carried out where the menu returns rather than through `on_command`, could open while locked (a posted `WM_CONTEXTMENU`). | No popup opens, and no pick counts, while locked, except the tray's (`popup_always`). | `no_context_menu_opens_while_locked` |
+| Low | GTK actions (D69; open since the 1.2.54 review) | Window and application actions were invocable over the session D-Bus (`org.gtk.Actions`) while locked: Copy Magnet Link, export, tags, start and remove. | Every action is made by `action` / `stateful_action`, whose first handler refuses all but Quit and Lock while locked. Checked live on the Xubuntu VM with `gdbus`, with a negative control. | `actions_are_refused_while_locked` |
+| Low (hardening) | `net/fetch.rs` `FetchError` | A server's HTTP reason phrase (up to the 16 KiB head) and redirect hosts reached status lines and the Logger unfiltered (terminal escapes, bidi overrides). | `util::string::remote_text`: cut to 100 characters (URLs 300), control and format (bidi, zero-width) characters dropped. | `a_reason_phrase_is_shown_short_and_clean`, `remote_text_is_cut_and_has_no_controls` |
+| Info | `ip_filter_list::redact`; `torrent_folders::file_name`; Mac `Tag(i)` / `Label(i)` | `redact` showed part of a password typed with `?` or `/`; export file names missed Windows device names with superscript digits (`COM¹`) and `CONIN$` / `CONOUT$` (core's sanitiser already covered them); the Mac resolved a menu item's index against the live tag or label list at click time. | `redact` takes everything to the last `@` as user info when it may be; `is_device_name`; the Mac's items name the lists the menu was built from (`built_tag`, `built_label`). The tracker list's error for a bad redirect target is redacted too. | `a_password_with_odd_characters_is_never_shown`, `torrent_folders` tests, core `device_names_with_superscript_digits_and_console_names`, Mac `the_items_name_what_the_menu_was_built_from` |
+
+### Reviewed and judged fine
+
+- **New endpoints:** `/pa/tags*`, `/pa/torrents/*-tag*`, `/pa/torrents/export`, `/pa/prefs/ipfilter*` and
+  the shim's tag and export calls are behind the login, CSRF, Host and POST-only rules (probed
+  live); the block-list address needs the current password and a hosted Web UI refuses it.
+- **Export:** `Content-Disposition` (`http::attachment`) has an ASCII `filename` without `"`, `\`
+  and `%` and an RFC 8187 `filename*`, cut at 255 bytes; the folder export's names go through
+  `file_name` and `create_new`; `app.js` builds no HTML from torrent names (no `innerHTML`).
+- **Tags:** `tags::normalize` (no comma or control character, 128 bytes, 1024 known) on every
+  path: both APIs, the GUIs, the import, the stored keys read back.
+- **Block-list fetch:** https only, no downgrade on redirects, no redirect from a public address
+  to a local one (SEC-26's reach rule), 32 MiB fetched, 256 MiB inflated (bounded while inflating), 120 s; written to a
+  `.part` then renamed; CIDR parsing with checked shifts and bounds.
+- **D77 and the importers:** the qBittorrent importer sanitises mapped paths after stripping
+  `.!qB`; renames never replace (`rename_no_replace`).
+- **D72:** the first and last pieces' arithmetic stays within the torrent's pieces.
+- **Remote protocol 20:** the new `FileCompleted` alert and setting decode exhaustively; fuzzed by
+  `remote_wire`.
+- **UI lock (D71):** the lock keys stay out of the hosted Web UI both ways; turning the lock off
+  or changing the PIN checks the PIN.
+
+### Open
+
+- A block list is trusted whole: one blocking everything is accepted, and with a new address no
+  rules are in force until its first fetch lands.
+- No Mark-of-the-Web or quarantine on downloads, and no question before Open of an unfinished or
+  executable file (unchanged by this range; with "Append .!ut" on, an unfinished file has an
+  extension no shell runs).
+- The tracker list (D66) still deletes its kept copy on an address change.
+- Magnet file lists are still matched against the exclusions under nox's State lock (with the
+  fast matcher).
+- Context menus inside the RSS and Add dialogs are not lock-gated (those dialogs are hidden while
+  locked).
+- A tracker's `failure reason` text is not cleaned like the fetcher's reason phrases.
+- A user rename giving two files the same name is allowed, as in libtorrent;
+  `rename_no_replace` on file systems without hard links is check-then-rename; a µTorrent or
+  qBittorrent partial adopted but never verified is now kept on Remove and Delete Data.
+- No fuzz target covers `ip_filter_list::parse_list`, `patterns`, `exclude`, `tags` or `import.rs`.
+- BACKLOG "Security review 1.2.63".
+
 ## Release 1.2.57 (since v1.2.54)
 
 Date: 2026-11-15_174308_1794760988. Scope: `git diff v1.2.54..HEAD` without the translations, the fixtures and the
@@ -376,9 +446,7 @@ and v1.2.46 have no section here (the 2026-11-05 bug hunt and the 1.2.44 bug rev
 
 ### Open
 
-- **GTK window actions while locked:** they have no central `locked()` check (Win32's
-  `on_command` and the Mac's `works_locked` have one). GtkApplication exports window actions on
-  the session bus, so another process of the user could probably open a dialog while locked.
-  Not checked at run time; within the privacy-only claim. BACKLOG "UI lock".
+- **GTK window actions while locked:** closed in 1.2.63 (see "Release 1.2.63": confirmed over
+  the session bus, every action now passes a lock gate).
 - **The search helper's surrogates:** a high surrogate followed by an escape that is not a low
   one drops the second escape (older than v1.2.46; one character lost).

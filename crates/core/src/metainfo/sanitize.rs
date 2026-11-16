@@ -373,6 +373,46 @@ mod tests {
         assert!(!super::is_reserved_device_name("COM\u{b4}"));
     }
 
+    /// Security review 2026-11-16: the stem is compared by characters, so the superscript
+    /// digits (two bytes in UTF-8) and the six-letter console names are found in any case and
+    /// before any extension, and what only looks like them is not.
+    #[test]
+    fn device_names_with_superscript_digits_and_console_names() {
+        use super::is_reserved_device_name as dev;
+        for base in ["COM", "LPT", "com", "Lpt"] {
+            for digit in ['\u{b9}', '\u{b2}', '\u{b3}'] {
+                assert!(dev(&format!("{base}{digit}")), "{base}{digit}");
+                assert!(dev(&format!("{base}{digit}  ")), "{base}{digit} with spaces");
+            }
+            // other superscripts and subscripts, two digits, a digit and a superscript: names
+            for not in ['\u{2074}', '\u{2070}', '\u{2081}', '\u{b9}'] {
+                assert!(!dev(&format!("{base}1{not}")), "{base}1{not}");
+                assert!(not == '\u{b9}' || !dev(&format!("{base}{not}")), "{base}{not}");
+            }
+        }
+        for name in ["CONIN$", "conin$", "CONOUT$", "ConOut$", "CONOUT$ "] {
+            assert!(dev(name), "{name}");
+        }
+        for name in ["CONIN", "CONOUT", "CONIN$$", "CONOUT$1", "$CONIN", "CON$", "COM", "LPT", ""] {
+            assert!(!dev(name), "{name}");
+        }
+        if WIN {
+            for (input, out) in [
+                ("COM\u{b2}", "COM\u{b2}_"),
+                ("lpt\u{b3}.txt", "lpt\u{b3}_.txt"),
+                ("LPT\u{b9} .x.y", "LPT\u{b9}_ .x.y"),
+                ("conin$.log", "conin$_.log"),
+                ("CONOUT$...", "CONOUT$_"),
+            ] {
+                assert_eq!(s(&[input.as_bytes()]), out, "{input}");
+                assert_eq!(s(&[b"d", input.as_bytes(), b"f"]), format!("d/{out}/f"), "{input}");
+            }
+        }
+        for name in ["COM\u{2074}", "LPT\u{b9}\u{b9}", "CONOUT$x", "x.COM\u{b9}"] {
+            assert_eq!(s(&[name.as_bytes()]), name, "{name}");
+        }
+    }
+
     #[test]
     fn names_from_outside_the_metadata() {
         assert_eq!(sanitize_name(""), "");

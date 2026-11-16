@@ -259,6 +259,20 @@ mod tests {
         assert_eq!(parts("aux /x"), ["_aux", "x"]);
         assert_eq!(parts("console"), ["console"]);
         assert_eq!(parts("com10"), ["com10"]);
+        // security review 2026-11-16: superscript digits and the console names, in any case,
+        // with an extension or trailing dots and spaces
+        for (label, folder) in [
+            ("COM²", "_COM²"),
+            ("lpt³.x", "_lpt³.x"),
+            ("Com¹ . ", "_Com¹"),
+            ("CONIN$", "_CONIN$"),
+            ("conout$.txt", "_conout$.txt"),
+            ("COM⁴", "COM⁴"),
+            ("LPT¹¹", "LPT¹¹"),
+            ("CONOUT$x", "CONOUT$x"),
+        ] {
+            assert_eq!(parts(label), [folder], "{label}");
+        }
 
         let long = "é".repeat(200);
         let p = parts(&long);

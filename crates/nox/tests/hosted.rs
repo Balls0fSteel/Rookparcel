@@ -1223,30 +1223,38 @@ fn lock_keys_are_the_hosts_own() {
     let mut options = Prefs::default();
     options.set("ui.lock_pin", &hash);
     options.set_bool("ui.locked", true);
+    // the lock's switch (D71) too
+    options.set_bool("ui.lock_enabled", true);
     let t = Harness::start("lock-keys", options, Some(PASS));
     let sid = t.login();
     for path in ["/pa/prefs", "/api/v2/app/preferences"] {
         let text = t.get(&sid, path).text();
         assert!(
-            !text.contains(SALT) && !text.contains("lock_pin") && !text.contains("ui.locked"),
+            !text.contains(SALT)
+                && !text.contains("lock_pin")
+                && !text.contains("ui.locked")
+                && !text.contains("lock_enabled"),
             "{path}: {text}"
         );
     }
     for body in [
         format!(r#"{{"ui.lock_pin":"","webui.current_password":"{PASS}"}}"#),
         format!(r#"{{"ui.locked":false,"webui.current_password":"{PASS}"}}"#),
-        r#"{"ui.lock_pin":"x","ui.locked":"0"}"#.to_owned(),
+        format!(r#"{{"ui.lock_enabled":false,"webui.current_password":"{PASS}"}}"#),
+        r#"{"ui.lock_pin":"x","ui.locked":"0","ui.lock_enabled":"0"}"#.to_owned(),
     ] {
         let r = t.pa(&sid, "/pa/prefs", &body);
         assert_ne!(r.status, 204, "{body}: {}", r.text());
     }
-    let set = "json=%7B%22ui.lock_pin%22%3A%22%22%2C%22ui.locked%22%3A%220%22%7D";
+    let set =
+        "json=%7B%22ui.lock_pin%22%3A%22%22%2C%22ui.locked%22%3A%220%22%2C%22ui.lock_enabled%22%3A%220%22%7D";
     t.post(&sid, "/api/v2/app/setPreferences", set);
     // another preference goes to the host; the journal never carries the lock's keys
     assert_eq!(t.pa(&sid, "/pa/prefs", r#"{"ui.add_stopped":true}"#).status, 204);
     assert_eq!(t.host.value_of("ui.add_stopped"), Some(Some("1".to_owned())));
     let journal = t.host.changes();
     assert!(!journal.iter().any(|(k, _)| k.starts_with("ui.lock")), "{journal:?}");
+    assert_eq!(t.host.value_of("ui.lock_enabled"), None);
 }
 
 #[test]
@@ -1336,8 +1344,8 @@ fn download_order_magnets_and_export_on_the_hosts_engine() {
 
 /// The IP filter's list from an address (D75) is the host's own, as its tracker list is: the
 /// page shows neither the box nor the address nor Update Now (the file greys all the same
-/// while the host takes the list from an address), a browser changes neither, even with the
-/// password, and there is no second list here to update. "Do not download files named"
+/// while the host takes the list from an address), the address is never sent, a browser changes
+/// neither, even with the password, and there is no second list here to update. "Do not download files named"
 /// (D74) is the host's too, and a browser changes it as the host's other options.
 #[test]
 fn the_ip_filter_address_and_the_excluded_names_are_the_hosts() {
@@ -1365,10 +1373,12 @@ fn the_ip_filter_address_and_the_excluded_names_are_the_hosts() {
         assert!(!bt.contains(part), "{part}: {bt}");
     }
     let value = |m: &Json, id: &str| m.get("fields").unwrap().get(id).unwrap().get("value").cloned().unwrap();
+    // the host's address never reaches a browser (it may carry a subscription's credentials)
     assert_eq!(
         (value(&m, "ipfilter.from_url"), value(&m, "ipfilter.url")),
-        (Json::Bool(true), Json::from(URL))
+        (Json::Bool(true), Json::from(""))
     );
+    assert!(!m.to_json().contains("lists.example"), "{}", m.to_json());
     assert_eq!(
         (value(&m, "files.exclude"), value(&m, "files.exclude_names")),
         (Json::Bool(true), Json::from("*.lnk; Thumbs.db"))
@@ -1413,7 +1423,8 @@ fn the_ip_filter_address_and_the_excluded_names_are_the_hosts() {
     ]);
     let m = t.get(&sid, "/pa/prefs").json();
     assert_eq!(value(&m, "files.exclude_names"), Json::from("*.iso"));
-    assert_eq!(value(&m, "ipfilter.url"), Json::from("https://lists.example/other.gz"));
+    assert_eq!(value(&m, "ipfilter.url"), Json::from(""));
+    assert!(!m.to_json().contains("lists.example"), "{}", m.to_json());
     let p = t.get(&sid, "/api/v2/app/preferences").json();
     assert_eq!(
         (p.get("excluded_file_names_enabled"), s(p.get("excluded_file_names"))),

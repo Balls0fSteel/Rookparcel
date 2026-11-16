@@ -1210,13 +1210,14 @@ Found and left:
 - **All:** Exit while locked with moves under way shows the closing window (D47) with the moves' destinations.
 - **Windows:** the reset question and "No lock PIN is set." have no owner, so they get a taskbar button; a locked start forgets the maximized state, as `--minimized` does; the Logger line after a reset was not read in the hidden run.
 - **Text:** the English wait message says "1 seconds" in its last second.
-- **GTK, from the 1.2.54 review (SECURITY-REVIEW.md):** window actions have no central `locked()`
-  check, unlike Win32's `on_command` and the Mac's `works_locked`; GtkApplication exports them on
-  the session bus, so another process could probably open a dialog while locked (not run).
 - **Windows:** a second forwarded `--reset-lock` while the question is open stacks another
   question and clears `asking_reset` early; only the order of the dialogs changes.
 - **Fixed in 1.2.54:** Set PIN no longer replaces an existing PIN (`ui_lock::submit`, and
   `on_command` checks the menu state for a posted command, as the Mac did).
+- **Fixed in 1.2.63 (security review):** GTK's window and application actions all pass a lock
+  gate (only Quit and Lock act while locked), also when activated over the session bus
+  (`org.gtk.Actions`; checked with `gdbus` on the Xubuntu VM). Win32 opens no context menu while
+  locked except the tray's.
 
 ## Download order, magnet links and export (D72, D73; built 2026-11-16, 1.2.59)
 
@@ -1244,7 +1245,7 @@ Found and left:
 - **IP filter address, status line:** empty while the box is ticked and the address is blank; it could say that an address is needed.
 - **macOS:** the Trackers page's Update Now now greys while its "from URL" box is unticked, a side effect of buttons greying with their row's field. Harmless, but it differs from the other interfaces.
 - **Windows, remote window:** the address's status line is empty, and Update Now does nothing, as the Trackers page's (the fetch belongs to the server; OK sends the address).
-- **Windows, Update Now:** it fetches with the page's fields unapplied (fixed in 1.2.60, as the Trackers page's). An unapplied address drops the copy kept of the stored one; closing without OK restores the stored rules and fetches that copy again. The shared help texts of both Update Now buttons still say "Applies the page", true of GTK and the Web UI only.
+- **Windows, Update Now:** with fields not applied yet it is a trial since 1.2.63: the line shows its result, and neither the rules in force nor the kept copy change until OK or Apply (Cancel leaves both). A new address keeps the old address's copy until the new one's list is saved. The shared help texts of both Update Now buttons still say "Applies the page", true of GTK and the Web UI only.
 - **Excluded names, duplicate magnets:** a magnet of a torrent already in the session leaves it alone (1.2.60), as the owner's torrent list knows it. One added in the second before that list shows it (its first status) counts as new.
 - **Web UI:** the new fields (the pattern list, the address, Update Now, the status line) not yet seen on a phone or in Safari or Firefox.
 - **Text:** "block list" is a newly coined term in all 34 machine-translated tables; it wants a native speaker's review.
@@ -1260,7 +1261,6 @@ Found and left:
 - **Text:** the tag words are machine-translated in 34 tables and want a native review. Weakest: es / ca "Marcas" / "Marques", pt-PT "Marcadores", el "Σημάνσεις", tr "İşaretler", hu "Jelölők", ro "Marcaje", zh "标记" / "標記". Accelerator clashes in the torrent menu: German `Ta&gs` with `Ei&genschaften`, Italian `Ta&g` with `Sposta &giù nella coda`.
 - **Hosted Web UI, simultaneous New Tag:** `tags.list` travels whole between the window and the Web UI it serves. Both write it only when their known tags change (1.2.61), but an unused tag made in the window and another made in a browser before the window's change reaches the daemon (the window hands its changes over once a second) can lose one of the two, on one side or both. A real fix needs a three-way merge against the last list exchanged (or per-name changes); left as it is. Tags a torrent has are not lost (each side keeps every tag a torrent has).
 - **Past 1024 names:** when the known list is read again with every torrent's tags (`set_known_tags`, the daemon's `reload_known_tags`) and they come to more than 1024 distinct names, the list is cut at 1024 and a torrent can keep a tag that is not in it: the Tags column shows it, no menu or sidebar row offers it.
-- **Mac, `Tag(i)`:** Tags ▸'s items carry an index into the known tags and resolve it against the live list at click time; a tag made or deleted elsewhere (a hosted change) between the menu opening and the click can toggle the neighbouring tag. Rare; Label ▸'s `Label(i)` works the same.
 - **GTK, category list:** a right-click on a tag row selects that row first, so the list filters by it before the menu opens (as a feed's row does there); the other interfaces open the menu without changing the filter.
 - **API, duplicate add:** `torrents/add` with `tags` for a torrent already in the list adds the tags to it (a `category` sets its label likewise); qBittorrent leaves a duplicate's tags alone. Documented in WEBUI.md, not changed.
 - **Icons:** no tag icons; the label icon is reused in the menus and the category list.
@@ -1285,6 +1285,19 @@ Found and left:
 - **GTK:** the hover-help box under a Preferences page cuts this setting's long help at three lines; the tooltip shows all of it.
 - **Logger:** the failed-rename line mixes `\` and `/` in the path on Windows.
 - **Text:** the two new strings are machine-translated in 34 tables; hu and nl start the check box with ".!ut", which wants a native review.
+
+## Security review 1.2.63 (v1.2.57..1.2.63; SECURITY-REVIEW.md)
+
+Left open by decision:
+
+- **Block list trusted whole:** a list that blocks every address is accepted; with a new address there are no rules until its first fetch lands.
+- **Downloads:** no Mark-of-the-Web or quarantine attribute on downloaded files, and no question before Open of an unfinished or executable file (older than this range; with "Append .!ut" on, an unfinished file has an extension no shell runs).
+- **Tracker list (D66):** still deletes its kept copy when the address changes (the block list keeps it since 1.2.63).
+- **nox, magnets:** excluded names are matched against a magnet's file list under the State lock when its metadata arrives (with the fast matcher since 1.2.63).
+- **Lock gate:** context menus inside the RSS and Add dialogs are not lock-gated (those dialogs are hidden while locked).
+- **Tracker text:** a tracker's `failure reason` reaches the Trackers tab and the Logger uncleaned (the fetcher's reason phrases are cleaned since 1.2.63).
+- **D77:** a user rename giving two files of a torrent the same name is allowed, as in libtorrent; `rename_no_replace` on a file system without hard links is check-then-rename; a µTorrent or qBittorrent partial that was adopted but never verified is kept on Remove and Delete Data.
+- **Fuzzing:** no target reaches `ip_filter_list::parse_list`, `patterns`, `exclude`, `tags` or `import.rs`.
 
 ## Settings guard (D70; 2026-11-15, 1.2.55-)
 

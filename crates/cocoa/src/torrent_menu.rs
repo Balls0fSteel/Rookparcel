@@ -17,8 +17,9 @@ use rookparcel_frontend::export::{ExportTarget, export_file_name};
 use rookparcel_frontend::tags::TagState;
 use rookparcel_frontend::tr;
 
-use crate::app::{apply, labels, peek, selected, tags, ui, with_core};
+use crate::app::{apply, peek, selected, ui, with_core};
 use crate::commands::Command;
+use crate::menu::{built_label, built_tag};
 use crate::ui::{self as mui, Pick, Style};
 
 /// Runs a torrent command on the selection (Start All and Stop All on every torrent).
@@ -87,15 +88,16 @@ pub fn run(cmd: Command) {
             );
         }
         RemoveLabel => set_label(&ids, ""),
+        // the names the menu showed (M1): a label or tag learned while it was open shifts no item
         Label(i) => {
-            if let Some(l) = labels().get(usize::from(i)) {
-                set_label(&ids, l);
+            if let Some(l) = built_label(i) {
+                set_label(&ids, &l);
             }
         }
         Tag(i) => {
-            if let Some(t) = tags().get(usize::from(i)) {
+            if let Some(t) = built_tag(i) {
                 apply(with_core(|c| {
-                    c.toggle_tag(&ids, t);
+                    c.toggle_tag(&ids, &t);
                     c.events()
                 }));
             }
@@ -119,8 +121,7 @@ pub fn state(cmd: Command) -> (bool, Option<bool>) {
     match cmd {
         _ if ids.is_empty() && matches!(cmd, Tag(_) | ClearTags) => return (false, None),
         Tag(i) => {
-            return peek(|c| c.tag_state(&ids, usize::from(i)))
-                .map_or((false, None), |s| (true, Some(s == Some(TagState::On))));
+            return tag_state(&ids, i).map_or((false, None), |s| (true, Some(s == TagState::On)));
         }
         ClearTags => return peek(|c| c.can_clear_tags(&ids)).map_or((false, None), |on| (on, None)),
         _ => {}
@@ -138,19 +139,23 @@ pub fn state(cmd: Command) -> (bool, Option<bool>) {
         DownLimit(i) => (true, limit(i, m.download_kib)),
         UpLimit(i) => (true, limit(i, m.upload_kib)),
         RemoveLabel => (m.can_remove_label, None),
-        Label(i) => (
-            true,
-            Some(m.label.is_some() && m.label.as_deref() == m.labels.get(usize::from(i)).map(String::as_str)),
-        ),
+        Label(i) => (true, Some(m.label.is_some() && m.label == built_label(i))),
         _ => (true, None),
     }
+}
+
+/// The state across `ids` of the tag Tags ▸'s item `i` shows (`menu::built_tag`, M1); `None`
+/// past the menu's tags or without a core.
+fn tag_state(ids: &[TorrentId], i: u16) -> Option<TagState> {
+    let tag = built_tag(i)?;
+    peek(|c| rookparcel_frontend::tags::state(c.list(), ids, &tag))
 }
 
 /// Whether a tag's item in Tags ▸ shows the mixed mark: some of the selection have it (D76).
 pub fn mixed(cmd: Command) -> bool {
     let Command::Tag(i) = cmd else { return false };
     let ids = selected();
-    peek(|c| c.tag_state(&ids, usize::from(i))).flatten() == Some(TagState::Mixed)
+    tag_state(&ids, i) == Some(TagState::Mixed)
 }
 
 /// Tags ▸ > New Tag: a name as New Label asks it; the selection gets the tag (made known when

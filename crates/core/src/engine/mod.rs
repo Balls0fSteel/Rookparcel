@@ -59,7 +59,7 @@ use crate::alert::{Alert, FileOperation};
 use crate::crypto::mse;
 use crate::disk::{
     BLOCK_SIZE, CheckMode, CheckResult, Completion, DiskIo, FenceAction, HashVerdict, MoveError, MoveStatus,
-    NameFailure,
+    NameFailure, Storage,
 };
 use crate::error::Error;
 use crate::exit::{ExitMove, ExitPhase};
@@ -2265,6 +2265,9 @@ impl Engine {
         }
         // A storage still moving files: deleting (or releasing) waits behind the move on it.
         let moving = self.torrent(id).and_then(|t| t.moving.take());
+        // (what the running storage wrote is the torrent's data: a file it wrote is deleted
+        // under a suffixed name, D77)
+        let running = self.torrent_ref(id).and_then(|t| t.storage.clone());
         self.stop_torrent(id, true);
         self.reap_peers();
         let slot = &mut self.slots[id.index() as usize];
@@ -2283,9 +2286,16 @@ impl Engine {
             self.store_flush_due.get_or_insert(Instant::now() + STORE_FLUSH_DELAY);
         }
         self.alert(Alert::TorrentRemoved { id, info_hashes: t.info_hashes });
+        // D77: the files holding pieces or blocks of the torrent are its data, whatever their
+        // names (only those are deleted under a suffixed one)
+        let note_data = |storage: &Storage, from: Option<Arc<Storage>>| {
+            let have = t.have_bits();
+            storage.note_data(&|p| have.is_some_and(|h| h.get(p as usize)), &t.unfinished, from);
+        };
         if let Some((storage, temporary)) = &moving {
             match delete {
                 Some(action) => {
+                    note_data(storage, running);
                     self.deleting.insert(storage.id, (id, t.info_hashes));
                     self.disk.async_fence(storage, action);
                 }
@@ -2298,6 +2308,7 @@ impl Engine {
                     let names = names_for(self.settings.append_incomplete_ext, &ti, t.have_bits());
                     let storage = self.disk.new_storage(t.save_path.to_string(), ti, Vec::new());
                     storage.init_names(&names);
+                    note_data(&storage, running);
                     self.deleting.insert(storage.id, (id, t.info_hashes));
                     self.disk.async_fence(&storage, action);
                 }
@@ -3405,10 +3416,14 @@ impl Engine {
                 self.on_file_renamed(storage, file, name, error, true)
             }
             Completion::Names { storage, failed, pending } => self.on_names(storage, failed, pending),
-            Completion::Fenced { storage, action, error } => {
+            Completion::Fenced { storage, action, error, log } => {
                 self.storages.remove(&storage);
                 if action != FenceAction::Release {
                     if let Some((id, info_hashes)) = self.deleting.remove(&storage) {
+                        // D77: files deleted or kept under a suffixed name
+                        for message in log {
+                            self.alert(Alert::Log { id: Some(id), message });
+                        }
                         match error {
                             None => self.alert(Alert::TorrentDeleted { id, info_hashes }),
                             Some(error) => self.alert(Alert::TorrentDeleteFailed { id, info_hashes, error }),

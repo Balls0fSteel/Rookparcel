@@ -501,10 +501,10 @@ fn startup(app: &gtk::Application) {
     }
     // a test aid: the windows drawn into PNGs and their texts listed (`ROOKPARCEL_SNAPSHOTS`)
     crate::snapshots::start();
-    let quit = gio::SimpleAction::new("quit", None);
+    let quit = action("quit", None);
     quit.connect_activate(|_, _| quit_app());
     app.add_action(&quit);
-    let remote = gio::SimpleAction::new("connect-remote", None);
+    let remote = action("connect-remote", None);
     let a = app.downgrade();
     remote.connect_activate(move |_, _| {
         if let Some(w) = a.upgrade().and_then(|a| a.active_window()) {
@@ -514,8 +514,7 @@ fn startup(app: &gtk::Application) {
     app.add_action(&remote);
     // File > Profiles: the items name a profile ("" the default one); this one's is checked
     let current = profile::current().name.clone().unwrap_or_default();
-    let switch =
-        gio::SimpleAction::new_stateful("profile", Some(glib::VariantTy::STRING), &current.to_variant());
+    let switch = stateful_action("profile", Some(glib::VariantTy::STRING), &current.to_variant());
     switch.connect_activate(|_, v| {
         let name = v.and_then(|v| v.str()).unwrap_or_default();
         if Some(name) != profile::current().name.as_deref().or(Some("")) {
@@ -529,7 +528,7 @@ fn startup(app: &gtk::Application) {
         ("profile-folder", profile_folder),
     ];
     for (name, f) in actions {
-        let a = gio::SimpleAction::new(name, None);
+        let a = action(name, None);
         a.connect_activate(move |_, _| f());
         // a menu item is for a named profile's entry (the default one has the package's)
         if name == "profile-shortcut" {
@@ -934,7 +933,7 @@ fn menu_state() -> Option<MenuState> {
         for (i, (_, state)) in states.iter().enumerate() {
             let name = format!("tag-{i}");
             if a.window.lookup_action(&name).is_none() {
-                let action = gio::SimpleAction::new_stateful(&name, None, &false.to_variant());
+                let action = stateful_action(&name, None, &false.to_variant());
                 action.connect_activate(move |_, _| toggle_tag(i));
                 a.window.add_action(&action);
             }
@@ -1560,7 +1559,7 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
                 let (added, finished) = opts.gui.run_commands();
                 RunProgram::new(added, finished)
             }),
-            // before the filter is loaded: a kept list of another address is dropped first
+            // before the filter is loaded (D75)
             ip_list: remote.is_none().then(|| {
                 IpFilterList::new(Some(paths::settings_dir()), ip_filter_list::Config::of(&opts.gui))
             }),
@@ -2594,9 +2593,44 @@ fn info(message: &str) {
 
 // --- actions -------------------------------------------------------------------------------
 
+/// The actions that act while the windows are locked (D69): Quit, as the tray's Exit (no PIN
+/// needed), and File > Lock (which does nothing then). The tray and the PIN prompt need none.
+const LOCKED_ACTIONS: [&str; 2] = ["quit", "lock"];
+
+/// A new action of the window (`win.`) or the application (`app.`), refused while the windows
+/// are locked ([`gate`]). Every action of theirs is made here or by [`stateful_action`].
+fn action(name: &str, parameter: Option<&glib::VariantTy>) -> gio::SimpleAction {
+    gate(gio::SimpleAction::new(name, parameter), locked)
+}
+
+/// [`action`] with a state.
+fn stateful_action(
+    name: &str,
+    parameter: Option<&glib::VariantTy>,
+    state: &glib::Variant,
+) -> gio::SimpleAction {
+    gate(gio::SimpleAction::new_stateful(name, parameter, state), locked)
+}
+
+/// The lock's check as `a`'s first handler (G1): while `is_locked`, an activation of anything
+/// but [`LOCKED_ACTIONS`] stops there, before the action's own handler, connected after this
+/// one. Not only the menus and shortcuts of the hidden window: a GtkApplicationWindow exports
+/// its `win.` actions, and the application its `app.` ones, on the session bus
+/// (`org.gtk.Actions`), where any program of the session can activate them, so a locked
+/// window would otherwise copy magnet links (private trackers' passkeys) to the clipboard,
+/// export torrents, make and delete tags, start and remove torrents.
+fn gate(a: gio::SimpleAction, is_locked: fn() -> bool) -> gio::SimpleAction {
+    a.connect_activate(move |a, _| {
+        if is_locked() && !LOCKED_ACTIONS.contains(&a.name().as_str()) {
+            a.stop_signal_emission_by_name("activate");
+        }
+    });
+    a
+}
+
 fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     let simple = |name: &str, f: fn()| {
-        let a = gio::SimpleAction::new(name, None);
+        let a = action(name, None);
         a.connect_activate(move |_, _| f());
         window.add_action(&a);
     };
@@ -2614,7 +2648,7 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
         }
     });
     for client in Client::ALL {
-        let a = gio::SimpleAction::new(&format!("import-{}", client.id()), None);
+        let a = action(&format!("import-{}", client.id()), None);
         a.connect_activate(move |_, _| import_from(client, None));
         // the files and folders are this computer's, not a remote server's
         a.set_enabled(!crate::remote::is_remote());
@@ -2622,7 +2656,7 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     }
     simple("rss", || show_rss(None));
     // the toolbar search box's menu (`crate::search::toolbar_menu`)
-    let search_mode = gio::SimpleAction::new_stateful(
+    let search_mode = stateful_action(
         "search-mode",
         Some(glib::VariantTy::STRING),
         &crate::search::Mode::Filter.target().to_variant(),
@@ -2639,7 +2673,7 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     });
     simple("feed-item-download", download_feed_items);
     for name in ["feed-add", "feed-edit", "feed-toggle", "feed-update", "feed-remove", "feed-rss"] {
-        let a = gio::SimpleAction::new(name, None);
+        let a = action(name, None);
         a.connect_activate(move |_, _| feed_command(name));
         window.add_action(&a);
     }
@@ -2688,7 +2722,7 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
         })
     });
     simple("label-none", || set_label(""));
-    let label = gio::SimpleAction::new_stateful("label", Some(glib::VariantTy::STRING), &"".to_variant());
+    let label = stateful_action("label", Some(glib::VariantTy::STRING), &"".to_variant());
     label.connect_activate(|_, v| {
         if let Some(l) = v.and_then(|v| v.get::<String>()) {
             set_label(&l);
@@ -2734,7 +2768,7 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     });
     simple("tag-delete", delete_tag);
     for (name, download) in [("dl-limit", true), ("ul-limit", false)] {
-        let a = gio::SimpleAction::new_stateful(name, Some(glib::VariantTy::UINT32), &0u32.to_variant());
+        let a = stateful_action(name, Some(glib::VariantTy::UINT32), &0u32.to_variant());
         a.connect_activate(move |_, v| {
             if let Some(kib) = v.and_then(|v| v.get::<u32>()) {
                 set_limit(download, kib.saturating_mul(1024));
@@ -2742,12 +2776,12 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
         });
         window.add_action(&a);
     }
-    let super_seed = gio::SimpleAction::new_stateful("super-seed", None, &false.to_variant());
+    let super_seed = stateful_action("super-seed", None, &false.to_variant());
     super_seed.connect_activate(|_, _| toggle_super_seeding());
     window.add_action(&super_seed);
     // Advanced > Download in Sequential Order, First and Last Pieces First (D73)
     for (name, flag) in FLAG_ITEMS {
-        let a = gio::SimpleAction::new_stateful(name, None, &false.to_variant());
+        let a = stateful_action(name, None, &false.to_variant());
         a.connect_activate(move |_, _| {
             let ids = selected();
             with_app(|a| actions::toggle_flag(&a.handle, &a.list, &ids, flag));
@@ -2758,7 +2792,7 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     simple("export-torrent", export_torrents);
     // Options > Auto Shutdown: one check item per mode, the chosen one checked
     for (i, &mode) in AutoMode::MENU.iter().enumerate() {
-        let a = gio::SimpleAction::new_stateful(&format!("auto-shutdown-{i}"), None, &(i == 0).to_variant());
+        let a = stateful_action(&format!("auto-shutdown-{i}"), None, &(i == 0).to_variant());
         a.connect_activate(move |_, _| {
             with_app(|a| a.auto_shutdown.set_mode(mode));
             update_auto_shutdown_menu();
@@ -2779,7 +2813,7 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
         }
     });
     for (name, folder) in [("file-open", false), ("file-open-folder", true)] {
-        let a = gio::SimpleAction::new(name, None);
+        let a = action(name, None);
         a.connect_activate(move |_, _| {
             if let Some(row) = ui().and_then(|ui| ui.details.selected_files().first().copied()) {
                 open_file(row, folder);
@@ -2788,13 +2822,13 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
         window.add_action(&a);
     }
     // the Files menu's Tree View check item (D62); its state follows `show_files_tree`
-    let files_tree = gio::SimpleAction::new_stateful("files-tree", None, &true.to_variant());
+    let files_tree = stateful_action("files-tree", None, &true.to_variant());
     files_tree.connect_activate(|a, _| {
         let tree = a.state().and_then(|s| s.get::<bool>()).unwrap_or(true);
         set_files_tree(!tree);
     });
     window.add_action(&files_tree);
-    let relocate = gio::SimpleAction::new("file-relocate", None);
+    let relocate = action("file-relocate", None);
     relocate.connect_activate(|_, _| {
         if let Some(row) = ui().and_then(|ui| ui.details.selected_files().first().copied()) {
             relocate_file(row);
@@ -2804,7 +2838,7 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     // None: Prioritize by File Order
     let prios = PRIORITIES.iter().enumerate().map(|(i, &(_, prio))| (format!("file-prio-{i}"), Some(prio)));
     for (name, prio) in prios.chain([("file-by-order".to_owned(), None)]) {
-        let a = gio::SimpleAction::new(&name, None);
+        let a = action(&name, None);
         a.connect_activate(move |_, _| {
             let Some(rows) = ui().map(|ui| ui.details.selected_files()) else { return };
             with_app(|a| {
@@ -2843,7 +2877,7 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
         "recheck",
         "reannounce",
     ] {
-        let a = gio::SimpleAction::new(name, None);
+        let a = action(name, None);
         let n = name.to_owned();
         a.connect_activate(move |_, _| torrent_action(&n));
         window.add_action(&a);
@@ -2852,7 +2886,7 @@ fn add_actions(window: &gtk::ApplicationWindow, list: &List) {
     let columns = gio::Menu::new();
     for (column, col) in &list.columns {
         let name = format!("column-{}", column.key());
-        let action = gio::SimpleAction::new_stateful(&name, None, &col.is_visible().to_variant());
+        let action = stateful_action(&name, None, &col.is_visible().to_variant());
         let col = col.clone();
         action.connect_activate(move |a, _| {
             let on = !a.state().and_then(|s| s.get::<bool>()).unwrap_or(true);
@@ -4017,8 +4051,8 @@ fn apply_options(a: &mut App, o: &Options) {
             }
         }
     }
-    // the list from the web (D75), before the filter is loaded: a kept list of another address
-    // is dropped first
+    // the list from the web (D75) follows the new fields, before the filter is loaded (a copy
+    // kept of another address stays, unused, until a list of the new one is saved)
     if let Some(l) = &mut a.ip_list {
         l.configure(ip_filter_list::Config::of(&o.gui));
     }
@@ -4039,10 +4073,16 @@ fn apply_options(a: &mut App, o: &Options) {
 }
 
 /// Loads the configured block list (`ipfilter.dat` in the settings folder by default), or the
-/// copy kept of the list from the web (D75). With nothing fetched from that address yet the
-/// rules in force stay: the fetch brings the new ones.
+/// copy kept of the list from the web (D75). With nothing fetched from that address yet (a
+/// copy of another address is not its list) the rules in force stay, none at start: the fetch
+/// brings the new ones, and the Logger says so.
 fn load_ip_filter(a: &mut App, gui: &GuiOptions) {
-    let Some(path) = ip_filter_list::list_file(gui, &paths::settings_dir()) else { return };
+    let Some(path) = ip_filter_list::list_file(gui, &paths::settings_dir()) else {
+        if let Some(line) = ip_filter_list::not_loaded_line(gui) {
+            a.detail.push_log(format!("{} {line}", now_hms()));
+        }
+        return;
+    };
     let r = a.handle.load_ip_filter(&path).map_err(|e| e.to_string());
     log_ip_filter(a, &path, &r);
 }
@@ -4664,6 +4704,65 @@ mod tests {
                 menu_actions(&sub, &label.unwrap_or_default(), out);
             }
         }
+    }
+
+    /// G1: while the windows are locked an action does nothing, whether a menu, a shortcut or
+    /// another program on the session bus (`org.gtk.Actions`) activates it, but Quit and Lock;
+    /// unlocked, every one acts. Every action of the window and the application is made by
+    /// `action` or `stateful_action`, which put the check first.
+    #[test]
+    fn actions_are_refused_while_locked() {
+        thread_local! {
+            static FAKE: Cell<bool> = const { Cell::new(false) };
+        }
+        fn fake() -> bool {
+            FAKE.with(Cell::get)
+        }
+        let names =
+            ["copy-magnet", "export-torrent", "tag-new", "tag-delete", "sequential", "tag-0", "quit", "lock"];
+        use gio::SimpleAction as Plain;
+        let ran = Rc::new(std::cell::RefCell::new(Vec::<String>::new()));
+        let group = gio::SimpleActionGroup::new();
+        for name in names {
+            let a = gate(Plain::new(name, None), fake);
+            let r = ran.clone();
+            a.connect_activate(move |a, _| r.borrow_mut().push(a.name().to_string()));
+            group.add_action(&a);
+        }
+        let stateful = gate(Plain::new_stateful("first-last", None, &false.to_variant()), fake);
+        let r = ran.clone();
+        stateful.connect_activate(move |a, _| {
+            a.set_state(&true.to_variant());
+            r.borrow_mut().push("first-last".into());
+        });
+        group.add_action(&stateful);
+        FAKE.with(|f| f.set(true));
+        for name in names.iter().chain(&["first-last"]) {
+            group.activate_action(name, None);
+        }
+        assert_eq!(*ran.borrow(), ["quit", "lock"]);
+        assert_eq!(stateful.state().and_then(|s| s.get::<bool>()), Some(false));
+        FAKE.with(|f| f.set(false));
+        ran.borrow_mut().clear();
+        for name in names.iter().chain(&["first-last"]) {
+            group.activate_action(name, None);
+        }
+        assert_eq!(ran.borrow().len(), names.len() + 1);
+        assert_eq!(stateful.state().and_then(|s| s.get::<bool>()), Some(true));
+        // the windows' own lock state is the one the made actions ask
+        let done = Rc::new(Cell::new(0));
+        let a = action("export-torrent", None);
+        let d = done.clone();
+        a.connect_activate(move |_, _| d.set(d.get() + 1));
+        LOCKED.with(|l| l.set(true));
+        a.activate(None);
+        assert_eq!(done.get(), 0);
+        LOCKED.with(|l| l.set(false));
+        a.activate(None);
+        assert_eq!(done.get(), 1);
+        // no action made any other way: only the two helpers call the constructors
+        let src = include_str!("app.rs");
+        assert_eq!(src.matches(concat!("gio::SimpleAction", "::new")).count(), 2);
     }
 
     /// D73: the download order check items follow Initial Seeding in Advanced; Copy Magnet Link
