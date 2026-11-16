@@ -632,6 +632,7 @@ wire_struct!(Settings {
     drive_overrides,
     disk_slow_downloads,
     disk_slow_uploads,
+    append_incomplete_ext,
     urlseed_pipeline_size,
     urlseed_timeout,
     urlseed_wait_retry,
@@ -906,6 +907,7 @@ pub(crate) fn encode_alert(a: &Alert, e: &mut Enc) {
             message!(e, "FileRenamed", id, index, old_name, new_name)
         }
         Alert::FileRenameFailed { id, index, error } => message!(e, "FileRenameFailed", id, index, error),
+        Alert::FileCompleted { id, index } => message!(e, "FileCompleted", id, index),
         Alert::StateChanged { id, state, prev_state } => message!(e, "StateChanged", id, state, prev_state),
         Alert::TorrentPaused { id } => message!(e, "TorrentPaused", id),
         Alert::TorrentResumed { id } => message!(e, "TorrentResumed", id),
@@ -993,6 +995,7 @@ pub(crate) fn decode_alert(frame: &[u8]) -> Option<Alert> {
             "FileRenameFailed" => {
                 Alert::FileRenameFailed { id: f.next()?, index: f.next()?, error: f.next()? }
             }
+            "FileCompleted" => Alert::FileCompleted { id: f.next()?, index: f.next()? },
             "StateChanged" => Alert::StateChanged { id: f.next()?, state: f.next()?, prev_state: f.next()? },
             "TorrentPaused" => Alert::TorrentPaused { id: f.next()? },
             "TorrentResumed" => Alert::TorrentResumed { id: f.next()? },

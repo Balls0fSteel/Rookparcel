@@ -442,6 +442,43 @@ fn multi_file_torrent_from_its_url_list() {
     finish(w, &f, dir);
 }
 
+/// D77: with "Append .!ut to incomplete files" on, a web seed download writes `.!ut` files and
+/// ends under the plain names; the requests still name the files' own paths.
+#[test]
+fn a_web_seed_download_with_ut_names() {
+    let base = Arc::new(Mutex::new(HashMap::new()));
+    let dir = temp_dir("leech-ut");
+    let root = dir.join("web-ut");
+    let saw_ut = Arc::new(AtomicBool::new(false));
+    let (b2, root2, saw2) = (base.clone(), root.clone(), saw_ut.clone());
+    let srv = server(Mode::Plain, move |r| {
+        // what the leech has written so far, at each request
+        if ["alpha.bin", "sub/beta file.bin", "sub/gamma.txt"]
+            .iter()
+            .any(|n| root2.join(format!("{n}.!ut")).exists())
+        {
+            saw2.store(true, Ordering::SeqCst);
+        }
+        match b2.lock().unwrap().get(&r.path) {
+            Some(d) => Reply::File(Vec::clone(d)),
+            None => not_found(),
+        }
+    });
+    let f = fixture("web-ut", &multi_files(), &[srv.url("/ws")], &[]);
+    *base.lock().unwrap() = files_at(&f, "/ws/");
+    let mut w = Watch::start(Settings { append_incomplete_ext: true, ..settings() });
+    let id = w.add(&f, &dir, &[]);
+    let st = w.finished(id, 60);
+    assert_eq!(st.total_failed_bytes, 0);
+    assert!(saw_ut.load(Ordering::SeqCst), "the files carried .!ut while downloading");
+    let log = srv.log.lock().unwrap().clone();
+    assert!(log.iter().all(|l| !l.contains("!ut")), "{log:?}");
+    for n in ["alpha.bin", "sub/beta file.bin", "sub/gamma.txt", "empty"] {
+        assert!(root.join(n).exists() && !root.join(format!("{n}.!ut")).exists(), "{n}");
+    }
+    finish(w, &f, dir);
+}
+
 /// A v2-only torrent from its url-list: the files end mid-block, and the block at each end is
 /// asked for only up to the end of the file (libtorrent 2.0.13 `piece_size_for_req`), so no
 /// range runs past a file and no pad byte is downloaded. alpha.bin ends in the last block of a

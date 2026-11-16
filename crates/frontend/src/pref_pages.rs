@@ -601,6 +601,16 @@ pub fn pages(features: Features) -> Vec<Page> {
             )),
         ]);
     }
+    // D77: µTorrent 2.2.1's group, last on the page
+    general.extend([
+        Group(S::PrefWhenDownloading),
+        F(checkbox(
+            "append_incomplete_ext",
+            S::PrefAppendIncomplete,
+            |o| o.settings.append_incomplete_ext,
+            |o, v| o.settings.append_incomplete_ext = v,
+        )),
+    ]);
     vec![
         Page { key: "general", title: S::PageGeneral, parent: None, items: general },
         Page { key: "ui", title: S::PageUi, parent: None, items: ui },

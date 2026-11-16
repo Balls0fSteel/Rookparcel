@@ -23,7 +23,7 @@ use rookparcel_core::{
 };
 use rookparcel_frontend::auto_shutdown::{self, AutoShutdown, Mode as AutoMode, Step};
 use rookparcel_frontend::columns::Column;
-use rookparcel_frontend::detail::{Detail, FILES_TREE_KEY, PRIORITIES, Tab};
+use rookparcel_frontend::detail::{Detail, FILES_TREE_KEY, PRIORITIES, Tab, on_disk_path};
 use rookparcel_frontend::exclude::Pending;
 use rookparcel_frontend::export::{self, ExportTarget, Exports};
 use rookparcel_frontend::icons::{Icon, network_icon};
@@ -3234,7 +3234,8 @@ fn open_folder(ids: &[TorrentId]) {
     }
     let Some((window, path)) = with_app(|a| {
         let st = a.list.get(*ids.first()?)?;
-        Some((a.window.clone(), PathBuf::from(&st.save_path).join(&st.name)))
+        // a single-file torrent still downloading is `name.!ut` on disk (D77)
+        Some((a.window.clone(), on_disk_path(&PathBuf::from(&st.save_path).join(&st.name))))
     })
     .flatten() else {
         return;
@@ -3263,6 +3264,8 @@ fn open_file(row: usize, folder: bool) {
     .flatten() else {
         return;
     };
+    // an unfinished file may be `name.!ut` (or a qBittorrent `.!qB`) on disk (D77)
+    let path = on_disk_path(&path);
     let done = |r: Result<(), glib::Error>| {
         if let Err(e) = r {
             eprintln!("cannot open the file: {e}");

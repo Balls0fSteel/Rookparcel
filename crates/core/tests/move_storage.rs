@@ -513,6 +513,52 @@ fn move_completed_moves_a_finished_download() {
     let _ = std::fs::remove_dir_all(seed_dir);
 }
 
+/// D77: with "Append .!ut to incomplete files" on, `TorrentFinished` comes once the files have
+/// their plain names, so the move that "Move completed downloads" makes on it takes them under
+/// those names; nothing with `.!ut` is left in either folder.
+#[test]
+fn move_completed_takes_the_plain_names_with_append_incomplete_ext() {
+    let f = fixture();
+    let (seed, _sw, seed_dir, port, _) = seeder(&f);
+    let dir = temp_dir("completed-ut");
+    let done = dir.join("done");
+    let leech = start_with(None, |s| s.append_incomplete_ext = true);
+    let mut w = Watch::new(leech.handle());
+    let mut mover = MoveCompleted::new(done.to_string_lossy());
+    let id = add(&mut w, &f, &dir);
+    leech.handle().torrent(id).connect_peer(local(port));
+    let h = leech.handle();
+    let new = wait(&mut w, 60, "moved", |a| {
+        mover.on_alert(a, &h, |_| None);
+        match a {
+            Alert::StorageMoved { id: i, new, .. } if *i == id => Some(new.clone()),
+            _ => None,
+        }
+    });
+    assert!(same(&new, &done));
+    wait_state(&mut w, id, TorrentState::Seeding, 10);
+    leech.shutdown();
+    seed.shutdown();
+    assert_files(&f, &done);
+    let ut = |d: &Path| {
+        let mut found = Vec::new();
+        let mut dirs = vec![d.to_path_buf()];
+        while let Some(d) = dirs.pop() {
+            for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+                if e.path().is_dir() {
+                    dirs.push(e.path());
+                } else if e.path().to_string_lossy().ends_with(".!ut") {
+                    found.push(e.path());
+                }
+            }
+        }
+        found
+    };
+    assert_eq!(ut(&dir), Vec::<PathBuf>::new());
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(seed_dir);
+}
+
 #[test]
 fn commands_queued_behind_a_move_see_the_new_path() {
     use rookparcel_core::RemoveFlags;

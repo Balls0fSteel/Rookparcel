@@ -1111,6 +1111,9 @@ fn preferences(st: &State, shared: &Shared, local: bool) -> Json {
         // "Do not download files named" (D74): qBittorrent's patterns are one per line
         .with("excluded_file_names_enabled", p.exclude_names)
         .with("excluded_file_names", exclude_lines(&p.exclude_list))
+        // "Append .!ut to incomplete files" (D77): qBittorrent's own suffix is `.!qB`, ours
+        // µTorrent's `.!ut` (both are picked up when a torrent starts)
+        .with("incomplete_files_ext", s.append_incomplete_ext)
         // read-only here: setPreferences does not take them (a block list is read under the
         // lock there, and the shim cannot report one that does not load); the list from an
         // address (D75) has no qBittorrent key
@@ -1204,6 +1207,8 @@ pub(crate) fn apply_preferences(shared: &Shared, st: &mut State, v: &Json, keep:
             // D74; the patterns come one per line and are kept `; `-separated
             "excluded_file_names_enabled" => one(pref_pages::EXCLUDE_NAMES, Some(val.clone())),
             "excluded_file_names" => one(pref_pages::EXCLUDE_LIST, val.as_str().map(Json::from)),
+            // D77, the engine setting; the suffix is `.!ut`, not qBittorrent's `.!qB`
+            "incomplete_files_ext" => one("append_incomplete_ext", Some(val.clone())),
             "dl_limit" => one("download_rate_limit", kib(val)),
             "up_limit" => one("upload_rate_limit", kib(val)),
             "alt_dl_limit" => one("alt_dl_limit", kib(val)),

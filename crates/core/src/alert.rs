@@ -38,15 +38,20 @@ bit_flags! {
         const SESSION_LOG = 13;
         const TORRENT_LOG = 14;
         const PORT_MAPPING_LOG = 19;
+        /// A file of a torrent completed ([`Alert::FileCompleted`]; libtorrent `file_progress`):
+        /// one alert per file, off by default.
+        const FILE_PROGRESS = 21;
     }
 }
 
 impl AlertCategory {
-    /// `Settings::alert_mask`'s default: everything but [`AlertCategory::CONNECT`]. A deliberate
-    /// difference from libtorrent, whose default is errors only: Rookparcel's frontends read the
-    /// status, tracker, storage and log alerts.
-    pub const DEFAULT: AlertCategory =
-        AlertCategory(AlertCategory::all().bits() & !AlertCategory::CONNECT.bits());
+    /// `Settings::alert_mask`'s default: everything but [`AlertCategory::CONNECT`] and
+    /// [`AlertCategory::FILE_PROGRESS`] (one alert per file of a torrent, which the frontends'
+    /// Loggers would list). A deliberate difference from libtorrent, whose default is errors
+    /// only: Rookparcel's frontends read the status, tracker, storage and log alerts.
+    pub const DEFAULT: AlertCategory = AlertCategory(
+        AlertCategory::all().bits() & !AlertCategory::CONNECT.bits() & !AlertCategory::FILE_PROGRESS.bits(),
+    );
 }
 
 /// libtorrent `alert_priority`.
@@ -169,6 +174,14 @@ pub enum Alert {
         id: TorrentId,
         index: u32,
         error: Error,
+    },
+    /// Every piece file `index` overlaps passed its hash check (libtorrent
+    /// `file_completed_alert`): posted once, as the download completes it, not for files found
+    /// complete by a check, nor for pad files or empty ones. With `append_incomplete_ext` its
+    /// `.!ut` is taken off behind it (D77).
+    FileCompleted {
+        id: TorrentId,
+        index: u32,
     },
     StateChanged {
         id: TorrentId,
@@ -447,6 +460,7 @@ impl Alert {
             | ExternalIp { .. }
             | DhtReply { .. }
             | DhtBootstrap
+            | FileCompleted { .. }
             | LsdPeer { .. }
             | LsdError { .. }
             | PeerBanned { .. }
@@ -481,6 +495,7 @@ impl Alert {
                 C::STORAGE | C::ERROR
             }
             FileError { .. } => C::STATUS | C::STORAGE,
+            FileCompleted { .. } => C::FILE_PROGRESS,
             MetadataFailed { .. } | LsdError { .. } | Proxy { .. } => C::ERROR,
             TorrentError { .. } | ListenFailed { .. } => C::STATUS | C::ERROR,
             TrackerReply { .. } | ScrapeReply { .. } => C::TRACKER,
@@ -537,6 +552,7 @@ impl Alert {
             | StorageMovedFailed { id, .. }
             | FileRenamed { id, .. }
             | FileRenameFailed { id, .. }
+            | FileCompleted { id, .. }
             | StateChanged { id, .. }
             | TorrentPaused { id }
             | TorrentResumed { id }
@@ -588,6 +604,7 @@ impl Alert {
                 write!(s, "file {index} renamed from \"{old_name}\" to \"{new_name}\"")
             }
             FileRenameFailed { index, error, .. } => write!(s, "failed to rename file {index}: {error}"),
+            FileCompleted { index, .. } => write!(s, "file {index} completed"),
             StateChanged { state, prev_state, .. } => write!(s, "state changed: {prev_state:?} -> {state:?}"),
             TorrentPaused { .. } => write!(s, "paused"),
             TorrentResumed { .. } => write!(s, "resumed"),
@@ -776,6 +793,13 @@ mod tests {
         };
         assert!(disconnected.masked_by(AlertCategory::DEFAULT), "connect is off by default");
         assert!(!disconnected.masked_by(AlertCategory::DEFAULT | AlertCategory::CONNECT));
+        // D77: one alert per completed file, off by default as in libtorrent; the default
+        // mask's number is what it was before the category came
+        let completed = Alert::FileCompleted { id: TorrentId::default(), index: 3 };
+        assert!(completed.masked_by(AlertCategory::DEFAULT));
+        assert!(!completed.masked_by(AlertCategory::DEFAULT | AlertCategory::FILE_PROGRESS));
+        assert_eq!(completed.message(), "file 3 completed");
+        assert_eq!(AlertCategory::DEFAULT.bits(), 550_239);
         assert_eq!(disconnected.message(), "peer 10.0.0.1:6881 (TCP) failed: connect timed out");
         // an alert in two categories gets through on either
         let tracker_error = Alert::TrackerError {

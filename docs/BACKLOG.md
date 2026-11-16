@@ -1269,6 +1269,23 @@ Found and left:
 - **Windows, hosted Web UI:** the round trip of tag changes between the window and the Web UI it serves is unit-tested only, not clicked live.
 - **macOS:** the VM lost some scripted menu clicks during the tag checks, believed to be the VM's accessibility events, not the app.
 
+## Append .!ut to incomplete files (D77; built 2026-11-16, 1.2.62)
+
+2026-11-16_184948_1794851388. Open:
+
+- **Stopped torrents:** turning the option on or off renames their files only when they start.
+- **Cross-seeding:** an incomplete torrent renames a file to `.!ut` that another torrent in the list may be seeding from the same folder (that one then misses the file), as in µTorrent.
+- **Delete while renaming:** Remove and Delete Data runs on a storage of its own, not ordered against a rename the stopped storage still has queued behind its writes; in that window a file renamed afterwards can be left behind. Starts wait for such renames (1.2.62); deletes do not.
+- **Relocate onto a `.!ut` file:** picking `x.!ut` itself in the Relocate dialog makes `x.!ut` the file's name (and `x.!ut.!ut` while it is incomplete with the option on); picking `x` finds `x.!ut` there.
+- **Long names:** names over 241 bytes keep their plain name (the suffix plus the part file's `.pa-export` would pass 255 bytes); a `.!ut` or `.!qB` file of such a name is still found and keeps its name until complete. A plain name of 246-255 bytes still cannot be taken out of the part file (older than D77).
+- **Logger after Force Re-Check:** a full check knows no pieces in advance, so every complete file is expected as `.!ut` and logs "is not there; using" its plain name: one line per complete file at each recheck while the option is on.
+- **Race test:** the swarm tests restart right after files complete, but cannot force a rename to wait behind a write backlog; the ordering the start relies on is unit-tested on the disk threads (`a_storage_made_after_the_names_answer_finds_the_new_names`).
+- **Not tested:** real NAS / SMB shares; real qBittorrent and µTorrent profiles with partial files (only constructed records and files); pad files in a real hybrid swarm; a hard kill exactly between a rename and the resume save in a live run (unit-tested only); Files tab Open on an unfinished file by hand in Win32 and on the Mac; a kill-and-resume run on the Mac. Unix's `rename_no_replace` (link, then unlink) and its crash case have run only on the Xubuntu VM so far (unit tests and live runs); CI's Linux and FreeBSD jobs run them once pushed.
+- **Loopback reconnect (not this feature's code):** once on the Xubuntu VM, the seeder kept a hard-killed loopback peer listed for about two minutes, so the restarted downloader could not reconnect. Needs its own look.
+- **GTK:** the hover-help box under a Preferences page cuts this setting's long help at three lines; the tooltip shows all of it.
+- **Logger:** the failed-rename line mixes `\` and `/` in the path on Windows.
+- **Text:** the two new strings are machine-translated in 34 tables; hu and nl start the check box with ".!ut", which wants a native review.
+
 ## Settings guard (D70; 2026-11-15, 1.2.55-)
 
 Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/frontend/tests/settings_fixtures.rs`. Layer 2 (1.2.56): the stamp, the start comparison and the backups. Open:

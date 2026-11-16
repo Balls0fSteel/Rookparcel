@@ -13,7 +13,9 @@
 // Renames (libtorrent `rename_file`, a fence job) are barriers too, and keep the renamed layout
 // beside the shared `TorrentInfo` as `posix_storage::m_mapped_files` does. Reads for peers go
 // through each thread's read cache (`read_cache`, after libtorrent 1.2), which writes, fences
-// and barriers of the storage clear.
+// and barriers of the storage clear. Incomplete files may carry µTorrent's `.!ut` (D77, not in
+// libtorrent): the suffix is a per-file state of the storage, found on disk by the first job and
+// changed only by barriers, never saved.
 
 //! Disk I/O: a thread pool doing file reads, writes, piece hashing and file checking for the
 //! network thread.
@@ -28,7 +30,7 @@ pub(crate) mod smart;
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, mpsc};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -72,6 +74,85 @@ pub(crate) struct Storage {
     /// The drive the save path is on, with the overrides' generation it was found under;
     /// dropped when the save path changes.
     drive: RwLock<Option<(u64, Arc<Drive>)>>,
+    /// D77: per file, the [`Suffix`] its name carries on disk now. Set by [`Storage::init_names`]
+    /// before the first job, by the probe ([`Storage::probe_names`]) and by renames, all of
+    /// which run with no other job of the storage in flight (the check is the storage's first
+    /// job; renames are barriers), so the other jobs read it without a lock.
+    names: Vec<AtomicU8>,
+    /// The names were looked for on disk ([`Storage::probe_names`]).
+    probed: AtomicBool,
+    /// Files whose failed rename to the name they should have was reported; reported again only
+    /// after a rename of theirs worked.
+    rename_reported: Mutex<Vec<bool>>,
+}
+
+/// D77: what a file's name carries after its own while the file is incomplete: µTorrent's
+/// `.!ut`, which Rookparcel writes, or qBittorrent's `.!qB`, which it only picks up. Neither is
+/// stored anywhere: the engine derives which files should carry `.!ut` from the pieces it has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Suffix {
+    Plain = 0,
+    Ut = 1,
+    Qb = 2,
+}
+
+impl Suffix {
+    fn ext(self) -> &'static str {
+        match self {
+            Suffix::Plain => "",
+            Suffix::Ut => INCOMPLETE_EXT,
+            Suffix::Qb => QBITTORRENT_EXT,
+        }
+    }
+
+    fn from_u8(v: u8) -> Suffix {
+        match v {
+            1 => Suffix::Ut,
+            2 => Suffix::Qb,
+            _ => Suffix::Plain,
+        }
+    }
+}
+
+/// µTorrent's extension for incomplete files (`Settings::append_incomplete_ext`, D77).
+pub(crate) const INCOMPLETE_EXT: &str = ".!ut";
+/// qBittorrent's ("Append .!qB extension to incomplete files"): picked up, never written.
+pub(crate) const QBITTORRENT_EXT: &str = ".!qB";
+/// The longest file name (one path component) the common file systems take: 255 bytes on
+/// ext4, APFS and most others, 255 UTF-16 units on NTFS (never more than the UTF-8 bytes). A
+/// file whose name would pass it with the suffix keeps its plain name.
+const NAME_MAX: usize = 255;
+/// What [`export_file`] puts after a file's name (the suffix included) while it writes it.
+const EXPORT_EXT: &str = ".pa-export";
+
+/// `path` with `suffix`'s extension after its file name.
+fn with_suffix(path: PathBuf, suffix: Suffix) -> PathBuf {
+    if suffix == Suffix::Plain {
+        return path;
+    }
+    let mut s = path.into_os_string();
+    s.push(suffix.ext());
+    PathBuf::from(s)
+}
+
+fn name_len(path: &Path) -> Option<usize> {
+    path.file_name().map(|n| n.to_string_lossy().len())
+}
+
+/// Whether we may give `path`'s file name a suffix (all are 4 bytes): it still fits
+/// [`NAME_MAX`] with one, and with the part file's export name after that ([`EXPORT_EXT`]).
+fn suffix_fits(path: &Path) -> bool {
+    name_len(path).is_some_and(|n| n + INCOMPLETE_EXT.len() + EXPORT_EXT.len() <= NAME_MAX)
+}
+
+/// Whether a file of `path`'s name with a suffix can exist at all (another client's, or one we
+/// are given): looked for by the probes, which then give it the name we would.
+fn suffix_possible(path: &Path) -> bool {
+    name_len(path).is_some_and(|n| n + INCOMPLETE_EXT.len() <= NAME_MAX)
+}
+
+fn found(path: &Path) -> bool {
+    matches!(path.try_exists(), Ok(true))
 }
 
 /// libtorrent `posix_storage::m_file_priority`, `m_use_partfile` and `m_part_file`.
@@ -97,7 +178,19 @@ impl Storage {
         let save_path = RwLock::new(save_path);
         let mapped = RwLock::new(None);
         let drive = RwLock::new(None);
-        Storage { id, save_path, info, mapped, abort: AtomicBool::new(false), files, part_files, drive }
+        Storage {
+            id,
+            save_path,
+            info,
+            mapped,
+            abort: AtomicBool::new(false),
+            files,
+            part_files,
+            drive,
+            names: (0..n).map(|_| AtomicU8::new(Suffix::Plain as u8)).collect(),
+            probed: AtomicBool::new(false),
+            rename_reported: Mutex::new(vec![false; n]),
+        }
     }
 
     pub fn save_path(&self) -> String {
@@ -109,12 +202,147 @@ impl Storage {
         self.mapped.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
+    /// Where file `file` is: its name in the torrent (or the one it was renamed to) in the save
+    /// path, with the suffix it carries on disk now (D77).
     fn file_path(&self, file: usize) -> PathBuf {
+        with_suffix(self.base_path(file), self.suffix(file))
+    }
+
+    /// File `file`'s path without a suffix: its name in the torrent, or the one it was renamed
+    /// to, in the save path.
+    fn base_path(&self, file: usize) -> PathBuf {
         let save_path = self.save_path.read().unwrap_or_else(|e| e.into_inner());
         match &*self.mapped.read().unwrap_or_else(|e| e.into_inner()) {
             Some(fs) => PathBuf::from(fs.file_path(file, &save_path)),
             None => PathBuf::from(self.info.files().file_path(file, &save_path)),
         }
+    }
+
+    /// The suffix file `file`'s name carries on disk now (D77).
+    pub fn suffix(&self, file: usize) -> Suffix {
+        self.names.get(file).map_or(Suffix::Plain, |n| Suffix::from_u8(n.load(Ordering::Relaxed)))
+    }
+
+    fn set_suffix(&self, file: usize, suffix: Suffix) {
+        if let Some(n) = self.names.get(file) {
+            n.store(suffix as u8, Ordering::Relaxed);
+        }
+    }
+
+    /// Whether file `file` (at `base`, its plain path) may carry a suffix: not a pad file or a
+    /// symlink, not empty, and its name still fits [`NAME_MAX`] with one.
+    fn may_suffix(&self, file: usize, base: &Path) -> bool {
+        !self.skip_file(file) && self.info.files().file_size(file) > 0 && suffix_fits(base)
+    }
+
+    /// D77: the names the files should have, before the storage's first job: `incomplete`
+    /// files carry `.!ut` where they may ([`Storage::may_suffix`]). What is on disk is looked
+    /// at by the first job that touches the files ([`Storage::probe_names`]).
+    pub fn init_names(&self, incomplete: &[bool]) {
+        for (f, &inc) in incomplete.iter().enumerate().take(self.names.len()) {
+            let suffix =
+                if inc && self.may_suffix(f, &self.base_path(f)) { Suffix::Ut } else { Suffix::Plain };
+            self.set_suffix(f, suffix);
+        }
+    }
+
+    /// D77: whether a file is not under the name [`DiskIo::async_set_names`] with `incomplete`
+    /// would give it. Only meaningful while no names job of the storage is in flight (its
+    /// check's answer is such a time).
+    pub fn names_differ(&self, incomplete: &[bool]) -> bool {
+        incomplete
+            .iter()
+            .enumerate()
+            .take(self.names.len())
+            .any(|(f, &inc)| self.name_change(f, inc).is_some())
+    }
+
+    /// D77: when file `f` is not under the name it should have (`.!ut` while `incomplete` where
+    /// it may carry one, else plain): the suffix it has, the one it should have, and its plain
+    /// path. Most files have the right one, which is told without building a path: a file keeps
+    /// a `.!ut` it has while incomplete (we give one only where it fits; one found on disk keeps
+    /// it too, and loses it once complete).
+    fn name_change(&self, f: usize, incomplete: bool) -> Option<(Suffix, Suffix, PathBuf)> {
+        let now = self.suffix(f);
+        let settled = match now {
+            Suffix::Plain => !incomplete,
+            Suffix::Ut => incomplete,
+            Suffix::Qb => false,
+        };
+        if settled || self.skip_file(f) {
+            return None;
+        }
+        let base = self.base_path(f);
+        let want = if incomplete && self.may_suffix(f, &base) { Suffix::Ut } else { Suffix::Plain };
+        (now != want).then_some((now, want, base))
+    }
+
+    /// D77: finds each file on disk, once per storage, before anything else uses the files. A
+    /// file not under the name it should have is looked for under its plain name, then with
+    /// `.!ut`, then with `.!qB` (qBittorrent's), and the first one found is used under that name
+    /// (a crash between a rename and the next save of the resume data, the option turned on
+    /// or off while Rookparcel was closed, or µTorrent's or qBittorrent's partial file). Nothing
+    /// is renamed here: the engine sends the names the files should have once the pieces are
+    /// known ([`DiskIo::async_set_names`]), so a complete file found under its plain name is
+    /// never renamed back and forth. With `thorough` (a full check), a file found under one name
+    /// while another candidate exists too is noted: the other is left alone. Returns the
+    /// Logger lines.
+    fn probe_names(&self, thorough: bool) -> Vec<String> {
+        self.probe(thorough, None)
+    }
+
+    /// [`Storage::probe_names`], keeping in `sizes` the length of each file found: the look
+    /// at a file under the name it should have is the only one when it is there, and the
+    /// check's test of the resume data needs no second one ([`resume_files`]).
+    fn probe(&self, thorough: bool, mut sizes: Option<&mut [Option<u64>]>) -> Vec<String> {
+        if self.probed.swap(true, Ordering::Relaxed) {
+            return Vec::new();
+        }
+        let mut log = Vec::new();
+        for f in 0..self.names.len() {
+            if self.skip_file(f) || self.info.files().file_size(f) == 0 {
+                continue;
+            }
+            let base = self.base_path(f);
+            let now = self.suffix(f);
+            let may = suffix_possible(&base);
+            let mut order = vec![now];
+            for s in [Suffix::Plain, Suffix::Ut, Suffix::Qb] {
+                if !order.contains(&s) && (s == Suffix::Plain || may) {
+                    order.push(s);
+                }
+            }
+            let mut first = None;
+            for s in order {
+                let p = with_suffix(base.clone(), s);
+                let Ok(meta) = std::fs::metadata(&p) else { continue };
+                match first {
+                    None => {
+                        first = Some(s);
+                        if let Some(size) = sizes.as_deref_mut().and_then(|v| v.get_mut(f)) {
+                            *size = Some(meta.len());
+                        }
+                        if !thorough {
+                            break;
+                        }
+                    }
+                    Some(used) => log.push(format!(
+                        "\"{}\" is used; \"{}\" is there too and is left alone",
+                        with_suffix(base.clone(), used).display(),
+                        p.display()
+                    )),
+                }
+            }
+            if let Some(s) = first.filter(|&s| s != now) {
+                self.set_suffix(f, s);
+                log.push(format!(
+                    "\"{}\" is not there; using \"{}\"",
+                    with_suffix(base.clone(), now).display(),
+                    with_suffix(base, s).display()
+                ));
+            }
+        }
+        log
     }
 
     fn skip_file(&self, file: usize) -> bool {
@@ -245,8 +473,16 @@ struct Barrier {
 
 enum BarrierAction {
     FilePriority(Vec<u8>),
-    Move { path: String, flags: MoveFlags },
-    Rename { file: u32, name: String },
+    Move {
+        path: String,
+        flags: MoveFlags,
+    },
+    Rename {
+        file: u32,
+        name: String,
+    },
+    /// D77: per file, whether it should carry `.!ut` ([`DiskIo::async_set_names`]).
+    Names(Vec<bool>),
 }
 
 /// libtorrent `status_t`, the values `move_storage` returns.
@@ -295,6 +531,9 @@ pub(crate) struct CheckResult {
     /// Files the resume data counted on that are gone, when that was all that was wrong with
     /// it: `have` is the resume data's set without their pieces, and nothing was hashed.
     pub missing: Vec<usize>,
+    /// D77: files found under another name than the one they should have, for the Logger
+    /// ([`Storage::probe_names`]).
+    pub names: Vec<String>,
 }
 
 /// How a piece compares with the metadata. v1 pieces are checked against their SHA-1, v2
@@ -371,6 +610,24 @@ pub(crate) enum Completion {
         name: String,
         error: Option<(String, Error)>,
     },
+    /// Answer to [`DiskIo::async_set_names`]: the renames that failed for the first time
+    /// (what was to be renamed to what, the error), and whether a file is still not under the
+    /// name it should have for a reason that may pass (`pending`: tried again later).
+    Names {
+        storage: u64,
+        failed: Vec<NameFailure>,
+        pending: bool,
+    },
+}
+
+/// A rename to the name a file should have that failed (D77): the file keeps the name it has.
+#[derive(Debug)]
+pub(crate) struct NameFailure {
+    pub from: String,
+    pub to: String,
+    pub error: Error,
+    /// Tried again later ([`rename_may_work_later`]); a name taken by another file is not.
+    pub retry: bool,
 }
 
 pub(crate) struct DiskIo {
@@ -762,6 +1019,15 @@ impl DiskIo {
         self.barrier(storage, BarrierAction::Rename { file, name });
     }
 
+    /// D77: gives each file the name it should have, after every job queued so far for
+    /// `storage` and before any queued later (a barrier, as a rename): `.!ut` after the files
+    /// whose `incomplete` entry is true (where they may carry one), the plain name for the rest.
+    /// A file is closed before it is renamed and never renamed over an existing one; one that
+    /// cannot be renamed keeps its name and is used under it. Answered by [`Completion::Names`].
+    pub fn async_set_names(&mut self, storage: &Arc<Storage>, incomplete: Vec<bool>) {
+        self.barrier(storage, BarrierAction::Names(incomplete));
+    }
+
     fn barrier(&mut self, storage: &Arc<Storage>, action: BarrierAction) {
         let seq = self.next_barrier;
         self.next_barrier += 1;
@@ -1111,6 +1377,10 @@ impl Worker {
                         let (file, name) = (*file, name.clone());
                         ctx.send(Completion::Renamed { storage: storage.id, file, name, error });
                     }
+                    BarrierAction::Names(incomplete) => {
+                        let (failed, pending) = set_names(&storage, ctx, incomplete);
+                        ctx.send(Completion::Names { storage: storage.id, failed, pending });
+                    }
                 }
                 for (i, tx) in ctx.queues.get().into_iter().flatten().enumerate() {
                     if i != ctx.index {
@@ -1401,6 +1671,10 @@ fn check_files(
     let fs = storage.info.files();
     let num_pieces = storage.info.num_pieces();
     let mut resume_failed = false;
+    // D77: every file under the name it has on disk, before anything looks at the files; the
+    // lengths of those found serve the resume data's test below
+    let mut sizes = vec![None; fs.num_files()];
+    let names = storage.probe(matches!(mode, CheckMode::Full), Some(&mut sizes));
 
     // libtorrent `posix_storage::initialize`: a skipped file that exists keeps its blocks; the
     // others go to the part file.
@@ -1436,7 +1710,7 @@ fn check_files(
 
     if let CheckMode::Resume(mut have) = mode {
         let files = if have.len() == num_pieces as usize {
-            resume_files(storage, &have)
+            resume_files(storage, &have, &sizes)
         } else {
             ResumeFiles::Mismatch
         };
@@ -1447,6 +1721,7 @@ fn check_files(
                     resume_failed: false,
                     inconsistent: None,
                     missing: Vec::new(),
+                    names,
                 });
             }
             // Our addition (libtorrent checks every file): a file that is gone took only its
@@ -1464,7 +1739,7 @@ fn check_files(
                         have.set(piece as usize, false);
                     }
                 }
-                return Ok(CheckResult { have, resume_failed: false, inconsistent: None, missing });
+                return Ok(CheckResult { have, resume_failed: false, inconsistent: None, missing, names });
             }
             ResumeFiles::Mismatch => resume_failed = true,
         }
@@ -1477,7 +1752,7 @@ fn check_files(
             !aborted(storage) && fs.file_size(f) > 0 && !storage.skip_file(f) && storage.file_path(f).exists()
         });
     if !any_file || aborted(storage) {
-        return Ok(CheckResult { have, resume_failed, inconsistent: None, missing: Vec::new() });
+        return Ok(CheckResult { have, resume_failed, inconsistent: None, missing: Vec::new(), names });
     }
     let mut buf = vec![0u8; storage.info.piece_length() as usize];
     let report_every = (num_pieces / 100).max(16);
@@ -1537,7 +1812,7 @@ fn check_files(
     }
     // Checking may open hundreds of files; don't keep them all.
     ctx.pool.release(storage.id);
-    Ok(CheckResult { have, resume_failed, inconsistent, missing: Vec::new() })
+    Ok(CheckResult { have, resume_failed, inconsistent, missing: Vec::new(), names })
 }
 
 /// The torrent was stopped or removed ([`DiskIo::async_fence`]), at shutdown too: a check
@@ -1571,7 +1846,9 @@ enum ResumeFiles {
     Mismatch,
 }
 
-fn resume_files(storage: &Storage, have: &Bitfield) -> ResumeFiles {
+/// `sizes`: the lengths of the files the probe found ([`Storage::probe`]); the others are looked
+/// at here.
+fn resume_files(storage: &Storage, have: &Bitfield, sizes: &[Option<u64>]) -> ResumeFiles {
     let fs = storage.info.files();
     let piece_len = storage.info.piece_length() as u64;
     let mut need = vec![0u64; fs.num_files()];
@@ -1597,8 +1874,12 @@ fn resume_files(storage: &Storage, have: &Bitfield) -> ResumeFiles {
         if aborted(storage) {
             return ResumeFiles::Mismatch;
         }
-        match std::fs::metadata(storage.file_path(f)) {
-            Ok(m) if m.len() >= n => {}
+        let len = match sizes.get(f).copied().flatten() {
+            Some(len) => Ok(len),
+            None => std::fs::metadata(storage.file_path(f)).map(|m| m.len()),
+        };
+        match len {
+            Ok(len) if len >= n => {}
             Err(e) if e.kind() == io::ErrorKind::NotFound => missing.push(f),
             _ => return ResumeFiles::Mismatch,
         }
@@ -1613,16 +1894,25 @@ fn delete_files(storage: &Storage) -> Result<(), Error> {
     let mut dirs = std::collections::BTreeSet::new();
     let mut first_error = None;
     let save = PathBuf::from(storage.save_path());
+    storage.probe_names(false);
     for f in 0..fs.num_files() {
         if fs.pad_file_at(f) {
             continue;
         }
         let path = storage.file_path(f);
-        match std::fs::remove_file(&path) {
-            Ok(()) => {}
-            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(e) => {
-                first_error.get_or_insert(Error::from(e));
+        // D77: the name the file has, and a `.!ut` one of ours left beside it (an incomplete
+        // file's while the plain one is used); a plain file beside a `.!ut` one is not ours
+        let mut paths = vec![path.clone()];
+        if storage.suffix(f) != Suffix::Ut && storage.may_suffix(f, &storage.base_path(f)) {
+            paths.push(with_suffix(storage.base_path(f), Suffix::Ut));
+        }
+        for p in paths {
+            match std::fs::remove_file(&p) {
+                Ok(()) => {}
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    first_error.get_or_insert(Error::from(e));
+                }
             }
         }
         let mut p = path.parent();
@@ -1661,6 +1951,7 @@ fn delete_part_file(storage: &Storage) -> io::Result<()> {
 /// flight. Pieces left in the part file that no skipped file needs any more are freed.
 fn set_file_priority(storage: &Storage, ctx: &Ctx, priorities: &[u8]) -> Result<(), (String, Error)> {
     let fs = storage.info.files();
+    storage.probe_names(false);
     let mut st = storage.lock_files();
     for (f, &new) in priorities.iter().enumerate().take(fs.num_files()) {
         // pad files always have priority 0
@@ -1709,8 +2000,9 @@ fn export_file(storage: &Storage, ctx: &Ctx, part: &PartFile, f: usize) -> Resul
             )
             .map_err(|e| io_error(storage, f, e));
     }
+    // (a suffix is given only where this name still fits, `suffix_fits`)
     let mut tmp = path.clone().into_os_string();
-    tmp.push(".pa-export");
+    tmp.push(EXPORT_EXT);
     let tmp = PathBuf::from(tmp);
     // what an earlier interrupted export left
     let _ = std::fs::remove_file(&tmp);
@@ -1910,25 +2202,39 @@ fn rename_file(storage: &Storage, ctx: &Ctx, file: usize, name: &str) -> Result<
         let e = io::Error::new(io::ErrorKind::InvalidInput, "no such file in the torrent");
         return Err((String::new(), e.into()));
     }
+    storage.probe_names(false);
     let old = storage.file_path(file);
     let fail = |path: &Path, e: io::Error| Err((path.to_string_lossy().into_owned(), Error::from(e)));
+    let new_base = if crate::util::path::is_complete(name) {
+        PathBuf::from(name)
+    } else {
+        PathBuf::from(storage.save_path()).join(name)
+    };
+    // D77: the suffix goes on top of the new name, unless the new name is too long for one
+    let mut suffix = match storage.suffix(file) {
+        s if s != Suffix::Plain && suffix_fits(&new_base) => s,
+        _ => Suffix::Plain,
+    };
     match old.try_exists() {
         Ok(true) => {
-            let new = if crate::util::path::is_complete(name) {
-                PathBuf::from(name)
-            } else {
-                PathBuf::from(storage.save_path()).join(name)
-            };
+            let new = with_suffix(new_base.clone(), suffix);
             // An existing file is never overwritten (libtorrent 2.0.12), not even by itself. On
             // Windows a change of case only finds the file itself, and is let through
             // (libtorrent refuses it).
-            let case_only = cfg!(windows) && old != new && {
-                let key = |p: &Path| p.to_string_lossy().replace('/', "\\").to_lowercase();
-                key(&old) == key(&new)
-            };
+            let key = |p: &Path| p.to_string_lossy().replace('/', "\\").to_lowercase();
+            let case_only = cfg!(windows) && old != new && key(&old) == key(&new);
             if !case_only && matches!(new.try_exists(), Ok(true)) {
                 let e = io::Error::new(io::ErrorKind::AlreadyExists, "file already exists");
                 return fail(&new, e);
+            }
+            // D77: nor is a suffixed file put beside a file of the new name: without the suffix
+            // that rename is refused, and the file there would never get its name (Relocate to
+            // a file that is already there refuses as it always did)
+            let base = storage.base_path(file);
+            let same_base = base == new_base || (cfg!(windows) && key(&base) == key(&new_base));
+            if suffix != Suffix::Plain && !same_base && matches!(new_base.try_exists(), Ok(true)) {
+                let e = io::Error::new(io::ErrorKind::AlreadyExists, "file already exists");
+                return fail(&new_base, e);
             }
             if let Some(dir) = new.parent().filter(|d| !d.as_os_str().is_empty()) {
                 if let Err(e) = std::fs::create_dir_all(dir) {
@@ -1944,13 +2250,138 @@ fn rename_file(storage: &Storage, ctx: &Ctx, file: usize, name: &str) -> Result<
                 Err(e) => return fail(&old, e),
             }
         }
-        Ok(false) => {}
+        // D77: not on disk, so the new name is where to look for it (Relocate to a file that is
+        // there): under the plain name, then with `.!ut`, then `.!qB`, the first found is used
+        // under the name it has; a check counts it, and the names follow its pieces
+        Ok(false) => {
+            let may = suffix_possible(&new_base);
+            let there = [Suffix::Plain, Suffix::Ut, Suffix::Qb]
+                .into_iter()
+                .filter(|&s| s == Suffix::Plain || may)
+                .find(|&s| found(&with_suffix(new_base.clone(), s)));
+            if let Some(s) = there {
+                suffix = s;
+            }
+        }
         Err(e) => return fail(&old, e),
     }
     let mut mapped = storage.mapped.write().unwrap_or_else(|e| e.into_inner());
     let files = mapped.get_or_insert_with(|| Arc::new(fs.clone()));
     Arc::make_mut(files).rename_file(file, name);
+    storage.set_suffix(file, suffix);
+    // a failed rename to the name it should have is reported anew under the new one
+    if let Some(r) = storage.rename_reported.lock().unwrap_or_else(|e| e.into_inner()).get_mut(file) {
+        *r = false;
+    }
     Ok(())
+}
+
+/// D77: renames each file whose name differs from the one it should have: `.!ut` after an
+/// `incomplete` file's name where it may carry one, the plain name otherwise. Runs with no
+/// other job of `storage` in flight, after the files were found on disk. A file not on disk
+/// only changes its name. A file is closed first and never renamed over an existing one; a
+/// rename that fails (another program has the file open without sharing it, a permission)
+/// leaves the file under the name it has, where every job keeps using it. Returns the failures
+/// not reported before (once per file until one of its renames works, or a user's rename of
+/// it) and whether a failure is worth trying again later ([`rename_may_work_later`]): a name
+/// taken by another file is not; it is tried again only by the next names job sent for another
+/// reason (a file completed, the option toggled, a start).
+fn set_names(storage: &Storage, ctx: &Ctx, incomplete: &[bool]) -> (Vec<NameFailure>, bool) {
+    storage.probe_names(false);
+    let mut failed = Vec::new();
+    let mut pending = false;
+    let mut report = |f: usize, from: &Path, to: &Path, e: io::Error, pending: &mut bool| {
+        let retry = rename_may_work_later(&e);
+        *pending |= retry;
+        let mut reported = storage.rename_reported.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(r) = reported.get_mut(f).filter(|r| !**r) {
+            *r = true;
+            failed.push(NameFailure {
+                from: from.to_string_lossy().into_owned(),
+                to: to.to_string_lossy().into_owned(),
+                error: e.into(),
+                retry,
+            });
+        }
+    };
+    for (f, &inc) in incomplete.iter().enumerate().take(storage.names.len()) {
+        // (most files have the name they should: no path is built for them)
+        let Some((now, want, base)) = storage.name_change(f, inc) else { continue };
+        let (from, to) = (with_suffix(base.clone(), now), with_suffix(base, want));
+        match from.try_exists() {
+            // nothing on disk under that name: the name alone changes
+            Ok(false) => {
+                storage.set_suffix(f, want);
+                continue;
+            }
+            Ok(true) => {}
+            Err(e) => {
+                report(f, &from, &to, e, &mut pending);
+                continue;
+            }
+        }
+        // our handles share deletion, but a file is closed before it is renamed all the same
+        ctx.pool.release_file(storage.id, f as u32);
+        match file_pool::rename_no_replace(&from, &to) {
+            Ok(()) => {
+                storage.set_suffix(f, want);
+                if let Some(r) = storage.rename_reported.lock().unwrap_or_else(|e| e.into_inner()).get_mut(f)
+                {
+                    *r = false;
+                }
+            }
+            // gone between the look and the rename: as not on disk
+            Err(e) if e.kind() == io::ErrorKind::NotFound && !found(&from) => storage.set_suffix(f, want),
+            // Unix renames are a link plus an unlink: a crash between them leaves both names on
+            // one file, and the old one only has to go
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists && same_file(&from, &to) => {
+                match std::fs::remove_file(&from) {
+                    Ok(()) => {
+                        storage.set_suffix(f, want);
+                        if let Some(r) =
+                            storage.rename_reported.lock().unwrap_or_else(|e| e.into_inner()).get_mut(f)
+                        {
+                            *r = false;
+                        }
+                    }
+                    Err(e) => report(f, &from, &to, e, &mut pending),
+                }
+            }
+            Err(e) => report(f, &from, &to, e, &mut pending),
+        }
+    }
+    (failed, pending)
+}
+
+/// D77: whether a rename to the name a file should have that failed with `e` may work later
+/// without anything being done to the torrent: another program has the file open without
+/// sharing it, or a permission or a read-only volume may come back. A name taken by another
+/// file (`AlreadyExists`) is not tried again on a timer.
+fn rename_may_work_later(e: &io::Error) -> bool {
+    // ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION
+    if cfg!(windows) && matches!(e.raw_os_error(), Some(32 | 33)) {
+        return true;
+    }
+    matches!(
+        e.kind(),
+        io::ErrorKind::PermissionDenied | io::ErrorKind::ResourceBusy | io::ErrorKind::ReadOnlyFilesystem
+    )
+}
+
+/// Whether `a` and `b` are one file under two names (hard links; never on Windows, whose
+/// renames are one step).
+#[cfg(unix)]
+fn same_file(a: &Path, b: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (std::fs::symlink_metadata(a), std::fs::symlink_metadata(b)) {
+        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        _ => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn same_file(_: &Path, _: &Path) -> bool {
+    false
 }
 
 /// libtorrent `posix_storage::move_storage` and `aux::move_storage`: moves every file (rename,
@@ -1965,8 +2396,11 @@ fn move_storage(
 ) -> (MoveStatus, String, Option<MoveError>) {
     // Open files cannot be renamed on Windows (libtorrent `mmap_storage` releases them too).
     ctx.pool.release(storage.id);
+    // D77: the files move under the names they have, a suffix included
+    storage.probe_names(false);
     let mapped = storage.mapped();
     let fs = mapped.as_deref().unwrap_or(storage.info.files());
+    let at = |i: usize, root: &str| with_suffix(PathBuf::from(fs.file_path(i, root)), storage.suffix(i));
     let save_path = storage.save_path();
     let new_save_path = complete(dest);
     let fail = |status, file: String, operation, e: io::Error| {
@@ -1974,10 +2408,23 @@ fn move_storage(
     };
     let movable = |i: &usize| !fs.file_absolute_path(*i) && !fs.pad_file_at(*i);
 
+    // D77: a file of the torrent at `root` under any name it may have there (plain, `.!ut`,
+    // `.!qB`), the name it has here first
+    let there = |i: usize, root: &str| {
+        let base = PathBuf::from(fs.file_path(i, root));
+        let may = suffix_possible(&base);
+        let mut order = vec![storage.suffix(i)];
+        order.extend(
+            [Suffix::Plain, Suffix::Ut, Suffix::Qb].into_iter().filter(|&s| s == Suffix::Plain || may),
+        );
+        order.into_iter().map(|s| with_suffix(base.clone(), s)).find(|p| found(p))
+    };
+
     if flags == MoveFlags::FailIfExist && !is_not_found(std::fs::metadata(&new_save_path)) {
         // The directory exists: so may the files.
         for i in (0..fs.num_files()).filter(movable) {
-            let path = fs.file_path(i, &new_save_path);
+            let path = there(i, &new_save_path).unwrap_or_else(|| at(i, &new_save_path));
+            let path = path.to_string_lossy().into_owned();
             match std::fs::metadata(&path) {
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {}
                 Err(e) => return fail(MoveStatus::FileExist, path, FileOperation::FileStat, e),
@@ -2005,13 +2452,20 @@ fn move_storage(
         *storage.save_path.write().unwrap_or_else(|e| e.into_inner()) = p.to_owned();
         *storage.drive.write().unwrap_or_else(|e| e.into_inner()) = None;
     };
+    // D77: the files at the new path go by the names they have there
+    let probe_again = || {
+        storage.probed.store(false, Ordering::Relaxed);
+        storage.probe_names(false);
+    };
     match flags {
         MoveFlags::ResetSavePath => {
             set_save_path(&new_save_path);
+            probe_again();
             return (MoveStatus::NeedFullCheck, new_save_path, None);
         }
         MoveFlags::ResetSavePathUnchecked => {
             set_save_path(&new_save_path);
+            probe_again();
             return (MoveStatus::NoError, new_save_path, None);
         }
         _ => {}
@@ -2030,13 +2484,33 @@ fn move_storage(
             error = Some((i, FileOperation::FileCopy, cancelled()));
             break;
         }
-        let old = PathBuf::from(fs.file_path(i, &save_path));
-        let new = PathBuf::from(fs.file_path(i, &new_save_path));
+        let old = at(i, &save_path);
+        let new = at(i, &new_save_path);
         let done = moves.done(id) + fs.file_size(i);
-        if flags == MoveFlags::DontReplace && new.exists() {
+        // (D77: the file there under any of its names is kept, and used under it after the
+        // check; see the probe below)
+        if flags == MoveFlags::DontReplace && there(i, &new_save_path).is_some() {
             status = MoveStatus::NeedFullCheck;
             moves.set_done(id, done);
             continue;
+        }
+        // D77: a file of the same name there is replaced as it always was, whatever name ours
+        // carries now: our `x.!ut` takes the place of a plain `x` (which would keep it from
+        // ever getting its name)
+        if flags == MoveFlags::AlwaysReplaceFiles
+            && storage.suffix(i) != Suffix::Plain
+            && save_path != new_save_path
+            && found(&old)
+        {
+            let plain = PathBuf::from(fs.file_path(i, &new_save_path));
+            match std::fs::remove_file(&plain) {
+                Ok(()) => {}
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    error = Some((i, FileOperation::FileRename, e));
+                    break;
+                }
+            }
         }
         match move_file(&old, &new) {
             Ok(()) => renamed[i] = old != new,
@@ -2062,7 +2536,7 @@ fn move_storage(
     }
     moves.end(id);
     let mut error = error.map(|(i, operation, e)| MoveError {
-        file: fs.file_path(i, &save_path),
+        file: at(i, &save_path).to_string_lossy().into_owned(),
         operation,
         error: e.into(),
     });
@@ -2093,9 +2567,9 @@ fn move_storage(
         // renamed are moved here, so a destination file kept by `DontReplace` stays put. The
         // copies are deleted: their sources are all still there.
         for i in (0..fs.num_files()).rev() {
-            let new = PathBuf::from(fs.file_path(i, &new_save_path));
+            let new = at(i, &new_save_path);
             if renamed[i] {
-                let _ = move_file(&new, Path::new(&fs.file_path(i, &save_path)));
+                let _ = move_file(&new, &at(i, &save_path));
             } else if copied[i] {
                 let _ = std::fs::remove_file(&new);
             }
@@ -2113,7 +2587,7 @@ fn move_storage(
             subdirs.insert(parent.to_path_buf());
         }
         if copied[i] {
-            let _ = std::fs::remove_file(fs.file_path(i, &save_path));
+            let _ = std::fs::remove_file(at(i, &save_path));
         }
     }
     let root = Path::new(&save_path);
@@ -2126,8 +2600,14 @@ fn move_storage(
             }
         }
     }
+    // D77: a file that was not on disk here, or that `DontReplace` left there, is used under
+    // the name it has there (as Relocate does); the moved ones are found under theirs
+    probe_again();
     (status, new_save_path, None)
 }
+
+#[cfg(test)]
+mod names_tests;
 
 #[cfg(test)]
 pub(crate) mod tests {
@@ -2715,7 +3195,7 @@ pub(crate) mod tests {
 
         let stopped = fresh();
         stopped.abort.store(true, Ordering::Relaxed);
-        assert!(matches!(resume_files(&stopped, &all), ResumeFiles::Mismatch));
+        assert!(matches!(resume_files(&stopped, &all, &[]), ResumeFiles::Mismatch));
         let res = check_files(&stopped, &ctx, CheckMode::Resume(all.clone()), &mut || {}).unwrap();
         assert!(res.have.none_set());
         assert!(!r.dir.join("test/empty").exists(), "the empty file was not made");

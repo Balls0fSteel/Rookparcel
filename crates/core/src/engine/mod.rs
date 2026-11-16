@@ -45,7 +45,7 @@ mod v2;
 mod web_seed;
 mod wire;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -59,6 +59,7 @@ use crate::alert::{Alert, FileOperation};
 use crate::crypto::mse;
 use crate::disk::{
     BLOCK_SIZE, CheckMode, CheckResult, Completion, DiskIo, FenceAction, HashVerdict, MoveError, MoveStatus,
+    NameFailure,
 };
 use crate::error::Error;
 use crate::exit::{ExitMove, ExitPhase};
@@ -84,7 +85,9 @@ use crate::utp::{self, SendOutcome, UtpIo, UtpManager, UtpSettings};
 use peer::{PeerConn, PeerState, Transport};
 use peer_list::Reconnect;
 use picker::PiecePicker;
-use torrent::{AnnounceTo, HaveRef, StrPool, Torrent, piece_priorities};
+use torrent::{
+    AnnounceTo, HaveRef, StrPool, Torrent, files_completed_by, incomplete_files, piece_priorities,
+};
 use tracker::{
     HTTP_TOKEN_BASE, JobKind, TrackerEntry, TrackerJob, TrackerManager, TrackerOutcome, UDP4_TOKEN,
     UDP6_TOKEN,
@@ -116,6 +119,39 @@ const MAX_READS_IN_FLIGHT: usize = 8;
 /// that does not read gets here (SEC-10).
 fn max_send_buffer(watermark: u32) -> usize {
     (4 * 1024 * 1024).max(4 * watermark as usize)
+}
+
+/// D77: which files of `ti` should carry `.!ut` with the pieces in `have` (`None`: not known
+/// yet): the incomplete ones while `on` (`Settings::append_incomplete_ext`), none otherwise.
+fn names_for(on: bool, ti: &TorrentInfo, have: Option<HaveRef<'_>>) -> Vec<bool> {
+    if on { incomplete_files(ti, have) } else { vec![false; ti.num_files()] }
+}
+
+/// D77: a storage's `async_set_names` jobs in flight. Coalesced: while one is in flight a new
+/// request only sets `again`, and one more job is sent when it answers (on the torrent's
+/// running storage; a released one's names are set by the next storage's check), so a burst of
+/// completed files costs two barriers, not one each.
+#[derive(Debug)]
+struct NamesJobs {
+    torrent: TorrentId,
+    in_flight: u32,
+    again: bool,
+    /// `TorrentFinished` is posted after this many more answers (0: it does not wait), so a
+    /// program run when a download finishes finds the files under their plain names. Counted
+    /// when it is held: the jobs in flight and the one `again` asks for, never later ones, so
+    /// it cannot wait for ever; also posted when the last job answers.
+    finished_after: u32,
+}
+
+/// How [`Engine::send_names`] sends.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SendNames {
+    /// Only when a file is not under the name it should have (the check's answer).
+    IfNeeded,
+    /// Behind the job in flight, if any ([`NamesJobs`]).
+    Coalesced,
+    /// At once, even beside a job in flight: before the storage is released.
+    Now,
 }
 
 /// Hands the smart disk I/O settings (D48) to the disk threads.
@@ -395,6 +431,13 @@ pub(crate) struct Engine {
     storages: HashMap<u64, TorrentId>,
     /// Storages being deleted for removed torrents.
     deleting: HashMap<u64, (TorrentId, crate::types::InfoHashes)>,
+    /// D77: storages with `async_set_names` jobs in flight ([`NamesJobs`]). A torrent does not
+    /// start while one of its previous storage's is in flight.
+    names_jobs: HashMap<u64, NamesJobs>,
+    /// D77: running torrents with a file not under the name it should have (a rename to or from
+    /// `.!ut` failed): the names are sent again at the next file completed, stop and save. Kept
+    /// here, not in `Torrent`, which stays compact for 100,000 stopped ones.
+    names_pending: HashSet<TorrentId>,
 
     peers: Slab<PeerConn>,
     next_peer_gen: u32,
@@ -610,6 +653,8 @@ impl Engine {
             queue: Vec::new(),
             storages: HashMap::new(),
             deleting: HashMap::new(),
+            names_jobs: HashMap::new(),
+            names_pending: HashSet::new(),
             peers: Slab::default(),
             next_peer_gen: 1,
             listeners: Vec::new(),
@@ -1803,7 +1848,15 @@ impl Engine {
             || s.recv_socket_buffer_size != self.settings.recv_socket_buffer_size;
         let privileged = s.no_connect_privileged_ports;
         let utp_limited_changed = s.rate_limit_utp != self.settings.rate_limit_utp;
+        let names_changed = s.append_incomplete_ext != self.settings.append_incomplete_ext;
         self.settings = s;
+        // D77: every running torrent's incomplete files get `.!ut`, or lose it; a stopped
+        // torrent's files are named when it starts
+        if names_changed {
+            for id in self.active_ids() {
+                self.send_names(id, SendNames::Coalesced);
+            }
+        }
         if utp_limited_changed {
             self.apply_rate_limit_utp();
         }
@@ -2242,7 +2295,9 @@ impl Engine {
         } else if let Some(action) = delete {
             match t.ti.clone() {
                 Some(ti) => {
+                    let names = names_for(self.settings.append_incomplete_ext, &ti, t.have_bits());
                     let storage = self.disk.new_storage(t.save_path.to_string(), ti, Vec::new());
+                    storage.init_names(&names);
                     self.deleting.insert(storage.id, (id, t.info_hashes));
                     self.disk.async_fence(&storage, action);
                 }
@@ -2299,10 +2354,13 @@ impl Engine {
             });
             return;
         }
+        let names_on = self.settings.append_incomplete_ext;
         let t = self.torrent(id).expect("exists");
         let (save_path, ti, prio) =
             (t.save_path.to_string(), t.ti.clone().expect("loaded"), t.file_priority.clone());
+        let names = names_for(names_on, &ti, t.have_bits());
         let storage = self.disk.new_storage(save_path, ti, prio);
+        storage.init_names(&names);
         self.storages.insert(storage.id, id);
         let t = self.torrent(id).expect("exists");
         t.moving = Some((storage.clone(), true));
@@ -2386,6 +2444,7 @@ impl Engine {
         if !self.ensure_metadata(id) {
             return fail(self, Error::Unsupported("renaming files without metadata"));
         }
+        let names_on = self.settings.append_incomplete_ext;
         let t = self.torrent(id).expect("exists");
         let ti = t.ti.clone().expect("loaded");
         if file as usize >= ti.num_files() {
@@ -2396,7 +2455,9 @@ impl Engine {
             (Some(s), _) | (None, Some((s, _))) => s.clone(),
             (None, None) => {
                 let (save_path, prio) = (t.save_path.to_string(), t.file_priority.clone());
+                let names = names_for(names_on, &ti, t.have_bits());
                 let s = self.disk.new_storage(save_path, ti, prio);
+                s.init_names(&names);
                 self.storages.insert(s.id, id);
                 self.torrent(id).expect("exists").moving = Some((s.clone(), true));
                 s
@@ -2538,6 +2599,12 @@ impl Engine {
         if self.torrent_ref(id).is_some_and(|t| t.moves_pending > 0 || t.renames_pending > 0) {
             return;
         }
+        // D77: nor may it look for the files while the previous storage still renames them (its
+        // names job waits behind its writes on the I/O threads; the check runs on another
+        // thread): it would find a name the file is about to lose. `on_names` starts it.
+        if self.names_jobs.values().any(|j| j.torrent == id) {
+            return;
+        }
         if !self.ensure_metadata(id) {
             let Some(t) = self.torrent(id) else { return };
             t.status_dirty = true;
@@ -2555,6 +2622,7 @@ impl Engine {
             self.prioritize_lsd(id);
             return;
         }
+        let names_on = self.settings.append_incomplete_ext;
         let t = self.torrent(id).expect("exists");
         let ti = t.ti.clone().expect("loaded");
         // a v2-only torrent is verified against its piece layers: fetch them first
@@ -2567,7 +2635,10 @@ impl Engine {
         let save_path = t.save_path.to_string();
         let peer_slots = t.peers.clone();
         let file_priority = t.file_priority.clone();
+        // D77: the names the resume data's pieces call for; the check finds what is on disk
+        let names = names_for(names_on, &ti, t.stored_have());
         let storage = self.disk.new_storage(save_path, ti.clone(), file_priority);
+        storage.init_names(&names);
         self.storages.insert(storage.id, id);
         let mut picker = PiecePicker::new(
             ti.num_pieces(),
@@ -2628,6 +2699,17 @@ impl Engine {
 
     /// libtorrent `torrent::stop` / `pause`: disconnects peers, tells trackers, releases files.
     fn stop_torrent(&mut self, id: TorrentId, shutting_down: bool) {
+        // D77: a rename that failed is tried again behind the jobs queued, before the release,
+        // as are names asked for while a job was in flight (that job's answer will not send
+        // them to a released storage)
+        let again = self
+            .torrent_ref(id)
+            .and_then(|t| t.storage.as_ref())
+            .and_then(|s| self.names_jobs.get(&s.id))
+            .is_some_and(|j| j.again);
+        if again || self.names_pending.contains(&id) {
+            self.send_names(id, SendNames::Now);
+        }
         let keep_metadata = self.store.is_none();
         let peer_id = self.peer_id;
         let key = self.tracker_key;
@@ -2809,6 +2891,12 @@ impl Engine {
                         message: "resume data did not match the files; rechecked".into(),
                     });
                 }
+                for message in &res.names {
+                    self.alert(Alert::Log { id: Some(id), message: message.clone() });
+                }
+                // D77: the files get the names the checked pieces call for (no job when they
+                // have them, the usual case: nothing else of the storage is in flight now)
+                self.send_names(id, SendNames::IfNeeded);
                 if let Some(&first) = res.missing.first() {
                     let t = self.torrent_ref(id).expect("exists");
                     let name = t.ti.as_ref().map(|ti| ti.files().file_path(first, "")).unwrap_or_default();
@@ -2825,7 +2913,7 @@ impl Engine {
                 if finished {
                     self.remove_from_queue(id);
                     if !was_finished_before {
-                        self.alert(Alert::TorrentFinished { id });
+                        self.finished_alert(id);
                     }
                 } else {
                     self.add_to_queue(id);
@@ -2871,6 +2959,11 @@ impl Engine {
         if let Some(storage) = t.storage.clone() {
             let prios = t.file_priority.clone();
             self.disk.async_set_file_priority(&storage, prios);
+            // D77: a file taken out of the part file is created under the name it should have
+            // (a complete one plain); the names are sent behind the change all the same
+            if self.settings.append_incomplete_ext {
+                self.send_names(id, SendNames::Coalesced);
+            }
         }
         let t = self.torrent(id).expect("exists");
         let finished = t.is_finished();
@@ -2920,10 +3013,129 @@ impl Engine {
             }
         }
         self.set_state(id, state);
-        self.alert(Alert::TorrentFinished { id });
+        self.finished_alert(id);
         self.remove_from_queue(id);
         self.needs_auto_manage = true;
         self.save_resume(true);
+    }
+
+    /// `TorrentFinished`, or, while names are being set on the torrent's files (D77), once they
+    /// are: a program run when a download finishes finds the files under their plain names.
+    fn finished_alert(&mut self, id: TorrentId) {
+        let storage = self.torrent_ref(id).and_then(|t| t.storage.as_ref()).map(|s| s.id);
+        match storage.and_then(|s| self.names_jobs.get_mut(&s)) {
+            // the jobs in flight, and the one `again` will send (the piece that finished the
+            // download asked for it): the last of those renames the last file
+            Some(job) => job.finished_after = job.finished_after.max(job.in_flight + job.again as u32),
+            None => self.alert(Alert::TorrentFinished { id }),
+        }
+    }
+
+    // --- Incomplete files' names (D77) --------------------------------------------------------
+
+    /// Sends the running storage the names its files should have now: `.!ut` after the
+    /// incomplete ones while `append_incomplete_ext` is on, the plain names otherwise. Every
+    /// file is compared, so a rename that failed before is tried again. Nothing before the
+    /// check is done: the pieces are not known then, and the check's answer sends them. See
+    /// [`SendNames`] for `how`.
+    fn send_names(&mut self, id: TorrentId, how: SendNames) {
+        let on = self.settings.append_incomplete_ext;
+        let Some(t) = self.torrent(id) else { return };
+        let (Some(storage), Some(ti)) = (t.storage.clone(), t.ti.clone()) else { return };
+        if !t.checked || t.checking {
+            return;
+        }
+        let in_flight = self.names_jobs.get_mut(&storage.id);
+        if how == SendNames::Coalesced {
+            if let Some(job) = in_flight {
+                self.names_pending.remove(&id);
+                job.again = true;
+                return;
+            }
+        }
+        let t = self.torrent(id).expect("exists");
+        let names = names_for(on, &ti, t.have_bits());
+        // (the check's answer: no other names job of the storage can be in flight)
+        if how == SendNames::IfNeeded
+            && !self.names_jobs.contains_key(&storage.id)
+            && !storage.names_differ(&names)
+        {
+            return;
+        }
+        self.names_pending.remove(&id);
+        let job = self.names_jobs.entry(storage.id).or_insert(NamesJobs {
+            torrent: id,
+            in_flight: 0,
+            again: false,
+            finished_after: 0,
+        });
+        job.in_flight += 1;
+        job.again = false;
+        self.disk.async_set_names(&storage, names);
+    }
+
+    /// The disk threads' answer to [`Engine::send_names`]: each failed rename is logged once per
+    /// file, a file left under another name for a reason that may pass is tried again later,
+    /// names asked for meanwhile are sent, a `TorrentFinished` that waited for the names is
+    /// posted, and a start that waited for a released storage's names goes ahead.
+    fn on_names(&mut self, storage: u64, failed: Vec<NameFailure>, pending: bool) {
+        // every names job is in the map from its sending to its answer
+        let Some(job) = self.names_jobs.get_mut(&storage) else { return };
+        let id = job.torrent;
+        job.in_flight = job.in_flight.saturating_sub(1);
+        let mut finished = false;
+        if job.finished_after > 0 {
+            job.finished_after -= 1;
+            finished = job.finished_after == 0;
+        }
+        let current = self.torrent_ref(id).and_then(|t| t.storage.as_ref()).is_some_and(|s| s.id == storage);
+        let job = self.names_jobs.get_mut(&storage).expect("looked up above");
+        let (mut again, mut released) = (false, false);
+        if job.in_flight == 0 {
+            if job.again && current {
+                again = true;
+            } else {
+                // a released storage's names are the next storage's to set
+                let job = self.names_jobs.remove(&storage).expect("looked up above");
+                finished |= job.finished_after > 0;
+                released = !current;
+            }
+        }
+        if current {
+            if pending {
+                self.names_pending.insert(id);
+            } else {
+                self.names_pending.remove(&id);
+            }
+        }
+        for f in failed {
+            let then = if f.retry {
+                "the rename is tried again later"
+            } else {
+                "the rename is tried again when the torrent starts again, another of its files \
+                 completes or the option is changed"
+            };
+            let message = format!(
+                "cannot rename \"{}\" to \"{}\": {}; the file is used under its present name, and {then}",
+                f.from, f.to, f.error
+            );
+            self.alert(Alert::Log { id: Some(id), message });
+        }
+        if again {
+            self.send_names(id, SendNames::Now);
+            // (it always sends: the storage is the running one, checked; should it not, the
+            // entry must not stay, or the torrent would never start again)
+            if self.names_jobs.get(&storage).is_some_and(|j| j.in_flight == 0) {
+                let job = self.names_jobs.remove(&storage).expect("looked up above");
+                finished |= job.finished_after > 0;
+            }
+        }
+        if finished && self.torrent_ref(id).is_some() {
+            self.alert(Alert::TorrentFinished { id });
+        }
+        if released {
+            self.update_running(id);
+        }
     }
 
     // --- Queue --------------------------------------------------------------------------------
@@ -3139,6 +3351,10 @@ impl Engine {
                     };
                     if announced {
                         self.lost_piece(id, piece);
+                        // D77: its files are incomplete again and get `.!ut` back
+                        if self.settings.append_incomplete_ext {
+                            self.send_names(id, SendNames::Coalesced);
+                        }
                     }
                     self.alert(Alert::Log {
                         id: Some(id),
@@ -3188,6 +3404,7 @@ impl Engine {
             Completion::Renamed { storage, file, name, error } => {
                 self.on_file_renamed(storage, file, name, error, true)
             }
+            Completion::Names { storage, failed, pending } => self.on_names(storage, failed, pending),
             Completion::Fenced { storage, action, error } => {
                 self.storages.remove(&storage);
                 if action != FenceAction::Release {
@@ -3203,6 +3420,8 @@ impl Engine {
     }
 
     fn piece_passed(&mut self, id: TorrentId, piece: u32) {
+        let names_on = self.settings.append_incomplete_ext || self.names_pending.contains(&id);
+        let file_alerts = self.settings.alert_mask & crate::AlertCategory::FILE_PROGRESS.bits() != 0;
         let Some(t) = self.torrent(id) else { return };
         let Some(p) = t.picker.as_mut() else { return };
         let downloaders = p.get_downloaders(piece);
@@ -3211,6 +3430,13 @@ impl Engine {
         t.resume_dirty = true;
         t.status_dirty = true;
         let finished = p.is_finished();
+        // D77: the files this piece completed (libtorrent `file_completed_alert`), looked for
+        // only when someone wants them: the alert's category, or the names
+        let completed = match t.ti.as_ref() {
+            Some(ti) if names_on || file_alerts => files_completed_by(ti, p.have(), piece),
+            _ => Vec::new(),
+        };
+        let names = !completed.is_empty() && names_on;
         let peers = t.peers.clone();
         for slot in peers {
             if let Some(p) = self.peers.get_mut(slot).filter(|p| p.state == PeerState::Active) {
@@ -3219,6 +3445,13 @@ impl Engine {
             }
         }
         self.on_piece_pass(id, piece, downloaders);
+        for index in completed {
+            self.alert(Alert::FileCompleted { id, index });
+        }
+        // a completed file loses its `.!ut` (behind the piece's write, before any later job)
+        if names {
+            self.send_names(id, SendNames::Coalesced);
+        }
         if finished {
             self.on_finished(id);
         }
@@ -3961,6 +4194,12 @@ impl Engine {
     // --- Persistence --------------------------------------------------------------------------
 
     fn save_resume(&mut self, force: bool) {
+        // D77: renames to or from `.!ut` that failed are tried again
+        // (a torrent removed or stopped since is let go: its next storage finds the names anew)
+        let pending: Vec<TorrentId> = self.names_pending.drain().collect();
+        for id in pending {
+            self.send_names(id, SendNames::Coalesced);
+        }
         self.last_save = Instant::now();
         self.store_flush_due = None;
         let (up, down) = (self.stat.upload_payload.total, self.stat.download_payload.total);

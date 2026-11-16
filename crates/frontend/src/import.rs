@@ -451,6 +451,7 @@ fn qbittorrent_torrent(path: &Path) -> Result<Import, (Option<String>, String)> 
     let hashes = meta.info.info_hashes();
     let name = if qbt_name.is_empty() { meta.info.name().to_owned() } else { qbt_name };
     *rec.key("name") = Entry::Bytes(name.clone().into_bytes());
+    without_qbittorrent_ext(&mut rec);
     Ok(Import {
         key: hashes.key_hex(),
         label: label.to_owned(),
@@ -461,6 +462,28 @@ fn qbittorrent_torrent(path: &Path) -> Result<Import, (Option<String>, String)> 
         name,
     })
 }
+
+/// qBittorrent's "Append .!qB extension to incomplete files" renames an unfinished file through
+/// libtorrent's `rename_file`, so `mapped_files` names it `<name>.!qB` (D77). The suffix is
+/// taken off: the engine finds the partial file under it by itself and names it as the pieces
+/// call for, where a mapped `.!qB` would end up in the file's name for good.
+fn without_qbittorrent_ext(rec: &mut Entry) {
+    if let Some(Entry::List(mapped)) = rec.dict_mut().get_mut(b"mapped_files".as_slice()) {
+        for m in mapped {
+            if let Entry::Bytes(path) = m {
+                let keep = path.len().saturating_sub(QBITTORRENT_EXT.len());
+                let base = &path[..keep];
+                let folder = base.is_empty() || base.ends_with(b"/") || base.ends_with(b"\\");
+                if path.ends_with(QBITTORRENT_EXT.as_bytes()) && !folder {
+                    path.truncate(keep);
+                }
+            }
+        }
+    }
+}
+
+/// qBittorrent's suffix for incomplete files, as it writes it.
+const QBITTORRENT_EXT: &str = ".!qB";
 
 /// A qBittorrent torrent's run state as its own loader reads it, in 4.x and 5.x alike (no key
 /// of its own): `paused` without `auto_managed` is stopped, neither is forced, else queued
@@ -997,6 +1020,52 @@ mod tests {
         prepare(&mut found, &mut prefs, |_| false);
         assert_eq!(prefs.get(&crate::tags::torrent_key(&hex)), Some("24-bit,flac,Lossless"));
         assert_eq!(prefs.get(crate::tags::KNOWN_KEY), Some("24-bit,flac,Lossless,old"));
+        let _ = std::fs::remove_dir_all(&data);
+    }
+
+    /// The review's F5: qBittorrent's "Append .!qB extension to incomplete files" renames an
+    /// unfinished file through libtorrent, so its fastresume maps it to `<name>.!qB`. The
+    /// imported record maps it to its own name: the engine finds the `.!qB` file itself (D77).
+    #[test]
+    fn qbittorrent_incomplete_files_keep_their_names() {
+        let data = temp("qbt-ext");
+        let dir = data.join("BT_backup");
+        std::fs::create_dir_all(&dir).unwrap();
+        let (bytes, hashes) = torrent("Album");
+        let hex = hashes.key_hex();
+        std::fs::write(dir.join(format!("{hex}.torrent")), &bytes).unwrap();
+        let mut rec = Entry::new_dict();
+        *rec.key("file-format") = Entry::Bytes(b"libtorrent resume file".to_vec());
+        *rec.key("file-version") = Entry::Int(1);
+        *rec.key("info-hash") = Entry::Bytes(hashes.v1.unwrap().0.to_vec());
+        *rec.key("save_path") = Entry::Bytes(b"/data/music".to_vec());
+        // a unfinished (and moved into a folder of its own by the user), b finished
+        *rec.key("mapped_files") = Entry::List(vec![
+            Entry::Bytes(b"Album/cd1/a.bin.!qB".to_vec()),
+            Entry::Bytes(b"Album/b.bin".to_vec()),
+        ]);
+        std::fs::write(dir.join(format!("{hex}.fastresume")), rec.bencode()).unwrap();
+        let found = read(Client::QBittorrent, &data).unwrap();
+        let e = decoded(&found.torrents[0]);
+        let mapped: Vec<_> =
+            e.get("mapped_files").unwrap().as_list().unwrap().iter().map(|m| m.as_str()).collect();
+        assert_eq!(mapped, [Some("Album/cd1/a.bin"), Some("Album/b.bin")]);
+
+        // only a whole suffix after a name goes; other names stay as written
+        let mut rec = Entry::new_dict();
+        *rec.key("mapped_files") = Entry::List(
+            ["x.!QB", "x.!qBit", "Album/.!qB", ".!qB", "x.!ut", "x.!qB.!qB"]
+                .iter()
+                .map(|m| Entry::Bytes(m.as_bytes().to_vec()))
+                .collect(),
+        );
+        without_qbittorrent_ext(&mut rec);
+        let mapped: Vec<_> =
+            rec.get("mapped_files").unwrap().as_list().unwrap().iter().map(|m| m.as_str()).collect();
+        assert_eq!(
+            mapped,
+            [Some("x.!QB"), Some("x.!qBit"), Some("Album/.!qB"), Some(".!qB"), Some("x.!ut"), Some("x.!qB")]
+        );
         let _ = std::fs::remove_dir_all(&data);
     }
 

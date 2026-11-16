@@ -34,6 +34,21 @@ Right-click torrents and choose **Advanced > Set Download Location...** to pick 
 
 If you quit while files are moving, the closing window waits for the moves, with their progress, since stopping in the middle could leave a torrent half in one folder and half in the other. **Quit Now** asks first and says what it would undo: the torrent's files stay in the old folder, what was copied to the new one is deleted, and you can move it again later.
 
+### Incomplete files and .!ut
+
+*New in 1.2.62, not in a published release yet.* With **Options > Preferences > General > Append .!ut to incomplete files** ticked (under **When Downloading**, off by default), a file that is still downloading is stored with `.!ut` after its name, for example `film.mkv.!ut`. As soon as all of the file has downloaded and passed its check, it gets its normal name, while the rest of the torrent carries on.
+
+- **Why:** media players, file watchers and [Sonarr and Radarr](Sonarr-Radarr-and-Prowlarr) see a file under its real name only once it is complete, so nothing opens or imports half a file. This is how µTorrent names unfinished files.
+- **Turning it on or off** renames the files of running torrents at once, and those of stopped torrents when they next start.
+- **What never gets it:** empty files, the padding files some torrents carry, and a file whose name would be too long with the suffix. A file you renamed on the Files tab gets `.!ut` after its new name.
+- **Files tab:** **Open** and **Open Containing Folder** find the file under its `.!ut` name. The Web UI and its API show the plain names.
+- **A file another program has open** (on Windows, for example a player that does not share it) keeps its present name until it can be renamed. The Logger says so once, and Rookparcel tries again about every 30 seconds and at the next start. The torrent keeps working meanwhile.
+- **An existing file is never overwritten.** If both `film.mkv` and `film.mkv.!ut` are in the folder, the finished file stays as `film.mkv.!ut`. The Logger says so once. Remove the other file, then pause and resume the torrent to have it renamed.
+- **Relocate...** on the Files tab, for a file not downloaded yet, takes the file it is pointed at under the name it has there: `film.mkv`, `film.mkv.!ut` or `film.mkv.!qB`. Run **Force Re-Check** so its pieces are counted.
+- **Set Download Location** replaces a file of the same name in the new folder, also a `film.mkv` there while the moving file is still `film.mkv.!ut`. A file that was not downloaded yet is taken from the new folder under whichever of those names it has there.
+
+**Coming from µTorrent or qBittorrent.** Whether the box is ticked or not, a file missing under its expected name is looked for with `.!ut` (µTorrent's suffix) and with `.!qB` (qBittorrent's "Append .!qB extension to incomplete files"). A torrent [imported](Importing-from-uTorrent-and-qBittorrent) or added again with **Save In** set to its old folder therefore carries on from its partial files instead of starting over. They are then renamed to the name Rookparcel gives them: `.!ut` while unfinished with the box ticked, the plain name otherwise. qBittorrent's separate folder for incomplete files and its `.unwanted` folders are not looked in.
+
 ## Smart disk I/O
 
 Smart disk I/O keeps the computer responsive while Rookparcel reads and writes. Its settings are on **Options > Preferences > Advanced > Disk I/O** (a page under Advanced in the page list).
@@ -104,6 +119,7 @@ Under **Disk Queue and Files**:
 
 ## In the GTK window and the Web UI
 
+- **GTK window** (Linux, BSD), **macOS** and the **Web UI**: **Append .!ut to incomplete files** is on the General page under **When Downloading** too.
 - **GTK window** (Linux, BSD): the same Directories, Disk Cache and Disk I/O pages. Drive types are detected on Linux, macOS and FreeBSD too, each with the system's own methods.
 - **Web UI**: the same pages under **Preferences**, with **Disk Cache** and **Disk I/O** under **Advanced**. Folders there are folders on the computer running Rookparcel, not on the browser's.
 - **rookparcel-nox**: `--save DIR` sets the download folder and `--move-on-complete DIR` moves finished torrents; the other settings are in the Web UI's Preferences.

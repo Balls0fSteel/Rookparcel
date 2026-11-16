@@ -1102,6 +1102,12 @@ strings! {
     /// Error: what the web address returned is not a block list (a web page, say). ipfilter.dat,
     /// P2P and CIDR are format names: keep them.
     IpFilterErrNotList = "the file is not a block list in ipfilter.dat, P2P or CIDR format";
+    /// Preferences > General, as in µTorrent 2.2.1: the group of what happens while a torrent
+    /// downloads.
+    PrefWhenDownloading = "When Downloading";
+    /// Check box (µTorrent 2.2.1's text): a file still downloading is named like "film.mkv.!ut"
+    /// until it is complete. Keep ".!ut" as it is; & marks the mnemonic.
+    PrefAppendIncomplete = "Append .!&ut to incomplete files";
 
     // ---- RSS Downloader
 

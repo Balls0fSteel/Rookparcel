@@ -4721,6 +4721,8 @@ unsafe fn open_file(hwnd: HWND, row: usize, folder: bool) {
     .flatten() else {
         return;
     };
+    // the file as it is on disk: `x.!ut` while unfinished (D77), or `x.!qB`
+    let path = detail::on_disk_path(&path);
     unsafe {
         if folder {
             let shown = path.ancestors().skip(1).take_while(|p| p.starts_with(&save)).find(|p| p.is_dir());
@@ -5276,7 +5278,12 @@ unsafe fn torrent_action(id: u16) {
                 cmd::QUEUE_TOP => t.queue_position(QueueMove::Top),
                 cmd::QUEUE_BOTTOM => t.queue_position(QueueMove::Bottom),
                 cmd::OPEN_FOLDER if folder.is_none() && !crate::remote_ui::is_remote() => {
-                    folder = a.list.get(tid).and_then(|st| open_folder_target(&st.save_path, &st.name));
+                    // a single file's name on disk while unfinished: `x.!ut` (D77)
+                    folder = a
+                        .list
+                        .get(tid)
+                        .and_then(|st| open_folder_target(&st.save_path, &st.name))
+                        .map(|(save, target)| (save, detail::on_disk_path(&target)));
                 }
                 _ => {}
             }

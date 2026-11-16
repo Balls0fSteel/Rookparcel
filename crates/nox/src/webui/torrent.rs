@@ -219,6 +219,10 @@ pub const FIELDS: [&str; 49] = [
 pub fn fields(st: &TorrentStatus, x: &Extra<'_>) -> Vec<Json> {
     let paused = st.flags.contains(TorrentFlags::PAUSED);
     let auto = st.flags.contains(TorrentFlags::AUTO_MANAGED);
+    // Always the torrent's own name, never the `.!ut` a single file has on disk while
+    // incomplete (D77), as qBittorrent's `contentPath()` leaves out its `.!qB`: the *arr apps
+    // import only completed torrents, whose files then have their plain names (one another
+    // program holds open gets it within seconds of being let go). No disk access per torrent.
     let content_path = if st.name.is_empty() {
         st.save_path.clone()
     } else {

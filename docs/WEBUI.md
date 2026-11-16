@@ -291,6 +291,21 @@ The shim's `app/preferences` and `setPreferences` carry "Do not download files n
 that read outside it for the page's own commit) and answers 200 whatever it found, so a list
 that does not load would go unreported. The list from an address (D75) has no qBittorrent key.
 
+"Append .!ut to incomplete files" (D77) is the engine setting `append_incomplete_ext`, on the
+page's General page under When Downloading (an engine setting like the others, so hosted it
+goes to the host). The shim reads and sets it as qBittorrent's `incomplete_files_ext`, but the
+suffix differs: qBittorrent writes `.!qB`, this client µTorrent's `.!ut`. Partials under
+either suffix are picked up when a torrent is added or started, whatever the setting. The
+APIs keep reporting the torrent's own names, never the suffixed ones: `content_path` is
+`<save_path>/<name>` (a single file's plain name even while it is stored as `name.!ut`; the
+folder of a multi-file torrent), as qBittorrent's `contentPath()` leaves out its `.!qB`, and
+`torrents/files` and the native Files tab give the paths in the torrent. That cannot break an
+*arr import: Sonarr and Radarr act only on completed torrents, whose files then have their plain
+names (a file another program holds open while it completes keeps `.!ut` until it is let go,
+then is renamed within seconds; an import tried in between fails and is retried). No API
+endpoint reads a downloaded file from disk, so none has to look for the suffix; the desktop
+programs' Open and Open Containing Folder do (`frontend::detail::on_disk_path`).
+
 `torrents/properties` (`isPrivate`, `comment`, `created_by`, `creation_date`), the trackers
 list's "This torrent is private" rows and the native General tab's Created On / Created By /
 Comment ask the engine once per torrent (`TorrentHandle::metadata`, a call answered on a

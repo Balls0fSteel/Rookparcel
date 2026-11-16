@@ -385,6 +385,11 @@ pub struct Settings {
     /// slowly than its usual.
     pub disk_slow_downloads: bool,
     pub disk_slow_uploads: bool,
+    /// µTorrent's "Append .!ut to incomplete files" (D77, not in libtorrent): a file not yet
+    /// complete is stored as `<name>.!ut` and gets its own name once every piece it overlaps
+    /// has passed its hash check. Nothing about it is saved: the names follow from the pieces,
+    /// and files under `.!ut` or qBittorrent's `.!qB` are picked up whether it is on or off.
+    pub append_incomplete_ext: bool,
     /// Web seeds (libtorrent's `urlseed_*` and web seed settings): BEP 17 requests in flight
     /// per connection (we also cap BEP 19 request runs by it).
     pub urlseed_pipeline_size: i32,
@@ -569,6 +574,7 @@ impl Default for Settings {
             drive_overrides: String::new(),
             disk_slow_downloads: false,
             disk_slow_uploads: false,
+            append_incomplete_ext: false,
             urlseed_pipeline_size: 5,
             urlseed_timeout: 20,
             urlseed_wait_retry: 30,

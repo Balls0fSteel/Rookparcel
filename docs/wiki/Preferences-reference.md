@@ -30,10 +30,13 @@ The texts below are short versions of that built-in help. Rates on the pages are
 | **Default apps...** (Windows only) | Opens Windows Settings at Default apps. A program chosen there wins over the boxes above, and only you can change that choice. |
 | **Check for updates automatically** (Privacy) | About ten seconds after start and then every 12 hours, asks the project website whether a newer release is out. Nothing is downloaded or installed without asking. **Help > Check for Updates** works either way. |
 | **Update to beta versions** (Privacy) | Also offers pre-release (beta) versions when checking for updates. |
+| **Append .!ut to incomplete files** (When Downloading) | A file still downloading is stored with `.!ut` after its name (`film.mkv.!ut`) and gets its normal name as soon as all of it has downloaded and passed its check. Turning it on or off renames the files of running torrents at once, those of stopped torrents when they start. Off by default. |
 
 On Windows the integration boxes are under **Windows Integration**; in the GTK version the group is called **Desktop Integration**.
 
-More: [Tray, notifications and startup](Tray-notifications-and-startup), [Adding torrents](Adding-torrents), [Updating Rookparcel](Updating-Rookparcel), [Profiles](Profiles).
+*Append .!ut to incomplete files is new in 1.2.62, not in a published release yet.* Files left as `.!ut` by µTorrent or as `.!qB` by qBittorrent are picked up whether the box is ticked or not. A file another program holds open keeps its name until it can be renamed.
+
+More: [Tray, notifications and startup](Tray-notifications-and-startup), [Adding torrents](Adding-torrents), [Updating Rookparcel](Updating-Rookparcel), [Profiles](Profiles), [Disk and storage](Disk-and-storage#incomplete-files-and-ut).
 
 ## UI Settings
 

@@ -92,6 +92,46 @@ impl Bitfield {
         (0..self.len).map(|i| self.get(i))
     }
 
+    /// Whether every bit in `start..end` is set, looked at from `from` outwards: first up to
+    /// `end`, then down to `start`, a whole byte at a time where it can. A range whose missing
+    /// bit is near `from` (the piece just passed, in a sequential download) is answered at once.
+    pub fn all_set_in(&self, start: usize, end: usize, from: usize) -> bool {
+        let end = end.min(self.len);
+        if start >= end {
+            return true;
+        }
+        let from = from.clamp(start, end);
+        let mut i = from;
+        while i < end {
+            if i % 8 == 0 && i + 8 <= end {
+                if self.bytes[i / 8] != 0xff {
+                    return false;
+                }
+                i += 8;
+            } else {
+                if !self.get(i) {
+                    return false;
+                }
+                i += 1;
+            }
+        }
+        let mut i = from;
+        while i > start {
+            if i % 8 == 0 && i - 8 >= start {
+                if self.bytes[i / 8 - 1] != 0xff {
+                    return false;
+                }
+                i -= 8;
+            } else {
+                i -= 1;
+                if !self.get(i) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
     fn clear_trailing_bits(&mut self) {
         if self.len % 8 != 0 {
             let last = self.bytes.len() - 1;
@@ -134,6 +174,40 @@ mod tests {
         assert!(half.is_subset_of(&bf) && !bf.is_subset_of(&half));
         half.set_all(true);
         assert_eq!(half, bf);
+    }
+
+    #[test]
+    fn all_set_in_a_range_from_any_start() {
+        let mut bf = Bitfield::new(40, true);
+        bf.set(3, false);
+        bf.set(30, false);
+        for from in [0, 3, 4, 10, 17, 29, 31, 40, 99] {
+            assert!(bf.all_set_in(4, 30, from), "{from}");
+            assert!(bf.all_set_in(31, 40, from), "{from}");
+            assert!(!bf.all_set_in(3, 4, from), "{from}");
+            assert!(!bf.all_set_in(0, 40, from), "{from}");
+            assert!(!bf.all_set_in(8, 31, from), "{from}");
+            assert!(!bf.all_set_in(2, 9, from), "{from}");
+        }
+        assert!(bf.all_set_in(5, 5, 5), "an empty range");
+        assert!(bf.all_set_in(31, 100, 0), "clamped to the length");
+        // brute force against `get`
+        let mut x = 0x2545_f491u32;
+        let mut bf = Bitfield::new(77, false);
+        for i in 0..77 {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            bf.set(i, x % 7 != 0);
+        }
+        for s in 0..77 {
+            for e in s..=77 {
+                let want = (s..e).all(|i| bf.get(i));
+                for from in [s, (s + e) / 2, e] {
+                    assert_eq!(bf.all_set_in(s, e, from), want, "{s}..{e} from {from}");
+                }
+            }
+        }
     }
 
     #[test]

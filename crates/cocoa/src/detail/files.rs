@@ -497,6 +497,8 @@ fn file_url(p: &Path) -> Retained<NSURL> {
 /// Finder once it exists, else the nearest folder inside the save path that does.
 fn open(at: At, folder: bool) {
     let Some((save, path)) = at.path() else { return };
+    // an unfinished file may be `name.!ut` (or a qBittorrent `.!qB`) on disk (D77)
+    let path = rookparcel_frontend::detail::on_disk_path(&path);
     let ws = NSWorkspace::sharedWorkspace();
     if folder && path.exists() {
         ws.activateFileViewerSelectingURLs(&NSArray::from_retained_slice(&[file_url(&path)]));

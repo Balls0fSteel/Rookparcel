@@ -405,6 +405,7 @@ pub static TABLE: &[Entry] = &[
     entry!(drive_overrides: str),
     entry!(disk_slow_downloads: bool),
     entry!(disk_slow_uploads: bool),
+    entry!(append_incomplete_ext: bool),
     entry!(urlseed_pipeline_size: i32),
     entry!(urlseed_timeout: u32),
     entry!(urlseed_wait_retry: u32),

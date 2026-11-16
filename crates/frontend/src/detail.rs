@@ -415,6 +415,28 @@ impl FileFilter {
     }
 }
 
+/// Where the file the torrent names `path` (from [`file_path`], [`Detail::file_path`] or
+/// `<save path>/<name>`) is on disk now, for Open and Open Containing Folder (D77): `path` when
+/// it exists, else `path` with `.!ut` after it (an incomplete file while
+/// `Settings::append_incomplete_ext` is on, or one µTorrent left), else with `.!qB` (one
+/// qBittorrent left, until the engine renames it); `path` itself when none exists. A folder
+/// exists under its own name, so it comes back unchanged. Relocate keeps the name without the
+/// suffix: the engine puts the suffix on the new name itself.
+pub fn on_disk_path(path: &std::path::Path) -> PathBuf {
+    if path.exists() {
+        return path.to_path_buf();
+    }
+    for ext in [".!ut", ".!qB"] {
+        let mut s = path.as_os_str().to_owned();
+        s.push(ext);
+        let p = PathBuf::from(s);
+        if p.is_file() {
+            return p;
+        }
+    }
+    path.to_path_buf()
+}
+
 /// `<save path>/<path>` for a file's `/`-separated path in its torrent, or None when the save
 /// path is not absolute or the path is anything but plain names, so what Open runs can never
 /// be outside the save path (as Open Folder's target, SEC-18).
@@ -1134,6 +1156,23 @@ mod tests {
     }
 
     /// Open stays inside the save path whatever the torrent's file paths are.
+    #[test]
+    fn the_on_disk_path_finds_an_incomplete_files_suffix() {
+        let dir = std::env::temp_dir().join(format!("rp-on-disk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("folder")).unwrap();
+        let file = dir.join("film.mkv");
+        assert_eq!(on_disk_path(&file), file, "nothing there: the name itself");
+        std::fs::write(dir.join("film.mkv.!qB"), b"q").unwrap();
+        assert_eq!(on_disk_path(&file), dir.join("film.mkv.!qB"));
+        std::fs::write(dir.join("film.mkv.!ut"), b"u").unwrap();
+        assert_eq!(on_disk_path(&file), dir.join("film.mkv.!ut"), ".!ut before .!qB");
+        std::fs::write(&file, b"f").unwrap();
+        assert_eq!(on_disk_path(&file), file, "the plain name first");
+        assert_eq!(on_disk_path(&dir.join("folder")), dir.join("folder"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn file_paths_stay_in_the_save_path() {
         let save = if cfg!(windows) { r"C:\Downloads" } else { "/downloads" };

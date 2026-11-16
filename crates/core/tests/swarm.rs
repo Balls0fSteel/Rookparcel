@@ -12,8 +12,12 @@
 //! that sent the rest of the piece is kept; and the IP and port filters: blocked peers are never
 //! connected, refused when they connect, and dropped when a new filter blocks them, and blocked
 //! trackers are not announced to; a skipped file kept in the part file across a restart and
-//! a recheck, then unskipped; and a sequential download that asks for each file's first and
-//! last pieces first.
+//! a recheck, then unskipped; a sequential download that asks for each file's first and
+//! last pieces first; and "Append .!ut to incomplete files" (D77): a download under `.!ut` names
+//! that ends with the plain ones, a stop and restart from resume data, µTorrent's `.!ut` and
+//! qBittorrent's `.!qB` partial files picked up with the option off and on, the option turned
+//! on and off mid-download, names that disagree with the resume data after a crash, a skipped
+//! file beside shared pieces, and a move and a removal with suffixed files.
 
 use std::collections::VecDeque;
 use std::net::{SocketAddr, TcpListener, UdpSocket};
@@ -63,6 +67,17 @@ fn fixture_padded(announce: Option<&str>, padding: usize) -> Fixture {
 fn fixture_with(announce: Option<&str>, padding: usize, piece_len: usize) -> Fixture {
     let sizes =
         [("alpha.bin", 300_000usize), ("sub/beta.bin", 1_000_000), ("sub/gamma.txt", 12_345), ("empty", 0)];
+    fixture_of(&sizes, announce, padding, piece_len)
+}
+
+/// A torrent `swarm-test` of files of these names and sizes, with deterministic contents.
+fn fixture_of<S: AsRef<str>>(
+    sizes: &[(S, usize)],
+    announce: Option<&str>,
+    padding: usize,
+    piece_len: usize,
+) -> Fixture {
+    let sizes: Vec<(&str, usize)> = sizes.iter().map(|(n, s)| (n.as_ref(), *s)).collect();
     let mut all = Vec::new();
     let mut files = Vec::new();
     for (i, (name, size)) in sizes.iter().enumerate() {
@@ -2541,4 +2556,539 @@ fn first_and_last_pieces_are_asked_for_first() {
     assert_eq!(order, want);
     assert_files(&f, &dir);
     let _ = std::fs::remove_dir_all(dir);
+}
+
+// ---- D77: "Append .!ut to incomplete files" ---------------------------------------------------
+
+/// The fixture's files by index (alpha is pieces 0-9, beta 9-39, gamma 39-40, empty none).
+const NAMES: [&str; 4] = ["alpha.bin", "sub/beta.bin", "sub/gamma.txt", "empty"];
+
+/// A leech's settings: the option, a download limit (0: none) so a download can be looked at
+/// midway, and the per-file alerts.
+fn names_settings(on: bool, rate: u32) -> Settings {
+    Settings {
+        append_incomplete_ext: on,
+        download_rate_limit: rate,
+        alert_mask: (rookparcel_core::AlertCategory::DEFAULT | rookparcel_core::AlertCategory::FILE_PROGRESS)
+            .bits(),
+        ..settings()
+    }
+}
+
+fn start_names(on: bool, rate: u32, state_dir: Option<PathBuf>) -> Session {
+    Session::start(SessionParams { settings: names_settings(on, rate), state_dir, ..Default::default() })
+        .expect("session starts")
+}
+
+/// The files under `<dir>/swarm-test`, `/`-separated and sorted.
+fn listing(dir: &Path) -> Vec<String> {
+    fn walk(root: &Path, d: &Path, out: &mut Vec<String>) {
+        for e in std::fs::read_dir(d).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(root, &p, out);
+            } else {
+                out.push(p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
+    let root = dir.join("swarm-test");
+    let mut out = Vec::new();
+    walk(&root, &root, &mut out);
+    out.sort();
+    out
+}
+
+/// Waits until the files in `dir` satisfy `ok` (the disk threads rename behind the engine).
+fn wait_listing(dir: &Path, secs: u64, what: &str, ok: impl Fn(&[String]) -> bool) -> Vec<String> {
+    let deadline = Instant::now() + Duration::from_secs(secs);
+    loop {
+        let l = listing(dir);
+        if ok(&l) {
+            return l;
+        }
+        assert!(Instant::now() < deadline, "timed out waiting for {what}; files: {l:?}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn plain_names() -> Vec<String> {
+    let mut v: Vec<String> = NAMES.iter().map(|s| s.to_string()).collect();
+    v.sort();
+    v
+}
+
+fn suffixed(l: &[String]) -> bool {
+    l.iter().any(|n| n.ends_with(".!ut"))
+}
+
+/// Waits for the torrent's `TorrentFinished`, collecting the `FileCompleted` alerts before it.
+fn finished_with_files(w: &mut Watch, id: TorrentId, secs: u64) -> Vec<u32> {
+    let mut files = Vec::new();
+    wait(w, secs, "finished", |a| match a {
+        Alert::FileCompleted { id: i, index } if *i == id => {
+            files.push(*index);
+            None
+        }
+        Alert::TorrentFinished { id: i } if *i == id => Some(()),
+        _ => None,
+    });
+    files.sort();
+    files
+}
+
+#[test]
+fn a_download_with_ut_names_ends_under_the_plain_names() {
+    let f = fixture(None);
+    let (seed, seed_dir, port, _) = seeder(&f);
+    let dir = temp_dir("names-leech");
+    let leech = start_names(true, 250_000, None);
+    let mut w = Watch::new(leech.handle());
+    let id = add(&mut w, &f, &dir);
+    wait_state(&mut w, id, TorrentState::Downloading, 10);
+    assert_eq!(listing(&dir), ["empty"], "the check creates the empty file, under its plain name");
+    leech.handle().torrent(id).connect_peer(SocketAddr::from(([127, 0, 0, 1], port)));
+    // midway the data is under .!ut names only
+    let l = wait_listing(&dir, 30, "a .!ut file", suffixed);
+    assert!(l.iter().all(|n| n.ends_with(".!ut") || NAMES.contains(&n.as_str())), "{l:?}");
+    // `TorrentFinished` waits for the renames: the plain names are there when it comes
+    let completed = finished_with_files(&mut w, id, 60);
+    assert_eq!(listing(&dir), plain_names());
+    assert_eq!(completed, [0, 1, 2], "one FileCompleted per file, none for the empty one");
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 10);
+    assert_eq!(st.total_failed_bytes, 0);
+    // a forced recheck finds the files under their names and renames nothing
+    leech.handle().torrent(id).force_recheck();
+    wait(&mut w, 20, "checked", |a| matches!(a, Alert::TorrentChecked { id: i } if *i == id).then_some(()));
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 20);
+    assert_eq!(st.total_done, st.total);
+    assert_eq!(listing(&dir), plain_names());
+    leech.shutdown();
+    seed.shutdown();
+    assert_files(&f, &dir);
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(seed_dir);
+}
+
+#[test]
+fn a_download_stopped_midway_resumes_with_its_names_and_pieces() {
+    let f = fixture(None);
+    let (seed, seed_dir, port, _) = seeder(&f);
+    let seed_addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let dir = temp_dir("names-restart");
+    let state = temp_dir("names-restart-state");
+    let (first, before) = {
+        let leech = start_names(true, 200_000, Some(state.clone()));
+        let mut w = Watch::new(leech.handle());
+        let id = add(&mut w, &f, &dir);
+        wait_state(&mut w, id, TorrentState::Downloading, 10);
+        leech.handle().torrent(id).connect_peer(seed_addr);
+        let first = wait(&mut w, 60, "a file completed", |a| match a {
+            Alert::FileCompleted { id: i, index } if *i == id => Some(*index as usize),
+            _ => None,
+        });
+        leech.handle().torrent(id).pause();
+        wait(&mut w, 10, "paused", |a| status_of(a, id).filter(|s| s.flags.contains(TorrentFlags::PAUSED)));
+        std::thread::sleep(Duration::from_millis(300));
+        leech.shutdown();
+        (first, listing(&dir))
+    };
+    assert!(before.contains(&NAMES[first].to_owned()), "the completed file is plain: {before:?}");
+    assert!(suffixed(&before), "the others carry .!ut: {before:?}");
+
+    let leech = start_names(true, 10_000, Some(state.clone()));
+    let mut w = Watch::new(leech.handle());
+    let id = first_restored(&mut w).id;
+    leech.handle().torrent(id).resume();
+    let mut rechecked = false;
+    let st = wait(&mut w, 20, "downloading after the restart", |a| {
+        if let Alert::StateChanged { id: i, state: TorrentState::CheckingFiles, .. } = a {
+            rechecked |= *i == id;
+        }
+        status_of(a, id).filter(|s| s.state == TorrentState::Downloading)
+    });
+    assert!(!rechecked, "resumed without a recheck");
+    let done = st.total_done;
+    assert!(done > 0 && done < st.total);
+    // (a piece hashed after the stop may have completed another file, renamed now)
+    wait_listing(&dir, 10, "the names as they were", |l| l.contains(&NAMES[first].to_owned()) && suffixed(l));
+    // (the restart reconnects to the seed at 10 kB/s: now at full speed)
+    leech.handle().apply_settings(names_settings(true, 0));
+    leech.handle().torrent(id).connect_peer(seed_addr);
+    let completed = finished_with_files(&mut w, id, 60);
+    assert!(!completed.contains(&(first as u32)), "{first} was complete already: {completed:?}");
+    assert_eq!(listing(&dir), plain_names());
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 10);
+    assert_eq!(st.total_failed_bytes, 0);
+    assert_eq!(st.total_payload_download + st.total_redundant_bytes, st.total - done, "nothing again");
+    leech.shutdown();
+    seed.shutdown();
+    assert_files(&f, &dir);
+    for d in [dir, state, seed_dir] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// µTorrent's whole alpha as `alpha.bin.!ut`, qBittorrent's partial beta as `beta.bin.!qB`: both
+/// are found by the check and only the missing pieces are downloaded.
+fn other_clients_partials_are_adopted(on: bool) {
+    let f = fixture(None);
+    let (seed, seed_dir, port, _) = seeder(&f);
+    let dir = temp_dir(if on { "names-adopt-on" } else { "names-adopt-off" });
+    let root = dir.join("swarm-test");
+    std::fs::create_dir_all(root.join("sub")).unwrap();
+    std::fs::write(root.join("alpha.bin.!ut"), &f.files[0].1).unwrap();
+    std::fs::write(root.join("sub/beta.bin.!qB"), &f.files[1].1[..500_000]).unwrap();
+    let leech = start_names(on, 0, None);
+    let mut w = Watch::new(leech.handle());
+    let id = add(&mut w, &f, &dir);
+    let st = wait_state(&mut w, id, TorrentState::Downloading, 20);
+    // pieces 0-23: alpha, and beta up to 500,000 (piece 24 needs more of it)
+    assert_eq!(st.total_done, 24 * PIECE as u64);
+    let want: &[&str] = if on {
+        &["alpha.bin", "empty", "sub/beta.bin.!ut"]
+    } else {
+        &["alpha.bin", "empty", "sub/beta.bin"]
+    };
+    wait_listing(&dir, 10, "the names the pieces call for", |l| l == want);
+    leech.handle().torrent(id).connect_peer(SocketAddr::from(([127, 0, 0, 1], port)));
+    finished_with_files(&mut w, id, 60);
+    assert_eq!(listing(&dir), plain_names());
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 10);
+    assert_eq!(st.total_failed_bytes, 0);
+    assert_eq!(st.total_payload_download + st.total_redundant_bytes, st.total - 24 * PIECE as u64);
+    leech.shutdown();
+    seed.shutdown();
+    assert_files(&f, &dir);
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(seed_dir);
+}
+
+#[test]
+fn partial_files_of_other_clients_are_adopted_with_the_option_off() {
+    other_clients_partials_are_adopted(false);
+}
+
+#[test]
+fn partial_files_of_other_clients_are_adopted_with_the_option_on() {
+    other_clients_partials_are_adopted(true);
+}
+
+#[test]
+fn turning_the_option_on_and_off_mid_download_renames_the_files() {
+    let f = fixture(None);
+    let (seed, seed_dir, port, _) = seeder(&f);
+    let dir = temp_dir("names-toggle");
+    let rate = 100_000;
+    let leech = start_names(false, rate, None);
+    let mut w = Watch::new(leech.handle());
+    let id = add(&mut w, &f, &dir);
+    wait_state(&mut w, id, TorrentState::Downloading, 10);
+    leech.handle().torrent(id).connect_peer(SocketAddr::from(([127, 0, 0, 1], port)));
+    let beta = |l: &[String]| l.iter().any(|n| n.starts_with("sub/beta.bin"));
+    wait_listing(&dir, 30, "beta under its plain name", |l| beta(l) && !suffixed(l));
+    // on: the incomplete files get .!ut (beta, a megabyte, is far from done)
+    leech.handle().apply_settings(names_settings(true, rate));
+    let l = wait_listing(&dir, 10, "on", |l| l.contains(&"sub/beta.bin.!ut".to_owned()));
+    assert!(!l.contains(&"sub/beta.bin".to_owned()), "{l:?}");
+    // off: plain again
+    leech.handle().apply_settings(names_settings(false, rate));
+    wait_listing(&dir, 10, "off", |l| beta(l) && !suffixed(l));
+    // on again, and the rest at full speed: the end has the plain names
+    leech.handle().apply_settings(names_settings(true, rate));
+    wait_listing(&dir, 10, "on again", |l| l.contains(&"sub/beta.bin.!ut".to_owned()));
+    leech.handle().apply_settings(names_settings(true, 0));
+    finished_with_files(&mut w, id, 60);
+    assert_eq!(listing(&dir), plain_names());
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 10);
+    assert_eq!(st.total_failed_bytes, 0);
+    leech.shutdown();
+    seed.shutdown();
+    assert_files(&f, &dir);
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(seed_dir);
+}
+
+/// A crash between a rename and the next save of the resume data, simulated: the names on disk
+/// disagree with the pieces the resume data has. The next start finds the files under the
+/// names they have and renames them to the ones the pieces call for.
+#[test]
+fn a_restart_heals_names_a_crash_left_wrong() {
+    let f = fixture(None);
+    let (seed, seed_dir, port, _) = seeder(&f);
+    let seed_addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let dir = temp_dir("names-crash");
+    let state = temp_dir("names-crash-state");
+    let root = dir.join("swarm-test");
+    let (first, before) = {
+        let leech = start_names(true, 200_000, Some(state.clone()));
+        let mut w = Watch::new(leech.handle());
+        let id = add(&mut w, &f, &dir);
+        wait_state(&mut w, id, TorrentState::Downloading, 10);
+        leech.handle().torrent(id).connect_peer(seed_addr);
+        let first = wait(&mut w, 60, "a file completed", |a| match a {
+            Alert::FileCompleted { id: i, index } if *i == id => Some(*index as usize),
+            _ => None,
+        });
+        wait_listing(&dir, 10, "the completed file renamed", |l| {
+            l.contains(&NAMES[first].to_owned()) && suffixed(l)
+        });
+        leech.handle().torrent(id).pause();
+        wait(&mut w, 10, "paused", |a| status_of(a, id).filter(|s| s.flags.contains(TorrentFlags::PAUSED)));
+        std::thread::sleep(Duration::from_millis(300));
+        leech.shutdown();
+        (first, listing(&dir))
+    };
+    // the complete file back under .!ut, an incomplete one under its plain name
+    // beta, the largest, is the least likely to be completed by a piece hashed after the stop
+    let ut = |n: &&String| n.ends_with(".!ut");
+    let incomplete = before.iter().filter(ut).find(|n| n.starts_with("sub/beta")).or(before.iter().find(ut));
+    let incomplete = incomplete.unwrap().clone();
+    let complete = root.join(NAMES[first]);
+    std::fs::rename(&complete, root.join(format!("{}.!ut", NAMES[first]))).unwrap();
+    std::fs::rename(root.join(&incomplete), root.join(incomplete.trim_end_matches(".!ut"))).unwrap();
+    assert_ne!(listing(&dir), before);
+
+    let leech = start_names(true, 10_000, Some(state.clone()));
+    let mut w = Watch::new(leech.handle());
+    let id = first_restored(&mut w).id;
+    leech.handle().torrent(id).resume();
+    let mut rechecked = false;
+    let st = wait(&mut w, 20, "downloading after the restart", |a| {
+        if let Alert::StateChanged { id: i, state: TorrentState::CheckingFiles, .. } = a {
+            rechecked |= *i == id;
+        }
+        status_of(a, id).filter(|s| s.state == TorrentState::Downloading)
+    });
+    assert!(!rechecked, "the files were found where they are: no recheck");
+    let done = st.total_done;
+    // (a piece hashed after the stop may have completed another file, renamed now too)
+    wait_listing(&dir, 10, "the names healed", |l| {
+        l.contains(&NAMES[first].to_owned()) && l.contains(&incomplete) && suffixed(l)
+    });
+    // (the restart reconnects to the seed at 10 kB/s: now at full speed)
+    leech.handle().apply_settings(names_settings(true, 0));
+    leech.handle().torrent(id).connect_peer(seed_addr);
+    finished_with_files(&mut w, id, 60);
+    assert_eq!(listing(&dir), plain_names());
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 10);
+    assert_eq!(st.total_failed_bytes, 0);
+    assert_eq!(st.total_payload_download + st.total_redundant_bytes, st.total - done);
+    leech.shutdown();
+    seed.shutdown();
+    assert_files(&f, &dir);
+    for d in [dir, state, seed_dir] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// beta skipped: pieces 9 and 39, which it shares with alpha and gamma, keep its part in the
+/// part file, and it gets no file of any name; unskipped, it is downloaded under `.!ut` and ends
+/// plain.
+#[test]
+fn a_skipped_file_beside_shared_pieces_gets_no_file_until_it_is_wanted() {
+    use rookparcel_core::DownloadPriority;
+    let f = fixture(None);
+    let (seed, seed_dir, port, _) = seeder(&f);
+    let dir = temp_dir("names-skip");
+    let part = dir.join(format!(".{}.parts", hex(&f.info_hash)));
+    let leech = start_names(true, 0, None);
+    let mut w = Watch::new(leech.handle());
+    let mut p = AddTorrentParams::new(TorrentSource::TorrentFile(f.torrent.clone()), dir.to_string_lossy());
+    p.flags = TorrentFlags::empty();
+    p.file_priorities = vec![DownloadPriority::NORMAL, DownloadPriority::DONT_DOWNLOAD];
+    leech.handle().add_torrent(p);
+    let id = wait(&mut w, 5, "add", |a| match a {
+        Alert::TorrentAdded { id, .. } => Some(*id),
+        _ => None,
+    });
+    wait_state(&mut w, id, TorrentState::Downloading, 10);
+    leech.handle().torrent(id).connect_peer(SocketAddr::from(([127, 0, 0, 1], port)));
+    let completed = finished_with_files(&mut w, id, 60);
+    assert_eq!(completed, [0, 2]);
+    let st = wait_state(&mut w, id, TorrentState::Finished, 10);
+    assert_eq!(st.total_failed_bytes, 0, "the shared pieces pass");
+    assert_eq!(listing(&dir), ["alpha.bin", "empty", "sub/gamma.txt"]);
+    assert!(part.exists(), "beta's part of the shared pieces");
+    for i in [0, 2] {
+        let (name, data) = &f.files[i];
+        assert!(std::fs::read(dir.join("swarm-test").join(name)).unwrap() == *data, "{name}");
+    }
+    // wanted now: from a second seed (the first one was closed as redundant)
+    let (seed2, seed2_dir, port2, _) = seeder(&f);
+    leech.handle().torrent(id).set_file_priority(1, DownloadPriority::NORMAL);
+    leech.handle().torrent(id).connect_peer(SocketAddr::from(([127, 0, 0, 1], port2)));
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 60);
+    assert_eq!(st.total_failed_bytes, 0);
+    wait_listing(&dir, 10, "beta plain", |l| l == plain_names());
+    assert!(!part.exists());
+    leech.shutdown();
+    seed.shutdown();
+    seed2.shutdown();
+    assert_files(&f, &dir);
+    for d in [dir, seed_dir, seed2_dir] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// A download moved midway takes its `.!ut` files along and finishes under the plain names at
+/// the new place; one removed with its data midway leaves no `.!ut` file behind.
+#[test]
+fn suffixed_files_move_and_are_removed_with_the_data() {
+    use rookparcel_core::{MoveFlags, RemoveFlags};
+    let f = fixture(None);
+    let (seed, seed_dir, port, _) = seeder(&f);
+    let seed_addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let dir = temp_dir("names-move");
+    let (from, to) = (dir.join("from"), dir.join("to"));
+    let rate = 150_000;
+    let leech = start_names(true, rate, None);
+    let mut w = Watch::new(leech.handle());
+    let id = add(&mut w, &f, &from);
+    wait_state(&mut w, id, TorrentState::Downloading, 10);
+    leech.handle().torrent(id).connect_peer(seed_addr);
+    wait_listing(&from, 30, "a .!ut file", suffixed);
+    leech.handle().torrent(id).move_storage(to.to_string_lossy(), MoveFlags::AlwaysReplaceFiles);
+    wait(&mut w, 20, "moved", |a| match a {
+        Alert::StorageMoved { id: i, .. } if *i == id => Some(()),
+        Alert::StorageMovedFailed { error, .. } => panic!("move failed: {error}"),
+        _ => None,
+    });
+    assert!(listing(&from).is_empty(), "nothing left behind: {:?}", listing(&from));
+    leech.handle().apply_settings(names_settings(true, 0));
+    finished_with_files(&mut w, id, 60);
+    assert_eq!(listing(&to), plain_names());
+    assert_files(&f, &to);
+    leech.handle().remove_torrent(id, RemoveFlags::DELETE_FILES);
+    wait(&mut w, 20, "deleted", |a| {
+        matches!(a, Alert::TorrentDeleted { id: i, .. } if *i == id).then_some(())
+    });
+
+    // again, removed with its data midway
+    leech.handle().apply_settings(names_settings(true, rate));
+    let id = add(&mut w, &f, &from);
+    wait_state(&mut w, id, TorrentState::Downloading, 10);
+    leech.handle().torrent(id).connect_peer(seed_addr);
+    wait_listing(&from, 30, "a .!ut file", suffixed);
+    leech.handle().remove_torrent(id, RemoveFlags::DELETE_FILES);
+    wait(&mut w, 20, "deleted", |a| match a {
+        Alert::TorrentDeleted { id: i, .. } if *i == id => Some(()),
+        Alert::TorrentDeleteFailed { error, .. } => panic!("delete failed: {error}"),
+        _ => None,
+    });
+    assert!(!from.join("swarm-test").exists(), "left: {:?}", listing(&from));
+    leech.shutdown();
+    seed.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(seed_dir);
+}
+
+/// The review's F1: a stop and a start right after a file completes (Force Re-Check is both in
+/// one go; Pause then Resume) while the old storage's rename may still wait behind its writes.
+/// The new storage starts only once that rename is done, so it never finds a name the file is
+/// about to lose: no file ends up twice (`x` beside a fresh `x.!ut`) and the names end plain.
+fn restarts_right_after_files_complete(recheck: bool) {
+    let f = fixture(None);
+    let (seed, seed_dir, port, _) = seeder(&f);
+    let seed_addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let dir = temp_dir(if recheck { "names-recheck-race" } else { "names-pause-race" });
+    // (a pause keeps the seed's close time: without this the seed is tried again only after a
+    // minute)
+    let leech = Session::start(SessionParams {
+        settings: Settings { min_reconnect_time: 1, ..names_settings(true, 400_000) },
+        ..Default::default()
+    })
+    .expect("session starts");
+    let mut w = Watch::new(leech.handle());
+    let id = add(&mut w, &f, &dir);
+    wait_state(&mut w, id, TorrentState::Downloading, 10);
+    leech.handle().torrent(id).connect_peer(seed_addr);
+    let (mut restarts, mut finished) = (0, false);
+    while !finished {
+        let completed = wait(&mut w, 60, "a file completed", |a| match a {
+            Alert::FileCompleted { id: i, .. } if *i == id => Some(true),
+            Alert::TorrentFinished { id: i } if *i == id => Some(false),
+            _ => None,
+        });
+        if !completed {
+            break;
+        }
+        let t = leech.handle().torrent(id);
+        if recheck {
+            t.force_recheck();
+        } else {
+            t.pause();
+            t.resume();
+        }
+        restarts += 1;
+        // checked again, then to the seed again (a stop closes the connections); the download
+        // may have finished meanwhile (posted once, before or after the check)
+        wait(&mut w, 30, "checked", |a| match a {
+            Alert::TorrentFinished { id: i } if *i == id => {
+                finished = true;
+                None
+            }
+            Alert::TorrentChecked { id: i } if *i == id => Some(()),
+            _ => None,
+        });
+        leech.handle().torrent(id).connect_peer(seed_addr);
+    }
+    assert!(restarts > 0);
+    // a file found under a name it was losing would be downloaded again into a new `.!ut`
+    // beside the complete one, which could then never get its name: the end shows it
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 30);
+    assert_eq!(st.total_done, st.total);
+    assert_eq!(st.total_failed_bytes, 0);
+    wait_listing(&dir, 10, "the plain names", |l| l == plain_names());
+    leech.shutdown();
+    seed.shutdown();
+    assert_eq!(listing(&dir), plain_names());
+    assert_files(&f, &dir);
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(seed_dir);
+}
+
+#[test]
+fn a_recheck_right_after_a_file_completes_finds_the_names_it_will_have() {
+    restarts_right_after_files_complete(true);
+}
+
+#[test]
+fn a_pause_and_resume_right_after_a_file_completes_finds_the_names_it_will_have() {
+    restarts_right_after_files_complete(false);
+}
+
+/// The review's F3: thousands of tiny files, dozens completed by each piece. Names jobs are
+/// coalesced (one in flight per storage, one more when it answers), and `TorrentFinished`
+/// still waits for the last renames.
+#[test]
+fn thousands_of_tiny_files_end_under_their_plain_names() {
+    let sizes: Vec<(String, usize)> =
+        (0..3000).map(|i| (format!("d{}/f{i:04}.bin", i / 500), 600 + i % 211)).collect();
+    let f = fixture_of(&sizes, None, 0, PIECE);
+    let (seed, seed_dir, port, _) = seeder(&f);
+    let dir = temp_dir("names-many");
+    // (3,000 alerts at once would pass the queue's 2,000: the rest would be dropped)
+    let leech = Session::start(SessionParams {
+        settings: Settings { alert_queue_size: 20_000, ..names_settings(true, 0) },
+        ..Default::default()
+    })
+    .expect("session starts");
+    let mut w = Watch::new(leech.handle());
+    let id = add(&mut w, &f, &dir);
+    wait_state(&mut w, id, TorrentState::Downloading, 30);
+    leech.handle().torrent(id).connect_peer(SocketAddr::from(([127, 0, 0, 1], port)));
+    let completed = finished_with_files(&mut w, id, 120);
+    assert_eq!(completed, (0..3000).collect::<Vec<u32>>(), "one FileCompleted per file");
+    // the plain names are there when `TorrentFinished` comes
+    let l = listing(&dir);
+    assert_eq!(l.len(), 3000);
+    assert!(!suffixed(&l), "{:?}", l.iter().filter(|n| n.ends_with(".!ut")).collect::<Vec<_>>());
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 10);
+    assert_eq!(st.total_failed_bytes, 0);
+    leech.shutdown();
+    seed.shutdown();
+    assert_files(&f, &dir);
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(seed_dir);
 }

@@ -802,6 +802,7 @@ const LABELS: &[(&str, S)] = &[
     ("tune_for_drive", S::PrefTuneForDrive),
     ("disk_slow_downloads", S::PrefDiskSlowDownloads),
     ("disk_slow_uploads", S::PrefDiskSlowUploads),
+    ("append_incomplete_ext", S::PrefAppendIncomplete),
 ];
 
 /// Engine settings the pages show without a caption: a number beside its check box, whose
@@ -851,14 +852,17 @@ impl Def {
         }
     }
 
-    fn label(&self) -> &'static str {
-        match self {
+    /// The caption, without the desktop dialogs' `&` mnemonics (`lang::plain`: "Append .!&ut
+    /// to incomplete files", D77).
+    fn label(&self) -> String {
+        let text = match self {
             Def::Setting(e) if UNLABELLED.contains(&e.name) => "",
             Def::Setting(e) => {
                 LABELS.iter().find(|(n, _)| *n == e.name).map_or(e.name, |(_, l)| lang::text(*l))
             }
             Def::Own(f) => f.label.map_or("", lang::text),
-        }
+        };
+        lang::plain(text)
     }
 
     /// The field's help key (D55): its own ([`HELP`]), else its label's, else for an engine
@@ -1123,6 +1127,9 @@ fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
         // nox's update check (D43); hosted, the host's Preferences have its own
         general.push(group(Some(tr!(PrefPrivacy)), vec![f("update.check"), f("update.beta")]));
     }
+    // D77: µTorrent 2.2.1's group, last on the page (`frontend::pref_pages`); an engine
+    // setting, so hosted it goes to the host like the others
+    general.push(group(Some(tr!(PrefWhenDownloading)), vec![f("append_incomplete_ext")]));
     let mut pages = vec![
         page("general", tr!(PageGeneral), general),
         page(
@@ -2702,6 +2709,26 @@ mod tests {
         assert_eq!(st.options.get("lt.check_rate_mb"), Some("250"));
         assert_eq!(st.options.get("lt.disk_slow_uploads"), Some("true"));
         assert_eq!(st.options.get("lt.check_gently"), Some("false"));
+    }
+
+    /// Preferences > General > When Downloading (D77): µTorrent's caption without its mnemonic,
+    /// the engine setting edited and stored as an `lt.*` key like any other.
+    #[test]
+    fn append_incomplete_ext_is_on_the_general_page() {
+        let def = find("append_incomplete_ext").unwrap();
+        assert_eq!(def.label(), "Append .!ut to incomplete files");
+        assert_eq!(def.help_key(), Some(H::PrefAppendIncomplete));
+        let mut st = state();
+        let general = pages(Path::new("."), false, true).remove(0).to_json();
+        assert!(general.contains(r#"{"f":"append_incomplete_ext"}"#), "{general}");
+        let hosted = pages(Path::new("."), true, true).remove(0).to_json();
+        assert!(hosted.contains(r#"{"f":"append_incomplete_ext"}"#), "hosted too");
+        assert_eq!(find("append_incomplete_ext").unwrap().get(&Working::from_state(&st)), Value::Bool(false));
+        let w = edited(&st, r#"{"append_incomplete_ext":true}"#).unwrap();
+        assert!(w.settings.append_incomplete_ext);
+        st.settings = w.settings;
+        store(&mut st, &[]);
+        assert_eq!(st.options.get("lt.append_incomplete_ext"), Some("true"));
     }
 
     /// Preferences > Advanced > Trackers (D66): the four fields are security fields, checked by

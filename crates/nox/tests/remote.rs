@@ -231,11 +231,14 @@ fn a_remote_session_drives_the_nox() {
     // settings take the Preferences path: applied and visible to the Web UI
     let mut s = hello.settings.clone();
     s.active_downloads = 7;
+    // D77 (protocol 20): the new setting crosses the wire and reaches the shim
+    assert!(!s.append_incomplete_ext);
+    s.append_incomplete_ext = true;
     h.apply_settings(s);
     let deadline = Instant::now() + TIMEOUT;
     loop {
         let prefs = shim_get(addr, "/api/v2/app/preferences");
-        if prefs.contains("\"max_active_downloads\":7") {
+        if prefs.contains("\"max_active_downloads\":7") && prefs.contains("\"incomplete_files_ext\":true") {
             break;
         }
         assert!(Instant::now() < deadline, "{prefs}");

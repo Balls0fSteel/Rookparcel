@@ -8,7 +8,7 @@ The alternative is the [Web UI](Web-UI) in a browser, which needs nothing instal
 
 - A `rookparcel-nox` running with its Web UI on, for example `rookparcel-nox run --webui 0.0.0.0:8443 --webui-https` ([Running rookparcel-nox](Running-rookparcel-nox)). The remote window uses the Web UI's port and login.
 - The Web UI's user name and password.
-- The same Rookparcel version on both sides. A server that speaks another version refuses the connection with "the server refused the connection (HTTP 426): this server speaks remote protocol ...".
+- The same Rookparcel version on both sides. A server that speaks another version refuses the connection with "the server refused the connection (HTTP 426): this server speaks remote protocol ...". Version 1.2.62 changed the remote protocol (for **Append .!ut to incomplete files**), so update the server and the computers with remote windows together.
 
 A remote window connects to `rookparcel-nox`. The Windows program's own Web UI (**Preferences > Web UI**) is for browsers.
 

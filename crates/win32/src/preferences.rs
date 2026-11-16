@@ -123,6 +123,8 @@ const ID_ASSOC_NOTE: u16 = id(0, 7);
 const ID_DEFAULT_APPS: u16 = id(0, 8);
 const ID_CHECK_UPDATES: u16 = id(0, 9);
 const ID_UPDATE_BETA: u16 = id(0, 10);
+/// "Append .!ut to incomplete files" (D77), under When Downloading.
+const ID_APPEND_INCOMPLETE: u16 = id(0, 11);
 // UI Settings
 const ID_CONFIRM_DELETE: u16 = id(1, 1);
 const ID_BALLOONS: u16 = id(1, 2);
@@ -318,6 +320,7 @@ const FIELD_KEYS: &[(u16, &str)] = &[
     (ID_START_MIN, "assoc.minimized"),
     (ID_CHECK_UPDATES, "update.check"),
     (ID_UPDATE_BETA, "update.beta"),
+    (ID_APPEND_INCOMPLETE, "append_incomplete_ext"),
     (ID_CONFIRM_DELETE, "ui.confirm_delete"),
     (ID_ALT_ROWS, "ui.alternate_rows"),
     (ID_TITLE_SPEED, "ui.title_speed"),
@@ -494,6 +497,11 @@ static FIELDS: &[Field] = &[
     },
     Field::Check { id: ID_CHECK_UPDATES, get: |o| o.gui.check_updates, set: |o, v| o.gui.check_updates = v },
     Field::Check { id: ID_UPDATE_BETA, get: |o| o.gui.update_beta, set: |o, v| o.gui.update_beta = v },
+    Field::Check {
+        id: ID_APPEND_INCOMPLETE,
+        get: |o| o.settings.append_incomplete_ext,
+        set: |o, v| o.settings.append_incomplete_ext = v,
+    },
     Field::Check { id: ID_SCHED, get: |o| o.gui.schedule.enabled, set: |o, v| o.gui.schedule.enabled = v },
     Field::Num {
         id: ID_SCHED_UL,
@@ -1187,6 +1195,9 @@ fn build() -> (Vec<u16>, Vec<(u16, u16)>) {
     b.group([0, 158, W, 48], tr!(PrefPrivacy));
     b.ctl(BUTTON, ID_CHECK_UPDATES, CHECK, [8, 172, 290, 10], tr!(PrefCheckUpdates));
     b.ctl(BUTTON, ID_UPDATE_BETA, CHECK, [8, 186, 290, 10], tr!(PrefUpdateBeta));
+    // last on the page, as in µTorrent 2.2.1 (D77)
+    b.group([0, 212, W, 32], tr!(PrefWhenDownloading));
+    b.ctl(BUTTON, ID_APPEND_INCOMPLETE, CHECK, [8, 226, 290, 10], tr!(PrefAppendIncomplete));
 
     b.page(1);
     b.group([0, 0, W, 102], tr!(PrefDisplay));
@@ -3819,6 +3830,36 @@ mod tests {
     }
 
     const BLOCK_LIST: &str = "https://lists.example/level1.gz";
+
+    /// General > When Downloading (D77): "Append .!ut to incomplete files", off by default, last
+    /// on the page and inside it, applied to the engine's settings.
+    #[test]
+    fn append_incomplete_on_general() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect;
+        let rect = |f: &Fixture, id: u16| unsafe {
+            let mut r: RECT = std::mem::zeroed();
+            GetWindowRect(item(f.dlg, id), &mut r);
+            r
+        };
+        let f = Fixture::new(defaults());
+        unsafe {
+            assert!(shown(item(f.dlg, ID_APPEND_INCOMPLETE)));
+            assert!(!checked(f.dlg, ID_APPEND_INCOMPLETE), "off by default, as in µTorrent");
+        }
+        assert_eq!(f.text(ID_APPEND_INCOMPLETE), tr!(PrefAppendIncomplete));
+        let (check, updates, tree) =
+            (rect(&f, ID_APPEND_INCOMPLETE), rect(&f, ID_UPDATE_BETA), rect(&f, ID_TREE));
+        assert!(check.top > updates.bottom, "under the Privacy box");
+        assert!(check.bottom < tree.bottom, "inside the page");
+        f.check(ID_APPEND_INCOMPLETE, true);
+        f.click(ID_APPLY);
+        let o = f.last_applied();
+        assert!(o.settings.append_incomplete_ext);
+        let g = Fixture::new(o.clone());
+        unsafe { assert!(checked(g.dlg, ID_APPEND_INCOMPLETE)) };
+        g.click(ID_APPLY);
+        assert_eq!(g.last_applied(), o);
+    }
 
     /// UI Settings > When Adding Torrents (D74): the list follows its box, goes in as typed and
     /// comes back tidy, and is kept while the box is off.

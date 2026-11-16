@@ -48,8 +48,9 @@ pub const VERSION_HEADER: &str = "X-Rookparcel-Remote";
 /// The protocol version: both ends must run the same one (messages are positional). 16 came
 /// with the rename to Rookparcel (D59), whose token and header names changed; 17 with
 /// `TorrentStatus::private`; 18 with the all-time totals in `SessionStats` (D65); 19 with
-/// `hold_transfers` and `NetworkStatus::Held` (D70).
-pub const PROTOCOL: u32 = 19;
+/// `hold_transfers` and `NetworkStatus::Held` (D70); 20 with `Settings::append_incomplete_ext`
+/// and `Alert::FileCompleted` (D77).
+pub const PROTOCOL: u32 = 20;
 /// The largest frame either side accepts (a status update of 100,000 torrents is about
 /// 60 MB).
 pub const MAX_FRAME: usize = 256 << 20;

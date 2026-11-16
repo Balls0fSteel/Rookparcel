@@ -122,6 +122,7 @@ fn every_alert() -> Vec<Alert> {
         },
         Alert::FileRenamed { id, index: 3, old_name: "o".into(), new_name: "n".into() },
         Alert::FileRenameFailed { id, index: 4, error: err() },
+        Alert::FileCompleted { id, index: 5 },
         Alert::StateChanged { id, state: TorrentState::Finished, prev_state: TorrentState::Downloading },
         Alert::TorrentPaused { id },
         Alert::TorrentResumed { id },

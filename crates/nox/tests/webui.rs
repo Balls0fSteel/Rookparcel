@@ -3728,6 +3728,92 @@ fn piece_states_report_the_pieces_being_downloaded() {
     }
 }
 
+/// "Append .!ut to incomplete files" (D77) through both APIs: the shim's `incomplete_files_ext`
+/// reads and sets the engine setting, as does the native page's `append_incomplete_ext` on the
+/// General page; then a real transfer from a seed on loopback, the leech limited so the files
+/// are seen under `.!ut` while they download and under their own names once complete.
+#[test]
+fn incomplete_files_get_the_ut_suffix_until_complete() {
+    let t = Harness::start("ut-leech");
+    let sid = t.login();
+    let pref = |key: &str| t.get(&sid, "/api/v2/app/preferences").json().get(key).cloned();
+    let model_value = || {
+        let m = t.get(&sid, "/pa/prefs").json();
+        m.get("fields").and_then(|f| f.get("append_incomplete_ext")).and_then(|f| f.get("value")).cloned()
+    };
+    // off by default; the shim switches it on and off, the page's model follows
+    assert_eq!(pref("incomplete_files_ext"), Some(Json::Bool(false)));
+    let set = |on: bool| {
+        let body = enc(&format!(r#"{{"incomplete_files_ext":{on}}}"#));
+        assert_eq!(t.post(&sid, "/api/v2/app/setPreferences", &format!("json={body}")).status, 200);
+    };
+    set(true);
+    assert_eq!(pref("incomplete_files_ext"), Some(Json::Bool(true)));
+    assert_eq!(model_value(), Some(Json::Bool(true)));
+    set(false);
+    assert_eq!(pref("incomplete_files_ext"), Some(Json::Bool(false)));
+    // the native page: on the General page under When Downloading, saved by a partial POST
+    let m = t.get(&sid, "/pa/prefs").json();
+    let field = m.get("fields").and_then(|f| f.get("append_incomplete_ext")).cloned().unwrap();
+    assert_eq!(s(field.get("label")), "Append .!ut to incomplete files");
+    assert_eq!(s(field.get("type")), "bool");
+    let Some(Json::Arr(pages)) = m.get("pages") else { panic!() };
+    assert!(pages[0].to_json().contains(r#"{"f":"append_incomplete_ext"}"#), "{}", pages[0].to_json());
+    assert_eq!(t.pa(&sid, "/pa/prefs", r#"{"append_incomplete_ext":true}"#).status, 204);
+    assert_eq!(model_value(), Some(Json::Bool(true)));
+    assert_eq!(pref("incomplete_files_ext"), Some(Json::Bool(true)));
+
+    // the transfer
+    let (bytes, hash) = torrent_named("webui-ut", None);
+    let seed = Harness::start_with(temp_dir("ut-seed"), Harness::settings());
+    let port = seed.listen_port();
+    let data = seed.dir.join("data").join("webui-ut");
+    std::fs::create_dir_all(&data).unwrap();
+    let all = torrent_data();
+    std::fs::write(data.join("a.bin"), &all[..40_000]).unwrap();
+    std::fs::write(data.join("b.bin"), &all[40_000..]).unwrap();
+    let seed_sid = seed.login();
+    let save = seed.dir.join("data").to_string_lossy().into_owned();
+    let (body, boundary) = multipart(&[("savepath", &save), ("paused", "false")], &bytes);
+    let r =
+        seed.req("POST", "/api/v2/torrents/add", &[("Cookie", &seed_sid)], Body::Multipart(&body, boundary));
+    assert_eq!((r.status, r.text().as_str()), (200, "Ok."));
+    seed.wait_for(&seed_sid, &hash, "the seed", |x| matches!(s(x.get("state")), "uploading" | "stalledUP"));
+
+    let (body, boundary) = multipart(&[("paused", "false"), ("dlLimit", "8000")], &bytes);
+    let r = t.req("POST", "/api/v2/torrents/add", &[("Cookie", &sid)], Body::Multipart(&body, boundary));
+    assert_eq!((r.status, r.text().as_str()), (200, "Ok."));
+    t.wait_for(&sid, &hash, "the leech", |x| x.get("dl_limit") == Some(&Json::Int(8000)));
+    let peers = enc(&format!("127.0.0.1:{port}"));
+    assert_eq!(
+        t.post(&sid, "/api/v2/torrents/addPeers", &format!("hashes={hash}&peers={peers}")).status,
+        200
+    );
+    let folder = t.dir.join("dl").join("webui-ut");
+    // while it downloads: the files under `.!ut`, never under their own names
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while !folder.join("a.bin.!ut").is_file() {
+        assert!(Instant::now() < deadline, "no a.bin.!ut in {}", folder.display());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // (b, pieces 2 and 3, may be complete already: piece 2 also starts a's file; it is never
+    // under both names)
+    assert!(!folder.join("a.bin").exists());
+    assert!(!(folder.join("b.bin").exists() && folder.join("b.bin.!ut").exists()));
+    let x = t.wait_for(&sid, &hash, "the content path", |_| true);
+    let content = PathBuf::from(s(x.get("content_path")));
+    assert_eq!(content, folder, "the folder, never a suffixed name");
+    // complete: their own names, the data the seed has
+    t.wait_for(&sid, &hash, "the download", |x| x.get("progress").and_then(Json::as_f64) == Some(1.0));
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while folder.join("a.bin.!ut").exists() || folder.join("b.bin.!ut").exists() {
+        assert!(Instant::now() < deadline, "still suffixed in {}", folder.display());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(std::fs::read(folder.join("a.bin")).unwrap(), &all[..40_000]);
+    assert_eq!(std::fs::read(folder.join("b.bin")).unwrap(), &all[40_000..]);
+}
+
 /// An HTTP proxy on loopback that answers every absolute-form `GET` itself with `body` (the
 /// URLs name a host that does not resolve, so only the proxy can answer them). Its log holds
 /// the request lines.

@@ -2,7 +2,7 @@
 //! (libtorrent `test_torrent.cpp`'s `test_rename_file` and `test_rename_file_fastresume`, plus
 //! our own): a seed renaming files while seeding and while stopped, the names surviving a
 //! restart and serving a leech from the renamed files, a download into names chosen at add
-//! time, and the failures.
+//! time, renames while "Append .!ut to incomplete files" is on (D77), and the failures.
 
 use std::collections::VecDeque;
 use std::net::SocketAddr;
@@ -323,6 +323,108 @@ fn renamed_files_at_add_time_take_the_download() {
     assert_file(&f, 1, &folder.join("sub/beta.bin"));
     assert_file(&f, 2, &folder.join("notes.txt"));
     assert!(!dir.join("rename-test").exists(), "nothing under the metadata's name");
+    for d in [dir, seed_dir] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// The files under `<dir>/rename-test`, `/`-separated and sorted.
+fn listing(dir: &Path) -> Vec<String> {
+    fn walk(root: &Path, d: &Path, out: &mut Vec<String>) {
+        for e in std::fs::read_dir(d).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(root, &p, out);
+            } else {
+                out.push(p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
+    let root = dir.join("rename-test");
+    let mut out = Vec::new();
+    walk(&root, &root, &mut out);
+    out.sort();
+    out
+}
+
+/// D77: with "Append .!ut to incomplete files" on, a rename of an incomplete file puts the
+/// suffix on the new name (the alert and the file list carry the name without it), a complete
+/// file is renamed under its plain name, and the download ends under the new plain names.
+#[test]
+fn renames_with_append_incomplete_ext() {
+    let f = fixture();
+    let seed_dir = temp_dir("ut-seed");
+    write_files(&f, &seed_dir);
+    let seed = start(None);
+    let mut sw = watch(&seed);
+    let port = listen_port(&mut sw);
+    let sid = add(&mut sw, params(&f, &seed_dir));
+    wait_state(&mut sw, sid, TorrentState::Seeding, 20);
+
+    let dir = temp_dir("ut-leech");
+    let leech_settings = |rate| Settings {
+        listen_interfaces: "127.0.0.1:0".into(),
+        tick_interval: 100,
+        aio_threads: 2,
+        enable_dht: false,
+        enable_lsd: false,
+        enable_upnp: false,
+        enable_natpmp: false,
+        append_incomplete_ext: true,
+        download_rate_limit: rate,
+        alert_mask: (rookparcel_core::AlertCategory::DEFAULT | rookparcel_core::AlertCategory::FILE_PROGRESS)
+            .bits(),
+        ..Settings::default()
+    };
+    let leech = Session::start(SessionParams { settings: leech_settings(60_000), ..Default::default() })
+        .expect("session starts");
+    let mut w = watch(&leech);
+    let id = add(&mut w, params(&f, &dir));
+    wait_state(&mut w, id, TorrentState::Downloading, 10);
+    leech.handle().torrent(id).connect_peer(local(port));
+    let names = ["alpha.bin", "sub/beta.bin", "sub/gamma.txt"];
+    let done = wait(&mut w, 60, "a file completed", |a| match a {
+        Alert::FileCompleted { id: i, index } if *i == id => Some(*index as usize),
+        _ => None,
+    });
+    // beta (700 kB at 60 kB/s) is not done yet, unless it was the one that completed
+    let open = if done == 1 { 0 } else { 1 };
+    let l = listing(&dir);
+    let (done_name, open_name) = (names[done].to_owned(), format!("{}.!ut", names[open]));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !(listing(&dir).contains(&done_name) && listing(&dir).contains(&open_name)) {
+        assert!(Instant::now() < deadline, "{:?}", l);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    // the complete file: renamed under its plain name
+    let (_, new) = rename(&mut w, id, done as u32, "rename-test/done/renamed-done.bin").expect("renamed");
+    assert_eq!(new, "rename-test/done/renamed-done.bin");
+    // the incomplete one: the suffix goes on top of the new name, not into it
+    let (_, new) = rename(&mut w, id, open as u32, "rename-test/open/renamed-open.bin").expect("renamed");
+    assert_eq!(new, "rename-test/open/renamed-open.bin");
+    let l = listing(&dir);
+    assert!(l.contains(&"done/renamed-done.bin".to_owned()), "{l:?}");
+    assert!(l.contains(&"open/renamed-open.bin.!ut".to_owned()), "{l:?}");
+    let paths = file_paths(&mut w, id);
+    assert_eq!(native(&paths[open]), native("rename-test/open/renamed-open.bin"));
+
+    // the rest at full speed: every file under its new plain name, and the data whole
+    leech.handle().apply_settings(leech_settings(0));
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 60);
+    assert_eq!(st.total_failed_bytes, 0);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while listing(&dir).iter().any(|n| n.ends_with(".!ut")) {
+        assert!(Instant::now() < deadline, "{:?}", listing(&dir));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    leech.shutdown();
+    seed.shutdown();
+    let root = dir.join("rename-test");
+    assert_file(&f, done, &root.join("done/renamed-done.bin"));
+    assert_file(&f, open, &root.join("open/renamed-open.bin"));
+    let third = 3 - done - open;
+    assert_file(&f, third, &root.join(names[third]));
     for d in [dir, seed_dir] {
         let _ = std::fs::remove_dir_all(d);
     }

@@ -15,7 +15,7 @@ For each torrent, Rookparcel takes:
 
 Rookparcel does not trust the other program's record of which pieces are complete: it checks the files before it relies on them. Large torrents therefore show **Checking** for a while after the import.
 
-The other program's files are only read, never changed. Torrents already in Rookparcel's list are left out, so you can run the import again safely.
+The other program's files are only read, never changed. Partial data files that µTorrent left as `.!ut` or qBittorrent as `.!qB` are picked up, and renamed when the torrent runs: see [Incomplete files and .!ut](Disk-and-storage#incomplete-files-and-ut) (*new in 1.2.62, not in a published release yet*). Torrents already in Rookparcel's list are left out, so you can run the import again safely.
 
 ## Before you start
 

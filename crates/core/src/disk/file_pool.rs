@@ -77,6 +77,12 @@ impl FilePool {
         self.lock().files.retain(|k, _| k.0 != storage);
     }
 
+    /// Closes one file of `storage`, before it is renamed (D77). A handle a running job still
+    /// holds stays open until that job drops it.
+    pub fn release_file(&self, storage: u64, file: u32) {
+        self.lock().files.remove(&(storage, file));
+    }
+
     #[cfg(test)]
     pub fn open_count(&self) -> usize {
         self.lock().files.len()
@@ -285,6 +291,11 @@ mod tests {
         let n = read_at(&pool.open(1, 0, &p(0), false).unwrap(), &mut buf, 0).unwrap();
         assert_eq!(&buf[..n], b"\0\0\0hello");
         assert_eq!(read_at(&a, &mut buf, 100).unwrap(), 0, "reading past the end is not an error");
+        pool.release_file(2, 1);
+        assert_eq!(pool.open_count(), 2, "not open: nothing to close");
+        pool.release_file(2, 0);
+        assert_eq!(pool.open_count(), 1);
+        pool.open(2, 0, &p(2), true).unwrap();
         pool.release(1);
         assert_eq!(pool.open_count(), 1);
         assert!(pool.open(3, 0, &dir.join("missing"), false).is_err());

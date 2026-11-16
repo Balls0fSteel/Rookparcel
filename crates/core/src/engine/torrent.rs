@@ -1012,6 +1012,49 @@ impl HaveRef<'_> {
     }
 }
 
+/// D77: the files of `ti` that are not complete in `have` (`None`: nothing is known, every file
+/// is incomplete). A file is complete when every piece it overlaps passed its hash check; pad
+/// files and empty files are always complete. Which files carry `.!ut` is derived from this,
+/// never stored.
+pub(crate) fn incomplete_files(ti: &TorrentInfo, have: Option<HaveRef<'_>>) -> Vec<bool> {
+    let fs = ti.files();
+    (0..fs.num_files())
+        .map(|f| {
+            if fs.pad_file_at(f) || fs.file_size(f) == 0 {
+                return false;
+            }
+            let (first, end) = crate::metainfo::file_storage::file_piece_range_inclusive(fs, f);
+            match have {
+                None => true,
+                Some(HaveRef::All(n)) => (end as usize) > n,
+                Some(HaveRef::Bits(b)) => {
+                    end as usize > b.len() || !b.all_set_in(first as usize, end as usize, first as usize)
+                }
+            }
+        })
+        .collect()
+}
+
+/// D77: the files `piece` completed, now that it is in `have`: those it overlaps (not pad
+/// files, not empty ones) whose every piece is in `have` (libtorrent's `file_completed_alert`
+/// in `torrent::we_have`). Each file's pieces are looked at from `piece` outwards, so a
+/// sequential download's next missing piece answers at once. (`map_block` gives each file once.)
+pub(crate) fn files_completed_by(ti: &TorrentInfo, have: &Bitfield, piece: u32) -> Vec<u32> {
+    let fs = ti.files();
+    let mut out = Vec::new();
+    for s in fs.map_block(piece, 0, ti.piece_size(piece) as u64) {
+        let f = s.file_index;
+        if fs.pad_file_at(f) || fs.file_size(f) == 0 {
+            continue;
+        }
+        let (first, end) = crate::metainfo::file_storage::file_piece_range_inclusive(fs, f);
+        if end as usize <= have.len() && have.all_set_in(first as usize, end as usize, piece as usize) {
+            out.push(f as u32);
+        }
+    }
+    out
+}
+
 /// libtorrent `torrent::update_piece_priorities`: a piece gets the highest priority of the
 /// files it overlaps (pad files don't count). With `first_last` (`TorrentFlags::
 /// FIRST_LAST_PIECES`) the first and last pieces of each wanted file get the top priority:

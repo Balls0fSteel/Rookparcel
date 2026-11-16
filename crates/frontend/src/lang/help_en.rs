@@ -58,6 +58,8 @@ helps! {
     PrefCheckUpdates = "About ten seconds after start and then every 12 hours, asks the project website whether a newer release is out and tells you. Nothing is downloaded or installed without asking. Help > Check for Updates works either way.";
     /// frontend: crates/frontend/src/update.rs (pre-releases offered with update.beta or when running one)
     PrefUpdateBeta = "Also offers pre-release (beta) versions when checking for updates. A pre-release build always hears of the next pre-release, whatever this says.";
+    /// core: crates/core/src/disk/mod.rs (Storage::file_path, probe_names, set_names), engine/mod.rs (send_names: after the check, a file completed, the option changed; names_for), engine/torrent.rs (incomplete_files); not saved in resume data
+    PrefAppendIncomplete = "A file that is still downloading is stored with .!ut after its name (film.mkv.!ut) and gets its normal name as soon as all of it has downloaded and passed its check, so other programs do not open half a file. Turning this on or off renames the files of running torrents at once, those of stopped torrents when they start. Files left as .!ut by µTorrent or as .!qB by qBittorrent are picked up when a torrent is added or started, whether this is on or off. A file another program holds open keeps its name until it can be renamed.";
 
     // ---- Preferences > UI Settings
     /// frontend: crates/win32/src/app.rs (ui.confirm_delete before Remove), crates/nox/src/webui/prefs.rs

@@ -1261,6 +1261,14 @@ IpFilterStatusOk={count} rules, downloaded {time}.
 # Error: what the web address returned is not a block list (a web page, say). ipfilter.dat,
 # P2P and CIDR are format names: keep them.
 IpFilterErrNotList=the file is not a block list in ipfilter.dat, P2P or CIDR format
+
+# Preferences > General, as in µTorrent 2.2.1: the group of what happens while a torrent
+# downloads.
+PrefWhenDownloading=When Downloading
+
+# Check box (µTorrent 2.2.1's text): a file still downloading is named like "film.mkv.!ut"
+# until it is complete. Keep ".!ut" as it is; & marks the mnemonic.
+PrefAppendIncomplete=Append .!&ut to incomplete files
 RssTitle=RSS Downloader
 RssAddFeed=Add RSS Feed
 RssEditFeed=Edit RSS Feed
@@ -1959,6 +1967,7 @@ help.PrefStartMinimized=With the automatic start, Rookparcel starts without show
 help.PrefDefaultApps=Opens Windows Settings at Default apps, on Rookparcel's own page where Windows has one. A program chosen there wins over the boxes above, and only you can change that choice.
 help.PrefCheckUpdates=About ten seconds after start and then every 12 hours, asks the project website whether a newer release is out and tells you. Nothing is downloaded or installed without asking. Help > Check for Updates works either way.
 help.PrefUpdateBeta=Also offers pre-release (beta) versions when checking for updates. A pre-release build always hears of the next pre-release, whatever this says.
+help.PrefAppendIncomplete=A file that is still downloading is stored with .!ut after its name (film.mkv.!ut) and gets its normal name as soon as all of it has downloaded and passed its check, so other programs do not open half a file. Turning this on or off renames the files of running torrents at once, those of stopped torrents when they start. Files left as .!ut by µTorrent or as .!qB by qBittorrent are picked up when a torrent is added or started, whether this is on or off. A file another program holds open keeps its name until it can be renamed.
 help.PrefConfirmDelete=Asks before removing torrents from the list, saying whether their files are deleted too. Off, Remove acts at once.
 help.PrefTheme=The page's colours for everyone who opens this Web UI. System follows the browser's light or dark setting. Your own themes: CSS files in the webui/themes folder under the settings folder, listed here by name.
 help.PrefThemeBrowser=A theme for this browser only, kept on this device and used instead of the server's choice. Server default follows the server's theme again.

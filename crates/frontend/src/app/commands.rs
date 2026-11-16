@@ -386,13 +386,14 @@ impl Core {
     }
 
     /// What Open Containing Folder shows for the first of `ids`: its file or folder (the GUI
-    /// reveals it). `None` in a remote window.
+    /// reveals it), a single file under the name it has on disk now (`.!ut` while incomplete,
+    /// D77: [`crate::detail::on_disk_path`]). `None` in a remote window.
     pub fn folder_of(&self, ids: &[TorrentId]) -> Option<PathBuf> {
         if self.is_remote() {
             return None;
         }
         let st = self.list.get(*ids.first()?)?;
-        Some(PathBuf::from(&st.save_path).join(&st.name))
+        Some(crate::detail::on_disk_path(&PathBuf::from(&st.save_path).join(&st.name)))
     }
 
     /// The torrent the detail tabs show: its status and whether the user paused it (the
