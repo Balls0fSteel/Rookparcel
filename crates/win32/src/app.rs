@@ -8675,7 +8675,8 @@ mod tests {
             assert_eq!(asked.get(), 1, "nothing is shown after the answer");
             assert_eq!(windows_sys::Win32::UI::WindowsAndMessaging::IsMenu(menu), 0, "the menu is gone");
         }
-        let src = include_str!("app.rs");
+        // a checkout with CRLF line ends (Windows CI) reads the same
+        let src = &include_str!("app.rs").replace("\r\n", "\n");
         let fn_at = |at: usize| {
             let head = &src[..at];
             let start = head.rfind("\nunsafe fn ").max(head.rfind("\nfn ")).expect("a function");
