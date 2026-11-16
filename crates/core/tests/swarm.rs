@@ -2622,6 +2622,34 @@ fn suffixed(l: &[String]) -> bool {
     l.iter().any(|n| n.ends_with(".!ut"))
 }
 
+/// Resumes a torrent a restart restored paused: (its bytes done before the resume, whether it
+/// was rechecked). The bytes done are read while it is paused, so nothing has come in yet; read
+/// after the resume, a block from the seed the restart reconnects to could count in both the
+/// bytes done and the payload (one block over, once on macOS CI).
+fn resume_after_restart(w: &mut Watch, leech: &Session, id: TorrentId) -> (u64, bool) {
+    let mut rechecked = false;
+    let mut checking = |a: &Alert| {
+        if let Alert::StateChanged { id: i, state: TorrentState::CheckingFiles, .. } = a {
+            rechecked |= *i == id;
+        }
+    };
+    let paused = wait(w, 20, "restored and paused", |a| {
+        checking(a);
+        status_of(a, id)
+            .filter(|s| s.state == TorrentState::Downloading && s.flags.contains(TorrentFlags::PAUSED))
+    });
+    let done = paused.total_done;
+    assert!(done > 0 && done < paused.total, "{done} of {}", paused.total);
+    assert_eq!(paused.total_payload_download, 0);
+    leech.handle().torrent(id).resume();
+    wait(w, 20, "downloading after the restart", |a| {
+        checking(a);
+        status_of(a, id)
+            .filter(|s| s.state == TorrentState::Downloading && !s.flags.contains(TorrentFlags::PAUSED))
+    });
+    (done, rechecked)
+}
+
 /// Waits for the torrent's `TorrentFinished`, collecting the `FileCompleted` alerts before it.
 fn finished_with_files(w: &mut Watch, id: TorrentId, secs: u64) -> Vec<u32> {
     let mut files = Vec::new();
@@ -2699,17 +2727,8 @@ fn a_download_stopped_midway_resumes_with_its_names_and_pieces() {
     let leech = start_names(true, 10_000, Some(state.clone()));
     let mut w = Watch::new(leech.handle());
     let id = first_restored(&mut w).id;
-    leech.handle().torrent(id).resume();
-    let mut rechecked = false;
-    let st = wait(&mut w, 20, "downloading after the restart", |a| {
-        if let Alert::StateChanged { id: i, state: TorrentState::CheckingFiles, .. } = a {
-            rechecked |= *i == id;
-        }
-        status_of(a, id).filter(|s| s.state == TorrentState::Downloading)
-    });
+    let (done, rechecked) = resume_after_restart(&mut w, &leech, id);
     assert!(!rechecked, "resumed without a recheck");
-    let done = st.total_done;
-    assert!(done > 0 && done < st.total);
     // (a piece hashed after the stop may have completed another file, renamed now)
     wait_listing(&dir, 10, "the names as they were", |l| l.contains(&NAMES[first].to_owned()) && suffixed(l));
     // (the restart reconnects to the seed at 10 kB/s: now at full speed)
@@ -2720,7 +2739,12 @@ fn a_download_stopped_midway_resumes_with_its_names_and_pieces() {
     assert_eq!(listing(&dir), plain_names());
     let st = wait_state(&mut w, id, TorrentState::Seeding, 10);
     assert_eq!(st.total_failed_bytes, 0);
-    assert_eq!(st.total_payload_download + st.total_redundant_bytes, st.total - done, "nothing again");
+    let (payload, redundant) = (st.total_payload_download, st.total_redundant_bytes);
+    assert_eq!(
+        payload + redundant,
+        st.total - done,
+        "nothing again: payload {payload}, redundant {redundant}, done {done}"
+    );
     leech.shutdown();
     seed.shutdown();
     assert_files(&f, &dir);
@@ -2852,16 +2876,8 @@ fn a_restart_heals_names_a_crash_left_wrong() {
     let leech = start_names(true, 10_000, Some(state.clone()));
     let mut w = Watch::new(leech.handle());
     let id = first_restored(&mut w).id;
-    leech.handle().torrent(id).resume();
-    let mut rechecked = false;
-    let st = wait(&mut w, 20, "downloading after the restart", |a| {
-        if let Alert::StateChanged { id: i, state: TorrentState::CheckingFiles, .. } = a {
-            rechecked |= *i == id;
-        }
-        status_of(a, id).filter(|s| s.state == TorrentState::Downloading)
-    });
+    let (done, rechecked) = resume_after_restart(&mut w, &leech, id);
     assert!(!rechecked, "the files were found where they are: no recheck");
-    let done = st.total_done;
     // (a piece hashed after the stop may have completed another file, renamed now too)
     wait_listing(&dir, 10, "the names healed", |l| {
         l.contains(&NAMES[first].to_owned()) && l.contains(&incomplete) && suffixed(l)
@@ -2873,7 +2889,8 @@ fn a_restart_heals_names_a_crash_left_wrong() {
     assert_eq!(listing(&dir), plain_names());
     let st = wait_state(&mut w, id, TorrentState::Seeding, 10);
     assert_eq!(st.total_failed_bytes, 0);
-    assert_eq!(st.total_payload_download + st.total_redundant_bytes, st.total - done);
+    let (payload, redundant) = (st.total_payload_download, st.total_redundant_bytes);
+    assert_eq!(payload + redundant, st.total - done, "payload {payload}, redundant {redundant}, done {done}");
     leech.shutdown();
     seed.shutdown();
     assert_files(&f, &dir);
