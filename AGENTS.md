@@ -1,7 +1,5 @@
 # Repository instructions
 
-If work can be parallelized and doing so could improve speed or quality, delegate it to subagents rather than doing everything yourself.
-
 ## Versioning
 
 - Every change set that alters the programs bumps the patch version (D37): `[workspace.package]
