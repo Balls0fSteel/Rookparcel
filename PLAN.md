@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-16_225831_1794866311
+Last updated: 2026-11-17_001800_1794871080
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D77](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -19,17 +19,16 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Current status
 
-- **Release 1.2.63 (prepared, not tagged):** the feature plan of 2026-11-16 in four waves, **1.2.59** (D72-D73 download order, Copy Magnet Link / Export), **1.2.60** (D74-D75 excluded names, block list from an https address), **1.2.61** (D76 tags), **1.2.62** (D77 `.!ut`), and **1.2.63** the security review's fixes (SECURITY-REVIEW.md; open items in BACKLOG "Security review 1.2.63"). Notes in `docs/releases/1.2.63.md`. Hand checks: BACKLOG "Download order, magnet links and export", "Excluded file names and the IP filter address", "Tags", "Append .!ut to incomplete files".
-  - Left: CI, FreeBSD and Fuzz green on the release commit; the owner's go-ahead to tag; the draft's checks; publish; then push the branch with the site news, the README and the wiki's version lines (`Home.md`, `BRIEF.md`, `Installing-Rookparcel.md`, the "not in a published release yet" marks) and the GitHub wiki.
+- **Release 1.2.63 (published 2026-11-17):** the feature plan of 2026-11-16 in four waves, **1.2.59** (D72-D73 download order, Copy Magnet Link / Export), **1.2.60** (D74-D75 excluded names, block list from an https address), **1.2.61** (D76 tags), **1.2.62** (D77 `.!ut`), and **1.2.63** the security review's fixes (SECURITY-REVIEW.md; open items in BACKLOG "Security review 1.2.63"). Notes in `docs/releases/1.2.63.md`. Hand checks: BACKLOG "Download order, magnet links and export", "Excluded file names and the IP filter address", "Tags", "Append .!ut to incomplete files".
 - **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.
 - **Artwork:** the Postal Rook won ([small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
-- **Releases:** 1.0.1 to 1.2.57 published ([notes](docs/releases/)). 1.2.0 shipped profiles (D42), D50-D55 and the bug-hunt fixes; 1.2.54 the UI lock (D69); **1.2.57** (2026-11-15) the settings guard (D70), its draft checked by checksum, the zip's contents and versions and `rookparcel-nox --version`; RELEASING.md step 5 by hand is open.
-- **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.57. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`. A small nox add race is in BACKLOG "Remote mode and Web UI".
-- **UI lock (D69, 1.2.47-1.2.50; released in 1.2.54):** a PIN of 4 to 6 digits hides all three GUIs' windows in the tray; Ctrl or Option at start, or `--reset-lock`, removes a forgotten one; wiki page `Locking-Rookparcel`. **1.2.58 (D71, not released):** Preferences > Advanced > UI Lock with an off switch that removes every Lock command, no Options > Lock PIN, a narrower Win32 PIN dialog; checked on all three. Open: BACKLOG "UI lock".
+- **Releases:** 1.0.1 to 1.2.63 published ([notes](docs/releases/)). 1.2.0 shipped profiles (D42), D50-D55 and the bug-hunt fixes; 1.2.54 the UI lock (D69); 1.2.57 the settings guard (D70); **1.2.63** (2026-11-17) D71-D77, its draft checked by checksum, the zip's contents and versions and `rookparcel-nox --version`; RELEASING.md step 5 by hand is open for both.
+- **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.63. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`. A small nox add race is in BACKLOG "Remote mode and Web UI".
+- **UI lock (D69, 1.2.47-1.2.50; released in 1.2.54):** a PIN of 4 to 6 digits hides all three GUIs' windows in the tray; Ctrl or Option at start, or `--reset-lock`, removes a forgotten one; wiki page `Locking-Rookparcel`. **1.2.58 (D71, released in 1.2.63):** Preferences > Advanced > UI Lock with an off switch that removes every Lock command, no Options > Lock PIN, a narrower Win32 PIN dialog; checked on all three. Open: BACKLOG "UI lock".
 - **Benchmarks:** [2026-11-11 results](docs/BENCHMARKS.md) for 1.2.46: 10,000 torrents use 67 MB after restart (qBittorrent 612 MB) and idle at 0.07 % of a core; Win32 lists 100,000 in 1.37-1.49 s. Not rerun since (no hot-path change).
-- CI, FreeBSD and Fuzz were green for `b0f3852b` (1.2.57, 2026-11-15), and the Release run for `v1.2.57` on its first attempt.
+- CI and FreeBSD were green for `cf6a1cd6` (1.2.63, 2026-11-17), Fuzz for `a6193cd1` (same code), and the Release run for `v1.2.63` on its first attempt.
 - Scale baselines on this PC: [plan snapshot](docs/archive/PLAN-2026-11-13.md), [BENCHMARKS.md](docs/BENCHMARKS.md); the low-end-machine gate remains open.
 - The app icon is the Postal Rook (D60): drawn marks below 48 px, the generated stamp from 48 px (`assets/rookparcel-icons`).
 

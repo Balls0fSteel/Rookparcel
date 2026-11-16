@@ -4,6 +4,15 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-17_001800_1794871080: Release 1.2.63 published; the site's news and the wiki pushed
+
+- **On the owner's go-ahead:** CI (every job, macOS included) and FreeBSD green on `cf6a1cd6`, Fuzz on `a6193cd1` (same code; the later commit only changed the notes); tag `v1.2.63`; the Release run [43970007402](https://github.com/Balls0fSteel/Rookparcel/actions/runs/43970007402) passed all 11 jobs on the first attempt.
+- **Checked on the draft:** all 13 files' GitHub SHA-256 digests match `SHA256SUMS`, and the downloaded zip too; the zip holds the two exes, `LICENSE.md` and `THIRD-PARTY-NOTICES.md`; both exes say 1.2.63 in their version resources, and `rookparcel-nox --version` prints `rookparcel-nox 1.2.63`.
+- **Notes corrected before the tag** (`cf6a1cd6`): the fixes list keeps only what affected a published version (the lock gate on Win32 and over GTK's D-Bus, the tracker-list address sent with credentials, the fetcher's reason phrases); tags kept through the API (the Sonarr and Radarr tried send none); the hand runs as they were; going back with `.!ut` on needs stopped torrents started once.
+- **Published** with `gh release edit v1.2.63 --draft=false --latest` (00:16 Budapest). Then `main` fast-forwarded to the publish commit (`8c57fa77`: the news entry, the README's and the wiki's version lines, "new in 1.2.63" for the marks of 1.2.58-1.2.62) and pushed; the GitHub wiki got 19 pages (`c84899d`), and a page-by-page comparison shows nothing else differing.
+- **Checked live:** `update.txt` says `stable=1.2.63`; the news page and `news.atom` lead with 1.2.63; the download page links the 1.2.63 setup.
+- **Still open:** RELEASING.md step 5 by hand (the files on a desktop, the update from an installed 1.2.57, the image), and the features' hand checks in BACKLOG.
+
 ## 2026-11-16_225831_1794866311: Release 1.2.63 prepared (covers 1.2.58-1.2.63); a macOS CI flake in the D77 restart tests fixed
 
 - **In the release since 1.2.57:** the UI Lock page with the lock's off switch (1.2.58, D71); download order and Copy Magnet Link / Export .torrent (1.2.59, D72-D73); excluded file names and the block list from an https address with CIDR lines (1.2.60, D74-D75); tags (1.2.61, D76); Append .!ut to incomplete files with µTorrent and qBittorrent partials adopted (1.2.62, D77); the security review's fixes (1.2.63). Remote protocol 20; the peer ID stays `-RP1014-`.
