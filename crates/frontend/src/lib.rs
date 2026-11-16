@@ -19,6 +19,8 @@
 //! * [`scheduler`]: the weekly scheduler (table, modes, what to change when the hour turns).
 //! * [`torrent_folders`]: the `.torrent` folders (stored copies, finished jobs, auto-load).
 //! * [`export`]: Copy Magnet Link and Export .torrent (D73).
+//! * [`exclude`]: files left unchecked when a torrent is added (D74), by [`patterns`].
+//! * [`ip_filter_list`]: the IP filter's block list fetched from a web address (D75).
 //! * [`rss`]: RSS / Atom feeds and the RSS Downloader (filters, episodes, history, `rss.dat`).
 //! * [`properties`]: the Torrent Properties dialog (trackers, limits, seeding goal, switches).
 //! * [`remote`]: remote mode's Connect to Remote step (the form, certificates, failure texts).
@@ -51,6 +53,7 @@ pub mod closing;
 pub mod columns;
 pub mod create;
 pub mod detail;
+pub mod exclude;
 pub mod export;
 pub mod fmt;
 pub mod guard;
@@ -58,12 +61,14 @@ pub mod help;
 pub mod icons;
 pub mod import;
 pub mod integration;
+pub mod ip_filter_list;
 pub mod lang;
 pub mod legacy;
 pub mod model;
 pub mod network;
 pub mod options;
 pub mod palette;
+pub mod patterns;
 pub mod pref_pages;
 pub mod prefs;
 pub mod profile;

@@ -104,6 +104,17 @@ pub struct FileTree {
 }
 
 impl FileTree {
+    /// The Add New Torrent window's tree: [`FileTree::from_torrent`] with the files Preferences
+    /// leave out ([`Setup::exclude`], D74) unchecked.
+    pub fn for_add(ti: &TorrentInfo, setup: &Setup) -> FileTree {
+        let mut t = FileTree::from_torrent(ti);
+        let patterns = crate::patterns::SkipPatterns::parse(&setup.exclude);
+        if !patterns.is_empty() {
+            t.uncheck(&crate::exclude::excluded_by(ti, &patterns));
+        }
+        t
+    }
+
     pub fn from_torrent(ti: &TorrentInfo) -> FileTree {
         let fs = ti.files();
         FileTree::new((0..fs.num_files()).map(|i| {
@@ -517,6 +528,17 @@ impl FileTree {
         self.recount();
     }
 
+    /// Unchecks the torrent files whose `files` entry is true (by torrent file index; the
+    /// folders above follow). Pad files and indices past the torrent's are ignored.
+    pub fn uncheck(&mut self, files: &[bool]) {
+        for (fi, _) in files.iter().enumerate().filter(|(_, out)| **out) {
+            if let Some(w) = self.wanted.get_mut(fi) {
+                *w = false;
+            }
+        }
+        self.recount();
+    }
+
     /// Select All / Select None: every file, or only the shown files while the filter is on
     /// (hidden files keep their check).
     pub fn set_all(&mut self, on: bool) {
@@ -717,6 +739,9 @@ pub struct Setup {
     /// The dialog's size the last time it was closed (width and height in 96-DPI pixels), as
     /// [`remember_window`] keeps it; `None` for the dialog's own.
     pub window: Option<(i32, i32)>,
+    /// Preferences' "Do not download files named" list while it is on, else empty (D74): the
+    /// files it names start unchecked ([`FileTree::for_add`]).
+    pub exclude: String,
 }
 
 impl Setup {
@@ -728,6 +753,7 @@ impl Setup {
             start: !gui.add_stopped,
             in_session: false,
             window: window_size(prefs),
+            exclude: if gui.exclude_names { gui.exclude_list.clone() } else { String::new() },
         }
     }
 
@@ -1428,6 +1454,46 @@ mod tests {
         let t = FileTree::from_torrent(&TorrentInfo::from_bytes(multi).unwrap());
         assert_eq!(names(&t), ["x", "y.txt", "z.txt"]);
         assert_eq!(t.sizes(), (7, 7));
+    }
+
+    /// D74: the files Preferences leave out start unchecked, the folders above them follow, and
+    /// they can be ticked back.
+    #[test]
+    fn excluded_files_start_unchecked() {
+        let mut t = sample();
+        // dir/sub/c.bin and e.iso
+        t.uncheck(&[false, false, true, false, false, true, true]);
+        assert_eq!(names(&t), ["a.txt", "dir", "b.bin", "sub", "c.bin", "d.bin", "e.iso"]);
+        let check = |t: &FileTree, i| t.row(i).unwrap().check;
+        assert_eq!(check(&t, 3), Check::Off, "sub holds only c.bin");
+        assert_eq!(check(&t, 1), Check::Mixed, "dir: b.bin and d.bin are on");
+        assert_eq!((check(&t, 4), check(&t, 6)), (Check::Off, Check::Off));
+        assert_eq!(t.sizes(), (10_110, 111_110));
+        let x = DownloadPriority::DONT_DOWNLOAD;
+        let n = DownloadPriority::NORMAL;
+        assert_eq!(t.file_priorities(), [n, n, x, x, n, x]);
+        // ticked back: the folders are whole again
+        t.toggle_checks(&[3]);
+        assert_eq!((check(&t, 3), check(&t, 1), check(&t, 4)), (Check::On, Check::On, Check::On));
+        t.toggle_checks(&[6]);
+        assert_eq!(t.file_priorities(), [n, n, n, x, n, n]);
+
+        // from the dialog's setup: only while Preferences' box is on
+        let multi = b"d4:infod5:filesld6:lengthi3e4:pathl1:x5:y.lnkeed6:lengthi4e4:pathl5:z.txteee4:name4:root12:piece lengthi16384e6:pieces20:aaaaaaaaaaaaaaaaaaaaee";
+        let ti = TorrentInfo::from_bytes(multi).unwrap();
+        let prefs = Prefs::default();
+        let mut gui = GuiOptions::load(&prefs, "/dl");
+        gui.exclude_list = "*.LNK; Thumbs.db".into();
+        let setup = Setup::new(&gui, &prefs, Vec::new());
+        assert_eq!(setup.exclude, "");
+        assert_eq!(FileTree::for_add(&ti, &setup).sizes(), (7, 7));
+        gui.exclude_names = true;
+        let setup = Setup::for_magnet(&gui, &prefs, Vec::new(), "/dl");
+        assert_eq!(setup.exclude, "*.LNK; Thumbs.db");
+        let t = FileTree::for_add(&ti, &setup);
+        assert_eq!(t.sizes(), (4, 7));
+        assert_eq!((t.row(0).unwrap().check, t.row(1).unwrap().check), (Check::Off, Check::Off));
+        assert_eq!(t.row(2).unwrap().check, Check::On);
     }
 
     #[test]

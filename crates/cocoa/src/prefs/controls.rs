@@ -102,7 +102,11 @@ impl Builder {
         let mut rows = Vec::new();
         // the row a `beside` field or a button joins
         let mut last: Option<Retained<NSStackView>> = None;
+        // the field whose row `last` is: a button there greys with it (Reload with the IP
+        // filter's path, Update Now with its address, D75)
+        let mut last_field: Option<&'static str> = None;
         for item in &page.items {
+            let field_before = last_field.take();
             match item {
                 Item::Group(title) => {
                     let l = ui::label(&ui::text(lang::text(*title)), mtm);
@@ -110,7 +114,10 @@ impl Builder {
                     rows.push(Row::Group(into_view(&l)));
                     last = None;
                 }
-                Item::Field(f) => self.field(f, o, &mut rows, &mut last),
+                Item::Field(f) => {
+                    self.field(f, o, &mut rows, &mut last);
+                    last_field = Some(f.key);
+                }
                 Item::Note(text) => {
                     let l = ui::note(&note_text(text()), mtm);
                     l.setPreferredMaxLayoutWidth(NOTE_WIDTH);
@@ -126,7 +133,13 @@ impl Builder {
                         self.lock.buttons.push((form, b.clone()));
                     }
                     match &last {
-                        Some(row) => row.addArrangedSubview(&b),
+                        Some(row) => {
+                            row.addArrangedSubview(&b);
+                            if let Some(f) = field_before.and_then(|k| self.fields.get_mut(k)) {
+                                f.grey.push(Retained::into_super(b.clone()));
+                            }
+                            last_field = field_before;
+                        }
                         None => {
                             let row = row_stack(&[&b], mtm);
                             rows.push(Row::Pair(None, into_view(&row)));

@@ -544,9 +544,13 @@ impl Core {
                 }
             }
         }
+        // before the filter is loaded: a kept list of another address is dropped first
+        self.configure_ip_list(&o.gui);
         let dir = self.dirs.settings.clone();
-        let changed = (o.gui.ip_filter, o.gui.ip_filter_file(&dir))
-            != (old.gui.ip_filter, old.gui.ip_filter_file(&dir));
+        let source = |g: &GuiOptions| {
+            (g.ip_filter, g.ip_filter_file(&dir), g.ip_filter_from_url, g.ip_filter_url.trim().to_owned())
+        };
+        let changed = source(&o.gui) != source(&old.gui);
         // a server applies its own block list
         if changed && !self.is_remote() {
             if o.gui.ip_filter {
@@ -567,9 +571,11 @@ impl Core {
         r
     }
 
-    /// Loads the configured block list (`ipfilter.dat` in the settings folder by default).
+    /// Loads the configured block list (`ipfilter.dat` in the settings folder by default), or
+    /// the copy kept of the list from the web (D75). With nothing fetched from that address yet
+    /// the rules in force stay: the fetch brings the new ones.
     pub(super) fn load_ip_filter(&mut self, gui: &GuiOptions) {
-        let path = gui.ip_filter_file(&self.dirs.settings);
+        let Some(path) = crate::ip_filter_list::list_file(gui, &self.dirs.settings) else { return };
         let r = self.handle.load_ip_filter(&path).map_err(|e| e.to_string());
         self.log_ip_filter(&path, &r);
     }

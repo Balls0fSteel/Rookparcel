@@ -77,6 +77,12 @@ The app imports finished files by reading them from the path Rookparcel reports.
 
 With nox, `--webui-save-root DIR` limits the folders the Web UI, and so the apps, may save into ([Running rookparcel-nox](Running-rookparcel-nox#web-ui)). Include the folders the apps use.
 
+## Leaving out unwanted files
+
+*New in 1.2.60, not in a published release yet.* **Do not download files named:** in Rookparcel's **Preferences > UI Settings** applies to the apps' grabs too. With it on, files whose names match the patterns, such as `*.lnk; Thumbs.db; *sample*`, are set to not download when the app adds the torrent; for a magnet link, once its file list has arrived. A torrent whose every file matches is downloaded whole. See [Adding torrents](Adding-torrents#files-left-out-by-name).
+
+Apps that set qBittorrent's "Excluded file names" through its API reach the same setting: `excluded_file_names_enabled` and `excluded_file_names` (one pattern per line).
+
 ## Seeding limits and Remove Completed
 
 **Remove Completed** in Sonarr and Radarr removes a torrent once it is stopped and its seeding limit is reached. Rookparcel reports both:
@@ -100,6 +106,7 @@ Prowlarr only adds torrents; it does not track or import them. Add Rookparcel in
 - Rookparcel reports itself as qBittorrent's API version 2.11.2.
 - Ignored when an app sends them: the content layout choice and Sonarr's inactive seeding time limit. "First and last piece first" is honoured since 1.2.59 (not in a published release yet); before that it was ignored.
 - Adding a torrent that is already in the list is answered as a success; the app then tracks the existing one.
+- The API shows the IP filter's `ip_filter_enabled` and `ip_filter_path` but does not change them, and it has no setting for the block list's web address. Set those in Rookparcel's own Preferences.
 
 ## If something goes wrong
 

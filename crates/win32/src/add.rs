@@ -170,7 +170,8 @@ impl State {
             name: ti.name().to_owned(),
             comment: ti.comment().to_owned(),
             date: ti.creation_date(),
-            tree: FileTree::from_torrent(ti),
+            // the files Preferences leave out start unchecked (D74)
+            tree: FileTree::for_add(ti, &setup),
             setup,
             choice: None,
             icons: ShellIcons::default(),
@@ -1192,6 +1193,8 @@ mod tests {
             start: true,
             in_session: false,
             window: None,
+            // Preferences' "Do not download files named" off (D74)
+            exclude: String::new(),
         }
     }
 
@@ -1439,6 +1442,30 @@ mod tests {
         assert!(!c.skip_hash_check);
         assert_eq!(c.save_path, save);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// D74: the files Preferences leave out start unchecked (their folder half), the size counts
+    /// only the rest, and OK hands them over as Don't Download unless ticked back.
+    #[test]
+    fn excluded_files_start_unchecked() {
+        let mut f = Fixture::new(&FILES, Setup { exclude: "README.TXT; c.*".into(), ..setup() });
+        // readme.txt, cd1, a.bin, b.bin, cd2, c.bin
+        let check = |f: &Fixture, row| f.st.tree.row(row).unwrap().check;
+        assert_eq!(check(&f, 0), Check::Off);
+        assert_eq!((check(&f, 1), check(&f, 2), check(&f, 3)), (Check::On, Check::On, Check::On));
+        assert_eq!((check(&f, 4), check(&f, 5)), (Check::Off, Check::Off));
+        assert_eq!(f.st.tree.sizes(), (50_000, 90_100));
+        f.click(IDOK as u16);
+        let c = f.st.choice.take().expect("OK gives a choice");
+        assert_eq!(c.file_priorities.iter().map(|p| p.0).collect::<Vec<_>>(), [0, 4, 4, 0]);
+        // ticked back
+        let mut g = Fixture::new(&FILES, Setup { exclude: "readme.txt".into(), ..setup() });
+        g.select(&[0]);
+        g.key(VK_SPACE);
+        assert_eq!(check(&g, 0), Check::On);
+        g.click(IDOK as u16);
+        let c = g.st.choice.take().expect("OK gives a choice");
+        assert_eq!(c.file_priorities.iter().map(|p| p.0).collect::<Vec<_>>(), [4, 4, 4, 4]);
     }
 
     #[test]

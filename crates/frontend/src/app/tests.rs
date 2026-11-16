@@ -32,17 +32,22 @@ struct Setup {
     mock: MockConfig,
     remote: Option<Remote>,
     demo: bool,
+    /// Files put in the settings folder before the start.
+    files: Vec<(&'static str, Vec<u8>)>,
 }
 
 impl Setup {
     fn new() -> Setup {
         let prefs = Prefs::default();
         let options = Options::load(&prefs, "/dl");
-        Setup { prefs, options, mock: MockConfig::default(), remote: None, demo: false }
+        Setup { prefs, options, mock: MockConfig::default(), remote: None, demo: false, files: Vec::new() }
     }
 
     fn start(self, name: &str) -> Core {
         let dir = temp(name);
+        for (file, bytes) in &self.files {
+            std::fs::write(dir.join(file), bytes).unwrap();
+        }
         let settings = Settings { tick_interval: 50, ..self.options.settings.clone() };
         let session = Session::start_mock(settings, self.mock);
         Core::start(Start {
@@ -738,4 +743,137 @@ fn a_locked_window_holds_its_popups_and_drops_completions() {
     let mut later = Events::default();
     later.merge(held);
     assert!(later.magnet_ready && later.errors.len() == 1);
+}
+
+/// The priorities of the files of the torrent named `name`, as the Files tab gets them.
+fn file_priorities(core: &mut Core, name: &str) -> Vec<u8> {
+    let id = core.list().ids().find(|&id| core.list().get(id).unwrap().name == name).unwrap();
+    core.select(&[id]);
+    core.show_tab(Tab::Files);
+    let prio = |c: &Core| -> Option<Vec<u8>> {
+        let files = c.detail().files.as_ref().filter(|_| c.detail().id == Some(id))?;
+        Some(files.iter().map(|f| f.priority.0).collect())
+    };
+    pump(core, "its files", |c| prio(c).is_some());
+    prio(core).unwrap()
+}
+
+/// D74: a `.torrent` added without the dialog leaves out the files Preferences name; one added
+/// through the dialog keeps what the user ticked, an excluded file ticked back included.
+#[test]
+fn excluded_files_are_left_out_of_adds_without_the_dialog() {
+    let mut s = Setup::new();
+    s.prefs.set_bool("ui.show_add_dialog", false);
+    s.prefs.set_bool("files.exclude", true);
+    s.prefs.set("files.exclude_names", "*.nfo; Thumbs.db");
+    let mut core = s.start("exclude-file");
+    let files: [(&[&str], u64); 3] =
+        [(&["Season 1", "e01.mkv"], 1000), (&["Season 1", "thumbs.db"], 30), (&["info.NFO"], 5)];
+    assert!(matches!(core.add_file(multi_torrent("Show", &files)), AddStep::Added));
+    pump(&mut core, "the torrent", |c| c.list().len() == 1);
+    assert_eq!(file_priorities(&mut core, "Show"), [4, 0, 0]);
+
+    // the dialog: its tree starts them unchecked, and the user's choice is what is added
+    core.prefs_mut().set_bool("ui.show_add_dialog", true);
+    let AddStep::Dialog(r) = core.add_file(multi_torrent("Other", &files)) else { panic!("no dialog") };
+    assert_eq!(r.setup.exclude, "*.nfo; Thumbs.db");
+    let mut tree = crate::add::FileTree::for_add(&r.ti, &r.setup);
+    assert_eq!(tree.sizes(), (1000, 1035));
+    tree.set_all(true);
+    core.finish_add(r, Some(AddChoice { file_priorities: tree.file_priorities(), ..choice() }));
+    pump(&mut core, "the second torrent", |c| c.list().len() == 2);
+    assert_eq!(file_priorities(&mut core, "Other"), [4, 4, 4]);
+
+    // the option off: nothing is left out
+    core.prefs_mut().set_bool("ui.show_add_dialog", false);
+    core.prefs_mut().set_bool("files.exclude", false);
+    core.add_file(multi_torrent("Third", &files));
+    pump(&mut core, "the third torrent", |c| c.list().len() == 3);
+    assert_eq!(file_priorities(&mut core, "Third"), [4, 4, 4]);
+}
+
+/// D74: a magnet added without the dialog gets its files left out once its metadata came; one
+/// waiting for the dialog does not (its dialog's tree does it).
+#[test]
+fn a_magnet_without_the_dialog_leaves_out_excluded_files_once_its_metadata_came() {
+    let mut s = Setup::new();
+    s.prefs.set_bool("ui.show_add_dialog", false);
+    s.prefs.set_bool("files.exclude", true);
+    // the simulated engine names a magnet's files "Part 01.mkv", "Part 02.mkv"...
+    s.prefs.set("files.exclude_names", "part 01.*");
+    let mut core = s.start("exclude-magnet");
+    let hex = "00112233445566778899aabbccddeeff00112233";
+    assert!(matches!(core.add_magnet(format!("magnet:?xt=urn:btih:{hex}&dn=Show")), AddStep::Added));
+    assert!(!core.excluded.is_empty());
+    pump(&mut core, "the metadata and the files left out", |c| {
+        c.excluded.is_empty()
+            && c.list()
+                .ids()
+                .filter_map(|id| c.list().get(id))
+                .any(|s| s.has_metadata && s.total_wanted < s.total)
+    });
+    let prio = file_priorities(&mut core, "Show");
+    assert!(prio.len() > 1 && prio[0] == 0 && prio[1..].iter().all(|&p| p == 4), "{prio:?}");
+
+    // through the dialog: nothing waits here
+    core.prefs_mut().set_bool("ui.show_add_dialog", true);
+    let step = core.add_magnet("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567".into());
+    assert!(matches!(step, AddStep::Awaiting));
+    assert!(core.excluded.is_empty());
+}
+
+/// D75: the IP filter comes from the file or from the kept copy of the list from the web, which
+/// a start loads before any fetch; another address drops the copy.
+#[test]
+fn the_ip_filter_comes_from_the_file_or_the_kept_list() {
+    use crate::ip_filter_list::{CACHE_FILE, INFO_FILE};
+    let url = "https://lists.example/level1.gz";
+    let now = rookparcel_core::util::time::unix_now();
+    let mut s = Setup::new();
+    s.files = vec![
+        (CACHE_FILE, b"1.2.3.0 - 1.2.3.255 , 0 , a\n5.0.0.0/8\nx:6.6.6.6-6.6.6.7\n".to_vec()),
+        (INFO_FILE, format!("url={url}\nfetched={now}\nrules=3\n").into_bytes()),
+        ("ipfilter.dat", b"9.9.9.9\n".to_vec()),
+    ];
+    for (k, v) in [("ipfilter.enable", "1"), ("ipfilter.from_url", "1"), ("ipfilter.url", url)] {
+        s.prefs.set(k, v);
+    }
+    s.options = Options::load(&s.prefs, "/dl");
+    let mut core = s.start("ip-list");
+    let dir = core.dirs().settings.clone();
+    let cache = dir.join(CACHE_FILE);
+    assert!(logged(&core, &tr!(LogIpFilterRules, count = 3, path = cache.display())));
+    assert_eq!(core.ip_filter_status(), tr!(IpFilterStatusOk, count = 3, time = fmt::date_time(now)));
+    let list = core.ip_filter_list().unwrap();
+    assert_eq!(list.status_for(true, "https://other.example/x"), tr!(TrackersStatusNone));
+    assert_eq!(list.status_for(false, url), "");
+
+    // the file instead
+    let mut o = core.options();
+    o.gui.ip_filter_from_url = false;
+    core.apply_options(&o);
+    assert!(logged(&core, &tr!(LogIpFilterRules, count = 1, path = dir.join("ipfilter.dat").display())));
+    assert_eq!(core.ip_filter_status(), "");
+    // back to the address: the kept copy again
+    o.gui.ip_filter_from_url = true;
+    core.apply_options(&o);
+    let loads = core.detail().log.iter().filter(|l| l.contains(&cache.display().to_string())).count();
+    assert_eq!(loads, 2);
+    // another address: the copy is gone, nothing is loaded until its list comes
+    o.gui.ip_filter_url = "https://other.example/list.p2p".into();
+    core.apply_options(&o);
+    assert!(!cache.exists() && !dir.join(INFO_FILE).exists());
+    assert_eq!(core.ip_filter_status(), tr!(TrackersStatusNone));
+    let errors = core.detail().log.iter().filter(|l| l.contains("other.example")).count();
+    assert_eq!(errors, 0, "nothing to load yet is no error");
+    // off
+    o.gui.ip_filter = false;
+    core.apply_options(&o);
+    assert!(logged(&core, tr!(LogIpFilterOff)));
+
+    // a remote window keeps no list: its server has its own filter
+    let mut s = Setup::new();
+    s.remote = Some(Remote { label: "server:1".into() });
+    let core = s.start("ip-list-remote");
+    assert!(core.ip_filter_list().is_none() && core.ip_filter_status().is_empty());
 }

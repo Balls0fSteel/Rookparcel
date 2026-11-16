@@ -2,13 +2,18 @@
 //! holds a file `prefs-tour` (a test script makes it; `run.sh` passes no other variable),
 //! opening Preferences starts a tour that shows every page and then drives the controls through
 //! their own actions (`performClick:`, a text field's action), the way a click or Return would: a check box, a bad port, a good one, a bad one again, the
-//! Advanced filter, a drag on the Scheduler's grid, closing the window with the bad port, and
-//! opening it again at the port. After each step it keeps the snapshot of the moment as
+//! Advanced filter, a drag on the Scheduler's grid, closing the window with the bad port,
+//! opening it again at the port, UI Settings' excluded file names (D74) and BitTorrent's IP
+//! filter from an address (D75). After each step it keeps the snapshot of the moment as
 //! `<step>-window-<n>.png` and `<step>.txt`, and logs the `rookparcel.ini` lines the step is
 //! about. Accessibility cannot reach the windows while the VM's screen is locked; this can.
 
 use std::cell::Cell;
 use std::path::PathBuf;
+
+use rookparcel_frontend::pref_pages::{
+    EXCLUDE_LIST, EXCLUDE_NAMES, IPFILTER_ENABLE, IPFILTER_FROM_URL, IPFILTER_URL,
+};
 
 use super::{Ctl, state};
 use crate::app::peek;
@@ -163,6 +168,49 @@ fn step() -> bool {
         }
         10 => {
             keep("reopened");
+            page("ui");
+        }
+        // D74: "Do not download files named" and its list, greyed until the box is ticked
+        11 => {
+            keep("exclude-off");
+            click(EXCLUDE_NAMES);
+        }
+        12 => {
+            keep("exclude-on");
+            enter(EXCLUDE_LIST, "*.txt; Thumbs.db");
+        }
+        13 => {
+            keep("exclude-list");
+            ini(&["files.exclude"]);
+            page("bittorrent");
+        }
+        // D75: the IP filter group's greying (off, a file, an address), the https check and
+        // the status line; `--demo` fetches nothing, and the address below answers nothing
+        14 => {
+            keep("ipfilter-off");
+            click(IPFILTER_ENABLE);
+        }
+        15 => {
+            keep("ipfilter-file");
+            click(IPFILTER_FROM_URL);
+        }
+        16 => {
+            keep("ipfilter-url-empty");
+            enter(IPFILTER_URL, "http://127.0.0.1:9/level1.dat");
+        }
+        17 => {
+            keep("ipfilter-http");
+            ini(&["ipfilter"]);
+            enter(IPFILTER_URL, "https://127.0.0.1:9/level1.dat");
+        }
+        18 => {
+            keep("ipfilter-https");
+            ini(&["ipfilter"]);
+            super::update_ip_filter(&st);
+            eprintln!("prefs tour: ip filter update now");
+        }
+        19 => {
+            keep("ipfilter-update");
             eprintln!("prefs tour: done");
             return false;
         }

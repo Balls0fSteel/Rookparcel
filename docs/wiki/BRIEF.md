@@ -17,7 +17,7 @@ End users of Rookparcel, not developers. Task-oriented: "how do I...". Cover the
   (and `help_en.rs` / `docs/HELP_TEXTS.md` for what a setting does). Do not guess a name.
 - Where a behaviour is only in the code, read the code (`crates/win32/src`, `crates/gtk/src`,
   `crates/cocoa/src`, `crates/frontend/src`, `crates/nox/src`). If you cannot confirm something, leave it out.
-- The wiki describes the current code, version 1.2.59; the latest published release is
+- The wiki describes the current code, version 1.2.60; the latest published release is
   1.2.57. When a feature is newer than 1.1.40, say so in one line, e.g. "*New in 1.1.59.*";
   when it is newer than the latest published release, add "not in a published release yet"
   (and take that out at the next release). No release was published between 1.1.40 and

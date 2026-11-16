@@ -21,11 +21,13 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use rookparcel_frontend::help;
 use rookparcel_frontend::icons::page_icon;
+use rookparcel_frontend::ip_filter_list;
 use rookparcel_frontend::lang::{self, H, S, gtk_mnemonic};
 use rookparcel_frontend::options::{self, GuiOptions, Options};
 use rookparcel_frontend::pref_pages::{
-    self, Action, Control, Features, Field, Form, Item, Page, SCHED_ENABLE, TRACKERS_APPEND,
-    TRACKERS_FROM_URL, TRACKERS_LIST, TRACKERS_URL, TextKind, advanced_name, advanced_rows,
+    self, Action, Control, Features, Field, Form, IPFILTER_ENABLE, IPFILTER_FROM_URL, IPFILTER_PATH,
+    IPFILTER_URL, Item, Page, SCHED_ENABLE, TRACKERS_APPEND, TRACKERS_FROM_URL, TRACKERS_LIST, TRACKERS_URL,
+    TextKind, advanced_name, advanced_rows,
 };
 use rookparcel_frontend::scheduler::{CELLS, Mode};
 use rookparcel_frontend::settings::{Entry, Kind, Value};
@@ -52,6 +54,13 @@ pub struct Hooks {
     /// The Trackers page's status line for the list from the web, for the page's "from the
     /// web" box and address as they stand (`TrackerList::status_for`).
     pub tracker_status: TrackerStatus,
+    /// "Update Now" in the BitTorrent page's IP Filter group (D75): store these options' four
+    /// IP filter values (`ip_filter`, `ip_filter_path`, `ip_filter_from_url`, `ip_filter_url`,
+    /// nothing else of them), put them into effect and fetch the list.
+    pub update_ip_filter: Box<dyn Fn(&GuiOptions)>,
+    /// The IP filter's status line for the list from the web, for the page's box and address
+    /// as they stand (`IpFilterList::status_for`); empty in a remote window.
+    pub ip_filter_status: TrackerStatus,
     /// Where `ipfilter.dat` is looked for when no path is set.
     pub settings_dir: PathBuf,
     /// A tray is on screen: UI Settings shows the tray and notification boxes.
@@ -78,6 +87,31 @@ struct LockPage {
     status: gtk::Label,
     /// The switch is being set to the stored state: its `toggled` is no click.
     quiet: Cell<bool>,
+}
+
+/// What a greyed widget follows.
+#[derive(Clone, Copy)]
+pub(crate) enum Grey {
+    /// A page's field: enabled while the boxes it needs are on and the ones that grey it off
+    /// ([`Field::enabled`]: `needs` and `unless`).
+    Field(Field),
+    /// Enabled while these boxes are on (the Scheduler's table).
+    Needs(&'static [&'static str]),
+}
+
+impl Grey {
+    /// For a field: `None` when nothing greys it.
+    fn of(f: &Field) -> Option<Grey> {
+        (!f.needs.is_empty() || !f.unless.is_empty()).then_some(Grey::Field(*f))
+    }
+
+    /// Whether the widget is enabled, with `on` telling whether a field is on now.
+    pub(crate) fn enabled(&self, on: impl Fn(&str) -> bool) -> bool {
+        match self {
+            Grey::Field(f) => f.enabled(on),
+            Grey::Needs(keys) => keys.iter().all(|k| on(k)),
+        }
+    }
 }
 
 /// A field's control.
@@ -157,12 +191,14 @@ struct Dialog {
     opts: RefCell<Options>,
     form: RefCell<Form>,
     controls: HashMap<&'static str, Ctl>,
-    /// Rows greyed unless the check boxes named are on.
-    needs: Vec<(gtk::Widget, &'static [&'static str])>,
+    /// Rows greyed unless the check boxes named are on (or while others are).
+    needs: Vec<(gtk::Widget, Grey)>,
     stack: gtk::Stack,
     /// The page on screen, to go back to when the pages cannot be read.
     page: RefCell<String>,
     ip_status: Option<gtk::Label>,
+    /// Reload's result, which the IP filter's line shows until the page's source changes.
+    ip_reload: RefCell<Option<Result<usize, String>>>,
     /// The Trackers page's status line for the list from the web.
     tracker_status: Option<gtk::Label>,
     advanced: Option<Advanced>,
@@ -351,6 +387,7 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
         needs,
         stack: stack.clone(),
         ip_status,
+        ip_reload: RefCell::default(),
         tracker_status,
         advanced,
         sched,
@@ -455,6 +492,25 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
                 d.update_tracker_status();
             }
         });
+    }
+    // the IP filter's line follows the page's source at once (D75); a Reload result goes
+    for key in [IPFILTER_FROM_URL, IPFILTER_URL, IPFILTER_PATH] {
+        let w = Rc::downgrade(&d);
+        let changed = move || {
+            if let Some(d) = w.upgrade() {
+                d.ip_reload.replace(None);
+                d.update_ip_status();
+            }
+        };
+        match d.controls.get(key) {
+            Some(Ctl::Check(c)) => {
+                c.connect_toggled(move |_| changed());
+            }
+            Some(Ctl::Entry(e)) => {
+                e.connect_changed(move |_| changed());
+            }
+            _ => {}
+        }
     }
     // "..." beside folders and files
     for (button, key, kind) in browse {
@@ -567,17 +623,20 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
     });
 
     d.write_controls();
-    d.update_ip_status(None);
+    d.update_ip_status();
     d.update_tracker_status();
     d.update_lock();
-    if d.tracker_status.is_some() {
-        // the list is fetched on its own time: the line follows while its page is on screen,
+    if d.tracker_status.is_some() || d.ip_status.is_some() {
+        // the lists are fetched on their own time: a line follows while its page is on screen,
         // until the dialog is gone
         let w = Rc::downgrade(&d);
         glib::timeout_add_seconds_local(1, move || {
             let Some(d) = w.upgrade() else { return glib::ControlFlow::Break };
             if d.tracker_status.as_ref().is_some_and(|l| l.is_mapped()) {
                 d.update_tracker_status();
+            }
+            if d.ip_status.as_ref().is_some_and(|l| l.is_mapped()) {
+                d.update_ip_status();
             }
             glib::ControlFlow::Continue
         });
@@ -669,8 +728,8 @@ impl Dialog {
             let value = ctl.value();
             pref_pages::fields(&self.pages).any(|f| f.key == k && pref_pages::is_on(&f.control, &value))
         };
-        for (widget, needs) in &self.needs {
-            widget.set_sensitive(needs.iter().all(|k| on(k)));
+        for (widget, grey) in &self.needs {
+            widget.set_sensitive(grey.enabled(on));
         }
     }
 
@@ -746,6 +805,7 @@ impl Dialog {
         self.write_controls();
         self.fill_advanced(self.selected_row());
         self.update_tracker_status();
+        self.update_ip_status();
         true
     }
 
@@ -763,21 +823,66 @@ impl Dialog {
                 }
             }
             Action::ReloadIpFilter => {
-                let on = matches!(self.controls.get("ipfilter.enable"), Some(Ctl::Check(c)) if c.is_active());
-                if !on {
-                    self.update_ip_status(Some(Err(tr!(PrefIpFilterOff).to_owned())));
+                if self.value(IPFILTER_ENABLE) != "true" {
+                    self.ip_reload.replace(Some(Err(tr!(PrefIpFilterOff).to_owned())));
+                    self.update_ip_status();
                     return;
                 }
                 let mut gui = self.opts.borrow().gui.clone();
-                gui.ip_filter_path = self.controls.get("ipfilter.path").map(Ctl::value).unwrap_or_default();
-                gui.ip_filter_path = gui.ip_filter_path.trim().to_owned();
-                let file = gui.ip_filter_file(&self.hooks.settings_dir);
-                let result =
-                    (self.hooks.reload_ip_filter)(&file).map_err(|e| format!("{}: {e}", file.display()));
-                self.update_ip_status(Some(result));
+                gui.ip_filter_path = self.value(IPFILTER_PATH).trim().to_owned();
+                gui.ip_filter_from_url = self.value(IPFILTER_FROM_URL) == "true";
+                gui.ip_filter_url = self.value(IPFILTER_URL).trim().to_owned();
+                // the page's file, or the copy kept of its address's list (none yet: the line
+                // says how the fetch stands)
+                let result = ip_filter_list::list_file(&gui, &self.hooks.settings_dir).map(|file| {
+                    (self.hooks.reload_ip_filter)(&file).map_err(|e| format!("{}: {e}", file.display()))
+                });
+                self.ip_reload.replace(result);
+                self.update_ip_status();
             }
             Action::UpdateTrackerList => self.update_tracker_list(),
+            Action::UpdateIpFilter => self.update_ip_filter(),
         }
+    }
+
+    /// IP Filter > Update Now (D75): the group's four values are stored and put into effect, as
+    /// Trackers' Update Now does for its own, then the list is fetched from the page's address.
+    /// The status line and the Logger say how it went.
+    fn update_ip_filter(&self) {
+        const KEYS: [&str; 4] = [IPFILTER_ENABLE, IPFILTER_PATH, IPFILTER_FROM_URL, IPFILTER_URL];
+        let mut o = self.opts.borrow().clone();
+        for f in pref_pages::fields(&self.pages).filter(|f| KEYS.contains(&f.key)) {
+            if let Err(message) = f.apply(&mut o, &self.value(f.key)) {
+                self.complain(f.key, message);
+                return;
+            }
+        }
+        // what `pref_pages::check` asks of them (the other pages may be half filled in)
+        let g = &o.gui;
+        if g.ip_filter
+            && g.ip_filter_from_url
+            && !rookparcel_frontend::tracker_list::is_list_url(&g.ip_filter_url)
+        {
+            self.complain(IPFILTER_URL, tr!(TrackersErrHttps).to_owned());
+            return;
+        }
+        (self.hooks.update_ip_filter)(&o.gui);
+        {
+            let mut opts = self.opts.borrow_mut();
+            opts.gui.ip_filter = o.gui.ip_filter;
+            opts.gui.ip_filter_path = o.gui.ip_filter_path;
+            opts.gui.ip_filter_from_url = o.gui.ip_filter_from_url;
+            opts.gui.ip_filter_url = o.gui.ip_filter_url;
+        }
+        // (the other controls keep what was typed into them, as after Trackers' Update Now)
+        let values = self.form.borrow_mut().write(&self.pages, &self.opts.borrow());
+        for (key, value) in values.iter().filter(|(k, _)| KEYS.contains(k)) {
+            if let Some(c) = self.controls.get(key) {
+                c.set(value);
+            }
+        }
+        self.ip_reload.replace(None);
+        self.update_ip_status();
     }
 
     /// The PIN dialog `form` over the Preferences window, modal on it (D71); the page follows
@@ -872,18 +977,21 @@ impl Dialog {
         }
     }
 
-    fn update_ip_status(&self, result: Option<Result<usize, String>>) {
+    /// The IP filter's line (`ip_filter_list::page_status`): Reload's result, else how the list
+    /// from the page's address stands while its box is ticked, else the default file.
+    fn update_ip_status(&self) {
         let Some(label) = &self.ip_status else { return };
-        let path = self.controls.get("ipfilter.path").map(Ctl::value).unwrap_or_default();
-        let text = match result {
-            Some(Ok(n)) => tr!(PrefIpFilterLoaded, count = n),
-            Some(Err(e)) => e,
-            None if path.trim().is_empty() => {
-                tr!(PrefIpFilterDefault, path = self.hooks.settings_dir.join("ipfilter.dat").display())
-            }
-            None => String::new(),
-        };
-        label.set_text(&text);
+        let url_status = (self.value(IPFILTER_FROM_URL) == "true")
+            .then(|| (self.hooks.ip_filter_status)(true, &self.value(IPFILTER_URL)));
+        let text = ip_filter_list::page_status(
+            self.ip_reload.borrow().as_ref(),
+            url_status,
+            &self.value(IPFILTER_PATH),
+            &self.hooks.settings_dir,
+        );
+        if label.text() != text {
+            label.set_text(&text);
+        }
     }
 
     fn selected_row(&self) -> Option<usize> {
@@ -1007,7 +1115,7 @@ pub(crate) fn pick(window: &gtk::Window, entry: &gtk::Entry, kind: TextKind) {
 #[derive(Default)]
 pub(crate) struct Builder {
     pub(crate) controls: HashMap<&'static str, Ctl>,
-    pub(crate) needs: Vec<(gtk::Widget, &'static [&'static str])>,
+    pub(crate) needs: Vec<(gtk::Widget, Grey)>,
     ip_status: Option<gtk::Label>,
     tracker_status: Option<gtk::Label>,
     advanced: Option<Advanced>,
@@ -1124,7 +1232,7 @@ impl Builder {
                     let grid = SchedGrid::new();
                     self.help(&grid.widget, pref_pages::item_help(item));
                     target.append(&grid.widget);
-                    self.needs.push((grid.widget.clone().upcast(), &[SCHED_ENABLE]));
+                    self.needs.push((grid.widget.clone().upcast(), Grey::Needs(&[SCHED_ENABLE])));
                     self.sched = Some(grid);
                 }
             }
@@ -1205,8 +1313,8 @@ impl Builder {
                 row.append(&control);
                 if f.fixed {
                     grey.set_sensitive(false);
-                } else if !f.needs.is_empty() {
-                    self.needs.push((grey, f.needs));
+                } else if let Some(rule) = Grey::of(f) {
+                    self.needs.push((grey, rule));
                 }
                 self.controls.insert(f.key, ctl);
                 return;
@@ -1233,8 +1341,9 @@ impl Builder {
         if f.fixed {
             // what a package manages: shown, never edited
             row.set_sensitive(false);
-        } else if !f.needs.is_empty() {
-            self.needs.push((row.clone().upcast(), f.needs));
+        } else if let Some(rule) = Grey::of(f) {
+            // a button beside the field (Reload, Update Now) greys with it
+            self.needs.push((row.clone().upcast(), rule));
         }
         self.last_row = Some(row);
         self.controls.insert(f.key, ctl);
@@ -1290,4 +1399,37 @@ thread_local! {
     /// The open dialog, for the Advanced table's cells (the table is built before the dialog's
     /// shared state exists).
     static DIALOG: RefCell<Option<std::rc::Weak<Dialog>>> = const { RefCell::new(None) };
+}
+
+#[cfg(test)]
+mod tests {
+    use rookparcel_frontend::pref_pages::{EXCLUDE_LIST, EXCLUDE_NAMES};
+
+    use super::*;
+
+    fn grey(pages: &[Page], key: &str) -> Option<Grey> {
+        Grey::of(pref_pages::fields(pages).find(|f| f.key == key).unwrap())
+    }
+
+    /// The rows follow `needs` and `unless` (D74, D75): the IP filter's path (with Reload beside
+    /// it) greys while the list comes from an address; the address (with Update Now) needs both
+    /// boxes; the exclusion list needs its box.
+    #[test]
+    fn rows_grey_by_needs_and_unless() {
+        let pages = pref_pages::pages(Features::default());
+        let on = |keys: &'static [&'static str]| move |k: &str| keys.contains(&k);
+        let path = grey(&pages, IPFILTER_PATH).expect("the path greys");
+        assert!(path.enabled(on(&[])) && path.enabled(on(&[IPFILTER_ENABLE])));
+        assert!(!path.enabled(on(&[IPFILTER_ENABLE, IPFILTER_FROM_URL])));
+        let url = grey(&pages, IPFILTER_URL).unwrap();
+        assert!(!url.enabled(on(&[])) && !url.enabled(on(&[IPFILTER_FROM_URL])));
+        assert!(url.enabled(on(&[IPFILTER_ENABLE, IPFILTER_FROM_URL])));
+        let from_url = grey(&pages, IPFILTER_FROM_URL).unwrap();
+        assert!(!from_url.enabled(on(&[])) && from_url.enabled(on(&[IPFILTER_ENABLE])));
+        let list = grey(&pages, EXCLUDE_LIST).unwrap();
+        assert!(!list.enabled(on(&[])) && list.enabled(on(&[EXCLUDE_NAMES])));
+        assert!(grey(&pages, IPFILTER_ENABLE).is_none() && grey(&pages, EXCLUDE_NAMES).is_none());
+        assert!(Grey::Needs(&[SCHED_ENABLE]).enabled(on(&[SCHED_ENABLE])));
+        assert!(!Grey::Needs(&[SCHED_ENABLE]).enabled(on(&[])));
+    }
 }

@@ -1,6 +1,6 @@
 # Connection, ports and firewall
 
-This page covers how other peers reach Rookparcel: the listening port, port forwarding with UPnP and NAT-PMP, the Windows firewall, how to tell whether incoming connections work, keeping torrent traffic on a VPN with "Use only this network", proxies, encryption, the IP filter, and the DHT, Peer Exchange and Local Peer Discovery.
+This page covers how other peers reach Rookparcel: the listening port, port forwarding with UPnP and NAT-PMP, the Windows firewall, how to tell whether incoming connections work, keeping torrent traffic on a VPN with "Use only this network", proxies, encryption, the IP filter and its block list from a web address, and the DHT, Peer Exchange and Local Peer Discovery.
 
 Most of these settings are on **Options > Preferences > Connection** and **Options > Preferences > BitTorrent**.
 
@@ -148,7 +148,19 @@ To allow only some connection types, such as TCP only, use `bt.transp_dispositio
 
 ## IP filter
 
-Under **IP Filter** on the BitTorrent page, Rookparcel can block peers by address, from a block list in eMule `ipfilter.dat` or PeerGuardian P2P format.
+Under **IP Filter** on the BitTorrent page, Rookparcel can block peers by address, from a block list in eMule `ipfilter.dat`, PeerGuardian P2P or CIDR format. The list can be a file on your computer or a file on the web that Rookparcel downloads and keeps current.
+
+Each line of a list is one rule:
+
+| Format | Example line |
+|---|---|
+| eMule `ipfilter.dat` | `001.002.004.000 - 001.002.004.255 , 000 , Some name` |
+| PeerGuardian P2P | `Some name:1.2.4.0-1.2.4.255` |
+| CIDR, IPv4 or IPv6 | `10.0.0.0/8` or `fd00::/8` |
+
+*CIDR lines are new in 1.2.60, not in a published release yet.* They work in a file on your computer too.
+
+### A list file on your computer
 
 1. Tick **Enable IP filter**.
 2. Choose the block list file in the box below. Left empty, Rookparcel uses `ipfilter.dat` in its settings folder.
@@ -156,15 +168,39 @@ Under **IP Filter** on the BitTorrent page, Rookparcel can block peers by addres
 
 The list is loaded at start and on Apply. The Logger writes "IP filter: N rules from ..." or the error. If a new list cannot be read, the rules loaded before stay in force.
 
-By default the filter also applies to the DHT and to trackers at blocked addresses (`apply_filter_to_dht` and `apply_ip_filter_to_trackers` on the Advanced page). Turn the tracker one off if a tracker you need sits in a blocked range.
-
 In the Web UI there is no Reload button: the list loads when you apply.
+
+### A list from a web address
+
+*New in 1.2.60, not in a published release yet.* Rookparcel can download the block list from the web and keep it current:
+
+1. Tick **Enable IP filter**.
+2. Tick **Get the block list from this address (https):** and type the list's address in the box below it. It must start with `https://`.
+3. Click **Update Now** to download it at once, or **OK**. The line under the button shows the result.
+
+While the address is in use, it replaces the file: the file box and **Reload** are greyed. What to know:
+
+- **Only `https://`.** An address that sends Rookparcel on to a plain `http://` one is refused. The download goes through your proxy when Preferences > Connection sets one.
+- **Formats.** The three formats above, plain or gzip-compressed. Zip archives are not supported. A download can be up to 32 MiB.
+- **How often.** Once a day, and an hour after a download that failed. **Update Now** downloads it at any time.
+- **At start.** Rookparcel keeps the last good download in its settings folder (`ipfilter-url.dat`) and puts it in force at once at the next start, before it downloads anything.
+- **When a download fails** or brings something that is not a block list (an error page, for example), the rules already in force stay, and the status line says "The last download failed: ...". The Logger writes the error too.
+- **Status line.** "N rules, downloaded" with the date and time, or "The list has not been downloaded yet." until the first download succeeds. Until then, the rules already in force stay.
+- **The settings check.** While Rookparcel holds the transfers after a version change, until you confirm the settings ([Updating Rookparcel](Updating-Rookparcel)), the download waits too.
+
+Use an address you trust: whoever controls the list decides which peers Rookparcel refuses to talk to.
+
+In the Web UI, changing the box or the address needs the current password (**Current password:** on the Web UI page), because the server downloads whatever address is set. The Web UI that the Windows program serves leaves the address out: it belongs to the window's own Preferences. The qBittorrent-compatible API cannot change it.
+
+### Trackers and the DHT
+
+By default the filter also applies to the DHT and to trackers at blocked addresses (`apply_filter_to_dht` and `apply_ip_filter_to_trackers` on the Advanced page). Turn the tracker one off if a tracker you need sits in a blocked range.
 
 ## In the GTK window and the Web UI
 
 - **GTK window**: the same pages and settings. The status bar's network part says the same things, and a click on "Port ... in use" opens Preferences at Connection.
 - **Web UI**: the same pages under **Preferences**; its status bar shows the network part with the same tooltip.
-- **rookparcel-nox**: `--port N` sets the listening port (default 6881), `--listen` sets the listen interfaces in full, `--proxy TYPE://[USER:PASS@]HOST:PORT` sets a proxy, `--ip-filter FILE` loads a block list, and `--network` sets "Use only this network". A service on Windows needs a firewall rule for `rookparcel-nox.exe`: see [Running rookparcel-nox](Running-rookparcel-nox).
+- **rookparcel-nox**: `--port N` sets the listening port (default 6881), `--listen` sets the listen interfaces in full, `--proxy TYPE://[USER:PASS@]HOST:PORT` sets a proxy, `--ip-filter FILE` loads a block list file (the address is set in the Web UI's Preferences), and `--network` sets "Use only this network". A service on Windows needs a firewall rule for `rookparcel-nox.exe`: see [Running rookparcel-nox](Running-rookparcel-nox).
 
 ## Related pages
 

@@ -51,6 +51,9 @@ More: [Tray, notifications and startup](Tray-notifications-and-startup), [Adding
 | **Don't start the download automatically** (When Adding Torrents) | New torrents are added stopped and outside the queue, so nothing is downloaded until you start them. |
 | **Activate the program window** | Brings the main window to the front when another program, such as a browser, hands Rookparcel a torrent. Off, only the Add New Torrent window comes up. |
 | **Show a window that displays the files inside the torrent** | Opens the Add New Torrent window for each torrent you add, to choose the folder and the files first; for a magnet link, once its file list has arrived. Off, torrents are added at once with the defaults. |
+| **Do not download files named:** (When Adding Torrents) | Files whose names match one of the patterns in the box below start unticked, so they are not downloaded, in torrents you add from now on. Separate the patterns with semicolons; `*` stands for any characters and `?` for one, and case does not matter, as in `*.lnk; Thumbs.db; *sample*`. Only a file's own name counts, not its folders. Off by default. |
+
+*Do not download files named is new in 1.2.60, not in a published release yet.* You can still tick such a file in the Add New Torrent window, or later on the Files tab. A torrent whose every file matches is left alone. The list also applies to torrents added without the Add New Torrent window, such as from the watched folder, RSS or Sonarr and Radarr, but not to torrents already in the list. See [Adding torrents](Adding-torrents#files-left-out-by-name).
 
 More: [Tray, notifications and startup](Tray-notifications-and-startup), [Adding torrents](Adding-torrents), [Managing torrents](Managing-torrents), [The main window](The-main-window).
 
@@ -124,10 +127,14 @@ More: [Speed limits and scheduler](Speed-limits-and-scheduler), [Keep ping low](
 | **Enable uTP (UDP transport with bandwidth management)** | Connects to and accepts peers over uTP as well as TCP. uTP slows down when the network is busy. |
 | **Outgoing:** (Protocol Encryption) | **Disabled**: never encrypt. **Enabled**: plain and encrypted attempts alternate per peer, keeping what worked. **Forced**: encrypted only, losing peers that cannot encrypt. |
 | **Allow incoming legacy connections** | Accepts incoming connections that are not encrypted. Off, only encrypted ones are accepted. |
-| **Enable IP filter** | Blocks peers whose addresses are in the block list, in eMule `ipfilter.dat` or PeerGuardian P2P format. An empty path means `ipfilter.dat` in the settings folder. |
+| **Enable IP filter** | Blocks peers whose addresses are in the block list, in eMule `ipfilter.dat` or PeerGuardian P2P format, or CIDR lines such as `10.0.0.0/8`. An empty path means `ipfilter.dat` in the settings folder. |
 | **Reload** | Loads the block list now and shows how many rules it holds. The IP filter must be enabled. |
+| **Get the block list from this address (https):** | Takes the block list from the `https://` address below instead of the file above, through the proxy when one is set. The copy downloaded last is used at once at start, and the list is downloaded again once a day. While it is ticked, the file and **Reload** are greyed. |
+| **Update Now** | Downloads the block list from the address now. The line below shows how many rules it holds and when it was downloaded, or why the last download failed. |
 
-More: [Connection, ports and firewall](Connection-ports-and-firewall).
+*The block list from an address is new in 1.2.60, not in a published release yet.* The list can be in `ipfilter.dat`, PeerGuardian P2P or CIDR (`10.0.0.0/8`) form, plain or gzip-compressed; zip archives are not supported. When a download fails or is not such a list, the rules in use stay.
+
+More: [Connection, ports and firewall](Connection-ports-and-firewall#ip-filter).
 
 ## Queueing
 
@@ -331,7 +338,8 @@ The macOS app opens Preferences from **Rookparcel > Preferences** (<kbd>⌘</kbd
 The Web UI (of `rookparcel-nox`, or the one the Windows window serves) has a **Preferences** window with the same pages. Changed values on its Advanced page are shown in bold instead of with a `*`. Other differences:
 
 - **General**: the association and autostart boxes are greyed with the note "File associations and autostart belong to the desktop client." `rookparcel-nox` has its own **Privacy** group for its update check; the Web UI a Windows window serves does not.
-- **UI Settings** has only **Confirm when deleting torrents**, **Don't start the download automatically** and **Show a window that displays the files inside the torrent**.
+- **UI Settings** has only **Confirm when deleting torrents**, the two theme settings, **Don't start the download automatically**, **Show a window that displays the files inside the torrent** and **Do not download files named:**.
+- **BitTorrent**: changing the IP filter's address, or the box above it, needs the current password, typed in **Current password:** on the Web UI page. The Web UI the Windows window serves has no address, **Update Now** or status line: the window's own Preferences hold them.
 - **Bandwidth** in `rookparcel-nox` has **Alternative Rate Limits**: **Alternative upload rate**, **Alternative download rate** and **Use the alternative rate limits now**, which apps that toggle qBittorrent's speed limits mode also switch.
 - **Queueing** has **Limit the upload rate instead of stopping the torrent** as a box with the rate beside it.
 - **Web UI** adds **Current password:** (needed to change the login and the security settings), **Bypass authentication for clients on localhost**, **Listening address:** (shown for reference), **Enable Host header validation**, **Enable Cross-Site Request Forgery (CSRF) protection**, and a **Security** group with **Ban client after consecutive failures:**, **Ban for (seconds):** and **Session timeout (seconds):**.

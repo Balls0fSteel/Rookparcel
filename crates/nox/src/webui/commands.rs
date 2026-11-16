@@ -20,6 +20,8 @@ use rookparcel_core::{
     TorrentId, TorrentSource,
 };
 use rookparcel_frontend::add::{self, AddChoice, AwaitingMetadata};
+use rookparcel_frontend::exclude;
+use rookparcel_frontend::options::GuiOptions;
 use rookparcel_frontend::properties::{self, Changes, Field, Fields, Properties, TorrentProps, Tri};
 use rookparcel_frontend::scheduler::Mode;
 use rookparcel_frontend::seeding::SeedGoal;
@@ -985,6 +987,19 @@ pub fn add(shared: &Shared, source: Source, o: &AddOptions) -> Result<String, Cm
     let mut params = params;
     params.download_limit = o.download_limit;
     params.upload_limit = o.upload_limit;
+    // D74: an add that names no priorities (the shim, the page with its dialog off, a URL, RSS,
+    // the auto-load folder, a search result) leaves out the files "Do not download files named"
+    // matches: a `.torrent`'s now, a magnet's once its metadata has arrived (`State::excluded`).
+    // The page's Add dialog sends the priorities its user chose, which stand.
+    if o.priorities.is_empty() {
+        // a magnet of a torrent the session has already (restored, or waiting for the page's
+        // dialog) leaves that torrent's files alone
+        let st = &mut *st;
+        let torrents = &st.torrents;
+        st.excluded.add(&mut params, &defaults, |h| {
+            torrents.values().any(|e| exclude::same_torrent(&e.status.info_hashes, h))
+        });
+    }
     if !label.is_empty() {
         st.set_label_keyed(&hash, key.as_deref(), label);
     }
@@ -1010,7 +1025,7 @@ pub fn add(shared: &Shared, source: Source, o: &AddOptions) -> Result<String, Cm
 }
 
 /// The dialog's priorities for every file of `ti` (Normal where not named, pad files never);
-/// empty when none were given.
+/// empty when none were given ([`add`] then applies "Do not download files named", D74).
 fn file_priorities(ti: &TorrentInfo, o: &AddOptions) -> Result<Vec<DownloadPriority>, CmdError> {
     if o.priorities.is_empty() {
         return Ok(Vec::new());
@@ -1077,7 +1092,7 @@ pub fn ready_adds(st: &State) -> Json {
 pub fn awaiting_info(st: &State, hash: &str) -> Result<Json, CmdError> {
     let key = ready_key(st, hash).ok_or_else(|| err(404, "no magnet waiting for the Add dialog"))?;
     let ti = st.awaiting.get(&key).and_then(|w| w.ti.clone()).expect("ready");
-    Ok(torrent_info(&ti))
+    Ok(torrent_info(&ti, &st.prefs.gui()))
 }
 
 /// `POST /pa/add` with a waiting magnet's `hash`: OK gives the torrent the dialog's choices
@@ -1190,9 +1205,12 @@ pub fn save_in(st: &State) -> Vec<String> {
 /// `/pa/torrent-info`: the Add dialog's Torrent Contents for a `.torrent` without adding it:
 /// name, comment, created_by, size (bytes and text), date (Unix and text), private, hash, and
 /// the files as `{"i": engine index, "path": below the torrent's folder, "size", "text"}`, pad
-/// files left out, so the page builds the same tree `frontend::add::FileTree` would.
-pub fn torrent_info(ti: &TorrentInfo) -> Json {
+/// files left out, so the page builds the same tree `frontend::add::FileTree` would; a file
+/// "Do not download files named" leaves out (D74, `gui`) has `"excluded": true` and starts
+/// unchecked.
+pub fn torrent_info(ti: &TorrentInfo, gui: &GuiOptions) -> Json {
     let fs = ti.files();
+    let excluded = exclude::excluded(ti, gui);
     let mut files = Vec::new();
     for i in 0..fs.num_files() {
         if fs.pad_file_at(i) {
@@ -1203,13 +1221,15 @@ pub fn torrent_info(ti: &TorrentInfo) -> Json {
         if parts.len() > 1 {
             parts.remove(0);
         }
-        files.push(
-            Json::obj()
-                .with("i", i)
-                .with("path", parts.join("/"))
-                .with("size", fs.file_size(i))
-                .with("text", fmt::size(fs.file_size(i))),
-        );
+        let mut file = Json::obj()
+            .with("i", i)
+            .with("path", parts.join("/"))
+            .with("size", fs.file_size(i))
+            .with("text", fmt::size(fs.file_size(i)));
+        if excluded.get(i).copied().unwrap_or(false) {
+            file.set("excluded", true);
+        }
+        files.push(file);
     }
     let total: u64 = (0..fs.num_files()).filter(|&i| !fs.pad_file_at(i)).map(|i| fs.file_size(i)).sum();
     Json::obj()
@@ -1443,6 +1463,10 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
             "prefs/trackers" => {
                 Ok(Response::json(&Json::obj().with("status", prefs::trackers_status(shared))))
             }
+            // the IP filter's list from an address (D75), the same way
+            "prefs/ipfilter" => {
+                Ok(Response::json(&Json::obj().with("status", prefs::ipfilter_status(shared))))
+            }
             "torrents/properties" => {
                 let sel = query_selection(&parse_urlencoded(req.head.query.as_bytes()))?;
                 Ok(Response::json(&properties_reply(shared, &sel)?))
@@ -1505,7 +1529,8 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
             let (files, _) = multipart_body(req)?;
             let f = files.into_iter().next().ok_or_else(|| err(400, "no torrent file in the upload"))?;
             let Source::Torrent(_, ti) = Source::from_torrent_bytes(f.data)? else { unreachable!() };
-            Ok(Response::json(&torrent_info(&ti)))
+            let gui = shared.lock().prefs.gui();
+            Ok(Response::json(&torrent_info(&ti, &gui)))
         }
         "session/limits" => {
             set_session_limits(shared, &json_body(req)?)?;
@@ -1534,6 +1559,12 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
         // nothing in the request can name another address
         "prefs/trackers/update" => {
             let status = prefs::update_trackers(shared).map_err(|why| err(409, why))?;
+            Ok(Response::json(&Json::obj().with("status", status)))
+        }
+        // Update Now (D75): the stored block list address, fetched again; nothing is read from
+        // the request either
+        "prefs/ipfilter/update" => {
+            let status = prefs::update_ip_filter(shared).map_err(|why| err(409, why))?;
             Ok(Response::json(&Json::obj().with("status", status)))
         }
         _ => {
@@ -1782,7 +1813,8 @@ mod tests {
     fn torrent_info_lists_the_files_below_the_root() {
         let multi = b"d4:infod5:filesld6:lengthi3e4:pathl1:x5:y.txteed6:lengthi4e4:pathl5:z.txteee4:name4:root12:piece lengthi16384e6:pieces20:aaaaaaaaaaaaaaaaaaaaee";
         let ti = TorrentInfo::from_bytes(multi).unwrap();
-        let v = torrent_info(&ti);
+        let mut gui = State::for_tests().prefs.gui();
+        let v = torrent_info(&ti, &gui);
         assert_eq!(v.get("name"), Some(&Json::from("root")));
         assert_eq!(v.get("size"), Some(&Json::from(7u64)));
         assert_eq!(v.get("size_text"), Some(&Json::from("7 B")));
@@ -1792,9 +1824,19 @@ mod tests {
         assert_eq!(files[0].get("i"), Some(&Json::from(0usize)));
         assert_eq!(files[1].get("path"), Some(&Json::from("z.txt")));
         assert_eq!(files[1].get("size"), Some(&Json::from(4u64)));
+        assert!(files.iter().all(|f| f.get("excluded").is_none()), "the option is off");
+        // D74: a file the list names is marked, by its own name, not its folder's
+        (gui.exclude_names, gui.exclude_list) = (true, "Y.TXT; root".into());
+        let v = torrent_info(&ti, &gui);
+        let Some(Json::Arr(files)) = v.get("files") else { panic!() };
+        assert_eq!((files[0].get("excluded"), files[1].get("excluded")), (Some(&Json::Bool(true)), None));
+        // every file matches: none is
+        gui.exclude_list = "*.txt".into();
+        let v = torrent_info(&ti, &gui);
+        assert!(!v.to_json().contains("excluded"), "{}", v.to_json());
         let single =
             b"d4:infod6:lengthi5e4:name5:a.iso12:piece lengthi16384e6:pieces20:aaaaaaaaaaaaaaaaaaaaee";
-        let v = torrent_info(&TorrentInfo::from_bytes(single).unwrap());
+        let v = torrent_info(&TorrentInfo::from_bytes(single).unwrap(), &gui);
         let Some(Json::Arr(files)) = v.get("files") else { panic!() };
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].get("path"), Some(&Json::from("a.iso")));

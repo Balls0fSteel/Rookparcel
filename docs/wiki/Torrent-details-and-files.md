@@ -134,7 +134,7 @@ Select one or more files and right-click:
 
 Double-clicking a file, or pressing <kbd>Enter</kbd> on it, opens it like **Open**.
 
-**Don't Download** is how you skip files after adding a torrent. Choosing a priority again downloads a skipped file. To skip files before the download starts, untick them in the [Add New Torrent window](Adding-torrents#torrent-contents).
+**Don't Download** is how you skip files after adding a torrent. Choosing a priority again downloads a skipped file. To skip files before the download starts, untick them in the [Add New Torrent window](Adding-torrents#torrent-contents). To skip files with certain names in every torrent you add, use **Do not download files named:** in Preferences > UI Settings ([Files left out by name](Adding-torrents#files-left-out-by-name); *new in 1.2.60, not in a published release yet*).
 
 After **Relocate...** to a file that was not on disk, run **Force Re-Check** so Rookparcel counts what it found there. Relocate never replaces a file that is already at the new place.
 

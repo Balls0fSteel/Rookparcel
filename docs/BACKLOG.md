@@ -1233,6 +1233,24 @@ Found and left:
 - **Text:** the 15 new strings are machine-translated in 34 tables.
 - **macOS:** see CHANGELOG 1.2.59.
 
+## Excluded file names and the IP filter address (D74, D75; built 2026-11-16, 1.2.60)
+
+2026-11-16_134225_1794832945. Open:
+
+- **Excluded names, magnets:** a magnet added without the window whose metadata arrives only after a restart downloads every file. The pending exclusion (`exclude::Pending`) is not saved with the torrent.
+- **Excluded names, nox command line:** `rookparcel-nox add` and `run <file|magnet>` bypass the list, as they bypass every Web UI preference.
+- **IP filter address, live fetch:** run only in GTK on the Xubuntu VM against a local HTTPS server (a plain list, a gzipped one, an HTML page refused, the kept copy in force at restart). Not run in Win32 (no local HTTPS fixture) or on the Mac.
+- **IP filter address, not tried:** a fetch through a real proxy, and a GUI run under the D70 hold.
+- **IP filter address, status line:** empty while the box is ticked and the address is blank; it could say that an address is needed.
+- **macOS:** the Trackers page's Update Now now greys while its "from URL" box is unticked, a side effect of buttons greying with their row's field. Harmless, but it differs from the other interfaces.
+- **Windows, remote window:** the address's status line is empty, and Update Now does nothing, as the Trackers page's (the fetch belongs to the server; OK sends the address).
+- **Windows, Update Now:** it fetches with the page's fields unapplied (fixed in 1.2.60, as the Trackers page's). An unapplied address drops the copy kept of the stored one; closing without OK restores the stored rules and fetches that copy again. The shared help texts of both Update Now buttons still say "Applies the page", true of GTK and the Web UI only.
+- **Excluded names, duplicate magnets:** a magnet of a torrent already in the session leaves it alone (1.2.60), as the owner's torrent list knows it. One added in the second before that list shows it (its first status) counts as new.
+- **Web UI:** the new fields (the pattern list, the address, Update Now, the status line) not yet seen on a phone or in Safari or Firefox.
+- **Text:** "block list" is a newly coined term in all 34 machine-translated tables; it wants a native speaker's review.
+- **Formats:** no zip support (gzip only).
+- **Fetch:** the list is fetched whole each time. No `ETag` / `If-Modified-Since`, which the fetch helper supports and RSS uses.
+
 ## Settings guard (D70; 2026-11-15, 1.2.55-)
 
 Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/frontend/tests/settings_fixtures.rs`. Layer 2 (1.2.56): the stamp, the start comparison and the backups. Open:

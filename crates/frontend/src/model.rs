@@ -14,7 +14,7 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
-use rookparcel_core::{TorrentId, TorrentStatus};
+use rookparcel_core::{InfoHashes, TorrentId, TorrentStatus};
 
 use crate::columns::{Column, RowExtra, natural_cmp, natural_key_into};
 use crate::status::{Category, status_text};
@@ -473,6 +473,11 @@ impl TorrentList {
 
     pub fn ids(&self) -> impl Iterator<Item = TorrentId> + '_ {
         self.rows.keys().copied()
+    }
+
+    /// Whether a torrent of these info-hashes is in the list ([`crate::exclude::same_torrent`]).
+    pub fn has(&self, h: &InfoHashes) -> bool {
+        self.rows.values().any(|s| crate::exclude::same_torrent(&s.info_hashes, h))
     }
 }
 

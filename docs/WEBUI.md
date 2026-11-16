@@ -228,10 +228,12 @@ nothing is 404. The shim's `torrents/*` handlers call the same functions.
 | `/pa/torrents/files` | `{"id":"...","priorities":{"<index>":0..7}}` | file priorities |
 | `/pa/torrents/properties` (`GET ?ids=<hash>,<hash>`, or `GET ?all=1&category=..&label=..&search=..` for Ctrl+A with the view's filter; `POST`) | `GET`: `count`, `can_initial_seed`, `finished` (every torrent is: the page's double-click opens the dialog only when not), `name` (one torrent only, for the title), `can_sequential` (some torrent is not finished: the download order boxes are not greyed), `fields` (`trackers` one URL per line with a blank line between tiers, `upload_kib`, `download_kib`, `upload_slots`, `goal_ratio`, `goal_minutes` as text, blank where the torrents differ; `override_slots`, `override_goal`, `initial_seeding`, `dht`, `pex`, `sequential`, `first_last` as `"on"` / `"off"` / `"mixed"`); `POST`: `{"ids":[...],"fields":{...}}` (or `"all":true` with the `filter`) with any of those fields, 400 `{"error":"<field>: <why>"}` | Torrent Properties (`frontend::properties`; the page's dialog from the context menu and a double-click): fields left out or unchanged stay as they are on every torrent; tracker lists are asked of the engine 32 at a time within one 5 s deadline; the seeding goal override is stored as `torrent.<hash>.seed_ratio` / `.seed_time` in `options` |
 | `/pa/torrents/rename` | `{"id":"...","old":"...","new":"...","folder":bool}` | files and folders (`folder` optional: a file when `old` names one, else a folder) |
-| `/pa/add` | `multipart/form-data`: `.torrent` files as `torrent` parts plus an `options` part holding the JSON below, or JSON `{"url":"magnet:...","save":"...","name":"...","label":"...","start":true,"skip_check":false,"top":false,"sequential":false,"first_last":false,"priorities":{"<index>":0..7}}` (`sequential` / `first_last`: the dialog's download order boxes, never remembered) (`url` also takes a bare info-hash or an `http://` link to a torrent); with `"dialog":true` a magnet joins the session in upload mode to wait for its metadata (200 `{"hash"}`, 409 when it is in the list already); then JSON `{"hash":"...", ...the choices}` finishes it, or `{"hash":"...","cancel":true}` removes it with its part file | the Add dialog's choices (`frontend::add::AddChoice`, for a waiting magnet `apply_to_torrent`); `GET /pa/add` gives the dialog its defaults: `save_in` (the default folder, then the recent ones), `labels`, `start`, `show_dialog`, and `ready`, the waiting magnets whose metadata is known, as `{"hash", "name"}` |
-| `/pa/torrent-info` | a `.torrent` upload (a `torrent` part); or `GET ?hash=` for a waiting magnet (404 until its metadata is known) | parses it and returns the Add dialog's Torrent Contents without adding (two-step add): `name`, `comment`, `created_by`, `size` / `size_text`, `date` / `date_text`, `private`, `hash`, `files` of `{"i": engine index, "path": below the torrent's folder, "size", "text"}` (pad files left out) |
+| `/pa/add` | `multipart/form-data`: `.torrent` files as `torrent` parts plus an `options` part holding the JSON below, or JSON `{"url":"magnet:...","save":"...","name":"...","label":"...","start":true,"skip_check":false,"top":false,"sequential":false,"first_last":false,"priorities":{"<index>":0..7}}` (`sequential` / `first_last`: the dialog's download order boxes, never remembered) (`url` also takes a bare info-hash or an `http://` link to a torrent); with `"dialog":true` a magnet joins the session in upload mode to wait for its metadata (200 `{"hash"}`, 409 when it is in the list already); then JSON `{"hash":"...", ...the choices}` finishes it, or `{"hash":"...","cancel":true}` removes it with its part file | the Add dialog's choices (`frontend::add::AddChoice`, for a waiting magnet `apply_to_torrent`); `GET /pa/add` gives the dialog its defaults: `save_in` (the default folder, then the recent ones), `labels`, `start`, `show_dialog`, and `ready`, the waiting magnets whose metadata is known, as `{"hash", "name"}`. An add without `priorities` (the page with its dialog off, a URL, RSS, the auto-load folder, a search result, the shim's `torrents/add`) leaves out the files "Do not download files named" matches (D74, `frontend::exclude`): a `.torrent`'s at once, a magnet's once its metadata has arrived (`State::excluded`, not kept over a restart); a magnet waiting for the dialog never, nor a torrent restored at start. The page's dialog sends every file's priority when the server marked a file `excluded`, so its user's choice stands even with all of them ticked back |
+| `/pa/torrent-info` | a `.torrent` upload (a `torrent` part); or `GET ?hash=` for a waiting magnet (404 until its metadata is known) | parses it and returns the Add dialog's Torrent Contents without adding (two-step add): `name`, `comment`, `created_by`, `size` / `size_text`, `date` / `date_text`, `private`, `hash`, `files` of `{"i": engine index, "path": below the torrent's folder, "size", "text"}` (pad files left out), with `"excluded": true` on a file "Do not download files named" leaves out (D74: matched by its own name; nothing when every file would be), which the page's tree starts unchecked |
 | `/pa/session/limits` | `{"down":0,"up":0,"alt":false,"alt_down":0,"alt_up":0}`, each optional: `alt` switches the alternative limits, `down` / `up` set the mode then in force; `GET` reads them back | global and alternative limits |
-| `/pa/prefs` (`GET`, `POST`) | `GET`: `pages` (the 2.2.1 tree, each page its groups of items: `{"f": id}` with optional `kb`, `min`, `max`, `enabled_by` (one check box id, or several space-separated that must all be on), `secret`; `{"row": [...]}`; `{"stub": label}`; `{"note": text}`; `{"button": label, "action": name}`), `fields` (id to `label`, `type` of `bool` / `int` with `min` and `max` / `text` / `folder` / `enum` with `options` / `password`, `value`, `default`, `readonly`) and `advanced` (every engine setting's id); `POST`: a partial object of ids to values, 204 or 400 `{"error": "<field>: <why>"}` naming the first bad field, nothing applied then | Preferences (slice 6, `webui/prefs.rs`): every engine setting by libtorrent name, the `frontend::options::GuiOptions` nox has an equivalent for under their preferences keys, the Win32 pages' composites (`listen_port`, `proxy_kind` / `proxy_auth`, `enc_out` / `enc_legacy`, `utp`), the alternative limits and the Web UI's own (`webui.*`; `webui.password` write-only); applied live, stored as the frontend's keys in the state file's `options` and re-applied at start; the shim's `setPreferences` maps onto the same ids |
+| `/pa/prefs` (`GET`, `POST`) | `GET`: `pages` (the 2.2.1 tree, each page its groups of items: `{"f": id}` with optional `kb`, `min`, `max`, `enabled_by` (one check box id, or several space-separated that must all be on), `disabled_by` (greyed while any of these boxes is on: the IP filter's file while the list comes from an address, D75), `secret`; `{"row": [...]}`; `{"stub": label}`; `{"note": text}`; `{"button": label, "action": name}`; `{"status": "trackers"}` / `{"status": "ipfilter"}`, the lines that show `trackers_status` / `ipfilter_status`), `fields` (id to `label`, `type` of `bool` / `int` with `min` and `max` / `text` / `folder` / `enum` with `options` / `password`, `value`, `default`, `readonly`) and `advanced` (every engine setting's id); `POST`: a partial object of ids to values, 204 or 400 `{"error": "<field>: <why>"}` naming the first bad field, nothing applied then | Preferences (slice 6, `webui/prefs.rs`): every engine setting by libtorrent name, the `frontend::options::GuiOptions` nox has an equivalent for under their preferences keys, the Win32 pages' composites (`listen_port`, `proxy_kind` / `proxy_auth`, `enc_out` / `enc_legacy`, `utp`), the alternative limits and the Web UI's own (`webui.*`; `webui.password` write-only); applied live, stored as the frontend's keys in the state file's `options` and re-applied at start; the shim's `setPreferences` maps onto the same ids |
+| `/pa/prefs/trackers` (`GET`), `/pa/prefs/trackers/update` | nothing is read from the body | the tracker list from an address (D66): `{"status"}`; Update Now fetches the saved address (409 hosted). See "Security" |
+| `/pa/prefs/ipfilter` (`GET`), `/pa/prefs/ipfilter/update` | nothing is read from the body | the IP filter's list from an address (D75): `{"status"}` (`IpFilterList::status`: empty while the box is off, "not downloaded yet", the rule count and fetch time, or the last failure); Update Now fetches the saved address at once (409 hosted). See "Security" |
 | `/pa/session/shutdown` | | |
 
 The compat shim's `torrents/*` handlers call the same internal functions, so one implementation
@@ -249,6 +251,14 @@ is not `http`, `https` or `udp`), `addTrackers` (each URL in a new tier after th
 (D73) gives the `.torrent` as `/pa/torrents/export` does (404 for an unknown hash, 409 for a
 magnet without its metadata). `magnet_uri` in `torrents/info` stays without trackers (the
 status carries no tracker list); the page's Copy Magnet Link has them.
+
+The shim's `app/preferences` and `setPreferences` carry "Do not download files named" (D74) as
+`excluded_file_names_enabled` (`files.exclude`) and `excluded_file_names`
+(`files.exclude_names`): qBittorrent's form, one pattern per line, stored and shown on the page
+`; `-separated. `app/preferences` also shows `ip_filter_enabled` and `ip_filter_path`, which
+`setPreferences` ignores: its commit reads a block list under the State lock (SEC-05 keeps
+that read outside it for the page's own commit) and answers 200 whatever it found, so a list
+that does not load would go unreported. The list from an address (D75) has no qBittorrent key.
 
 `torrents/properties` (`isPrivate`, `comment`, `created_by`, `creation_date`), the trackers
 list's "This torrent is private" rows and the native General tab's Created On / Created By /
@@ -451,7 +461,9 @@ magnets it has not shown and opens the same dialog for each (`GET /pa/torrent-in
 hash check greyed: the files were checked when the metadata arrived). OK sends the choices with
 the hash, Cancel (Esc, Back) removes the torrent. A magnet finished in another window closes its
 dialog here; a page opened later shows the dialogs of magnets still waiting. Other URLs add
-directly.
+directly. Files "Do not download files named" (Preferences > UI Settings > When Adding
+Torrents, D74) matches start unchecked in the tree, the folders above them mixed, and can be
+ticked back.
 
 The toolbar's Find (beside the name filter; on the phone under More) opens Search Torrents:
 the query (the filter box's text to start with), a category (All, Movies 2000, Audio 3000,
@@ -496,6 +508,23 @@ saved address now (never one from the request), `GET /pa/prefs/trackers` answers
 shim's `app/preferences` shows `add_trackers_enabled` and `add_trackers`; `setPreferences`
 ignores them. A Web UI hosted by a desktop program leaves the page out: the program owns the
 list.
+
+The IP filter's block list from an address (D75, Preferences > BitTorrent > IP Filter):
+`ipfilter.from_url` and `ipfilter.url` are security fields for the same reason (the server
+fetches the address, and what it returns decides whom it talks to); with the filter on, the
+address must be `https://` (400 on `ipfilter.url`), and what it returns is only ever parsed as
+a block list (ipfilter.dat, P2P or CIDR lines, gzip or not; `frontend::ip_filter_list`). With
+the box ticked the list replaces the file, whose field greys (`disabled_by`). The fetched list
+is kept beside `webui.json` (`ipfilter-url.dat` and `ipfilter-url.txt`) and loaded at start
+before any fetch; it is fetched again once a day, through the session's proxy, not while the
+D70 guard holds the transfers (only the page's own save confirms the settings). Until a first
+fetch the rules in force stay, so turning it on is no error. `POST /pa/prefs/ipfilter/update`
+fetches the saved address now (never one from the request; the page applies itself first);
+`GET /pa/prefs/ipfilter` answers `{"status"}`, the line `GET /pa/prefs` carries as
+`ipfilter_status`. SIGHUP reloads the kept copy (it fetches nothing); `--ip-filter` still names a
+file. Hosted, the box, the address, Update Now and the line are left out and a change of either
+field is refused (400; the update 409): the desktop program owns its list, and its file field
+greys here while it takes the list from an address.
 
 Run Program (D67, Preferences > Advanced > Run Program): `run.added_enabled`, `run.added`,
 `run.finished_enabled` and `run.finished` name programs the server starts, so they have the

@@ -290,7 +290,8 @@ fn show(req: AddRequest, mtm: MainThreadMarker) {
         ],
         mtm,
     );
-    let tree = Rc::new(RefCell::new(FileTree::from_torrent(&ti)));
+    // the files Preferences' "Do not download files named" matches start unchecked (D74)
+    let tree = Rc::new(RefCell::new(FileTree::for_add(&ti, &setup)));
     let (scroll, outline, source) = files_outline(&tree, id, mtm);
     layout::activate(&[scroll.heightAnchor().constraintGreaterThanOrEqualToConstant(160.0)]);
     // the filter field and its count, between the torrent's facts and the tree

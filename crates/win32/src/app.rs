@@ -30,6 +30,7 @@ use rookparcel_frontend::icons::{
     PRIORITY_ICONS, UiIcon, category_icon, network_icon, tab_icon, toolbar_size, tracker_icon,
 };
 use rookparcel_frontend::import;
+use rookparcel_frontend::ip_filter_list::{self, IpFilterList};
 use rookparcel_frontend::lang::{self, S};
 use rookparcel_frontend::model::{Filter, TorrentList};
 use rookparcel_frontend::options::{self, GuiOptions, Options};
@@ -48,7 +49,7 @@ use rookparcel_frontend::torrent_folders::{self, TorrentFiles, TorrentFolders, W
 use rookparcel_frontend::tracker_list::{self, TrackerList};
 use rookparcel_frontend::ui_lock::{self, Form};
 use rookparcel_frontend::update::{self, Checker, Kind, Manifest, Version};
-use rookparcel_frontend::{actions, add, create, export, fmt, profile, settings, tr};
+use rookparcel_frontend::{actions, add, create, exclude, export, fmt, profile, settings, tr};
 use rookparcel_nox::webui::{Rss, WebUi};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::*;
@@ -523,6 +524,15 @@ struct App {
     /// fetched from the web (run from the timer, which hands the engine each new list). `None`
     /// in a remote window, whose server has its own, and in a demo, which fetches nothing.
     trackers: Option<TrackerList>,
+    /// Preferences > BitTorrent > IP Filter's list from the web (D75), run from the timer, which
+    /// hands the engine each new list. `None` in a remote window, whose server has its own
+    /// filter; a demo's is never fetched and keeps nothing ([`ip_list_config`]).
+    ip_list: Option<IpFilterList>,
+    /// A `--demo` window: its engine is a mock, and it fetches no lists from the web.
+    demo: bool,
+    /// Magnets added without the Add New Torrent dialog, until their files are known (D74),
+    /// fed every alert.
+    excluded: exclude::Pending,
     /// Preferences > Advanced > Run Program (D67): the programs started when a torrent is added
     /// and when one finishes downloading, fed every alert. `None` in a remote window, whose
     /// server runs its own, and in a demo, which never starts a program.
@@ -940,6 +950,13 @@ pub fn run(args: Args) -> i32 {
                 let (added, finished) = opts.gui.run_commands();
                 a.run_program = Some(RunProgram::new(added, finished));
             }
+            // before the filter is loaded below: a kept list of another address is dropped
+            // first (D75); a demo keeps no list and fetches none
+            a.demo = args.demo.is_some();
+            if !crate::remote_ui::is_remote() {
+                let config = ip_list_config(&opts.gui, a.demo);
+                a.ip_list = Some(IpFilterList::new(local.then(|| dir.clone()), config));
+            }
         });
         for p in lang_problems {
             log_line(&p);
@@ -954,7 +971,8 @@ pub fn run(args: Args) -> i32 {
             let title = wide(&tr!(TitleRemote, version = profile::version(), label = r.label));
             SetWindowTextW(hwnd, title.as_ptr());
         }
-        // the server applies its own block list
+        // the server applies its own block list; one from the web not fetched yet comes with
+        // its fetch (`ip_list_timer`)
         if opts.gui.ip_filter && local {
             with_app(|a| load_ip_filter(a, &opts.gui));
         }
@@ -1499,6 +1517,9 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
             seeding_goal,
             scrapes: Scrapes::default(),
             trackers: None,
+            ip_list: None,
+            demo: false,
+            excluded: exclude::Pending::new(),
             run_program: None,
             rss,
             rss_dialog: null_mut(),
@@ -2466,6 +2487,7 @@ fn on_timer() {
         autoload(a);
         rss_timer(a);
         tracker_list_timer(a);
+        ip_list_timer(a);
         sync_web(a);
         let list = &a.list;
         let now = std::time::Instant::now();
@@ -2977,8 +2999,17 @@ fn autoload(a: &mut App) {
         p.flags = TorrentFlags::DEFAULT;
         GuiOptions::load(&a.prefs, &a.save_path).apply_to_new(&mut p);
         a.scheduler.apply_to_new(&mut p);
-        add_to_session(a, p);
+        add_without_dialog(a, p);
     }
+}
+
+/// A torrent added without the Add New Torrent dialog (its setting off, the auto-load folder,
+/// RSS): the files Preferences leave out are not downloaded (D74), a magnet's once its metadata
+/// has arrived. Not for the dialog's adds, restored torrents, imports or a new torrent seeded.
+fn add_without_dialog(a: &mut App, mut p: AddTorrentParams) {
+    let gui = GuiOptions::load(&a.prefs, &a.save_path);
+    a.excluded.add(&mut p, &gui, |h| a.list.has(h));
+    add_to_session(a, p);
 }
 
 /// Hands a torrent to the engine; a `.torrent`'s copy is stored once it is added.
@@ -3069,6 +3100,9 @@ unsafe fn on_alerts(hwnd: HWND) {
                     errors.push(export_error(&done.name, error));
                 }
             }
+            // magnets added without the dialog: their files once known (D74); the file list it
+            // asks for reaches the detail pane only when that shows the torrent, as any other
+            a.excluded.on_alert(&alert, &a.handle);
             // A torrent's first status: the label the Add dialog or an import stored for it,
             // before Run Program reads it for %L (the same update starts the "added" program).
             if let Alert::StateUpdate(v) = &alert {
@@ -5184,7 +5218,7 @@ fn add_params(_hwnd: HWND, source: TorrentSource, name: Option<String>) {
         p.flags = TorrentFlags::DEFAULT;
         GuiOptions::load(&a.prefs, &a.save_path).apply_to_new(&mut p);
         a.scheduler.apply_to_new(&mut p);
-        add_to_session(a, p);
+        add_without_dialog(a, p);
     });
 }
 
@@ -5340,6 +5374,8 @@ unsafe fn show_preferences_at(hwnd: HWND, page: usize) {
     };
     opts.gui.language = language_choice();
     let dir = data_dir();
+    // the IP filter fields the BitTorrent page's Update Now last fetched with (D75)
+    let ip_tried: RefCell<Option<ip_filter_list::Config>> = RefCell::new(None);
     // the dialog runs its own message loop; the hooks borrow the app only while they run
     let hooks = crate::preferences::Hooks {
         apply: Box::new(|o: &Options| {
@@ -5385,6 +5421,26 @@ unsafe fn show_preferences_at(hwnd: HWND, page: usize) {
             })
             .unwrap_or_default()
         }),
+        // Update Now fetches with the page's IP filter fields as they stand, as the Trackers
+        // page's; the timer takes the answer (D75)
+        ip_list: Box::new(|ask: crate::preferences::IpListAsk<'_>| {
+            with_app(|a| {
+                let demo = a.demo;
+                let Some(l) = a.ip_list.as_mut() else { return String::new() };
+                if ask.update {
+                    let c = ip_filter_list::Config {
+                        enabled: ask.enabled,
+                        from_url: ask.from_url && !demo,
+                        url: ask.url.trim().to_owned(),
+                    };
+                    l.configure(c.clone());
+                    l.refresh_now();
+                    *ip_tried.borrow_mut() = Some(c);
+                }
+                l.status_for(ask.from_url, ask.url)
+            })
+            .unwrap_or_default()
+        }),
         // the UI Lock page (D71): saved at once, never on OK
         ui_lock: Box::new(move |owner, act| unsafe { ui_lock_page(hwnd, owner, act) }),
     };
@@ -5395,7 +5451,31 @@ unsafe fn show_preferences_at(hwnd: HWND, page: usize) {
     with_app(|a| {
         let gui = GuiOptions::load(&a.prefs, &a.save_path);
         configure_tracker_list(a, &gui);
+        configure_ip_list(a, &gui);
+        // the IP filter's rules too, when a list fetched from what the page tried may be in
+        // force (D75)
+        if ip_tried.take().is_some_and(|c| c != ip_list_config(&gui, a.demo)) {
+            restore_ip_filter(a, &gui);
+        }
     });
+}
+
+/// After the BitTorrent page's Update Now tried fields that were not stored (D75): the engine
+/// gets the rules the stored fields give, none while the filter is off or nothing is kept from
+/// the stored address (whose fetch is due at once).
+fn restore_ip_filter(a: &mut App, gui: &GuiOptions) {
+    match ip_filter_list::list_file(gui, &data_dir()).filter(|_| gui.ip_filter) {
+        Some(path) => {
+            let r = a.handle.load_ip_filter(&path).map_err(|e| e.to_string());
+            log_ip_filter(a, &path, &r);
+        }
+        None => {
+            a.handle.set_ip_filter(IpFilter::new());
+            if !gui.ip_filter {
+                a.detail.push_log(format!("{} {}", now_hms(), tr!(LogIpFilterOff)));
+            }
+        }
+    }
 }
 
 /// The Setup Guide's options (D53): as stored, with the associations and autostart as the
@@ -5545,8 +5625,10 @@ fn apply_options_from(a: &mut App, old: &Options, o: &Options) {
             }
         }
     }
+    // before the filter is loaded: a kept list of another address is dropped first (D75)
+    configure_ip_list(a, &o.gui);
     let dir = data_dir();
-    if (o.gui.ip_filter, o.gui.ip_filter_file(&dir)) != (old.gui.ip_filter, old.gui.ip_filter_file(&dir)) {
+    if ip_filter_source(&o.gui, &dir) != ip_filter_source(&old.gui, &dir) {
         if o.gui.ip_filter {
             load_ip_filter(a, &o.gui);
         } else {
@@ -5686,11 +5768,48 @@ fn on_web_changes() {
     }
 }
 
-/// Loads the configured block list (`ipfilter.dat` in the settings folder by default).
+/// Loads the configured block list (`ipfilter.dat` in the settings folder by default), or the
+/// copy kept of the list from the web (D75). With nothing fetched from that address yet the
+/// rules in force stay: the fetch brings the new ones.
 fn load_ip_filter(a: &mut App, gui: &GuiOptions) {
-    let path = gui.ip_filter_file(&data_dir());
+    let Some(path) = ip_filter_list::list_file(gui, &data_dir()) else { return };
     let r = a.handle.load_ip_filter(&path).map_err(|e| e.to_string());
     log_ip_filter(a, &path, &r);
+}
+
+/// What tells whether the IP filter's rules come from elsewhere now: the switch, the file and
+/// the list from the web with its address.
+fn ip_filter_source(gui: &GuiOptions, dir: &Path) -> (bool, PathBuf, bool, String) {
+    (gui.ip_filter, gui.ip_filter_file(dir), gui.ip_filter_from_url, gui.ip_filter_url.trim().to_owned())
+}
+
+/// The IP filter list's preferences (D75). A demo's list is never fetched from the web.
+fn ip_list_config(gui: &GuiOptions, demo: bool) -> ip_filter_list::Config {
+    let c = ip_filter_list::Config::of(gui);
+    ip_filter_list::Config { from_url: c.from_url && !demo, ..c }
+}
+
+/// The IP filter's list from the web follows the preferences (D75): a list kept for another
+/// address is dropped, the new one is fetched by the timer.
+fn configure_ip_list(a: &mut App, gui: &GuiOptions) {
+    let demo = a.demo;
+    if let Some(l) = a.ip_list.as_mut() {
+        l.configure(ip_list_config(gui, demo));
+    }
+}
+
+/// Once a second: takes a finished fetch of the IP filter's list and starts one that is due (on
+/// the list's own thread, through the proxy the feeds use); the engine gets each new list.
+fn ip_list_timer(a: &mut App) {
+    let Some(l) = a.ip_list.as_mut() else { return };
+    let (prefs, save_path) = (&a.prefs, &a.save_path);
+    let lines = l.tick(|| FetchProxy::from_settings(&Options::load(prefs, save_path).settings));
+    if let Some(f) = l.take_filter() {
+        a.handle.set_ip_filter(f);
+    }
+    for line in lines {
+        a.detail.push_log(format!("{} {line}", now_hms()));
+    }
 }
 
 fn log_ip_filter(a: &mut App, path: &Path, r: &Result<usize, String>) {
@@ -6925,7 +7044,7 @@ fn rss_add(a: &mut App, req: AddRequest, d: Download) {
         // the item's title until the metadata names it
         p.name = Some(req.title.clone());
     }
-    add_to_session(a, p);
+    add_without_dialog(a, p);
     if let Err(e) = a.prefs.save() {
         a.detail.push_log(format!("{} {}", now_hms(), tr!(LogPrefsNotSaved, error = e)));
     }
@@ -7818,6 +7937,44 @@ mod tests {
 
     fn tuple(r: RECT) -> (i32, i32, i32, i32) {
         (r.left, r.top, r.right, r.bottom)
+    }
+
+    /// Preferences' Apply loads the IP filter again when any of its source's fields changed
+    /// (D75): the switch, the file, the box for the list from the web and its address (trimmed);
+    /// a demo's list is never fetched.
+    #[test]
+    fn the_ip_filter_source_changes_with_any_of_its_fields() {
+        let dir = Path::new(r"C:\settings");
+        let old = Options::load(&Prefs::default(), r"C:\Downloads").gui;
+        let same = |g: &GuiOptions| ip_filter_source(g, dir) == ip_filter_source(&old, dir);
+        let mut g = old.clone();
+        g.ip_filter_url = "  ".into();
+        assert!(same(&g), "an address of spaces is none");
+        g.seed_ratio += 1;
+        assert!(same(&g), "other options do not count");
+        let changes: [fn(&mut GuiOptions); 4] = [
+            |g| g.ip_filter = !g.ip_filter,
+            |g| g.ip_filter_path = r"D:\level1.dat".into(),
+            |g| g.ip_filter_from_url = !g.ip_filter_from_url,
+            |g| g.ip_filter_url = "https://lists.example/level1.gz".into(),
+        ];
+        for (i, change) in changes.iter().enumerate() {
+            let mut g = old.clone();
+            change(&mut g);
+            assert!(!same(&g), "change {i}");
+        }
+        // the default file named outright is the same file
+        let mut g = old.clone();
+        g.ip_filter_path = dir.join("ipfilter.dat").to_string_lossy().into_owned();
+        assert!(same(&g));
+
+        let mut g = old.clone();
+        g.ip_filter = true;
+        g.ip_filter_from_url = true;
+        g.ip_filter_url = " https://lists.example/level1.gz ".into();
+        let c = ip_list_config(&g, false);
+        assert!(c.enabled && c.from_url && c.url == "https://lists.example/level1.gz");
+        assert!(!ip_list_config(&g, true).from_url);
     }
 
     /// "Restoring torrents..." ends when the torrents are back or the store does not open.

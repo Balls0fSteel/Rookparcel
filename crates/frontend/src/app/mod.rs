@@ -49,7 +49,9 @@ use rookparcel_core::{Alert, Exit, MoveCompleted, Session, SessionHandle, Sessio
 use crate::add::AwaitingMetadata;
 use crate::auto_shutdown::{Action, AutoShutdown, Step};
 use crate::detail::{Detail, Tab};
+use crate::exclude::Pending;
 use crate::export::Exports;
+use crate::ip_filter_list::{self, IpFilterList};
 use crate::model::TorrentList;
 use crate::options::{GuiOptions, Options};
 use crate::prefs::Prefs;
@@ -277,6 +279,8 @@ pub struct Core {
     torrent_files: TorrentFiles,
     /// Export .torrent's files waiting for the engine.
     exports: Exports,
+    /// Magnets added without the Add New Torrent dialog, until their files are known (D74).
+    excluded: Pending,
     autoload: Watcher,
     schedule: Schedule,
     scheduler: Scheduler,
@@ -298,6 +302,9 @@ pub struct Core {
     trackers: Option<TrackerList>,
     /// What the engine was last given of them.
     extra_trackers: Vec<Vec<String>>,
+    /// The IP filter's list from the web (D75); `None` in a remote window, whose server keeps
+    /// its own filter.
+    ip_list: Option<IpFilterList>,
     /// The programs started when a torrent is added or finishes (D67); `None` in a remote
     /// window, whose server starts its own, and in a demo, whose torrents are not real.
     run: Option<RunProgram>,
@@ -360,6 +367,12 @@ fn tracker_config(gui: &GuiOptions, demo: bool) -> tracker_list::Config {
     tracker_list::Config { from_url: c.from_url && !demo, ..c }
 }
 
+/// The IP filter list's preferences (D75). A demo's list is never fetched from the web.
+fn ip_list_config(gui: &GuiOptions, demo: bool) -> ip_filter_list::Config {
+    let c = ip_filter_list::Config::of(gui);
+    ip_filter_list::Config { from_url: c.from_url && !demo, ..c }
+}
+
 /// A remote window's preferences: the server's engine settings and default folder are the
 /// window's; the language is the local client's (`base`, its `rookparcel.ini`).
 pub fn adopt_server(prefs: &mut Prefs, hello: &rookparcel_core::remote::Hello, base: &Prefs) {
@@ -386,6 +399,10 @@ impl Core {
         // a demo keeps no list from the web, and so no cache of one
         let cache = (!demo).then(|| dirs.settings.join(tracker_list::CACHE_FILE));
         let trackers = remote.is_none().then(|| TrackerList::new(cache, tracker_config(&opts.gui, demo)));
+        // before the filter is loaded: a kept list of another address is dropped first
+        let ip_list = remote.is_none().then(|| {
+            IpFilterList::new((!demo).then(|| dirs.settings.clone()), ip_list_config(&opts.gui, demo))
+        });
         let run = (remote.is_none() && !demo).then(|| {
             let (added, finished) = opts.gui.run_commands();
             RunProgram::new(added, finished)
@@ -418,6 +435,7 @@ impl Core {
             torrent_folders: opts.gui.torrent_folders.clone(),
             torrent_files: TorrentFiles::new(),
             exports: Exports::new(),
+            excluded: Pending::new(),
             autoload: Watcher::new(),
             schedule: opts.gui.schedule.clone(),
             scheduler: Scheduler::new(),
@@ -433,6 +451,7 @@ impl Core {
             demo,
             trackers,
             extra_trackers: Vec::new(),
+            ip_list,
             run,
             update_result: Arc::new(Mutex::new(None)),
             fetched: Arc::new(Mutex::new(Vec::new())),
@@ -636,6 +655,50 @@ impl Core {
     /// fetched at the next [`Core::tick`].
     pub fn update_tracker_list(&mut self) {
         if let Some(l) = &mut self.trackers {
+            l.refresh_now();
+        }
+    }
+
+    // ---- the IP filter's list from the web (D75) ----------------------------------------------
+
+    /// The preferences' IP filter source as it is in `gui`, from now on.
+    pub(super) fn configure_ip_list(&mut self, gui: &GuiOptions) {
+        let demo = self.demo;
+        if let Some(l) = &mut self.ip_list {
+            l.configure(ip_list_config(gui, demo));
+        }
+    }
+
+    /// The timer's part: takes a fetched list (the engine gets it), starts a fetch that is due.
+    pub(super) fn ip_list_timer(&mut self) {
+        let Some(mut list) = self.ip_list.take() else { return };
+        let lines = list.tick(|| self.proxy());
+        let filter = list.take_filter();
+        self.ip_list = Some(list);
+        if let Some(f) = filter {
+            self.handle.set_ip_filter(f);
+        }
+        for line in lines {
+            self.log(line);
+        }
+    }
+
+    /// The IP filter's list from the web, for a Preferences page's status line
+    /// ([`IpFilterList::status_for`]); `None` in a remote window.
+    pub fn ip_filter_list(&self) -> Option<&IpFilterList> {
+        self.ip_list.as_ref()
+    }
+
+    /// Preferences > BitTorrent's status line for the list from the web
+    /// ([`IpFilterList::status`]); empty when there is none to show.
+    pub fn ip_filter_status(&self) -> String {
+        self.ip_list.as_ref().map(IpFilterList::status).unwrap_or_default()
+    }
+
+    /// The page's Update Now, after [`Core::apply_options`] with the page's fields: the list is
+    /// fetched at the next [`Core::tick`].
+    pub fn update_ip_filter(&mut self) {
+        if let Some(l) = &mut self.ip_list {
             l.refresh_now();
         }
     }

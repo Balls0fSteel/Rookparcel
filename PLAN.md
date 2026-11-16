@@ -1,8 +1,8 @@
 # Rookparcel plan
 
-Last updated: 2026-11-16_122332_1794828212
+Last updated: 2026-11-16_140743_1794834463
 
-Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D73](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
+Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D75](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
 ## Vision
 
@@ -20,9 +20,8 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 ## Current status
 
 - **Feature plan of 2026-11-16:** six features from the comparison with qBittorrent, Transmission, Deluge and BiglyBT, in four waves for one published release; each wave bumps the patch version, only the last is tagged. Subagents do the work per crate after a shared step that adds all strings.
-  - Wave 1 = **1.2.59** (D72 download order, D73 Copy Magnet Link / Export .torrent): built and checked in all interfaces, not released. Hand checks: BACKLOG "Download order, magnet links and export".
-  - Wave 2 = 1.2.60: excluded file names, and the IP filter from a URL with CIDR.
-  - Wave 3 = 1.2.61: tags everywhere (API, three GUIs, Web UI; owner's choice).
+  - Wave 1 = **1.2.59** (D72 download order, D73 Copy Magnet Link / Export .torrent) and wave 2 = **1.2.60** (D74 excluded file names, D75 the IP filter's list from an https address, CIDR): built and checked in all interfaces, not released. Hand checks: BACKLOG "Download order, magnet links and export", "Excluded file names and the IP filter address".
+  - Wave 3 = 1.2.61, next: tags everywhere (API, three GUIs, Web UI; owner's choice).
   - Wave 4 = 1.2.62: "Append .!ut to incomplete files" (writes `.!ut`, adopts a `.!ut` or `.!qB` file when the plain name is missing). Last because it renames files on disk; left out of the release if its tests do not hold.
 - **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
@@ -87,7 +86,7 @@ Q1-Q15 are resolved; their answers and the original Q10 interop setup are in the
 
 - UI artwork (D27-D30): the bold family is integrated (gate 10). Optional: hand-drawn 20 px globe and pylon, dedicated 48/64 px drawings, and a web-ui globe matching the network globe.
 - Compare Properties > Advanced, `rss.*`, the Add dialog's wording and all 15 Preferences pages with the owner's µTorrent 2.2.1 captures in `z_exclude_uTorrent/` (BACKLOG "Win32 layout and dialogs"; Road to 1.0 item 9).
-- D46 and D50-D73 are settled; no decision is proposed.
+- D46 and D50-D75 are settled; no decision is proposed.
 - Decide the Flathub permission/submission approach (item 7); the recorded exception policy requires the owner's own text.
 
 ## V1.1

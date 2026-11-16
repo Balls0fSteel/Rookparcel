@@ -40,6 +40,8 @@ const ABSENT_AT_DEFAULT: &[(&str, &str)] = &[
     ("trackers.url", "https://example.org/trackers.txt"),
     ("run.added", "/fixture/added.sh %F"),
     ("run.finished", "/fixture/finished.sh %F"),
+    ("ipfilter.url", "https://example.org/level1.gz"),
+    ("files.exclude_names", "*.lnk; Thumbs.db"),
 ];
 
 fn fixtures() -> PathBuf {

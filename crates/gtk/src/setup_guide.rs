@@ -16,7 +16,7 @@ use rookparcel_frontend::pref_pages::{self, Features, Item, Page};
 use rookparcel_frontend::setup_guide::{self, Answers, Guide};
 use rookparcel_frontend::tr;
 
-use crate::preferences::{Builder, Ctl};
+use crate::preferences::{Builder, Ctl, Grey};
 
 /// A control of the guide: a Preferences field's, or a question's option buttons with their
 /// answers' values.
@@ -77,7 +77,7 @@ type Done = Box<dyn FnOnce(Option<Options>)>;
 struct State {
     guide: Guide,
     controls: HashMap<&'static str, Control>,
-    needs: Vec<(gtk::Widget, &'static [&'static str])>,
+    needs: Vec<(gtk::Widget, Grey)>,
     stack: gtk::Stack,
     page: Cell<usize>,
     back: gtk::Button,
@@ -104,8 +104,8 @@ impl State {
             let value = ctl.value();
             pref_pages::fields(&self.guide.pages).any(|f| f.key == k && pref_pages::is_on(&f.control, &value))
         };
-        for (widget, needs) in &self.needs {
-            widget.set_sensitive(needs.iter().all(|k| on(k)));
+        for (widget, grey) in &self.needs {
+            widget.set_sensitive(grey.enabled(on));
         }
     }
 

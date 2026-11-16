@@ -28,7 +28,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use rookparcel_core::{IpFilter, IpFilterLoad, ProxyType, Settings, TorrentFlags};
+use rookparcel_frontend::exclude;
 use rookparcel_frontend::help;
+use rookparcel_frontend::ip_filter_list;
 use rookparcel_frontend::lang::{self, H, S};
 use rookparcel_frontend::network;
 use rookparcel_frontend::options::{self, GuiOptions};
@@ -336,6 +338,21 @@ pub(crate) static FIELDS: &[Field] = &[
         |w| Value::Bool(w.prefs.show_add_dialog),
         |w, v| w.prefs.show_add_dialog = boolean(&v)
     ),
+    // D74: "Do not download files named" and its patterns, kept tidy (`exclude::to_stored`)
+    field!(
+        pref_pages::EXCLUDE_NAMES,
+        Some(S::PrefExcludeNames),
+        Kind::Bool,
+        |w| Value::Bool(w.prefs.exclude_names),
+        |w, v| w.prefs.exclude_names = boolean(&v)
+    ),
+    field!(
+        pref_pages::EXCLUDE_LIST,
+        None,
+        Kind::Text,
+        |w| Value::Str(w.prefs.exclude_list.clone()),
+        |w, v| w.prefs.exclude_list = exclude::to_stored(&string(v))
+    ),
     // Connection
     field!(
         "listen_port",
@@ -529,6 +546,22 @@ pub(crate) static FIELDS: &[Field] = &[
         .prefs
         .ip_filter_path =
         string(v).trim().to_owned()),
+    // D75: the list from an `https://` address instead of the file; security fields, see
+    // `SECURITY_FIELDS`
+    field!(
+        pref_pages::IPFILTER_FROM_URL,
+        Some(S::PrefIpFilterFromUrl),
+        Kind::Bool,
+        |w| Value::Bool(w.prefs.ip_filter_from_url),
+        |w, v| w.prefs.ip_filter_from_url = boolean(&v)
+    ),
+    field!(
+        pref_pages::IPFILTER_URL,
+        None,
+        Kind::Text,
+        |w| Value::Str(w.prefs.ip_filter_url.clone()),
+        |w, v| w.prefs.ip_filter_url = string(v).trim().to_owned()
+    ),
     // Scheduler
     field!(
         "sched.enable",
@@ -784,6 +817,8 @@ const HELP: &[(&str, H)] = &[
     ("dir.finished_torrents", H::PrefMoveTorrents),
     ("dir.autoload_dir", H::PrefAutoload),
     ("ipfilter.path", H::PrefIpFilterEnable),
+    (pref_pages::IPFILTER_URL, H::PrefIpFilterFromUrl),
+    (pref_pages::EXCLUDE_LIST, H::PrefExcludeNames),
     ("queue.seed_limit_kib", H::PrefGoalLimit),
     ("cache.size_mb", H::PrefCacheOverride),
     ("cache.expiry_s", H::PrefCacheExpire),
@@ -978,6 +1013,13 @@ fn enabled_by(item: Json, id: &str) -> Json {
     item.with("enabled_by", id)
 }
 
+/// Greys `item` while the check box `id` is on (several ids, space-separated: while any is),
+/// as `frontend::pref_pages::Field::unless` (the IP filter's file while the list comes from an
+/// address, D75).
+fn disabled_by(item: Json, id: &str) -> Json {
+    item.with("disabled_by", id)
+}
+
 fn row(items: Vec<Json>) -> Json {
     Json::obj().with("row", Json::Arr(items))
 }
@@ -1007,9 +1049,35 @@ fn page(id: &str, title: &str, groups: Vec<Json>) -> Json {
 
 /// The tree, in µTorrent 2.2.1's order; Disk Cache and Rookparcel's Disk I/O and Trackers sit
 /// under Advanced. `hosted`: without the alternative speed limits (the host has none), the
-/// update check and the Trackers page (the host's own).
+/// update check, the Trackers page and the IP filter's list from an address (the host's own).
 fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
     let ipf_default = settings_dir.join("ipfilter.dat");
+    // the file greys while the list comes from an address (D75)
+    let mut ip_filter = vec![
+        f(pref_pages::IPFILTER_ENABLE),
+        disabled_by(
+            enabled_by(f(pref_pages::IPFILTER_PATH), pref_pages::IPFILTER_ENABLE),
+            pref_pages::IPFILTER_FROM_URL,
+        ),
+        note(tr!(PrefIpFilterEmptyPath, path = ipf_default.display())),
+    ];
+    if !hosted {
+        // the list from an address (D75); hosted, the host's own, which a browser neither sees
+        // nor changes (its file greys all the same while the host takes the list from one)
+        let both = format!("{} {}", pref_pages::IPFILTER_ENABLE, pref_pages::IPFILTER_FROM_URL);
+        ip_filter.extend([
+            enabled_by(f(pref_pages::IPFILTER_FROM_URL), pref_pages::IPFILTER_ENABLE),
+            enabled_by(f(pref_pages::IPFILTER_URL), &both),
+            enabled_by(
+                Json::obj()
+                    .with("button", tr!(PrefTrackersUpdate))
+                    .with("action", "update_ipfilter")
+                    .with("help", lang::help(H::PrefIpFilterUpdate)),
+                &both,
+            ),
+            Json::obj().with("status", "ipfilter"),
+        ]);
+    }
     let mut bandwidth = vec![
         group(Some(tr!(PrefUpLimiting)), vec![kb("upload_rate_limit")]),
         group(Some(tr!(PrefDownLimiting)), vec![kb("download_rate_limit")]),
@@ -1069,7 +1137,16 @@ fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
                         local("theme", tr!(PrefThemeBrowser), H::PrefThemeBrowser),
                     ],
                 ),
-                group(Some(tr!(PrefWhenAdding)), vec![f("ui.add_stopped"), f("ui.show_add_dialog")]),
+                group(
+                    Some(tr!(PrefWhenAdding)),
+                    vec![
+                        f("ui.add_stopped"),
+                        f("ui.show_add_dialog"),
+                        // D74: the patterns under their box
+                        f(pref_pages::EXCLUDE_NAMES),
+                        enabled_by(f(pref_pages::EXCLUDE_LIST), pref_pages::EXCLUDE_NAMES),
+                    ],
+                ),
             ],
         ),
         page(
@@ -1159,14 +1236,7 @@ fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
                     vec![f("enable_dht"), f("enable_lsd"), f("bt.pex"), f("utp")],
                 ),
                 group(Some(tr!(PrefEncryption)), vec![f("enc_out"), f("enc_legacy")]),
-                group(
-                    Some(tr!(PrefIpFilter)),
-                    vec![
-                        f("ipfilter.enable"),
-                        enabled_by(f("ipfilter.path"), "ipfilter.enable"),
-                        note(tr!(PrefIpFilterEmptyPath, path = ipf_default.display())),
-                    ],
-                ),
+                group(Some(tr!(PrefIpFilter)), ip_filter),
             ],
         ),
         page(
@@ -1356,13 +1426,16 @@ fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
 }
 
 /// `GET /pa/prefs`: `pages` (the tree in order, each with its groups of items: `{"f": id}`
-/// with optional `kb`, `min`, `max`, `enabled_by` (space-separated ids), `secret`;
-/// `{"row": [items]}`; `{"stub": label}`; `{"note": text}`; `{"button": label, "action": name}`;
-/// `{"status": "trackers"}`, the line that shows `trackers_status`), `fields` (id to
+/// with optional `kb`, `min`, `max`, `enabled_by` (space-separated ids, greyed while any is
+/// off), `disabled_by` (greyed while any is on), `secret`; `{"row": [items]}`;
+/// `{"stub": label}`; `{"note": text}`; `{"button": label, "action": name}`;
+/// `{"status": "trackers"}` and `{"status": "ipfilter"}`, the lines that show
+/// `trackers_status` and `ipfilter_status`), `fields` (id to
 /// `label`, `type`, `value`, `default`, `min` / `max` for ints, `options` for enums,
 /// `readonly`, `help`: the current language's help text, `wiki`: its wiki page once there is
-/// one), `advanced` (every engine setting's id, the table's order) and `trackers_status` (the
-/// fetched tracker list's status line, D66; `GET /pa/prefs/trackers` gives it alone).
+/// one), `advanced` (every engine setting's id, the table's order), `trackers_status` (the
+/// fetched tracker list's status line, D66; `GET /pa/prefs/trackers` gives it alone) and
+/// `ipfilter_status` (the IP filter's list from an address, D75; `GET /pa/prefs/ipfilter`).
 ///
 /// `run`: whether the asking session may change the Run Program lines (D67, [`RunGate`]). When
 /// not, the four fields are `readonly` in this answer, the two command lines are left empty
@@ -1427,6 +1500,28 @@ pub(crate) fn model(shared: &Shared, st: &State, run: RunGate) -> Json {
         .with("fields", fields)
         .with("advanced", Json::Arr(advanced))
         .with("trackers_status", trackers_status(shared))
+        .with("ipfilter_status", ipfilter_status(shared))
+}
+
+/// The status line of the IP filter's list from an address (D75, `IpFilterList::status`):
+/// empty while that is switched off, and hosted (the host's own list).
+pub(crate) fn ipfilter_status(shared: &Shared) -> String {
+    shared.ip_list().map_or(String::new(), |l| l.status())
+}
+
+/// `POST /pa/prefs/ipfilter/update`, the page's Update Now (D75): fetches the block list again
+/// from the address stored in the preferences, as [`update_trackers`] does the tracker list;
+/// nothing is taken from the request. Hosted, refused (the host's own list). Returns the
+/// status line.
+pub(crate) fn update_ip_filter(shared: &Shared) -> Result<String, &'static str> {
+    let mut st = shared.lock();
+    match shared.ip_list() {
+        Some(mut l) => l.refresh_now(),
+        None => return Err(HOSTED_NO_IPFILTER_URL),
+    }
+    // starts the fetch now rather than at the next status tick
+    shared.ip_list_tick(&mut st);
+    Ok(ipfilter_status(shared))
 }
 
 /// The status line of the tracker list fetched from the web (`TrackerList::status`): empty
@@ -1478,6 +1573,16 @@ const TRACKER_FIELDS: [&str; 4] = [
     pref_pages::TRACKERS_URL,
 ];
 
+/// Why the IP filter's list from an address (D75) is refused while a desktop client hosts the
+/// Web UI: the address and its switch are the host's own, set in its Preferences, as the
+/// trackers' list (D66) is; `POST /pa/prefs` answers 400 with it,
+/// `POST /pa/prefs/ipfilter/update` 409.
+pub(crate) const HOSTED_NO_IPFILTER_URL: &str =
+    "the IP filter's list address is set in the desktop client that hosts the Web UI";
+
+/// The IP filter's list from an address (D75): its switch and the address.
+const IPFILTER_URL_FIELDS: [&str; 2] = [pref_pages::IPFILTER_FROM_URL, pref_pages::IPFILTER_URL];
+
 /// Why the Run Program lines (D67) are refused while a desktop client hosts the Web UI: the
 /// host starts the programs and owns the setting; `POST /pa/prefs` answers 400 with it.
 pub(crate) const HOSTED_NO_RUN: &str =
@@ -1518,9 +1623,11 @@ impl RunGate {
 
 /// The fields that guard the Web UI: changed only with the current password (SEC-03). The
 /// trackers added to new downloads (D66) are among them: they make the daemon fetch a file
-/// from the net and announce every public download to the addresses named. So are the Run
-/// Program lines (D67, [`RUN_FIELDS`]), behind their [`RunGate`] as well.
-const SECURITY_FIELDS: [&str; 18] = [
+/// from the net and announce every public download to the addresses named. So is the IP
+/// filter's list from an address (D75): it makes the daemon fetch a file from the net and
+/// decides whom it talks to. So are the Run Program lines (D67, [`RUN_FIELDS`]), behind their
+/// [`RunGate`] as well.
+const SECURITY_FIELDS: [&str; 20] = [
     "webui.username",
     "webui.bypass_local_auth",
     "webui.api_key_enabled",
@@ -1535,6 +1642,8 @@ const SECURITY_FIELDS: [&str; 18] = [
     pref_pages::TRACKERS_LIST,
     pref_pages::TRACKERS_FROM_URL,
     pref_pages::TRACKERS_URL,
+    pref_pages::IPFILTER_FROM_URL,
+    pref_pages::IPFILTER_URL,
     pref_pages::RUN_ADDED_ON,
     pref_pages::RUN_ADDED,
     pref_pages::RUN_FINISHED_ON,
@@ -1619,6 +1728,12 @@ pub(crate) fn validate(w: &Working) -> Result<(), Refusal> {
     if w.prefs.trackers_from_url && !tracker_list::is_list_url(&w.prefs.trackers_url) {
         return refuse(pref_pages::TRACKERS_URL, tr!(TrackersErrHttps));
     }
+    // the IP filter's list from an address (D75), https only while the filter takes it (the
+    // address is greyed while the filter is off)
+    let p = &w.prefs;
+    if p.ip_filter && p.ip_filter_from_url && !tracker_list::is_list_url(&p.ip_filter_url) {
+        return refuse(pref_pages::IPFILTER_URL, tr!(TrackersErrHttps));
+    }
     // a Run Program line that is switched on must be one that can be started (D67)
     for (on, line, id) in [
         (w.prefs.run_added_on, &w.prefs.run_added, pref_pages::RUN_ADDED),
@@ -1657,13 +1772,24 @@ fn check_paths(w: &Working, old: &Working, policy: &PathPolicy) -> Result<(), Re
 /// gave.
 type Read = Option<(PathBuf, io::Result<IpFilterLoad>)>;
 
-/// The IP filter's on switch and block list in `w`.
-fn ip_filter(shared: &Shared, w: &Working) -> (bool, PathBuf) {
-    (w.prefs.ip_filter, w.prefs.gui().ip_filter_file(&shared.settings_dir))
+/// The IP filter's on switch and the block list file it loads in `w`: the path field's (or
+/// `ipfilter.dat`), or with the list from an address (D75) the copy kept of that address's list,
+/// `None` while none is (`ip_filter_list::list_file`).
+fn ip_filter(shared: &Shared, w: &Working) -> (bool, Option<PathBuf>) {
+    (w.prefs.ip_filter, ip_filter_list::list_file(&w.prefs.gui(), &shared.settings_dir))
+}
+
+/// What decides the IP filter's rules in `w`: [`ip_filter`], and whether and where from the
+/// list comes from an address.
+type IpSource = (bool, Option<PathBuf>, bool, String);
+
+fn ip_source(shared: &Shared, w: &Working) -> IpSource {
+    let (on, file) = ip_filter(shared, w);
+    (on, file, w.prefs.ip_filter_from_url, w.prefs.ip_filter_url.trim().to_owned())
 }
 
 /// The block list committing `changes` onto `st` would read: the IP filter turned on or pointed
-/// at another file by changes that pass the checks (a path the policy refuses is never read).
+/// at another list by changes that pass the checks (a path the policy refuses is never read).
 fn ip_filter_to_read(shared: &Shared, st: &State, changes: &[Change]) -> Option<PathBuf> {
     let mut w = Working::from_state(st);
     for (def, v) in changes {
@@ -1673,7 +1799,8 @@ fn ip_filter_to_read(shared: &Shared, st: &State, changes: &[Change]) -> Option<
     let old = Working::from_state(st);
     check_paths(&w, &old, &shared.path_policy).ok()?;
     let (on, file) = ip_filter(shared, &w);
-    (on && (on, &file) != (old.prefs.ip_filter, &ip_filter(shared, &old).1)).then_some(file)
+    let file = file.filter(|_| on)?;
+    (ip_source(shared, &w) != ip_source(shared, &old)).then_some(file)
 }
 
 /// [`commit`] for a request: a block list the changes turn on is read without the State lock,
@@ -1796,10 +1923,15 @@ fn commit_read(
     w.prefs.trackers_list = tracker_list::to_text(&tracker_list::parse(&w.prefs.trackers_list).tiers);
     let old = Working::from_state(st);
     if st.hosted {
-        // the host's own list (D66): never changed from a browser
-        let changed = TRACKER_FIELDS.iter().find(|id| find(id).is_some_and(|d| d.get(&w) != d.get(&old)));
-        if let Some(id) = changed {
-            return Err(((*id).to_owned(), HOSTED_NO_TRACKERS.to_owned()));
+        // the host's own lists (D66, D75): never changed from a browser
+        let changed = |ids: &[&'static str]| {
+            ids.iter().copied().find(|id| find(id).is_some_and(|d| d.get(&w) != d.get(&old)))
+        };
+        if let Some(id) = changed(&TRACKER_FIELDS) {
+            return Err((id.to_owned(), HOSTED_NO_TRACKERS.to_owned()));
+        }
+        if let Some(id) = changed(&IPFILTER_URL_FIELDS) {
+            return Err((id.to_owned(), HOSTED_NO_IPFILTER_URL.to_owned()));
         }
     }
     if let Some(session) = from.filter(|_| security_changed(&w, &old)) {
@@ -1814,29 +1946,41 @@ fn commit_read(
     }
     check_paths(&w, &old, &shared.path_policy)?;
 
-    // the IP filter first: a block list that does not load refuses the whole change (hosted:
-    // the host loads its own; nothing here goes to the engine)
-    if !st.hosted && ip_filter(shared, &w) != ip_filter(shared, &old) {
+    // the IP filter first: a block list file that does not load refuses the whole change
+    // (hosted: the host loads its own; nothing here goes to the engine)
+    if !st.hosted && ip_source(shared, &w) != ip_source(shared, &old) {
         let (on, file) = ip_filter(shared, &w);
-        if on {
-            let list = match read {
+        let from_url = w.prefs.ip_filter_from_url;
+        let list = file.filter(|_| on).map(|file| {
+            let r = match read {
                 Some((f, r)) if f == file => r,
                 _ => IpFilter::load(&file),
             };
-            match list {
-                Ok(l) => {
-                    shared.handle.set_ip_filter(l.filter);
-                    st.push_log(
-                        None,
-                        tr!(LogIpFilterRules, count = l.rules, path = file.display()),
-                        unix_now(),
-                    )
-                }
-                Err(e) => return Err(("ipfilter.path".to_owned(), format!("{}: {e}", file.display()))),
+            (file, r)
+        });
+        if let (Some((file, Err(e))), false) = (&list, from_url) {
+            return Err((pref_pages::IPFILTER_PATH.to_owned(), format!("{}: {e}", file.display())));
+        }
+        // the list from an address follows before its rules are used: a kept copy of another
+        // address is forgotten, a new address is fetched at the next tick (D75)
+        shared.configure_ip_list(&w.prefs);
+        let now = unix_now();
+        match list {
+            Some((file, Ok(l))) => {
+                shared.handle.set_ip_filter(l.filter);
+                st.push_log(None, tr!(LogIpFilterRules, count = l.rules, path = file.display()), now)
             }
-        } else {
-            shared.handle.set_ip_filter(IpFilter::new());
-            st.push_log(None, tr!(LogIpFilterOff).to_owned(), unix_now());
+            // a kept copy that no longer loads: the rules in force stay until the next fetch
+            Some((file, Err(e))) => {
+                st.push_log(None, tr!(LogIpFilterKept, path = file.display(), error = e), now)
+            }
+            // nothing fetched from the address yet: the rules in force stay, the fetch brings
+            // the new ones
+            None if on => {}
+            None => {
+                shared.handle.set_ip_filter(IpFilter::new());
+                st.push_log(None, tr!(LogIpFilterOff).to_owned(), now);
+            }
         }
     }
     if !st.hosted && w.prefs.pex != old.prefs.pex {
@@ -1902,6 +2046,9 @@ fn commit_read(
     // before the next torrent is added, and a new address is fetched (hosted: the host's list)
     shared.configure_trackers(st);
     shared.trackers_tick(st);
+    // so does the IP filter's list from an address (D75): a new address is fetched now
+    shared.configure_ip_list(&st.prefs);
+    shared.ip_list_tick(st);
     // the server's texts switch now; the page reloads for its own (`lang.js`); hosted, the
     // host's language is the process's and the host switches it
     if !st.hosted && w.prefs.language != old.prefs.language {
@@ -2102,7 +2249,8 @@ pub(crate) fn migrate_keys(o: &mut rookparcel_frontend::prefs::Prefs) {
 /// At start (nox): [`read_back`], then re-applies the stored preferences onto the settings the
 /// daemon was started with (so a stored value wins over the command line, a value never stored
 /// keeps the command line's), picks a random listen port when asked, and loads the IP filter
-/// unless the daemon loaded that same file already (`loaded_ip_filter`).
+/// unless the daemon loaded that same file already (`loaded_ip_filter`): the file, or the copy
+/// kept of the list from an address (D75), whose list it configures first.
 pub(crate) fn restore(shared: &Shared, st: &mut State, loaded_ip_filter: Option<&Path>) {
     let mut changed = read_back(st);
     if st.prefs.random_port {
@@ -2112,8 +2260,13 @@ pub(crate) fn restore(shared: &Shared, st: &mut State, loaded_ip_filter: Option<
     if changed {
         shared.apply_limits(st);
     }
-    let file = st.prefs.gui().ip_filter_file(&shared.settings_dir);
+    // the list from an address (D75) first: a kept copy of another address is forgotten
+    shared.configure_ip_list(&st.prefs);
+    // with the list from an address, the copy kept of it, so the filter is in force before any
+    // fetch; none kept yet: the fetch brings the rules
+    let file = ip_filter_list::list_file(&st.prefs.gui(), &shared.settings_dir);
     if st.prefs.ip_filter {
+        let Some(file) = file else { return };
         if loaded_ip_filter != Some(file.as_path()) {
             match shared.handle.load_ip_filter(&file) {
                 Ok(n) => {

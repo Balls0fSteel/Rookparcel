@@ -246,6 +246,15 @@ impl Core {
     pub(super) fn add(&mut self, source: TorrentSource) {
         let mut p = AddTorrentParams::new(source, self.save_path.clone());
         self.gui_options().apply_to_new(&mut p);
+        self.add_without_dialog(p);
+    }
+
+    /// A torrent added without the Add New Torrent dialog (its setting off, the auto-load
+    /// folder, RSS): the files Preferences leave out are not downloaded (D74), a magnet's once
+    /// its metadata has arrived. Not for the dialog's adds, restored torrents or imports.
+    pub(super) fn add_without_dialog(&mut self, mut p: AddTorrentParams) {
+        let gui = self.gui_options();
+        self.excluded.add(&mut p, &gui, |h| self.list.has(h));
         self.add_to_session(p);
     }
 

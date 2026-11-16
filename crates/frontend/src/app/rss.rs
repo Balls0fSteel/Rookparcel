@@ -204,7 +204,7 @@ impl Core {
             // the item's title until the metadata names it
             p.name = Some(req.title.clone());
         }
-        self.add_to_session(p);
+        self.add_without_dialog(p);
         self.save_prefs();
     }
 

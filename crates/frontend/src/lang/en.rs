@@ -1060,6 +1060,19 @@ strings! {
     NetAdapterMissing = "{name} (not connected)";
     /// {range} is what the user typed.
     PrefBadRange = "\"{range}\" is not an address range such as 10.2.0.0/16 or fd00::/8.";
+    /// Preferences > UI Settings > When Adding Torrents: check box above a field of file name
+    /// patterns such as *.lnk; Thumbs.db. Files with such names start unchecked (not downloaded)
+    /// when a torrent is added.
+    PrefExcludeNames = "Do not download files named:";
+    /// Preferences > BitTorrent > IP Filter: check box above a field for a web address
+    /// (https://...) of a block list, used instead of the file above. Keep https as it is.
+    PrefIpFilterFromUrl = "Get the block list from this address (https):";
+    /// The IP filter's status line for the list from the web. {count} is a number of rules (blocked
+    /// address ranges), {time} a date and time.
+    IpFilterStatusOk = "{count} rules, downloaded {time}.";
+    /// Error: what the web address returned is not a block list (a web page, say). ipfilter.dat,
+    /// P2P and CIDR are format names: keep them.
+    IpFilterErrNotList = "the file is not a block list in ipfilter.dat, P2P or CIDR format";
 
     // ---- RSS Downloader
 

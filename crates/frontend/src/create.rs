@@ -10,6 +10,7 @@ use rookparcel_core::metainfo::{
 use rookparcel_core::{AddTorrentParams, Sha1Hash, TorrentFlags, TorrentSource, VERSION};
 
 use crate::lang::S;
+pub use crate::patterns::SkipPatterns;
 use crate::prefs::Prefs;
 use crate::tr;
 
@@ -201,54 +202,6 @@ pub fn parse_lines(text: &str) -> Vec<String> {
     out
 }
 
-/// The "Skip Files" field: wildcard patterns (`*`, `?`) separated by `|` or `;`, matched without
-/// case against the name of each file and folder below the source.
-#[derive(Clone, Debug, Default)]
-pub struct SkipPatterns(Vec<Vec<char>>);
-
-impl SkipPatterns {
-    pub fn parse(text: &str) -> SkipPatterns {
-        SkipPatterns(
-            text.split(['|', ';'])
-                .map(str::trim)
-                .filter(|p| !p.is_empty())
-                .map(|p| p.to_lowercase().chars().collect())
-                .collect(),
-        )
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn matches(&self, name: &str) -> bool {
-        let name: Vec<char> = name.to_lowercase().chars().collect();
-        self.0.iter().any(|p| wildcard(p, &name))
-    }
-}
-
-/// `*` matches any run (also empty), `?` one character.
-fn wildcard(p: &[char], s: &[char]) -> bool {
-    let (mut pi, mut si) = (0, 0);
-    let mut star: Option<(usize, usize)> = None;
-    while si < s.len() {
-        if pi < p.len() && (p[pi] == '?' || p[pi] == s[si]) {
-            pi += 1;
-            si += 1;
-        } else if pi < p.len() && p[pi] == '*' {
-            star = Some((pi, si));
-            pi += 1;
-        } else if let Some((sp, ss)) = star {
-            pi = sp + 1;
-            si = ss + 1;
-            star = Some((sp, ss + 1));
-        } else {
-            return false;
-        }
-    }
-    p[pi..].iter().all(|&c| c == '*')
-}
-
 /// The Trackers box as one preferences line: URLs separated by spaces, tiers by ` | `.
 pub fn trackers_to_pref(text: &str) -> String {
     parse_trackers(text).iter().map(|t| t.join(" ")).collect::<Vec<_>>().join(" | ")
@@ -433,19 +386,6 @@ mod tests {
         assert_eq!(pref, "http://a/ http://b/ | udp://c:1");
         assert_eq!(trackers_from_pref(&pref), "http://a/\r\nhttp://b/\r\n\r\nudp://c:1");
         assert_eq!(trackers_from_pref(""), "");
-    }
-
-    #[test]
-    fn skip_patterns() {
-        let s = SkipPatterns::parse("*.TXT| thumbs.db ;a?c*");
-        assert!(s.matches("readme.txt"));
-        assert!(s.matches("Thumbs.db"));
-        assert!(s.matches("abc"));
-        assert!(s.matches("axcdef"));
-        assert!(!s.matches("ac"));
-        assert!(!s.matches("readme.txt.bak"));
-        assert!(SkipPatterns::parse(" | ").is_empty());
-        assert!(SkipPatterns::parse("*").matches(""));
     }
 
     #[test]

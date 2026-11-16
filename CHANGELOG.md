@@ -4,6 +4,28 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-16_140743_1794834463: Version 1.2.60: excluded file names (D74), the IP filter's block list from an https address with CIDR (D75); feature wave 2
+
+- **Asked for (owner, 2026-11-16):** wave 2 of the feature plan (PLAN.md): "Do not download files named" as qBittorrent has it, and the IP filter's list from a web address, with CIDR lines.
+- **Engine:** `IpFilter` reads CIDR lines (IPv4 and IPv6) beside ipfilter.dat and P2P lines, in a local file too.
+- **Shared:**
+  - `patterns.rs` (Create's Skip Files matcher moved; `;`, `|` and line breaks separate). `exclude.rs`: `excluded`, `priorities`, `apply_to_new`, and `Pending` for magnets (`post_file_list` once the metadata is in).
+  - `ip_filter_list.rs`: https only, 32 MiB fetched and 256 MiB inflated (bounded while inflating), parsed on the worker, written to a `.part` then renamed; the kept copy `ipfilter-url.dat` with `ipfilter-url.txt`; every 24 h, an hour after a failure; a fetch held by D70 starts at the first tick after the hold lifts.
+  - `Field.unless` in `pref_pages`, `FileTree::for_add`; 4 strings and 3 help texts; the settings fixture 1.2.60, with `files.exclude_names` and `ipfilter.url` absent at their defaults; the D70 guard's summary unchanged.
+- **Win32:** the fields on UI Settings and BitTorrent (groups grown to 89 and 92 DU), `add_without_dialog` for every add without the dialog, `App.ip_list` with its timer. Hidden-desktop captures light and dark; the cut-off text audit clean in 35 languages for both pages (70 runs).
+- **GTK:** `Grey` so greying honours `unless`. On the Xubuntu VM 25 tests and live runs with two instances and a local tracker: the file unticked in the dialog and tickable; a .torrent and a magnet added without the dialog left the file skipped and absent from disk. Live fetches from a local HTTPS server (the repo's TLS fixture trusted through `SSL_CERT_FILE`): plain and gzip lists with P2P, dat, IPv4 and IPv6 CIDR lines (4 rules), an HTML page refused, an http address refused, the kept copy loaded at restart without a fetch.
+- **Mac:** a page's buttons grey with the field whose row they share (so Trackers' Update Now greys while its box is off, as on Win32). On the macOS VM 23 tests in light, dark and German: the pages, greying, the https error, the Add dialog's unticked file ticked back by a real click, an add without the dialog giving `file_priority [0,4,4]`. No live fetch there.
+- **nox:** the fields on UI Settings and BitTorrent, `disabled_by` in the page model, `GET /pa/prefs/ipfilter` and `POST /pa/prefs/ipfilter/update`; both address fields need the current password (`SECURITY_FIELDS`), and a hosted Web UI leaves them out and refuses them. Shim: `excluded_file_names_enabled` / `excluded_file_names` writable, `ip_filter_enabled` / `ip_filter_path` read-only; `torrent-info` marks `excluded`, and the page then sends every file's priority. Files are left out on shim adds, native adds with the dialog off, RSS, auto-load and search adds.
+- **Review** by a separate subagent. Two defects fixed in the wave: a duplicate magnet add could override file choices through `Pending` (now it waits for that id's `MetadataReceived`), and a failed write could leave a stale `.part` to become the kept list. Its five follow-ups, fixed after:
+  - The Logger and error texts name the block-list address as scheme, host, port and path (`ip_filter_list::redact`: no user name, password, query or fragment), a bad redirect target too. D66's tracker list names no address in its lines (only a bad redirect target inside a fetch error); left as it is.
+  - A magnet add duplicating a torrent already in the session (restored, or waiting for the Add window) is not remembered by `Pending`: `Pending::add` asks the owner's list (`TorrentList::has`, nox's torrents) through `exclude::same_torrent`. A duplicate `.torrent` needed nothing: the engine leaves the existing torrent as it is.
+  - `PrefIpFilterEnable` names CIDR lines; en.lng, HELP_TEXTS.md and the wiki row follow.
+  - The excluded-names list keeps at most 256 patterns and 4,096 bytes, cut after a whole pattern; the rest is dropped.
+  - Win32's IP filter Update Now no longer applies the dialog: it checks the https rule and fetches with the page's fields, as the Trackers page's does. Closing without OK puts the stored fields back and, when they differ from those tried, the stored rules.
+  - Found sound: CIDR parsing (checked shifts and bounds, existing lines unchanged), the inflation bound, an address change mid-fetch, the held-fetch loop, the wildcard matcher's cost (not exponential), the new routes' session, CSRF and Host rules, no innerHTML. Left as is, like D66: the daemon fetches any https address its password holder sets (SEC-26), and Update Now has no rate limit.
+- **Checked:** clippy `-D warnings` clean for core, frontend, nox and Win32, both Mac cross-lints and GTK's (after the follow-ups, before the bump). After the bump: fmt clean; tests core 1,101, frontend 437, Win32 161 (one thread), nox 227, all passing; the settings fixtures pass unchanged. The fuzz workspace was checked before the follow-ups, which touched no engine code.
+- **Open:** BACKLOG "Excluded file names and the IP filter address": a magnet whose metadata comes after a restart, no Win32 or Mac live fetch, the Web UI on a phone, Safari and Firefox, the machine translations, zip lists, conditional fetches.
+
 ## 2026-11-16_122332_1794828212: Version 1.2.59: download order (D72), Copy Magnet Link and Export .torrent (D73); feature wave 1
 
 - **Asked for (owner, 2026-11-16):** after a comparison with qBittorrent, Transmission, Deluge and BiglyBT, six features in four waves for one release (PLAN.md). Wave 1 is download order (D72) and Copy Magnet Link / Export .torrent (D73). The owner chose the torrent menu, the Add dialog and Properties for the switches, and no Preferences default.
@@ -55,41 +77,3 @@ Earlier history: [archive index](docs/archive/README.md), including all 148 orig
   - **GTK on the Xubuntu VM** (Xvfb, private bus, no tray): the page, Set PIN, the switch with Cancel and with the PIN, File > Lock hidden and Ctrl+L ignored while off, both back once ticked, and Ctrl+L without a PIN asking for one before it locks.
   - **The Mac on the macOS VM** (a subagent, light and dark), the same plus Change PIN with a wrong PIN, no Lock in the status item's or the Dock's menu while off, and a lock and unlock.
   - No D71 bug. Found and left in BACKLOG "UI lock": "tray" in the Mac's status line, and the Preferences sidebar's symbols nearly invisible in dark mode (older than D71).
-
-## 2026-11-15_180859_1794762539: Release 1.2.57 published; the site's news and the wiki pushed
-
-- **On the owner's "make a release":** CI, FreeBSD and Fuzz green on `b0f3852b`; tag `v1.2.57`; the Release run [43738460424](https://github.com/Balls0fSteel/Rookparcel/actions/runs/43738460424) passed every job on the first attempt (Windows, macOS, both Linux arches, both Flatpaks, both Docker images and the manifest).
-- **Checked on the draft:**
-  - All 13 files' GitHub SHA-256 digests match `SHA256SUMS`, and the downloaded zip matches too.
-  - The zip holds `rookparcel.exe`, `rookparcel-nox.exe`, `LICENSE.md` and `THIRD-PARTY-NOTICES.md`.
-  - Both exes say 1.2.57 in their version resources and the manifest says 1.2.57.0; `rookparcel-nox --version` prints `rookparcel-nox 1.2.57`.
-- **Published** with `gh release edit v1.2.57 --draft=false --latest` (18:07 Budapest).
-- **Then:**
-  - `main` fast-forwarded to the publish commit (`d032d7ed`: the news entry, the README's and the wiki's version lines, the settings check's "new in 1.2.57") and pushed.
-  - The GitHub wiki got the four changed pages (`19a4266`); a page-by-page comparison showed nothing else differing.
-- **Checked live:** `update.txt` says `stable=1.2.57`; the news page and `news.atom` lead with 1.2.57; the download page links the 1.2.57 setup.
-- **Still open:** RELEASING.md step 5 by hand (the GUIs, the setup and the update from an installed 1.2.54, the Linux and Mac files, the image), and the settings guard's hand checks (BACKLOG "Settings guard").
-
-## 2026-11-15_174308_1794760988: Version 1.2.57: the release review's findings in the settings guard; release 1.2.57 prepared
-
-- **Asked for:** make a release. The security review of `v1.2.54..HEAD` (code read by a subagent, every finding checked here; [SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md) "Release 1.2.57") found eleven things in D70, fixed here, so the release is **1.2.57**.
-- **High, the order of OK:**
-  - Preferences' OK used to lift the hold before the settings just entered reached the engine. Now `confirm_settings` runs after `apply_options` in all three GUIs.
-  - The Setup Guide and the hosted Web UI's changes no longer confirm.
-- **Medium:**
-  - **The frontends' own fetches are held too:** RSS, `.torrent` links, the tracker list, search and the update check (`fetch::set_held`).
-  - **Only a person's review confirms.** That means the Preferences dialog or the Web UI's Preferences page; a remote window's OK reaches nox's own confirmation. The scheduler, the qBittorrent API (a VPN port-forward helper posting `listen_port`), the limits and the Setup Guide do not confirm. nox's `store` keeps a line it cannot read.
-  - **A file without settings is no first start.** Text without a setting (zeroes after a crash) counts as damaged; no settings beside saved torrents is `NoSettings`, held with no guide; a dangling link counts as unreadable. `private_file::write` now syncs before the rename.
-- **Low:**
-  - `prune` spares the user's own `.bak` files.
-  - One `.damaged-` copy is kept per content.
-  - The old `lt.net.*` keys are written beside the new ones, so going back to 1.2.54 keeps the network rule.
-  - Damage near the proxy holds, and so does a damaged file whose copy failed.
-  - A blocked save is an error the user sees.
-  - nox's `read_state` retries.
-  - Only the stamp's known fields are compared, and printed without control characters.
-- **Release:** `docs/releases/1.2.57.md` covers 1.2.55-1.2.57. The Flatpak metainfo's first `<release>` is 1.2.57 (2026-11-15). The wiki's Updating page and D70 say what confirms. 1 new string (34 machine translations).
-- **Validation:**
-  - Tests: `cargo test --workspace --no-fail-fast` (40 binaries, run after the bump); clippy `-D warnings`, fmt, and the GTK and macOS cross-lint clean.
-  - End to end, real nox with `lt.proxy_type=7` stored: it started held. `setPreferences` with `listen_port` applied the port, kept the hold and kept the line. The Web UI's `/pa/prefs` lifted the hold after the new port listened, and dropped the line.
-- **Not done:** the GUIs' status bar and Preferences OK by hand. The fetch hold has no test of its own: the flag is process-wide, so a test would race the other fetch tests.

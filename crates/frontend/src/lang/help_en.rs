@@ -84,6 +84,8 @@ helps! {
     PrefActivateWindow = "Brings the main window to the front when another program, such as a browser, hands Rookparcel a torrent. Off, only the Add New Torrent window comes up.";
     /// frontend: crates/win32/src/app.rs (add_magnet waits for the metadata), crates/win32/src/add.rs
     PrefShowAddDialog = "Opens the Add New Torrent window for each torrent you add, to choose the folder and the files first; for a magnet link, once its file list has arrived. Off, torrents are added at once with the defaults.";
+    /// frontend: crates/frontend/src/exclude.rs (mask: the file's own name, pad files, all-matching torrents; apply_to_new, Pending for magnets), patterns.rs (SkipPatterns: * ?, separators, no case), add.rs (FileTree::for_add)
+    PrefExcludeNames = "Files whose names match one of these patterns are not downloaded: they start unchecked in torrents you add from now on. Separate the patterns with semicolons; * stands for any characters and ? for one, and case does not matter, as in *.lnk; Thumbs.db; *sample*. Only a file's own name counts, not its folders. You can still tick such a file in the Add New Torrent window, or later on the Files tab. A torrent whose every file matches is left alone.";
 
     // ---- Preferences > Directories
     /// frontend: crates/frontend/src/options.rs (GuiOptions::download_dir)
@@ -179,9 +181,13 @@ helps! {
     /// engine: crates/frontend/src/settings.rs (allow_legacy_incoming: in_enc_policy Enabled or Forced), crates/core/src/engine/wire.rs
     PrefLegacy = "Accepts incoming connections that are not encrypted. Off, only encrypted incoming connections are accepted, which loses peers that cannot encrypt.";
     /// frontend: crates/frontend/src/options.rs (ip_filter_file), crates/core/src/net/ip_filter.rs (formats), settings.apply_filter_to_dht / apply_ip_filter_to_trackers
-    PrefIpFilterEnable = "Blocks peers whose addresses are in the block list below, in eMule ipfilter.dat or PeerGuardian P2P format; an empty path means ipfilter.dat in the settings folder. Loaded at start and when Apply changes the box or the path; Reload reads an edited list.";
+    PrefIpFilterEnable = "Blocks peers whose addresses are in the block list below, in eMule ipfilter.dat or PeerGuardian P2P format, or CIDR lines such as 10.0.0.0/8; an empty path means ipfilter.dat in the settings folder. Loaded at start and when Apply changes the box or the path; Reload reads an edited list.";
     /// frontend: crates/win32/src/preferences.rs (reload_ip_filter: needs the box ticked)
     PrefReload = "Loads the block list from the path now, without waiting for Apply, and shows how many rules it holds. The IP filter must be enabled.";
+    /// frontend: crates/frontend/src/ip_filter_list.rs (list_file replaces the path; fetch: https only, no_downgrade, session proxy, 32 MiB; parse_list: gzip, refused answers; REFRESH 24 h, RETRY 1 h; the kept copy loaded at start), crates/core/src/net/ip_filter.rs (formats, CIDR)
+    PrefIpFilterFromUrl = "Takes the block list from the https address below instead of the file above, through the proxy when one is set. The copy downloaded last is used at once at start, and the list is downloaded again once a day. It can be in ipfilter.dat, PeerGuardian P2P or CIDR (10.0.0.0/8) form, plain or gzip-compressed; zip archives are not supported. When a download fails or is not such a list, the rules in use stay.";
+    /// frontend: crates/frontend/src/pref_pages.rs (Action::UpdateIpFilter), ip_filter_list.rs (IpFilterList::refresh_now, status_for)
+    PrefIpFilterUpdate = "Applies the page and downloads the block list from the address now, without waiting for the daily update. The line below shows the result.";
 
     // ---- Preferences > Queueing
     /// engine: crates/core/src/engine/mod.rs (auto_manage: auto-managed torrents only), settings.active_limit

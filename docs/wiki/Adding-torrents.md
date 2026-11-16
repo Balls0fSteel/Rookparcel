@@ -78,6 +78,8 @@ The file list shows the torrent's folders and files as a tree, each with a check
 - Click a folder's icon, or double-click it, to open or close it. <kbd>Right</kbd> and <kbd>Left</kbd> (or <kbd>+</kbd> and <kbd>-</kbd> on the number pad) do the same; <kbd>Space</kbd> ticks or unticks the selected rows.
 - Right-click selected rows for **High Priority**, **Normal Priority**, **Low Priority**, **Don't Download**, **Check** and **Uncheck**. Choosing a priority ticks the files; **Don't Download** unticks them.
 
+Files whose names match **Do not download files named:** (Preferences > UI Settings) start unticked here. Tick them if you want them after all: what you choose in this window always wins. See [Files left out by name](#files-left-out-by-name).
+
 You can change the file choices and priorities later in the [Files tab](Torrent-details-and-files#files).
 
 ### OK, Cancel and Don't show this again
@@ -89,6 +91,24 @@ Rookparcel remembers the window's size.
 ## Adding torrents stopped
 
 To add torrents without downloading anything until you say so, turn on **Don't start the download automatically** in **Options > Preferences > UI Settings**. New torrents are added stopped and outside the queue. Start them with **Start** when you are ready. In the Add New Torrent window this shows as **Start torrent** being unticked.
+
+## Files left out by name
+
+*New in 1.2.60, not in a published release yet.* Some torrents carry files you never want, such as shortcuts, thumbnail caches or sample videos. Rookparcel can leave them out by name:
+
+1. Open **Options > Preferences > UI Settings**.
+2. Under **When Adding Torrents**, tick **Do not download files named:**.
+3. In the box below it, type the names, separated by semicolons. `*` stands for any characters and `?` for one, and case does not matter. For example: `*.lnk; Thumbs.db; *sample*`.
+4. Click **OK**.
+
+Only a file's own name is compared, not the folders it is in. The list applies to torrents you add from now on:
+
+- In the Add New Torrent window, the matching files start unticked, and you can tick them back.
+- Torrents added without the window get the matching files set to **Don't Download**: with the window turned off, from the [watched folder](#a-watched-folder), from RSS, from a link, from the Web UI, and from apps such as Sonarr and Radarr. For a magnet link this happens once its file list has arrived.
+- A torrent whose every file matches is added with all its files, as if the list were empty.
+- Torrents already in the list, torrents brought back at start and imported torrents are not changed.
+
+A magnet link added without the window whose file list arrives only after Rookparcel has been restarted downloads every file, and so does a torrent handed to `rookparcel-nox` on its command line (`add`, or `run` with a file or link). To get a skipped file later, give it a priority on the [Files tab](Torrent-details-and-files#files).
 
 ## A torrent that is already in the list
 

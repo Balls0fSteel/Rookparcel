@@ -80,6 +80,11 @@ pub struct GuiOptions {
     /// The block list; empty = `ipfilter.dat` in the settings folder, like µTorrent
     /// (`ipfilter.path`).
     pub ip_filter_path: String,
+    /// Take the block list from `ip_filter_url` instead of the file (`ipfilter.from_url`,
+    /// `ipfilter.url`; D75, [`crate::ip_filter_list`]). Off by default; `ip_filter` stays the
+    /// switch for both.
+    pub ip_filter_from_url: bool,
+    pub ip_filter_url: String,
     /// Preferences > Scheduler (`sched.*`).
     pub schedule: Schedule,
     /// Preferences > General "User interface" language (`ui.language`): a code of
@@ -110,6 +115,11 @@ pub struct GuiOptions {
     pub run_added: String,
     pub run_finished_on: bool,
     pub run_finished: String,
+    /// Preferences > UI Settings > When Adding Torrents: files whose names match the list start
+    /// unchecked (`files.exclude`, `files.exclude_names`; D74, [`crate::exclude`]). Off and
+    /// empty by default.
+    pub exclude_names: bool,
+    pub exclude_list: String,
 }
 
 impl GuiOptions {
@@ -148,6 +158,8 @@ impl GuiOptions {
             seed_limit_kib: u32_of("queue.seed_limit_kib"),
             ip_filter: prefs.get_bool("ipfilter.enable", false),
             ip_filter_path: prefs.get("ipfilter.path").unwrap_or_default().to_owned(),
+            ip_filter_from_url: prefs.get_bool("ipfilter.from_url", false),
+            ip_filter_url: prefs.get("ipfilter.url").unwrap_or_default().trim().to_owned(),
             schedule: Schedule::load(prefs),
             language: prefs.get("ui.language").unwrap_or_default().trim().to_owned(),
             theme: prefs.get("ui.theme").unwrap_or_default().trim().to_owned(),
@@ -161,6 +173,8 @@ impl GuiOptions {
             run_added: prefs.get("run.added").unwrap_or_default().trim().to_owned(),
             run_finished_on: prefs.get_bool("run.finished_enabled", false),
             run_finished: prefs.get("run.finished").unwrap_or_default().trim().to_owned(),
+            exclude_names: prefs.get_bool("files.exclude", false),
+            exclude_list: crate::exclude::to_stored(prefs.get("files.exclude_names").unwrap_or_default()),
         }
     }
 
@@ -216,11 +230,15 @@ impl GuiOptions {
         prefs.set_bool("trackers.from_url", self.trackers_from_url);
         prefs.set_bool("run.added_enabled", self.run_added_on);
         prefs.set_bool("run.finished_enabled", self.run_finished_on);
+        prefs.set_bool("ipfilter.from_url", self.ip_filter_from_url);
+        prefs.set_bool("files.exclude", self.exclude_names);
         for (key, value) in [
             ("trackers.list", crate::tracker_list::to_stored(&self.trackers_list)),
             ("trackers.url", self.trackers_url.trim().to_owned()),
             ("run.added", self.run_added.trim().to_owned()),
             ("run.finished", self.run_finished.trim().to_owned()),
+            ("ipfilter.url", self.ip_filter_url.trim().to_owned()),
+            ("files.exclude_names", crate::exclude::to_stored(&self.exclude_list)),
         ] {
             if value.is_empty() {
                 prefs.remove(key);
@@ -412,6 +430,10 @@ mod tests {
             run_added: r#""C:\Program Files\Tools\added.exe" "%N" %I"#.into(),
             run_finished_on: false,
             run_finished: "/usr/local/bin/done.sh --path=%F".into(),
+            ip_filter_from_url: true,
+            ip_filter_url: "https://lists.example/level1.gz".into(),
+            exclude_names: true,
+            exclude_list: "*.lnk; Thumbs.db; *sample*".into(),
         };
         assert_eq!(changed.gui.run_commands(), (r#""C:\Program Files\Tools\added.exe" "%N" %I"#, ""));
         changed.store(&mut prefs);
@@ -430,6 +452,20 @@ mod tests {
         changed.gui.ip_filter_path = "  ".into();
         changed.store(&mut prefs);
         assert_eq!(prefs.get("ipfilter.path"), None);
+        assert_eq!(prefs.get("files.exclude_names"), Some("*.lnk; Thumbs.db; *sample*"));
+
+        // the two texts are absent while empty; the list is stored tidy
+        changed.gui.ip_filter_url = " ".into();
+        changed.gui.exclude_list = "a.txt|b.txt\n".into();
+        changed.store(&mut prefs);
+        assert_eq!(
+            (prefs.get("ipfilter.url"), prefs.get("files.exclude_names")),
+            (None, Some("a.txt; b.txt"))
+        );
+        changed.gui.exclude_list = " ;\n".into();
+        changed.store(&mut prefs);
+        assert_eq!(prefs.get("files.exclude_names"), None);
+        assert!(!o.gui.exclude_names && !o.gui.ip_filter_from_url, "off by default");
     }
 
     #[test]

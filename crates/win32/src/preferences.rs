@@ -19,13 +19,14 @@ use rookparcel_core::{EncPolicy, ProxyType};
 use rookparcel_frontend::icons::{UiIcon, page_icon};
 use rookparcel_frontend::lang::{self, H, S};
 use rookparcel_frontend::network;
-use rookparcel_frontend::options::{self, Options};
+use rookparcel_frontend::options::{self, GuiOptions, Options};
 use rookparcel_frontend::pref_pages::{self, Features, PROXY_TYPES, proxy_from_ui, proxy_to_ui};
 use rookparcel_frontend::scheduler::{self, Mode};
 use rookparcel_frontend::settings::{self, Entry, Kind, Value};
 use rookparcel_frontend::tr;
 use rookparcel_frontend::tracker_list;
 use rookparcel_frontend::ui_lock::{self, Form};
+use rookparcel_frontend::{exclude, ip_filter_list};
 use rookparcel_nox::webui::auth;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
@@ -80,6 +81,7 @@ pub const PAGES: [S; 15] = [
 ];
 /// Connection: where a listen failure in the status bar leads.
 pub const PAGE_CONNECTION: usize = 3;
+const PAGE_BITTORRENT: usize = 5;
 const PAGE_WEBUI: usize = 8;
 const PAGE_ADVANCED: usize = 9;
 const PAGE_DISK_CACHE: usize = 10;
@@ -105,7 +107,8 @@ const ID_HELP_HINT: u16 = 904;
 /// Checks what the pointer is over and what has the focus, for the help pane.
 const HELP_TIMER: usize = 1;
 const HELP_TIMER_MS: u32 = 100;
-/// Reads the Trackers page's status line again while that page is shown (D66).
+/// Reads the Trackers page's status line again while that page is shown (D66), and the
+/// BitTorrent page's for the IP filter's list from the web (D75).
 const TRACKERS_TIMER: usize = 2;
 const TRACKERS_TIMER_MS: u32 = 1000;
 
@@ -133,6 +136,9 @@ const ID_TITLE_SPEED: u16 = id(1, 9);
 /// The Theme drop-down (D64) and the note under it when this Windows cannot show dark.
 const ID_THEME: u16 = id(1, 10);
 const ID_THEME_NOTE: u16 = id(1, 11);
+/// "Do not download files named:" and its list (D74).
+const ID_EXCLUDE: u16 = id(1, 12);
+const ID_EXCLUDE_LIST: u16 = id(1, 13);
 // Directories
 const ID_DL_DIR: u16 = id(2, 1);
 const ID_DL_BROWSE: u16 = id(2, 2);
@@ -192,6 +198,10 @@ const ID_IPF_PATH: u16 = id(5, 8);
 const ID_IPF_BROWSE: u16 = id(5, 9);
 const ID_IPF_RELOAD: u16 = id(5, 10);
 const ID_IPF_STATUS: u16 = id(5, 11);
+/// The block list from an address instead of the file (D75), and its Update Now.
+const ID_IPF_FROM_URL: u16 = id(5, 12);
+const ID_IPF_URL: u16 = id(5, 13);
+const ID_IPF_UPDATE: u16 = id(5, 14);
 // Queueing
 const ID_ACTIVE: u16 = id(6, 1);
 const ID_ACTIVE_DL: u16 = id(6, 2);
@@ -317,6 +327,8 @@ const FIELD_KEYS: &[(u16, &str)] = &[
     (ID_ADD_STOPPED, "ui.add_stopped"),
     (ID_ACTIVATE, "ui.activate_on_add"),
     (ID_SHOW_ADD, "ui.show_add_dialog"),
+    (ID_EXCLUDE, pref_pages::EXCLUDE_NAMES),
+    (ID_EXCLUDE_LIST, pref_pages::EXCLUDE_LIST),
     (ID_DL_DIR, "dir.download"),
     (ID_MOVE, "dir.move_completed"),
     (ID_MOVE_ADD_LABEL, "dir.move_add_label"),
@@ -360,8 +372,10 @@ const FIELD_KEYS: &[(u16, &str)] = &[
     (ID_UTP, "utp"),
     (ID_ENC_OUT, "enc.out"),
     (ID_ENC_LEGACY, "enc.legacy"),
-    (ID_IPF, "ipfilter.enable"),
-    (ID_IPF_PATH, "ipfilter.path"),
+    (ID_IPF, pref_pages::IPFILTER_ENABLE),
+    (ID_IPF_PATH, pref_pages::IPFILTER_PATH),
+    (ID_IPF_FROM_URL, pref_pages::IPFILTER_FROM_URL),
+    (ID_IPF_URL, pref_pages::IPFILTER_URL),
     (ID_ACTIVE, "active_limit"),
     (ID_ACTIVE_DL, "active_downloads"),
     (ID_ACTIVE_SEEDS, "active_seeds"),
@@ -406,6 +420,7 @@ const EXTRA_HELP: &[(u16, H)] = &[
     (ID_DEFAULT_APPS, H::PrefDefaultApps),
     (ID_RANDOM_PORT, H::PrefRandomPort),
     (ID_IPF_RELOAD, H::PrefReload),
+    (ID_IPF_UPDATE, H::PrefIpFilterUpdate),
     (ID_TRK_UPDATE, H::PrefTrackersUpdate),
     (ID_LOCK_ON, H::PrefLockEnable),
     (ID_LOCK_SET, H::PrefLockSetPin),
@@ -512,6 +527,13 @@ static FIELDS: &[Field] = &[
     Field::Check { id: ID_ADD_STOPPED, get: |o| o.gui.add_stopped, set: |o, v| o.gui.add_stopped = v },
     Field::Check { id: ID_ACTIVATE, get: |o| o.gui.activate_on_add, set: |o, v| o.gui.activate_on_add = v },
     Field::Check { id: ID_SHOW_ADD, get: |o| o.gui.show_add_dialog, set: |o, v| o.gui.show_add_dialog = v },
+    Field::Check { id: ID_EXCLUDE, get: |o| o.gui.exclude_names, set: |o, v| o.gui.exclude_names = v },
+    // stored tidy (`; ` between the patterns), as the other interfaces store it
+    Field::Text {
+        id: ID_EXCLUDE_LIST,
+        get: |o| o.gui.exclude_list.clone(),
+        set: |o, v| o.gui.exclude_list = exclude::to_stored(&v),
+    },
     Field::Text {
         id: ID_DL_DIR,
         get: |o| o.gui.download_dir.clone(),
@@ -695,6 +717,16 @@ static FIELDS: &[Field] = &[
         id: ID_IPF_PATH,
         get: |o| o.gui.ip_filter_path.clone(),
         set: |o, v| o.gui.ip_filter_path = v.trim().to_owned(),
+    },
+    Field::Check {
+        id: ID_IPF_FROM_URL,
+        get: |o| o.gui.ip_filter_from_url,
+        set: |o, v| o.gui.ip_filter_from_url = v,
+    },
+    Field::Text {
+        id: ID_IPF_URL,
+        get: |o| o.gui.ip_filter_url.clone(),
+        set: |o, v| o.gui.ip_filter_url = v.trim().to_owned(),
     },
     Field::Num {
         id: ID_ACTIVE,
@@ -920,6 +952,24 @@ pub type WebUiHook<'a> = Box<dyn FnMut(Option<&Edit>) -> WebView + 'a>;
 /// now ("Update Now"); either way the status line afterwards.
 pub type TrackerListHook<'a> = Box<dyn FnMut(Option<&tracker_list::Config>) -> String + 'a>;
 
+/// The BitTorrent page's block list from the web (D75): the status line for the page's
+/// "Get the block list from this address" box and address as they stand
+/// (`IpFilterList::status_for`). With `update` (Update Now), the list is first configured from
+/// the page's IP filter fields as they stand, unapplied, and fetched now, as the Trackers page's
+/// Update Now does; the owner goes back to the stored fields when the dialog closes. Empty where
+/// there is no list (a remote window).
+pub type IpListHook<'a> = Box<dyn FnMut(IpListAsk<'_>) -> String + 'a>;
+
+/// What [`IpListHook`] is asked: the page's "Enable IP filter" box, its "Get the block list
+/// from this address" box and its address, and whether to fetch now.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IpListAsk<'s> {
+    pub enabled: bool,
+    pub from_url: bool,
+    pub url: &'s str,
+    pub update: bool,
+}
+
 /// What the UI Lock page (D71) does: a PIN dialog (Set, Change or Remove PIN), or the switch
 /// turned on or off.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -944,6 +994,8 @@ pub struct Hooks<'a> {
     pub webui: WebUiHook<'a>,
     /// The Trackers page's status line and its "Update Now".
     pub tracker_list: TrackerListHook<'a>,
+    /// The BitTorrent page's block list from the web: its status line and its "Update Now".
+    pub ip_list: IpListHook<'a>,
     /// The UI Lock page: the lock's PIN and its switch, saved at once, never on OK.
     pub ui_lock: LockHook<'a>,
 }
@@ -968,6 +1020,8 @@ struct State<'a> {
     webui: WebView,
     /// The Trackers page's status line as shown (`None`: not yet).
     tracker_status: Option<String>,
+    /// The IP filter's status line as shown (`None`: not yet).
+    ip_status: Option<String>,
     /// The General page's language list: `(ui.language value, text)`.
     languages: Vec<(String, String)>,
     /// The UI Settings page's Theme list: `(ui.theme value, text)` (D64).
@@ -1023,6 +1077,7 @@ impl<'a> State<'a> {
             integration: Status::default(),
             webui: WebView::default(),
             tracker_status: None,
+            ip_status: None,
             languages: Vec::new(),
             themes: Vec::new(),
             networks: Vec::new(),
@@ -1146,10 +1201,13 @@ fn build() -> (Vec<u16>, Vec<(u16, u16)>) {
     b.group([0, 108, W, 46], tr!(PrefTray));
     b.ctl(BUTTON, ID_CLOSE_TRAY, CHECK, [8, 122, 290, 10], tr!(PrefCloseToTray));
     b.ctl(BUTTON, ID_MIN_TRAY, CHECK, [8, 136, 290, 10], tr!(PrefMinimizeToTray));
-    b.group([0, 160, W, 60], tr!(PrefWhenAdding));
+    b.group([0, 160, W, 89], tr!(PrefWhenAdding));
     b.ctl(BUTTON, ID_ADD_STOPPED, CHECK, [8, 174, 290, 10], tr!(PrefDontStart));
     b.ctl(BUTTON, ID_ACTIVATE, CHECK, [8, 188, 290, 10], tr!(PrefActivateWindow));
     b.ctl(BUTTON, ID_SHOW_ADD, CHECK, [8, 202, 290, 10], tr!(PrefShowAddDialog));
+    // the patterns under their box (D74), greyed while it is off (`update_exclude_controls`)
+    b.ctl(BUTTON, ID_EXCLUDE, CHECK, [8, 216, 290, 10], tr!(PrefExcludeNames));
+    b.ctl(EDIT, ID_EXCLUDE_LIST, LINE, [20, 230, 282, 13], "");
 
     b.page(2);
     b.group([0, 0, W, 96], tr!(PrefDownloadLocation));
@@ -1232,13 +1290,18 @@ fn build() -> (Vec<u16>, Vec<(u16, u16)>) {
     b.label_for([8, 93, 36, 9], tr!(PrefOutgoing), ID_ENC_OUT);
     b.ctl(COMBOBOX, ID_ENC_OUT, COMBO, [46, 91, 80, 60], "");
     b.ctl(BUTTON, ID_ENC_LEGACY, CHECK, [8, 108, 290, 10], tr!(PrefLegacy));
-    b.group([0, 130, W, 62], tr!(PrefIpFilter));
+    // the file, or the list from an address instead (D75) on a row of its own (its box's text
+    // is long in every language), each with its button; greyed by `update_ip_filter_controls`
+    b.group([0, 130, W, 92], tr!(PrefIpFilter));
     b.ctl(BUTTON, ID_IPF, CHECK, [8, 143, 290, 10], tr!(PrefIpFilterEnable));
     b.ctl(EDIT, ID_IPF_PATH, LINE, [8, 157, 224, 13], "");
     b.ctl(BUTTON, ID_IPF_BROWSE, PUSH, [236, 157, 18, 13], "...");
     b.ctl(BUTTON, ID_IPF_RELOAD, PUSH, [258, 156, 44, 14], tr!(PrefReload));
-    // wraps inside a path too (`SS_EDITCONTROL`): a path has no spaces to break at
-    b.ctl(STATIC, ID_IPF_STATUS, C | crate::fit::SS_EDITCONTROL, [8, 175, 294, 9], "");
+    b.ctl(BUTTON, ID_IPF_FROM_URL, CHECK, [8, 175, 294, 10], tr!(PrefIpFilterFromUrl));
+    b.ctl(EDIT, ID_IPF_URL, LINE, [8, 188, 246, 13], "");
+    b.ctl(BUTTON, ID_IPF_UPDATE, PUSH, [258, 187, 44, 14], tr!(PrefTrackersUpdate));
+    // wraps inside a path or an address too (`SS_EDITCONTROL`): they have no spaces to break at
+    b.ctl(STATIC, ID_IPF_STATUS, C | SS_NOPREFIX | crate::fit::SS_EDITCONTROL, [8, 206, 294, 9], "");
 
     b.page(6);
     b.group([0, 0, W, 78], tr!(PrefQueue));
@@ -1460,6 +1523,10 @@ unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
             WM_TIMER if wp == TRACKERS_TIMER => {
                 if st.page == PAGE_TRACKERS {
                     update_tracker_status(dlg, st);
+                }
+                // the IP filter's list from the web the same way (D75)
+                if st.page == PAGE_BITTORRENT && checked(dlg, ID_IPF_FROM_URL) {
+                    update_ip_filter_status(dlg, st, None);
                 }
                 1
             }
@@ -1710,6 +1777,9 @@ unsafe fn show_page(dlg: HWND, st: &mut State<'_>, page: usize) {
         if page == PAGE_TRACKERS {
             update_tracker_status(dlg, st);
         }
+        if page == PAGE_BITTORRENT && checked(dlg, ID_IPF_FROM_URL) {
+            update_ip_filter_status(dlg, st, None);
+        }
         // a lock from the tray or a reset may have changed it meanwhile
         if page == PAGE_UI_LOCK {
             lock_action(dlg, st, None);
@@ -1782,6 +1852,8 @@ unsafe fn write_controls(dlg: HWND, st: &mut State<'_>) {
         update_tracker_status(dlg, st);
         write_integration(dlg, st);
         write_webui(dlg, st);
+        update_exclude_controls(dlg);
+        update_ip_filter_controls(dlg);
         update_move_controls(dlg);
         update_torrent_folder_controls(dlg);
         update_sched_controls(dlg);
@@ -2051,6 +2123,31 @@ unsafe fn sched_table(dlg: HWND) -> [Mode; scheduler::CELLS] {
     table
 }
 
+/// The list of names follows "Do not download files named" (D74, `pref_pages`' `needs`).
+unsafe fn update_exclude_controls(dlg: HWND) {
+    unsafe { EnableWindow(item(dlg, ID_EXCLUDE_LIST), checked(dlg, ID_EXCLUDE) as i32) };
+}
+
+/// The IP Filter box greys as `pref_pages` has it (D75): the file, its "..." and Reload while
+/// the list comes from an address; that box under "Enable IP filter"; the address and Update
+/// Now under both.
+unsafe fn update_ip_filter_controls(dlg: HWND) {
+    unsafe {
+        let on = checked(dlg, ID_IPF);
+        let from_url = checked(dlg, ID_IPF_FROM_URL);
+        for (id, enabled) in [
+            (ID_IPF_PATH, !from_url),
+            (ID_IPF_BROWSE, !from_url),
+            (ID_IPF_RELOAD, !from_url),
+            (ID_IPF_FROM_URL, on),
+            (ID_IPF_URL, on && from_url),
+            (ID_IPF_UPDATE, on && from_url),
+        ] {
+            EnableWindow(item(dlg, id), enabled as i32);
+        }
+    }
+}
+
 /// The folder, "Only move from ..." and "Append the torrent's label" follow "Move completed
 /// downloads to", as in µTorrent.
 unsafe fn update_move_controls(dlg: HWND) {
@@ -2235,6 +2332,11 @@ unsafe fn read_controls(dlg: HWND, st: &mut State<'_>) -> Result<(), (u16, Strin
         }
         // the list as the page shows it from now on: no repeats, one blank line between tiers
         o.gui.trackers_list = tracker_list::to_text(&typed.tiers);
+        // as `pref_pages::check`: the IP filter's list on the web is read over https only (D75),
+        // its address asked for only while the filter takes it from there
+        if o.gui.ip_filter && o.gui.ip_filter_from_url && !tracker_list::is_list_url(&o.gui.ip_filter_url) {
+            return Err((ID_IPF_URL, tr!(TrackersErrHttps).to_owned()));
+        }
         // as `pref_pages::check`: a line that cannot be run is refused while its box is on
         // (D67); a remote window has the page greyed and changes nothing on it
         if !remote_window(st) {
@@ -2374,6 +2476,13 @@ unsafe fn command(dlg: HWND, st: &mut State<'_>, id: u16, code: u32) -> bool {
                 }
             }
             ID_IPF_RELOAD if code == BN_CLICKED => reload_ip_filter(dlg, st),
+            ID_IPF if code == BN_CLICKED => update_ip_filter_controls(dlg),
+            ID_IPF_FROM_URL if code == BN_CLICKED => {
+                update_ip_filter_controls(dlg);
+                update_ip_filter_status(dlg, st, None);
+            }
+            ID_IPF_UPDATE if code == BN_CLICKED => update_ip_filter_list(dlg, st),
+            ID_EXCLUDE if code == BN_CLICKED => update_exclude_controls(dlg),
             ID_ADV_FILTER if code == EN_CHANGE => fill_advanced(dlg, st, None),
             ID_ADV_SET if code == BN_CLICKED => advanced_set(dlg, st, false),
             ID_ADV_RESET if code == BN_CLICKED => advanced_set(dlg, st, true),
@@ -2506,37 +2615,90 @@ unsafe fn advanced_set(dlg: HWND, st: &mut State<'_>, reset: bool) {
     }
 }
 
-unsafe fn update_ip_filter_status(dlg: HWND, st: &State<'_>, result: Option<Result<usize, String>>) {
+/// The IP filter's status line (`ip_filter_list::page_status`): Reload's `result` when it was
+/// just pressed, else the list from the web's status while the page's box for it is ticked, else
+/// the file an empty path field means.
+unsafe fn update_ip_filter_status(dlg: HWND, st: &mut State<'_>, result: Option<Result<usize, String>>) {
     unsafe {
         let path = window_text(item(dlg, ID_IPF_PATH));
-        let text = match result {
-            Some(Ok(n)) => tr!(PrefIpFilterLoaded, count = n),
-            Some(Err(e)) => e,
-            None if path.trim().is_empty() => {
-                tr!(PrefIpFilterDefault, path = st.settings_dir.join("ipfilter.dat").display())
-            }
-            None => String::new(),
-        };
+        let from_url = result.is_none() && checked(dlg, ID_IPF_FROM_URL);
+        let url_status = from_url.then(|| ip_list_status(dlg, st, false));
+        let text = ip_filter_list::page_status(result.as_ref(), url_status, &path, &st.settings_dir);
+        show_ip_filter_status(dlg, st, text);
+    }
+}
+
+unsafe fn show_ip_filter_status(dlg: HWND, st: &mut State<'_>, text: String) {
+    if st.ip_status.as_deref() == Some(text.as_str()) {
+        return;
+    }
+    unsafe {
         set_text(item(dlg, ID_IPF_STATUS), &text);
-        // a settings folder's path or an error can need a second line; the box follows
+        st.ip_status = Some(text);
+        // a settings folder's path, an address or an error can need more lines; the box follows
         let mut rc = RECT { left: 0, top: 0, right: 0, bottom: 9 };
         MapDialogRect(dlg, &mut rc);
         crate::fit::fit_note_height(dlg, ID_IPF_STATUS, rc.bottom, |id| page_of(id).map(|p| p as i32));
     }
 }
 
-/// "Reload": loads the block list in the path field now (whether or not the rest is applied).
+/// The owner's status line of the list from the web for the page's box and address as they
+/// stand; with `update`, a fetch of it starts first.
+unsafe fn ip_list_status(dlg: HWND, st: &mut State<'_>, update: bool) -> String {
+    unsafe {
+        let url = window_text(item(dlg, ID_IPF_URL));
+        let (enabled, from_url) = (checked(dlg, ID_IPF), checked(dlg, ID_IPF_FROM_URL));
+        (st.hooks.ip_list)(IpListAsk { enabled, from_url, url: url.trim(), update })
+    }
+}
+
+/// The page's IP filter fields as they stand, applied or not, over the working options.
+unsafe fn ip_filter_fields(dlg: HWND, st: &State<'_>) -> GuiOptions {
+    unsafe {
+        let mut gui = st.opts.gui.clone();
+        gui.ip_filter_path = window_text(item(dlg, ID_IPF_PATH)).trim().to_owned();
+        gui.ip_filter_from_url = checked(dlg, ID_IPF_FROM_URL);
+        gui.ip_filter_url = window_text(item(dlg, ID_IPF_URL)).trim().to_owned();
+        gui
+    }
+}
+
+/// "Reload": loads the block list the page names now (whether or not the rest is applied): the
+/// path field's file, or the copy kept of the list from the address; with nothing fetched from
+/// that address yet, the status line says so.
 unsafe fn reload_ip_filter(dlg: HWND, st: &mut State<'_>) {
     unsafe {
         if !checked(dlg, ID_IPF) {
             update_ip_filter_status(dlg, st, Some(Err(tr!(PrefIpFilterOff).to_owned())));
             return;
         }
-        let mut gui = st.opts.gui.clone();
-        gui.ip_filter_path = window_text(item(dlg, ID_IPF_PATH)).trim().to_owned();
-        let file = gui.ip_filter_file(&st.settings_dir);
+        let gui = ip_filter_fields(dlg, st);
+        let Some(file) = ip_filter_list::list_file(&gui, &st.settings_dir) else {
+            update_ip_filter_status(dlg, st, None);
+            return;
+        };
         let result = (st.hooks.reload_ip_filter)(&file).map_err(|e| format!("{}: {e}", file.display()));
         update_ip_filter_status(dlg, st, Some(result));
+    }
+}
+
+/// "Update Now" (D75), as the Trackers page's: the list is fetched now from the address in the
+/// field, with the page's IP filter fields as they stand (whether or not the rest is applied;
+/// OK or Apply store them, and the owner goes back to the stored ones when the dialog closes
+/// without). An address that is not https is refused as Apply refuses it. The status line says
+/// how it went once the fetch ends (`TRACKERS_TIMER`).
+unsafe fn update_ip_filter_list(dlg: HWND, st: &mut State<'_>) {
+    unsafe {
+        if !tracker_list::is_list_url(window_text(item(dlg, ID_IPF_URL)).trim()) {
+            dialogs::error(dlg, tr!(TrackersErrHttps));
+            SetFocus(item(dlg, ID_IPF_URL));
+            return;
+        }
+        let text = ip_list_status(dlg, st, true);
+        let path = window_text(item(dlg, ID_IPF_PATH));
+        let url_status = checked(dlg, ID_IPF_FROM_URL).then_some(text);
+        let text = ip_filter_list::page_status(None, url_status, &path, &st.settings_dir);
+        show_ip_filter_status(dlg, st, text);
     }
 }
 
@@ -2686,6 +2848,8 @@ mod tests {
     use super::*;
 
     type Log = Rc<RefCell<Vec<Options>>>;
+    /// Each Update Now of the IP filter's list: the page's two boxes and its address.
+    type IpUpdates = Rc<RefCell<Vec<(bool, bool, String)>>>;
 
     struct Fixture {
         dlg: HWND,
@@ -2701,6 +2865,7 @@ mod tests {
         /// The fake tracker list: its status line, and the fields each Update Now came with.
         tracker_status: Rc<RefCell<String>>,
         tracker_updates: Rc<RefCell<Vec<tracker_list::Config>>>,
+        ip_updates: IpUpdates,
         /// The fake lock: its state, whether a PIN dialog's OK goes through, and what was asked.
         lock: Rc<RefCell<FakeLock>>,
     }
@@ -2736,6 +2901,9 @@ mod tests {
             let tracker_status: Rc<RefCell<String>> = Rc::default();
             let tracker_updates: Rc<RefCell<Vec<tracker_list::Config>>> = Rc::default();
             let (status, updates) = (tracker_status.clone(), tracker_updates.clone());
+            let ip_updates: IpUpdates = Rc::default();
+            let ip_asks = ip_updates.clone();
+            let ip_fetched: Rc<RefCell<Option<String>>> = Rc::default();
             let lock = Rc::new(RefCell::new(FakeLock {
                 state: ui_lock::State::NoPin,
                 pin_ok: true,
@@ -2797,6 +2965,20 @@ mod tests {
                     }
                     status.borrow().clone()
                 }),
+                // the fake IP filter list: nothing fetched until Update Now, which fetches the
+                // address given, with the page's boxes
+                ip_list: Box::new(move |ask| {
+                    if ask.update {
+                        ip_asks.borrow_mut().push((ask.enabled, ask.from_url, ask.url.to_owned()));
+                        *ip_fetched.borrow_mut() = Some(ask.url.to_owned());
+                    }
+                    let fetched = ip_fetched.borrow().clone();
+                    match fetched {
+                        _ if !ask.from_url || ask.url.is_empty() => String::new(),
+                        Some(u) if u == ask.url => format!("Fetching {u}"),
+                        _ => tr!(TrackersStatusNone).to_owned(),
+                    }
+                }),
             };
             let mut st = Box::new(State::new(opts, Path::new(r"C:\settings"), hooks));
             let template = template();
@@ -2821,6 +3003,7 @@ mod tests {
                 web_edits,
                 tracker_status,
                 tracker_updates,
+                ip_updates,
                 lock,
             }
         }
@@ -2905,6 +3088,8 @@ mod tests {
                 ID_ENC_OUT,
                 ID_ENC_LEGACY,
                 ID_IPF_RELOAD,
+                ID_IPF_UPDATE,
+                ID_IPF_STATUS,
                 ID_ADV_LIST,
                 ID_ADV_SET,
                 ID_PROXY_TYPE,
@@ -3631,6 +3816,194 @@ mod tests {
         f.click(ID_IPF_RELOAD);
         assert_eq!(f.reloads.borrow().len(), 2, "no reload while the filter is off");
         assert!(f.applied.borrow().is_empty(), "Reload does not apply the rest");
+    }
+
+    const BLOCK_LIST: &str = "https://lists.example/level1.gz";
+
+    /// UI Settings > When Adding Torrents (D74): the list follows its box, goes in as typed and
+    /// comes back tidy, and is kept while the box is off.
+    #[test]
+    fn excluded_names_on_ui_settings() {
+        let mut f = Fixture::new(defaults());
+        f.page(1);
+        let enabled = |f: &Fixture, id| unsafe { IsWindowEnabled(item(f.dlg, id)) != 0 };
+        unsafe {
+            for id in [ID_EXCLUDE, ID_EXCLUDE_LIST] {
+                assert!(shown(item(f.dlg, id)), "control {id}");
+            }
+            assert!(!checked(f.dlg, ID_EXCLUDE), "off by default");
+        }
+        assert_eq!(f.text(ID_EXCLUDE), tr!(PrefExcludeNames));
+        assert_eq!(f.text(ID_EXCLUDE_LIST), "");
+        assert!(enabled(&f, ID_EXCLUDE) && !enabled(&f, ID_EXCLUDE_LIST));
+        f.check(ID_EXCLUDE, true);
+        f.click(ID_EXCLUDE);
+        assert!(enabled(&f, ID_EXCLUDE_LIST));
+        f.set(ID_EXCLUDE_LIST, " *.lnk |Thumbs.db;; *sample* ");
+        f.click(ID_APPLY);
+        let o = f.last_applied();
+        assert!(o.gui.exclude_names);
+        assert_eq!(o.gui.exclude_list, "*.lnk; Thumbs.db; *sample*");
+        assert_eq!(f.text(ID_EXCLUDE_LIST), "*.lnk; Thumbs.db; *sample*", "shown tidy");
+        let mut prefs = Prefs::default();
+        o.store(&mut prefs);
+        assert_eq!(Options::load(&prefs, "unused"), o);
+        // the box off: greyed, the list kept for the day it is on again
+        f.check(ID_EXCLUDE, false);
+        f.click(ID_EXCLUDE);
+        assert!(!enabled(&f, ID_EXCLUDE_LIST));
+        f.click(ID_APPLY);
+        let off = f.last_applied();
+        assert!(!off.gui.exclude_names);
+        assert_eq!(off.gui.exclude_list, o.gui.exclude_list);
+        // options that have it on open with the list live and unchanged by Apply
+        let g = Fixture::new(o.clone());
+        assert!(enabled(&g, ID_EXCLUDE_LIST));
+        g.click(ID_APPLY);
+        assert_eq!(g.last_applied(), o);
+    }
+
+    /// BitTorrent > IP Filter (D75): the file's controls grey while the list comes from an
+    /// address; that box needs the filter on, the address and Update Now need both.
+    #[test]
+    fn ip_filter_from_url_controls() {
+        let mut f = Fixture::new(defaults());
+        f.page(PAGE_BITTORRENT);
+        let enabled = |f: &Fixture, id| unsafe { IsWindowEnabled(item(f.dlg, id)) != 0 };
+        let file = [ID_IPF_PATH, ID_IPF_BROWSE, ID_IPF_RELOAD];
+        let web = [ID_IPF_URL, ID_IPF_UPDATE];
+        unsafe {
+            for id in [ID_IPF, ID_IPF_FROM_URL, ID_IPF_STATUS].into_iter().chain(file).chain(web) {
+                assert!(shown(item(f.dlg, id)), "control {id}");
+            }
+            assert!(!checked(f.dlg, ID_IPF) && !checked(f.dlg, ID_IPF_FROM_URL));
+        }
+        assert_eq!(f.text(ID_IPF_FROM_URL), tr!(PrefIpFilterFromUrl));
+        assert_eq!(f.text(ID_IPF_UPDATE), tr!(PrefTrackersUpdate));
+        let state = |f: &Fixture| {
+            let all = [ID_IPF_PATH, ID_IPF_BROWSE, ID_IPF_RELOAD, ID_IPF_FROM_URL, ID_IPF_URL, ID_IPF_UPDATE];
+            all.map(|id| enabled(f, id))
+        };
+        // (filter, from the web): file, file, Reload, the box, address, Update Now
+        for (on, from_url, want) in [
+            (false, false, [true, true, true, false, false, false]),
+            (true, false, [true, true, true, true, false, false]),
+            (true, true, [false, false, false, true, true, true]),
+            (false, true, [false, false, false, false, false, false]),
+        ] {
+            f.check(ID_IPF, on);
+            f.click(ID_IPF);
+            f.check(ID_IPF_FROM_URL, from_url);
+            f.click(ID_IPF_FROM_URL);
+            assert_eq!(state(&f), want, "filter {on}, from the web {from_url}");
+        }
+        // options that have both on open that way
+        let mut o = defaults();
+        o.gui.ip_filter = true;
+        o.gui.ip_filter_from_url = true;
+        o.gui.ip_filter_url = BLOCK_LIST.into();
+        let g = Fixture::new(o.clone());
+        assert_eq!(state(&g), [false, false, false, true, true, true]);
+        assert_eq!(g.text(ID_IPF_URL), BLOCK_LIST);
+        // and Apply hands them back untouched
+        g.click(ID_APPLY);
+        assert_eq!(g.last_applied(), o);
+        let mut prefs = Prefs::default();
+        o.store(&mut prefs);
+        assert_eq!(Options::load(&prefs, "unused"), o);
+    }
+
+    /// OK and Apply refuse a block list address that is not https while the filter takes the
+    /// list from it, on the BitTorrent page with the focus on the address; not otherwise.
+    #[test]
+    fn an_ip_filter_address_must_be_https() {
+        let mut f = Fixture::new(defaults());
+        f.check(ID_IPF, true);
+        f.check(ID_IPF_FROM_URL, true);
+        f.click(ID_IPF_FROM_URL);
+        for bad in ["http://lists.example/level1.gz", "", "lists.example/level1.gz"] {
+            f.page(0);
+            f.set(ID_IPF_URL, bad);
+            let err = unsafe { read_controls(f.dlg, &mut f.st) }.unwrap_err();
+            assert_eq!((err.0, page_of(err.0)), (ID_IPF_URL, Some(PAGE_BITTORRENT)), "{bad:?}");
+            f.click(ID_APPLY);
+            assert_eq!(dialogs::take_told(), [tr!(TrackersErrHttps).to_owned()], "{bad:?}");
+            assert_eq!(f.st.page, PAGE_BITTORRENT);
+            assert_eq!(unsafe { GetFocus() }, unsafe { item(f.dlg, ID_IPF_URL) }, "{bad:?}");
+        }
+        // Update Now checks the address as Apply does: refused the same way, nothing fetched or
+        // applied
+        for bad in ["http://lists.example/level1.gz", ""] {
+            f.set(ID_IPF_URL, bad);
+            f.click(ID_IPF_UPDATE);
+            assert_eq!(dialogs::take_told(), [tr!(TrackersErrHttps).to_owned()], "{bad:?}");
+            assert_eq!(unsafe { GetFocus() }, unsafe { item(f.dlg, ID_IPF_URL) }, "{bad:?}");
+            assert!(f.applied.borrow().is_empty() && f.ip_updates.borrow().is_empty());
+        }
+        f.set(ID_IPF_URL, "http://lists.example/level1.gz");
+        // the filter off, or the list from the file: the address is not asked about
+        f.check(ID_IPF, false);
+        f.click(ID_APPLY);
+        assert!(dialogs::take_told().is_empty());
+        f.check(ID_IPF, true);
+        f.check(ID_IPF_FROM_URL, false);
+        f.click(ID_APPLY);
+        assert!(dialogs::take_told().is_empty());
+        assert_eq!(f.applied.borrow().len(), 2);
+    }
+
+    /// The status line of the list from the web: "not downloaded yet" for an address with
+    /// nothing fetched; Update Now fetches from the page's address with the page's boxes,
+    /// applying nothing (as the Trackers page's), and the timer shows how it went while the page
+    /// is shown.
+    #[test]
+    fn ip_filter_update_now_fetches_without_applying() {
+        let mut f = Fixture::new(defaults());
+        f.page(PAGE_BITTORRENT);
+        // the default file while the list comes from the file
+        assert!(f.text(ID_IPF_STATUS).contains(r"C:\settings\ipfilter.dat"));
+        f.check(ID_IPF, true);
+        f.click(ID_IPF);
+        f.check(ID_IPF_FROM_URL, true);
+        f.click(ID_IPF_FROM_URL);
+        // no address yet: nothing to say
+        assert_eq!(f.text(ID_IPF_STATUS), "");
+        f.set(ID_IPF_URL, &format!(" {BLOCK_LIST} "));
+        unsafe { SendMessageW(f.dlg, WM_TIMER, TRACKERS_TIMER, 0) };
+        assert_eq!(f.text(ID_IPF_STATUS), tr!(TrackersStatusNone));
+        // Reload with nothing fetched from that address: the status says so, nothing loads
+        f.click(ID_IPF_RELOAD);
+        assert!(f.reloads.borrow().is_empty());
+        assert_eq!(f.text(ID_IPF_STATUS), tr!(TrackersStatusNone));
+        assert!(f.applied.borrow().is_empty());
+
+        // a half-edited value on another page stays unapplied
+        f.set(ID_PROXY_HOST, "proxy.example");
+        f.click(ID_IPF_UPDATE);
+        assert!(dialogs::take_told().is_empty());
+        assert!(f.applied.borrow().is_empty(), "Update Now applies nothing");
+        assert_eq!(f.ip_updates.borrow().as_slice(), [(true, true, BLOCK_LIST.to_owned())]);
+        assert_eq!(f.text(ID_IPF_STATUS), format!("Fetching {BLOCK_LIST}"));
+        assert_eq!(f.text(ID_PROXY_HOST), "proxy.example");
+        // another address typed: not fetched yet, said within a second, on this page only
+        f.set(ID_IPF_URL, "https://other.example/list.dat");
+        f.page(0);
+        unsafe { SendMessageW(f.dlg, WM_TIMER, TRACKERS_TIMER, 0) };
+        assert_eq!(f.text(ID_IPF_STATUS), format!("Fetching {BLOCK_LIST}"));
+        f.page(PAGE_BITTORRENT);
+        assert_eq!(f.text(ID_IPF_STATUS), tr!(TrackersStatusNone));
+        // the box off: the file's line again
+        f.check(ID_IPF_FROM_URL, false);
+        f.click(ID_IPF_FROM_URL);
+        assert!(f.text(ID_IPF_STATUS).contains(r"C:\settings\ipfilter.dat"));
+        // the line stays inside its group box
+        let rect = |id: u16| unsafe {
+            let mut r: RECT = std::mem::zeroed();
+            windows_sys::Win32::UI::WindowsAndMessaging::GetWindowRect(item(f.dlg, id), &mut r);
+            r
+        };
+        let (status, url) = (rect(ID_IPF_STATUS), rect(ID_IPF_URL));
+        assert!(status.top >= url.bottom, "{} {}", status.top, url.bottom);
     }
 
     #[test]

@@ -1223,3 +1223,90 @@ fn download_order_magnets_and_export_on_the_hosts_engine() {
         links[0].to_json()
     );
 }
+
+/// The IP filter's list from an address (D75) is the host's own, as its tracker list is: the
+/// page shows neither the box nor the address nor Update Now (the file greys all the same
+/// while the host takes the list from an address), a browser changes neither, even with the
+/// password, and there is no second list here to update. "Do not download files named"
+/// (D74) is the host's too, and a browser changes it as the host's other options.
+#[test]
+fn the_ip_filter_address_and_the_excluded_names_are_the_hosts() {
+    const URL: &str = "https://lists.example/level1.gz";
+    let mut options = Prefs::default();
+    options.set_bool("ipfilter.enable", true);
+    options.set_bool("ipfilter.from_url", true);
+    options.set("ipfilter.url", URL);
+    options.set_bool("files.exclude", true);
+    options.set("files.exclude_names", "*.lnk; Thumbs.db");
+    let t = Harness::start("ipfilter-exclude", options, Some(PASS));
+    let sid = t.login();
+    let m = t.get(&sid, "/pa/prefs").json();
+    let Some(Json::Arr(pages)) = m.get("pages") else { panic!("{}", m.to_json()) };
+    let bt = pages.iter().find(|p| s(p.get("id")) == "bittorrent").unwrap().to_json();
+    assert!(
+        bt.contains(
+            r#""f":"ipfilter.path","enabled_by":"ipfilter.enable","disabled_by":"ipfilter.from_url""#
+        ),
+        "{bt}"
+    );
+    for part in
+        [r#""f":"ipfilter.from_url""#, r#""f":"ipfilter.url""#, "update_ipfilter", r#""status":"ipfilter""#]
+    {
+        assert!(!bt.contains(part), "{part}: {bt}");
+    }
+    let value = |m: &Json, id: &str| m.get("fields").unwrap().get(id).unwrap().get("value").cloned().unwrap();
+    assert_eq!(
+        (value(&m, "ipfilter.from_url"), value(&m, "ipfilter.url")),
+        (Json::Bool(true), Json::from(URL))
+    );
+    assert_eq!(
+        (value(&m, "files.exclude"), value(&m, "files.exclude_names")),
+        (Json::Bool(true), Json::from("*.lnk; Thumbs.db"))
+    );
+    let ui = pages.iter().find(|p| s(p.get("id")) == "ui").unwrap().to_json();
+    assert!(ui.contains(r#""f":"files.exclude_names","enabled_by":"files.exclude""#), "{ui}");
+    assert_eq!(s(m.get("ipfilter_status")), "");
+
+    // the address and its box: refused, with the password too
+    for body in [
+        format!(r#"{{"ipfilter.url":"https://evil.example/x","webui.current_password":"{PASS}"}}"#),
+        format!(r#"{{"ipfilter.from_url":false,"webui.current_password":"{PASS}"}}"#),
+        r#"{"ipfilter.from_url":false}"#.to_owned(),
+    ] {
+        let r = t.pa(&sid, "/pa/prefs", &body);
+        assert_eq!(r.status, 400, "{body}: {}", r.text());
+        assert!(
+            s(r.json().get("error")).contains(": the IP filter's list address is set in the desktop client"),
+            "{body}: {}",
+            r.text()
+        );
+    }
+    assert_eq!(t.pa(&sid, "/pa/prefs/ipfilter/update", "{}").status, 409);
+    assert_eq!(s(t.get(&sid, "/pa/prefs/ipfilter").json().get("status")), "");
+
+    // the excluded names go to the host as its keys, kept tidy; the host's address stays
+    t.host.clear();
+    let r = t.pa(&sid, "/pa/prefs", r#"{"files.exclude_names":"*.nfo|Thumbs.db\n","ipfilter.enable":false}"#);
+    assert_eq!(r.status, 204, "{}", r.text());
+    assert_eq!(t.host.value_of("files.exclude_names"), Some(Some("*.nfo; Thumbs.db".to_owned())));
+    assert_eq!(t.host.value_of("ipfilter.enable"), Some(Some("0".to_owned())));
+    for key in ["ipfilter.url", "ipfilter.from_url", "files.exclude"] {
+        assert_eq!(t.host.value_of(key), None, "{key}: {:?}", t.host.changes());
+    }
+    let set = format!("json={}", "%7B%22excluded_file_names_enabled%22%3Afalse%7D");
+    assert_eq!(t.post(&sid, "/api/v2/app/setPreferences", &set).status, 200);
+    assert_eq!(t.host.value_of("files.exclude"), Some(Some("0".to_owned())));
+    // the host's own change comes back to the pages
+    t.web.options_changed(&[
+        ("files.exclude_names".to_owned(), Some("*.iso".to_owned())),
+        ("ipfilter.url".to_owned(), Some("https://lists.example/other.gz".to_owned())),
+    ]);
+    let m = t.get(&sid, "/pa/prefs").json();
+    assert_eq!(value(&m, "files.exclude_names"), Json::from("*.iso"));
+    assert_eq!(value(&m, "ipfilter.url"), Json::from("https://lists.example/other.gz"));
+    let p = t.get(&sid, "/api/v2/app/preferences").json();
+    assert_eq!(
+        (p.get("excluded_file_names_enabled"), s(p.get("excluded_file_names"))),
+        (Some(&Json::Bool(false)), "*.iso")
+    );
+}

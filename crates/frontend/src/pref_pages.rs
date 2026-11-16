@@ -75,6 +75,9 @@ pub struct Field {
     /// Greyed unless these fields (keys) are all on ([`is_on`]): check boxes, or the proxy
     /// type, which is off at "(none)".
     pub needs: &'static [&'static str],
+    /// Greyed while any of these check boxes is on (the IP filter's path while the list comes
+    /// from an address). [`Field::enabled`] asks both.
+    pub unless: &'static [&'static str],
     /// Always greyed: shown, never edited (what a package manages, [`Features::packaged`]).
     pub fixed: bool,
     /// Its help text (D55) when not the one named like its label ([`Field::help`]): a field
@@ -97,6 +100,10 @@ pub enum Action {
     SetPin,
     ChangePin,
     RemovePin,
+    /// Fetches the IP filter's list at the `ipfilter.url` address now (D75,
+    /// [`crate::ip_filter_list::IpFilterList::refresh_now`], after applying the page). Its label
+    /// is Update Now as the trackers' button; its help text is its own ([`item_help`]).
+    UpdateIpFilter,
 }
 
 impl Action {
@@ -124,7 +131,9 @@ pub enum Item {
         action: Action,
         label: S,
     },
-    /// The IP filter's status line, filled by the toolkit.
+    /// The IP filter's status line, filled by the toolkit with
+    /// [`crate::ip_filter_list::page_status`] (Reload's result, the list from the web's
+    /// [`crate::ip_filter_list::IpFilterList::status_for`], the default file).
     IpFilterStatus,
     /// The fetched tracker list's status line, filled by the toolkit with
     /// [`crate::tracker_list::TrackerList::status`].
@@ -147,6 +156,16 @@ pub const TRACKERS_APPEND: &str = "trackers.append";
 pub const TRACKERS_LIST: &str = "trackers.list";
 pub const TRACKERS_FROM_URL: &str = "trackers.from_url";
 pub const TRACKERS_URL: &str = "trackers.url";
+
+/// UI Settings > When Adding Torrents (D74): "Do not download files named" and its list.
+pub const EXCLUDE_NAMES: &str = "files.exclude";
+pub const EXCLUDE_LIST: &str = "files.exclude_names";
+
+/// BitTorrent > IP Filter: the switch, the file, and the list from an address instead (D75).
+pub const IPFILTER_ENABLE: &str = "ipfilter.enable";
+pub const IPFILTER_PATH: &str = "ipfilter.path";
+pub const IPFILTER_FROM_URL: &str = "ipfilter.from_url";
+pub const IPFILTER_URL: &str = "ipfilter.url";
 
 /// Advanced > Run Program (D67): the two check boxes and their command lines.
 pub const RUN_ADDED_ON: &str = "run.added_enabled";
@@ -180,7 +199,9 @@ pub fn text_error(key: &str, text: &str) -> Option<String> {
     }
     match key {
         TRACKERS_LIST => (crate::tracker_list::parse(text).invalid > 0).then(|| tr_owned(S::TrackersErrLine)),
-        TRACKERS_URL => (!crate::tracker_list::is_list_url(text)).then(|| tr_owned(S::TrackersErrHttps)),
+        TRACKERS_URL | IPFILTER_URL => {
+            (!crate::tracker_list::is_list_url(text)).then(|| tr_owned(S::TrackersErrHttps))
+        }
         RUN_ADDED | RUN_FINISHED => run_command_error(text),
         _ => None,
     }
@@ -297,7 +318,17 @@ fn theme_choices(_: &Options) -> Vec<(String, String)> {
 }
 
 const fn field(key: &'static str, label: Option<S>, control: Control) -> Field {
-    Field { key, label, control, indent: false, beside: false, needs: &[], fixed: false, help: None }
+    Field {
+        key,
+        label,
+        control,
+        indent: false,
+        beside: false,
+        needs: &[],
+        unless: &[],
+        fixed: false,
+        help: None,
+    }
 }
 
 const fn checkbox(
@@ -346,6 +377,11 @@ impl Field {
         self
     }
 
+    const fn unless(mut self, keys: &'static [&'static str]) -> Field {
+        self.unless = keys;
+        self
+    }
+
     const fn fixed(mut self, on: bool) -> Field {
         self.fixed = on;
         self
@@ -385,10 +421,10 @@ impl Field {
         Ok(())
     }
 
-    /// Whether the control is enabled, with `on` telling whether a field it needs is on now
-    /// ([`is_on`] of its control's value).
+    /// Whether the control is enabled, with `on` telling whether a field it needs (or one that
+    /// greys it, [`Field::unless`]) is on now ([`is_on`] of its control's value).
     pub fn enabled(&self, on: impl Fn(&str) -> bool) -> bool {
-        self.needs.iter().all(|k| on(k))
+        self.needs.iter().all(|k| on(k)) && !self.unless.iter().any(|k| on(k))
     }
 }
 
@@ -474,6 +510,22 @@ pub fn pages(features: Features) -> Vec<Page> {
             |o| o.gui.show_add_dialog,
             |o, v| o.gui.show_add_dialog = v,
         )),
+        // D74, `exclude`: the patterns under their box
+        F(checkbox(
+            EXCLUDE_NAMES,
+            S::PrefExcludeNames,
+            |o| o.gui.exclude_names,
+            |o, v| o.gui.exclude_names = v,
+        )),
+        F(text(
+            EXCLUDE_LIST,
+            None,
+            TextKind::Plain,
+            |o| o.gui.exclude_list.clone(),
+            |o, v| o.gui.exclude_list = crate::exclude::to_stored(&v),
+        )
+        .help(H::PrefExcludeNames)
+        .needs(&[EXCLUDE_NAMES])),
     ]);
     let mut general = vec![
         Group(S::PrefLanguage),
@@ -941,20 +993,40 @@ pub fn pages(features: Features) -> Vec<Page> {
                 )),
                 Group(S::PrefIpFilter),
                 F(checkbox(
-                    "ipfilter.enable",
+                    IPFILTER_ENABLE,
                     S::PrefIpFilterEnable,
                     |o| o.gui.ip_filter,
                     |o, v| o.gui.ip_filter = v,
                 )),
+                // greyed while the list comes from an address (D75)
                 F(text(
-                    "ipfilter.path",
+                    IPFILTER_PATH,
                     None,
                     TextKind::File(S::PrefIpFilter),
                     |o| o.gui.ip_filter_path.clone(),
                     |o, v| o.gui.ip_filter_path = v.trim().to_owned(),
                 )
-                .help(H::PrefIpFilterEnable)),
+                .help(H::PrefIpFilterEnable)
+                .unless(&[IPFILTER_FROM_URL])),
                 Item::Button { action: Action::ReloadIpFilter, label: S::PrefReload },
+                // D75, `ip_filter_list`: the list from an address instead of the file
+                F(checkbox(
+                    IPFILTER_FROM_URL,
+                    S::PrefIpFilterFromUrl,
+                    |o| o.gui.ip_filter_from_url,
+                    |o, v| o.gui.ip_filter_from_url = v,
+                )
+                .needs(&[IPFILTER_ENABLE])),
+                F(text(
+                    IPFILTER_URL,
+                    None,
+                    TextKind::Plain,
+                    |o| o.gui.ip_filter_url.clone(),
+                    |o, v| o.gui.ip_filter_url = v.trim().to_owned(),
+                )
+                .help(H::PrefIpFilterFromUrl)
+                .needs(&[IPFILTER_ENABLE, IPFILTER_FROM_URL])),
+                Item::Button { action: Action::UpdateIpFilter, label: S::PrefTrackersUpdate },
                 Item::IpFilterStatus,
             ],
         },
@@ -1357,10 +1429,12 @@ pub fn fields(pages: &[Page]) -> impl Iterator<Item = &Field> {
 }
 
 /// The help text's key of a page item a toolkit gives a tooltip (D55): a field's
-/// ([`Field::help_key`]), a button's (named like its label) and the Scheduler's table.
+/// ([`Field::help_key`]), a button's (named like its label, but the IP filter's Update Now has
+/// its own) and the Scheduler's table.
 pub fn item_help(item: &Item) -> Option<H> {
     match item {
         Item::Field(f) => f.help_key(),
+        Item::Button { action: Action::UpdateIpFilter, .. } => Some(H::PrefIpFilterUpdate),
         Item::Button { label, .. } => H::for_label(*label),
         Item::SchedTable => Some(H::PrefSchedTable),
         Item::LockSwitch => Some(H::PrefLockEnable),
@@ -1410,6 +1484,10 @@ pub fn check(o: &Options) -> Result<(), (&'static str, String)> {
     }
     if g.trackers_from_url && !crate::tracker_list::is_list_url(&g.trackers_url) {
         return Err((TRACKERS_URL, tr_owned(S::TrackersErrHttps)));
+    }
+    // (the address is greyed while the filter is off: it is not asked for then)
+    if g.ip_filter && g.ip_filter_from_url && !crate::tracker_list::is_list_url(&g.ip_filter_url) {
+        return Err((IPFILTER_URL, tr_owned(S::TrackersErrHttps)));
     }
     for (on, line, key) in
         [(g.run_added_on, &g.run_added, RUN_ADDED), (g.run_finished_on, &g.run_finished, RUN_FINISHED)]
@@ -1495,7 +1573,7 @@ mod tests {
         let mut seen = std::collections::HashSet::new();
         for f in fields(&pages) {
             assert!(seen.insert(f.key), "{} twice", f.key);
-            for k in f.needs {
+            for k in f.needs.iter().chain(f.unless) {
                 let needed = fields(&pages).find(|g| g.key == *k).unwrap_or_else(|| panic!("{k}"));
                 let switch =
                     matches!(needed.control, Control::Check { .. }) || *k == PROXY_TYPE || *k == NETWORK_RULE;
@@ -1699,6 +1777,91 @@ mod tests {
         assert!(f.enabled(|k| k == "use_read_cache" || k == "cache.override"));
         assert!(!f.enabled(|k| k == "use_read_cache"));
         assert!(fields(&pages).find(|f| f.key == "port").unwrap().enabled(|_| false));
+        // D75: the path greys while the list comes from an address, which needs both boxes
+        let path = fields_by(&pages, IPFILTER_PATH);
+        assert!(path.enabled(|_| false) && path.enabled(|k| k == IPFILTER_ENABLE));
+        assert!(!path.enabled(|k| k == IPFILTER_ENABLE || k == IPFILTER_FROM_URL));
+        let url = fields_by(&pages, IPFILTER_URL);
+        assert!(url.enabled(|k| k == IPFILTER_ENABLE || k == IPFILTER_FROM_URL));
+        assert!(!url.enabled(|k| k == IPFILTER_FROM_URL) && !url.enabled(|k| k == IPFILTER_ENABLE));
+        assert!(!fields_by(&pages, IPFILTER_FROM_URL).enabled(|_| false));
+        // D74: the list follows its box
+        let list = fields_by(&pages, EXCLUDE_LIST);
+        assert!(!list.enabled(|_| false) && list.enabled(|k| k == EXCLUDE_NAMES));
+    }
+
+    /// D74 on UI Settings after "Show a window that displays the files", D75 on BitTorrent in
+    /// the IP Filter group: in that order, with their help texts.
+    #[test]
+    fn the_exclusion_list_and_the_ip_filter_address() {
+        let pages = pages(Features::default());
+        assert_eq!(page_of(&pages, EXCLUDE_NAMES).map(|p| p.key), Some("ui"));
+        let ui: Vec<&str> = fields(&pages[1..2]).map(|f| f.key).collect();
+        let at = ui.iter().position(|k| *k == "ui.show_add_dialog").unwrap();
+        assert_eq!(ui[at + 1..at + 3], [EXCLUDE_NAMES, EXCLUDE_LIST]);
+        assert_eq!(fields_by(&pages, EXCLUDE_LIST).help_key(), Some(H::PrefExcludeNames));
+        assert_eq!(fields_by(&pages, EXCLUDE_NAMES).label, Some(S::PrefExcludeNames));
+
+        let bt = &pages.iter().find(|p| p.key == "bittorrent").unwrap().items;
+        let at = bt.iter().position(|i| matches!(i, Item::Group(S::PrefIpFilter))).unwrap();
+        let order: Vec<String> = bt[at + 1..]
+            .iter()
+            .map(|i| match i {
+                Item::Field(f) => f.key.to_owned(),
+                Item::Button { action, .. } => format!("{action:?}"),
+                Item::IpFilterStatus => "status".to_owned(),
+                _ => "other".to_owned(),
+            })
+            .collect();
+        assert_eq!(
+            order,
+            [
+                IPFILTER_ENABLE,
+                IPFILTER_PATH,
+                "ReloadIpFilter",
+                IPFILTER_FROM_URL,
+                IPFILTER_URL,
+                "UpdateIpFilter",
+                "status"
+            ]
+        );
+        let update =
+            bt.iter().find(|i| matches!(i, Item::Button { action: Action::UpdateIpFilter, .. })).unwrap();
+        assert_eq!(item_help(update), Some(H::PrefIpFilterUpdate));
+        assert_eq!(fields_by(&pages, IPFILTER_URL).help_key(), Some(H::PrefIpFilterFromUrl));
+
+        // the list is kept tidy; the address must be https while the filter takes it
+        let o = opts();
+        let mut form = Form::default();
+        let shown: HashMap<_, _> = form.write(&pages, &o).into_iter().collect();
+        assert_eq!((shown[EXCLUDE_NAMES].as_str(), shown[EXCLUDE_LIST].as_str()), ("false", ""));
+        let edited = |k: &str| match k {
+            EXCLUDE_NAMES => "true".to_owned(),
+            EXCLUDE_LIST => " *.lnk |Thumbs.db\n".to_owned(),
+            _ => shown[k].clone(),
+        };
+        let new = form.read(&pages, &o, edited).unwrap();
+        assert!(new.gui.exclude_names);
+        assert_eq!(new.gui.exclude_list, "*.lnk; Thumbs.db");
+        let shown = &shown;
+        let url = |value: &'static str, enable: &'static str| {
+            move |k: &str| match k {
+                IPFILTER_ENABLE => enable.to_owned(),
+                IPFILTER_FROM_URL => "true".to_owned(),
+                IPFILTER_URL => value.to_owned(),
+                _ => shown[k].clone(),
+            }
+        };
+        let (key, message) = form.read(&pages, &o, url("http://x.example/l.gz", "true")).unwrap_err();
+        assert_eq!((key, message), (IPFILTER_URL, tr_owned(S::TrackersErrHttps)));
+        assert_eq!(form.read(&pages, &o, url("", "true")).unwrap_err().0, IPFILTER_URL);
+        let new = form.read(&pages, &o, url(" https://x.example/l.gz ", "true")).unwrap();
+        assert!(new.gui.ip_filter && new.gui.ip_filter_from_url);
+        assert_eq!(new.gui.ip_filter_url, "https://x.example/l.gz");
+        // the filter off: the greyed address is not asked for
+        assert!(form.read(&pages, &o, url("", "false")).is_ok());
+        assert_eq!(text_error(IPFILTER_URL, "ftp://x"), Some(tr_owned(S::TrackersErrHttps)));
+        assert_eq!(text_error(IPFILTER_URL, " "), None);
     }
 
     /// Every control of every page has a help text (D55), so a setting added without one fails

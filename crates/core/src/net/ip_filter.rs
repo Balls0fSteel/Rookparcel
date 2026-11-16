@@ -5,7 +5,7 @@
 // IPv4-mapped IPv6 address is looked up in the IPv4 table. The ipfilter.dat / P2P parser is new.
 
 //! IP and port filters (libtorrent `ip_filter`, `port_filter`) and a parser for block lists in
-//! the eMule / µTorrent `ipfilter.dat` and PeerGuardian P2P text formats.
+//! the eMule / µTorrent `ipfilter.dat` and PeerGuardian P2P text formats (CIDR blocks too).
 
 use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -206,7 +206,8 @@ impl IpFilter {
     ///   range of one;
     /// * PeerGuardian P2P: `description:first-last`.
     ///
-    /// Blank lines and `#` or `//` comments are skipped; other lines that fit neither format
+    /// In either, a CIDR block (`10.0.0.0/8`, `2001:db8::/32`) may stand for the range, and a
+    /// line may be a CIDR block alone. Blank lines and `#` or `//` comments are skipped; other lines that fit neither format
     /// are counted in [`IpFilterLoad::invalid`] and skipped.
     pub fn parse(data: &[u8]) -> IpFilterLoad {
         let mut out = IpFilterLoad { filter: IpFilter::new(), rules: 0, invalid: 0 };
@@ -271,9 +272,13 @@ fn parse_p2p_line(line: &str) -> Option<Rule> {
         .map(|(a, b)| Rule::Block(a, b))
 }
 
-/// `first - last`, or (with `single`) a lone address. Both ends of one family, `first <= last`.
+/// `first - last`, a CIDR block (`10.0.0.0/8`, `2001:db8::/32`), or (with `single`) a lone
+/// address. Both ends of one family, `first <= last`.
 fn parse_range(s: &str, single: bool) -> Option<(IpAddr, IpAddr)> {
     let s = s.trim();
+    if s.contains('/') {
+        return parse_cidr(s);
+    }
     let (first, last) = match s.split_once('-') {
         Some((a, b)) => (parse_addr(a)?, parse_addr(b)?),
         None if !single => return None,
@@ -288,6 +293,30 @@ fn parse_range(s: &str, single: bool) -> Option<(IpAddr, IpAddr)> {
         _ => false,
     };
     ok.then_some((first, last))
+}
+
+/// `address/prefix` as the block's first and last address: /0 to /32 for IPv4, /0 to /128 for
+/// IPv6. The host bits are ignored (`10.1.2.3/8` is `10.0.0.0 - 10.255.255.255`).
+fn parse_cidr(s: &str) -> Option<(IpAddr, IpAddr)> {
+    let (addr, bits) = s.split_once('/')?;
+    let bits = bits.trim();
+    if bits.is_empty() || bits.len() > 3 || !bits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let bits: u32 = bits.parse().ok()?;
+    match parse_addr(addr)? {
+        IpAddr::V4(a) if bits <= 32 => {
+            let mask = u32::MAX.checked_shl(32 - bits).unwrap_or(0);
+            let first = a.to_bits() & mask;
+            Some((IpAddr::V4(Ipv4Addr::from_bits(first)), IpAddr::V4(Ipv4Addr::from_bits(first | !mask))))
+        }
+        IpAddr::V6(a) if bits <= 128 => {
+            let mask = u128::MAX.checked_shl(128 - bits).unwrap_or(0);
+            let first = a.to_bits() & mask;
+            Some((IpAddr::V6(Ipv6Addr::from_bits(first)), IpAddr::V6(Ipv6Addr::from_bits(first | !mask))))
+        }
+        _ => None,
+    }
 }
 
 /// An address, allowing the zero-padded IPv4 octets of `ipfilter.dat` (`001.002.003.004`).
@@ -691,6 +720,48 @@ mod tests {
         assert!(f.is_blocked(addr("10.0.0.7")));
         assert!(f.is_blocked(addr("2001:db8::80")) && !f.is_blocked(addr("2001:db8::100")));
         assert!(f.is_blocked(addr("7.7.7.8")));
+    }
+
+    #[test]
+    fn parse_cidr_blocks() {
+        let text = b"10.1.2.3/8\n\
+            192.168.0.0/16 , 000 , a dat line\n\
+            Some network:172.16.0.0/12\n\
+            v6 block:2001:db8::/32\n\
+            fd00::1/128\n\
+            8.8.8.8/32\n\
+            0.0.0.0/0\n\
+            1.2.3.0/33\n\
+            ::/129\n\
+            1.2.3.0/\n\
+            1.2.3.0/x\n\
+            1.2.3.0/0008\n\
+            5.0.0.0/8 , 200 , a high level allows\n";
+        let l = IpFilter::parse(text);
+        assert_eq!((l.rules, l.invalid), (7, 5));
+        let f = &l.filter;
+        // host bits are ignored
+        assert!(f.is_blocked(addr("10.0.0.0")) && f.is_blocked(addr("10.255.255.255")));
+        assert!(f.is_blocked(addr("192.168.200.1")) && f.is_blocked(addr("172.31.255.255")));
+        assert!(f.is_blocked(addr("2001:db8:ffff::1")) && !f.is_blocked(addr("2001:db9::")));
+        assert!(f.is_blocked(addr("fd00::1")) && !f.is_blocked(addr("fd00::2")));
+        assert!(f.is_blocked(addr("8.8.8.8")) && f.is_blocked(addr("5.5.5.5")), "0.0.0.0/0 is everything");
+
+        // each bound alone
+        for (line, first, last) in [
+            ("1.2.3.4/32", "1.2.3.4", "1.2.3.4"),
+            ("1.2.3.4/31", "1.2.3.4", "1.2.3.5"),
+            ("1.2.3.4/0", "0.0.0.0", "255.255.255.255"),
+            ("::/0", "::", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"),
+            ("2001:db8::5/127", "2001:db8::4", "2001:db8::5"),
+            ("2001:db8::5/128", "2001:db8::5", "2001:db8::5"),
+        ] {
+            assert_eq!(parse_range(line, false), Some((addr(first), addr(last))), "{line}");
+        }
+        assert_eq!(parse_range("1.2.3.4/33", true), None);
+        assert_eq!(parse_range("::/129", true), None);
+        assert_eq!(parse_range("1.2.3.4/-1", true), None);
+        assert_eq!(parse_range("1.2.3.4/ 8", true), parse_range("1.2.3.4/8", true));
     }
 
     #[test]

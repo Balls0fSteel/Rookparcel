@@ -56,6 +56,8 @@ use rookparcel_core::{
     Alert, AnnounceEntry, Bitfield, FileEntry, MoveCompleted, PartialPiece, PeerInfo, SessionHandle,
     SessionStats, Settings, TorrentFlags, TorrentId, TorrentStatus,
 };
+use rookparcel_frontend::exclude::Pending;
+use rookparcel_frontend::ip_filter_list::{self, IpFilterList};
 use rookparcel_frontend::options::GuiOptions;
 use rookparcel_frontend::scheduler::{Mode, Schedule, Scheduler};
 use rookparcel_frontend::scrape::Scrapes;
@@ -248,6 +250,12 @@ pub(crate) struct Prefs {
     /// The page shows the Add New Torrent dialog for `.torrent` files (`GET /pa/add`'s
     /// `show_dialog`).
     pub show_add_dialog: bool,
+    /// UI Settings > When Adding Torrents (D74, `GuiOptions::exclude_names`, `exclude_list`,
+    /// kept as `frontend::exclude::to_stored` gives it): files whose names match the list start
+    /// unchecked in the page's Add dialog, and are not downloaded in torrents added without it
+    /// (`commands::add`). Hosted, the host's, which a browser changes as its other options.
+    pub exclude_names: bool,
+    pub exclude_list: String,
     /// A new listen port at every start.
     pub random_port: bool,
     /// Per-torrent defaults: peer exchange, connected peers and upload slots per new torrent
@@ -260,6 +268,12 @@ pub(crate) struct Prefs {
     /// The IP filter: on, and the block list (empty = `ipfilter.dat` in the state directory).
     pub ip_filter: bool,
     pub ip_filter_path: String,
+    /// The block list from an `https://` address instead of the file (D75,
+    /// `GuiOptions::ip_filter_from_url`, `ip_filter_url`), fetched by [`Shared::ip_list`].
+    /// Changed only with the current password (`prefs::SECURITY_FIELDS`); hosted, the host's
+    /// own, which a browser never changes.
+    pub ip_filter_from_url: bool,
+    pub ip_filter_url: String,
     /// Preferences > Scheduler (`GuiOptions::schedule`).
     pub schedule: Schedule,
     /// Preferences > General > Privacy: nox's update check (`GuiOptions::check_updates`,
@@ -322,6 +336,8 @@ impl Prefs {
             torrent_folders: TorrentFolders::default(),
             confirm_delete: true,
             show_add_dialog: true,
+            exclude_names: false,
+            exclude_list: String::new(),
             random_port: false,
             pex: true,
             max_peers_per_torrent: 0,
@@ -329,6 +345,8 @@ impl Prefs {
             seeding_goal: SeedingGoal::default(),
             ip_filter: false,
             ip_filter_path: String::new(),
+            ip_filter_from_url: false,
+            ip_filter_url: String::new(),
             schedule: Schedule::default(),
             check_updates: true,
             update_beta: false,
@@ -399,6 +417,10 @@ impl Prefs {
             run_added: self.run_added.clone(),
             run_finished_on: self.run_finished_on,
             run_finished: self.run_finished.clone(),
+            exclude_names: self.exclude_names,
+            exclude_list: self.exclude_list.clone(),
+            ip_filter_from_url: self.ip_filter_from_url,
+            ip_filter_url: self.ip_filter_url.clone(),
         }
     }
 
@@ -413,7 +435,8 @@ impl Prefs {
 
     /// Writes these preferences into `g`, leaving the desktop-only options (tray, balloons,
     /// window activation and title, updates, the trackers added to new downloads, the Run
-    /// Program lines) as they are: a host's options with the Web UI's changes on them.
+    /// Program lines, the IP filter's list from an address) as they are: a host's options with
+    /// the Web UI's changes on them.
     pub fn apply_to(&self, g: &mut GuiOptions) {
         let mine = self.gui();
         *g = GuiOptions {
@@ -437,6 +460,9 @@ impl Prefs {
             run_added: g.run_added.clone(),
             run_finished_on: g.run_finished_on,
             run_finished: g.run_finished.clone(),
+            // the host's own block list address (D75): a browser never changes it
+            ip_filter_from_url: g.ip_filter_from_url,
+            ip_filter_url: g.ip_filter_url.clone(),
             ..mine
         };
     }
@@ -458,6 +484,10 @@ impl Prefs {
         self.seeding_goal = g.seeding_goal();
         self.ip_filter = g.ip_filter;
         self.ip_filter_path = g.ip_filter_path.clone();
+        self.ip_filter_from_url = g.ip_filter_from_url;
+        self.ip_filter_url = g.ip_filter_url.clone();
+        self.exclude_names = g.exclude_names;
+        self.exclude_list = g.exclude_list.clone();
         self.schedule = g.schedule.clone();
         self.check_updates = g.check_updates;
         self.update_beta = g.update_beta;
@@ -627,6 +657,11 @@ pub(crate) struct State {
     /// choice (kept in `options`), and a version a `tick` carries as `adds`.
     pub awaiting: rookparcel_frontend::add::AwaitingMetadata,
     pub adds_version: u64,
+    /// Magnets added without the Add dialog (the shim, URL adds with the dialog off, RSS),
+    /// until their files are known: the ones "Do not download files named" leaves out are set
+    /// to Don't Download then (D74). Fed every alert by [`WebUi::on_alerts`]; not kept over a
+    /// restart.
+    pub excluded: Pending,
     /// The newer Rookparcel nox's update check found (`update.rs`), for the page's status bar;
     /// never set hosted (the host checks).
     pub update: Option<rookparcel_frontend::update::Version>,
@@ -671,6 +706,11 @@ pub(crate) struct Shared {
     /// ([`Shared::trackers_tick`]). `None` hosted: the host owns its own list. Its lock is taken
     /// alone or after the State lock, never before it.
     pub(crate) trackers: Option<Mutex<TrackerList>>,
+    /// The IP filter's block list from an `https://` address (D75): configured from
+    /// `Prefs::ip_filter*`, ticked with [`Shared::trackers_tick`] ([`Shared::ip_list_tick`]),
+    /// a fetched list handed to the engine. `None` hosted: the host keeps its own. Its lock is
+    /// taken alone or after the State lock, never before it.
+    pub(crate) ip_list: Option<Mutex<IpFilterList>>,
     /// Run Program (D67): the daemon's one starter of the user's programs, fed every alert by
     /// [`WebUi::on_alerts`] and pointed at `Prefs::run_commands` there, so before the first
     /// alert after a commit. `None` hosted: the host runs its own. Only the alert thread takes
@@ -876,6 +916,36 @@ impl Shared {
         }
         if let Some(tiers) = tiers {
             self.handle.set_extra_trackers(tiers);
+        }
+    }
+
+    pub(crate) fn ip_list(&self) -> Option<MutexGuard<'_, IpFilterList>> {
+        self.ip_list.as_ref().map(|l| l.lock().unwrap_or_else(|e| e.into_inner()))
+    }
+
+    /// The IP filter's list from an address (D75) follows the preferences: at start, before
+    /// the filter is loaded, and with a commit (a kept list of another address is forgotten).
+    /// Hosted: nothing (the host's list).
+    pub(crate) fn configure_ip_list(&self, p: &Prefs) {
+        if let Some(mut l) = self.ip_list() {
+            l.configure(ip_filter_list::Config::of(&p.gui()));
+        }
+    }
+
+    /// With [`Shared::trackers_tick`]: a finished fetch of the block list is taken and a due one
+    /// started (through the session's proxy, held while the D70 guard holds the transfers), its
+    /// lines go to the Logger, and a new list goes to the engine.
+    pub(crate) fn ip_list_tick(&self, st: &mut State) {
+        let Some(mut l) = self.ip_list() else { return };
+        let log = l.tick(|| FetchProxy::from_settings(&st.settings));
+        let filter = l.take_filter();
+        drop(l);
+        if let Some(f) = filter {
+            self.handle.set_ip_filter(f);
+        }
+        let now = unix_now();
+        for line in log {
+            st.push_log(None, line, now);
         }
     }
 
@@ -1178,6 +1248,7 @@ impl WebUi {
                 search_version: 1,
                 awaiting,
                 adds_version: 1,
+                excluded: Pending::new(),
                 update: None,
             }),
             replied: Condvar::new(),
@@ -1208,6 +1279,15 @@ impl WebUi {
                 None => Some(Mutex::new(TrackerList::new(
                     config.state_dir.as_ref().map(|d| d.join(tracker_list::CACHE_FILE)),
                     tracker_list::Config::default(),
+                ))),
+            },
+            // ipfilter-url.dat and .txt beside webui.json; none kept without a config directory;
+            // hosted, the host's own list. Configured by `prefs::restore`.
+            ip_list: match hosted {
+                Some(_) => None,
+                None => Some(Mutex::new(IpFilterList::new(
+                    config.state_dir.clone(),
+                    ip_filter_list::Config::default(),
                 ))),
             },
             // hosted, the host starts its own programs (D67): none here
@@ -1241,6 +1321,9 @@ impl WebUi {
                 // the cached one) before anything is added; a due fetch starts here too
                 shared.configure_trackers(&st);
                 shared.trackers_tick(&mut st);
+                // the IP filter's list from an address (D75), configured by `restore`: a due
+                // fetch starts here (the kept copy is in force already)
+                shared.ip_list_tick(&mut st);
                 // the Web UI's language (Preferences > General); ROOKPARCEL_LANG over it
                 for p in rookparcel_frontend::lang::init(&st.prefs.language) {
                     st.push_log(None, p, unix_now());
@@ -1317,15 +1400,17 @@ impl WebUi {
     }
 
     /// Reads the IP filter's block list again (the daemon's SIGHUP) when the filter is on: the
-    /// BitTorrent page's file, else `ipfilter.dat` in the state directory. A list that does not
-    /// load leaves the old rules in force. Returns the line it logged.
+    /// BitTorrent page's file, else `ipfilter.dat` in the state directory; with the list from an
+    /// address (D75), the copy kept of it (nothing while none was fetched from that address:
+    /// nothing is fetched here). A list that does not load leaves the old rules in force.
+    /// Returns the line it logged.
     pub fn reload_ip_filter(&self) -> Option<String> {
         let file = {
             let st = self.shared.lock();
             if !st.prefs.ip_filter {
                 return None;
             }
-            st.prefs.gui().ip_filter_file(&self.shared.settings_dir)
+            ip_filter_list::list_file(&st.prefs.gui(), &self.shared.settings_dir)?
         };
         // read without the State lock (SEC-05)
         let line = match self.shared.handle.load_ip_filter(&file) {
@@ -1462,6 +1547,9 @@ impl WebUi {
                     st.push_log(None, line, now);
                 }
             }
+            // magnets added without the Add dialog: their files once known (D74); hosted too,
+            // for the Web UI's own adds
+            st.excluded.on_alert(a, &self.shared.handle);
             let left = matches!(a, Alert::TorrentRemoved { id, .. } if st.awaiting.holds(*id));
             let s = &mut *st;
             if s.awaiting.on_alert(a, &self.shared.handle, &mut s.options) || left {
@@ -1587,6 +1675,8 @@ impl WebUi {
             }
             // the tracker list (D66) before this tick's adds (the auto-load folder, RSS)
             self.shared.trackers_tick(&mut st);
+            // the IP filter's list from an address (D75)
+            self.shared.ip_list_tick(&mut st);
             found = autoload(&mut st, &self.shared.path_policy, now);
         }
         let meta_wanted: Vec<TorrentId> = if ticked {
@@ -1992,6 +2082,7 @@ impl State {
             helper: Mutex::default(),
             this: Weak::new(),
             trackers: Some(Mutex::new(TrackerList::new(None, tracker_list::Config::default()))),
+            ip_list: Some(Mutex::new(IpFilterList::new(None, ip_filter_list::Config::default()))),
             run_program: Some(Mutex::new(RunPrograms::new())),
             remote_run_program: false,
         }
@@ -2043,6 +2134,7 @@ impl State {
             search_version: 1,
             awaiting: Default::default(),
             adds_version: 1,
+            excluded: Pending::new(),
             update: None,
         }
     }

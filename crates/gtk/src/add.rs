@@ -176,7 +176,8 @@ pub fn show(
     filter_bar.append(&filter);
     filter_bar.append(&count);
     let d = Rc::new(Dialog {
-        tree: RefCell::new(FileTree::from_torrent(ti)),
+        // the files Preferences leave out start unchecked (D74)
+        tree: RefCell::new(FileTree::for_add(ti, &setup)),
         model,
         selection,
         bound: RefCell::default(),

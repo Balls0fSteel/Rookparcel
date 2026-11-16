@@ -5076,3 +5076,362 @@ fn export_and_magnet_links() {
     let x = t.wait_for(&sid, &hash, "untouched", |_| true);
     assert!(!flag_of(&x, "seq_dl") && !flag_of(&x, "f_l_piece_prio"));
 }
+
+// ---------------------------------------------------------------------------------------------
+// "Do not download files named" (D74): UI Settings > When Adding Torrents
+
+/// A torrent's file priorities as the shim gives them (qBittorrent's 0, 1, 6, 7), once its file
+/// list is known and `f` holds for it.
+fn prios_until(t: &Harness, sid: &str, hash: &str, what: &str, f: impl Fn(&[i64]) -> bool) -> Vec<i64> {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let r = t.get(sid, &format!("/api/v2/torrents/files?hash={hash}"));
+        let prios: Vec<i64> = match (r.status, json::parse(&r.text())) {
+            (200, Ok(Json::Arr(v))) => {
+                v.iter().map(|x| x.get("priority").and_then(Json::as_i64).unwrap_or(-1)).collect()
+            }
+            _ => Vec::new(),
+        };
+        if !prios.is_empty() && f(&prios) {
+            return prios;
+        }
+        assert!(Instant::now() < deadline, "timed out waiting for {what}: {prios:?}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// The two exclusion fields' values (the box, the list).
+fn exclude_prefs(t: &Harness, sid: &str) -> (Json, String) {
+    let m = t.get(sid, "/pa/prefs").json();
+    let value = |id: &str| m.get("fields").unwrap().get(id).unwrap().get("value").cloned().unwrap();
+    (value("files.exclude"), s(Some(&value("files.exclude_names"))).to_owned())
+}
+
+/// The option on the page and in the shim (one pattern per line there); with it on, an add
+/// that names no priorities (the shim, the page with its dialog off) leaves the matching file
+/// out, an add that names its own is untouched, a torrent whose every file matches is left
+/// alone, and the page's dialog is told which files start unchecked.
+#[test]
+fn excluded_file_names_on_adds_without_the_dialog() {
+    let t = Harness::start("exclude-names");
+    let sid = t.login();
+    let m = t.get(&sid, "/pa/prefs").json();
+    let Some(Json::Arr(pages)) = m.get("pages") else { panic!("{}", m.to_json()) };
+    let ui = pages.iter().find(|p| s(p.get("id")) == "ui").expect("UI Settings").to_json();
+    let at = |part: &str| ui.find(part).unwrap_or_else(|| panic!("{part}: {ui}"));
+    assert!(at(r#""f":"ui.show_add_dialog""#) < at(r#""f":"files.exclude""#));
+    assert!(at(r#""f":"files.exclude""#) < at(r#""f":"files.exclude_names","enabled_by":"files.exclude""#));
+    let field = |id: &str| m.get("fields").unwrap().get(id).unwrap().clone();
+    assert_eq!(s(field("files.exclude").get("label")), "Do not download files named:");
+    assert_eq!(
+        (s(field("files.exclude").get("type")), s(field("files.exclude_names").get("type"))),
+        ("bool", "text")
+    );
+    assert_eq!(field("files.exclude_names").get("help"), field("files.exclude").get("help"));
+    assert!(s(field("files.exclude_names").get("help")).contains("Thumbs.db"));
+    assert_eq!(exclude_prefs(&t, &sid), (Json::Bool(false), String::new()), "off by default");
+    let p = t.get(&sid, "/api/v2/app/preferences").json();
+    assert_eq!(
+        (p.get("excluded_file_names_enabled"), s(p.get("excluded_file_names"))),
+        (Some(&Json::Bool(false)), "")
+    );
+
+    // the page's list, kept tidy; the shim gives it one pattern per line
+    let r = t.pa(&sid, "/pa/prefs", r#"{"files.exclude":true,"files.exclude_names":" B.BIN |*.nfo\n"}"#);
+    assert_eq!(r.status, 204, "{}", r.text());
+    assert_eq!(exclude_prefs(&t, &sid), (Json::Bool(true), "B.BIN; *.nfo".to_owned()));
+    let p = t.get(&sid, "/api/v2/app/preferences").json();
+    assert_eq!(
+        (p.get("excluded_file_names_enabled"), s(p.get("excluded_file_names"))),
+        (Some(&Json::Bool(true)), "B.BIN\n*.nfo")
+    );
+    // the shim's: lines in, the page's form stored
+    let set = format!(
+        "json={}",
+        enc(r#"{"excluded_file_names":"b.bin\nThumbs.db\n","excluded_file_names_enabled":false}"#)
+    );
+    assert_eq!(t.post(&sid, "/api/v2/app/setPreferences", &set).status, 200);
+    assert_eq!(exclude_prefs(&t, &sid), (Json::Bool(false), "b.bin; Thumbs.db".to_owned()));
+    let set = format!("json={}", enc(r#"{"excluded_file_names_enabled":true}"#));
+    assert_eq!(t.post(&sid, "/api/v2/app/setPreferences", &set).status, 200);
+    assert_eq!(exclude_prefs(&t, &sid), (Json::Bool(true), "b.bin; Thumbs.db".to_owned()));
+    let file = std::fs::read_to_string(t.dir.join("state").join(STATE_FILE)).unwrap();
+    assert!(
+        file.contains(r#""files.exclude":"1""#)
+            && file.contains(r#""files.exclude_names":"b.bin; Thumbs.db""#),
+        "{file}"
+    );
+
+    // the page's dialog: b.bin starts unchecked, a.bin does not
+    let (bytes, _) = torrent_named("exclude-info", None);
+    let info = t.pa_upload(&sid, "/pa/torrent-info", "{}", &bytes).json();
+    let Some(Json::Arr(files)) = info.get("files") else { panic!("{}", info.to_json()) };
+    assert_eq!((s(files[1].get("path")), files[1].get("excluded")), ("b.bin", Some(&Json::Bool(true))));
+    assert_eq!((s(files[0].get("path")), files[0].get("excluded")), ("a.bin", None));
+
+    // the shim's add (Sonarr, Radarr): b.bin is not downloaded
+    let (bytes, hash) = torrent_named("exclude-shim", None);
+    let (body, boundary) = multipart(&[("paused", "true")], &bytes);
+    let r = t.req("POST", "/api/v2/torrents/add", &[("Cookie", &sid)], Body::Multipart(&body, boundary));
+    assert_eq!(r.status, 200, "{}", r.text());
+    assert_eq!(prios_until(&t, &sid, &hash, "the shim's add", |_| true), [1, 0]);
+    // the page with its dialog off (no priorities named)
+    let (bytes, hash) = torrent_named("exclude-native", None);
+    assert_eq!(t.pa_upload(&sid, "/pa/add", r#"{"start":false}"#, &bytes).status, 204);
+    assert_eq!(prios_until(&t, &sid, &hash, "the native add", |_| true), [1, 0]);
+    // the dialog's own choice stands, b.bin ticked back included
+    let (bytes, hash) = torrent_named("exclude-dialog", None);
+    let r = t.pa_upload(&sid, "/pa/add", r#"{"start":false,"priorities":{"0":4,"1":4}}"#, &bytes);
+    assert_eq!(r.status, 204);
+    assert_eq!(prios_until(&t, &sid, &hash, "the dialog's add", |_| true), [1, 1]);
+
+    // every file matches: the torrent is left alone, and the dialog marks nothing
+    let r = t.pa(&sid, "/pa/prefs", r#"{"files.exclude_names":"*.BIN"}"#);
+    assert_eq!(r.status, 204, "{}", r.text());
+    let (bytes, hash) = torrent_named("exclude-all", None);
+    assert!(!t.pa_upload(&sid, "/pa/torrent-info", "{}", &bytes).text().contains("excluded"));
+    let (body, boundary) = multipart(&[("paused", "true")], &bytes);
+    let r = t.req("POST", "/api/v2/torrents/add", &[("Cookie", &sid)], Body::Multipart(&body, boundary));
+    assert_eq!(r.status, 200, "{}", r.text());
+    assert_eq!(prios_until(&t, &sid, &hash, "the all-matching add", |_| true), [1, 1]);
+
+    // off: nothing is left out
+    assert_eq!(
+        t.pa(&sid, "/pa/prefs", r#"{"files.exclude":false,"files.exclude_names":"b.bin"}"#).status,
+        204
+    );
+    let (bytes, hash) = torrent_named("exclude-off", None);
+    assert_eq!(t.pa_upload(&sid, "/pa/add", r#"{"start":false}"#, &bytes).status, 204);
+    assert_eq!(prios_until(&t, &sid, &hash, "the add with the option off", |_| true), [1, 1]);
+}
+
+/// A magnet added without the dialog (the shim, a URL) gets its files left out once the
+/// simulated engine has fetched its metadata.
+#[test]
+fn a_magnet_added_without_the_dialog_is_excluded_with_its_metadata() {
+    let t = Harness::start_mock("exclude-magnet", 0, 0.0, 20);
+    let sid = t.login();
+    let r = t.pa(&sid, "/pa/prefs", r#"{"files.exclude":true,"files.exclude_names":"Part 01.*"}"#);
+    assert_eq!(r.status, 204, "{}", r.text());
+    // through the shim, and the page's URL add with the dialog off; the mock makes a torrent of
+    // one file (its name: never left out) or of several (`<name>/Part 01.<ext>` ...) from its
+    // hash, so a few of each
+    let hashes =
+        |first: char| (1..=4).map(move |i| format!("{first}{i}23456789abcdef0123456789abcdef01234567"));
+    for hash in hashes('a') {
+        let set = format!("urls={}", enc(&format!("magnet:?xt=urn:btih:{hash}&dn=shim")));
+        assert_eq!(t.post(&sid, "/api/v2/torrents/add", &set).status, 200);
+    }
+    for hash in hashes('b') {
+        let body = format!(r#"{{"url":"magnet:?xt=urn:btih:{hash}&dn=native"}}"#);
+        assert_eq!(t.pa(&sid, "/pa/add", &body).status, 204);
+    }
+    for first in ['a', 'b'] {
+        let mut several = 0;
+        for hash in hashes(first) {
+            let n = prios_until(&t, &sid, &hash, "the magnet's files", |_| true).len();
+            if n == 1 {
+                std::thread::sleep(Duration::from_millis(300));
+                assert_eq!(prios_until(&t, &sid, &hash, "the files", |_| true), [1], "{hash}");
+                continue;
+            }
+            several += 1;
+            let p = prios_until(&t, &sid, &hash, "the magnet's first part left out", |p| p[0] == 0);
+            assert!(p[1..].iter().all(|&x| x == 1), "{hash}: {p:?}");
+        }
+        assert!(several > 0, "no magnet of several files among {first}: pick other hashes");
+    }
+    // a magnet whose metadata comes while the option is off keeps every file
+    assert_eq!(t.pa(&sid, "/pa/prefs", r#"{"files.exclude":false}"#).status, 204);
+    let off = "5523456789abcdef0123456789abcdef01234567";
+    let set = format!("urls={}", enc(&format!("magnet:?xt=urn:btih:{off}&dn=off")));
+    assert_eq!(t.post(&sid, "/api/v2/torrents/add", &set).status, 200);
+    t.wait_for(&sid, off, "the metadata", |x| x.get("size").and_then(Json::as_i64).unwrap_or(0) > 0);
+    std::thread::sleep(Duration::from_millis(500));
+    let p = prios_until(&t, &sid, off, "the files", |_| true);
+    assert!(p.iter().all(|&x| x == 1), "{p:?}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// The IP filter's block list from an https address (D75): BitTorrent > IP Filter
+
+/// An address nothing answers at: loopback, so no test leaves this machine.
+const BLOCK_LIST_URL: &str = "https://127.0.0.1:9/level1.dat";
+
+/// The IP filter's fields' values: on, from an address, the address.
+fn ipfilter_prefs(t: &Harness, sid: &str) -> (Json, Json, String) {
+    let m = t.get(sid, "/pa/prefs").json();
+    let value = |id: &str| m.get("fields").unwrap().get(id).unwrap().get("value").cloned().unwrap();
+    (value("ipfilter.enable"), value("ipfilter.from_url"), s(Some(&value("ipfilter.url"))).to_owned())
+}
+
+/// The fields sit in the IP Filter group with Update Now and the status line, the file greyed
+/// while the list comes from an address; the address and its box change only with the current
+/// password, must be https while the filter takes them, and a list not fetched yet is no
+/// error. Update Now and the status line need a login; the shim shows the filter, changes none
+/// of it and has no key for the address.
+#[test]
+fn the_ip_filter_address_changes_only_with_the_current_password() {
+    let t = Harness::start("ipfilter-url");
+    let sid = t.login();
+    let m = t.get(&sid, "/pa/prefs").json();
+    let Some(Json::Arr(pages)) = m.get("pages") else { panic!("{}", m.to_json()) };
+    let bt = pages.iter().find(|p| s(p.get("id")) == "bittorrent").expect("BitTorrent").to_json();
+    let at = |part: &str| bt.find(part).unwrap_or_else(|| panic!("{part}: {bt}"));
+    let order = [
+        r#""f":"ipfilter.enable""#,
+        r#""f":"ipfilter.path","enabled_by":"ipfilter.enable","disabled_by":"ipfilter.from_url""#,
+        r#""f":"ipfilter.from_url","enabled_by":"ipfilter.enable""#,
+        r#""f":"ipfilter.url","enabled_by":"ipfilter.enable ipfilter.from_url""#,
+        r#""action":"update_ipfilter""#,
+        r#""status":"ipfilter""#,
+    ];
+    for w in order.windows(2) {
+        assert!(at(w[0]) < at(w[1]), "{w:?}: {bt}");
+    }
+    let field =
+        |id: &str| m.get("fields").unwrap().get(id).unwrap_or_else(|| panic!("no field {id}")).clone();
+    assert_eq!(
+        (s(field("ipfilter.from_url").get("type")), s(field("ipfilter.url").get("type"))),
+        ("bool", "text")
+    );
+    assert_eq!(field("ipfilter.url").get("help"), field("ipfilter.from_url").get("help"));
+    assert!(!s(field("ipfilter.url").get("help")).is_empty());
+    assert_eq!(s(m.get("ipfilter_status")), "");
+    let off = (Json::Bool(false), Json::Bool(false), String::new());
+    assert_eq!(ipfilter_prefs(&t, &sid), off, "off by default");
+
+    // neither the box nor the address without the current password
+    for body in
+        [r#"{"ipfilter.from_url":true}"#.to_owned(), format!(r#"{{"ipfilter.url":"{BLOCK_LIST_URL}"}}"#)]
+    {
+        let r = t.pa(&sid, "/pa/prefs", &body);
+        assert_eq!(r.status, 400, "{body}");
+        assert!(r.text().contains("webui.current_password"), "{body}: {}", r.text());
+    }
+    // https only while the filter takes the list
+    for url in ["http://127.0.0.1:9/level1.dat", "", "file:///etc/hosts"] {
+        let body = format!(
+            r#"{{"ipfilter.enable":true,"ipfilter.from_url":true,"ipfilter.url":"{url}","webui.current_password":"{PASS}"}}"#
+        );
+        let r = t.pa(&sid, "/pa/prefs", &body);
+        assert_eq!(r.status, 400, "{url}");
+        assert_eq!(
+            s(r.json().get("error")),
+            "ipfilter.url: The list's address must start with https://",
+            "{url}"
+        );
+    }
+    assert_eq!(ipfilter_prefs(&t, &sid), off, "nothing of a refused body is kept");
+
+    // saved with the filter off: nothing is fetched, the line says nothing was yet
+    let body = format!(
+        r#"{{"ipfilter.from_url":true,"ipfilter.url":" {BLOCK_LIST_URL} ","webui.current_password":"{PASS}"}}"#
+    );
+    let r = t.pa(&sid, "/pa/prefs", &body);
+    assert_eq!(r.status, 204, "{}", r.text());
+    let saved = (Json::Bool(false), Json::Bool(true), BLOCK_LIST_URL.to_owned());
+    assert_eq!(ipfilter_prefs(&t, &sid), saved);
+    let status = || s(t.get(&sid, "/pa/prefs/ipfilter").json().get("status")).to_owned();
+    assert_eq!(status(), "The list has not been downloaded yet.");
+    assert_eq!(s(t.get(&sid, "/pa/prefs").json().get("ipfilter_status")), status());
+    let file = std::fs::read_to_string(t.dir.join("state").join(STATE_FILE)).unwrap();
+    assert!(file.contains(r#""ipfilter.from_url":"1""#), "{file}");
+    assert!(file.contains(&format!(r#""ipfilter.url":"{BLOCK_LIST_URL}""#)), "{file}");
+
+    // the shim: the filter shown, none of it changed (no key for the address in qBittorrent)
+    let p = t.get(&sid, "/api/v2/app/preferences").json();
+    assert_eq!((p.get("ip_filter_enabled"), s(p.get("ip_filter_path"))), (Some(&Json::Bool(false)), ""));
+    let set = format!(
+        "json={}",
+        enc(&format!(
+            r#"{{"ip_filter_enabled":true,"ip_filter_path":"/etc/passwd","ipfilter.url":"https://evil.example/x","web_ui_current_password":"{PASS}"}}"#
+        ))
+    );
+    assert_eq!(t.post(&sid, "/api/v2/app/setPreferences", &set).status, 200);
+    assert_eq!(ipfilter_prefs(&t, &sid), saved);
+    let p = t.get(&sid, "/api/v2/app/preferences").json();
+    assert_eq!((p.get("ip_filter_enabled"), s(p.get("ip_filter_path"))), (Some(&Json::Bool(false)), ""));
+
+    // Update Now and the status line: a login and the CSRF header; the request names nothing
+    assert_eq!(t.req("GET", "/pa/prefs/ipfilter", &[], Body::None).status, 403, "not without a login");
+    let origin = format!("http://{}", t.host());
+    let r = t.req(
+        "POST",
+        "/pa/prefs/ipfilter/update",
+        &[("Origin", &origin), ("X-Requested-With", "Rookparcel")],
+        Body::Json("{}"),
+    );
+    assert_eq!(r.status, 403, "not without a login: {}", r.text());
+    let r = t.req("POST", "/pa/prefs/ipfilter/update", &[("Cookie", &sid)], Body::Json("{}"));
+    assert_eq!(r.status, 403, "not without the CSRF header: {}", r.text());
+    let r = t.pa(
+        &sid,
+        "/pa/prefs/ipfilter/update",
+        r#"{"url":"https://evil.example/x","ipfilter.url":"https://evil.example/x"}"#,
+    );
+    assert_eq!(r.status, 200, "{}", r.text());
+    assert_eq!(s(r.json().get("status")), "The list has not been downloaded yet.", "the filter is off");
+    assert_eq!(ipfilter_prefs(&t, &sid), saved);
+
+    // the filter on: a list not fetched yet is no error; the address is tried (nothing
+    // answers there), the line and the Logger say so, and nothing is kept
+    let r = t.pa(&sid, "/pa/prefs", r#"{"ipfilter.enable":true}"#);
+    assert_eq!(r.status, 204, "{}", r.text());
+    wait_until("the failed fetch in the status line", || status().starts_with("The last download failed"));
+    assert!(!t.dir.join("state").join("ipfilter-url.dat").exists(), "nothing was fetched, nothing is kept");
+    assert_eq!(t.pa(&sid, "/pa/prefs/ipfilter/update", "{}").status, 200);
+    // the file path greys meanwhile, but a file that does not load still refuses it once
+    // the list comes from the file again
+    let missing = t.dir.join("missing.dat").to_string_lossy().replace('\\', "\\\\");
+    let body = format!(
+        r#"{{"ipfilter.from_url":false,"ipfilter.path":"{missing}","webui.current_password":"{PASS}"}}"#
+    );
+    let r = t.pa(&sid, "/pa/prefs", &body);
+    assert_eq!(r.status, 400, "{}", r.text());
+    assert!(s(r.json().get("error")).starts_with("ipfilter.path: "), "{}", r.text());
+
+    // a wrong password ends the session, as for the other security settings
+    let r = t.pa(&sid, "/pa/prefs", r#"{"ipfilter.from_url":false,"webui.current_password":"guess"}"#);
+    assert_eq!(r.status, 400);
+    assert_eq!(t.get(&sid, "/api/v2/app/version").status, 403);
+    let sid = t.login();
+    assert_eq!(ipfilter_prefs(&t, &sid), (Json::Bool(true), Json::Bool(true), BLOCK_LIST_URL.to_owned()));
+}
+
+/// At start the copy kept of the list from an address is in force before any fetch (a copy of
+/// today is not fetched again), and the status line names it; another address forgets it.
+#[test]
+fn the_kept_block_list_is_in_force_at_start() {
+    let dir = temp_dir("ipfilter-kept");
+    let state = dir.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::write(state.join("ipfilter-url.dat"), "1.2.3.0 - 1.2.3.255 , 000 , Bad Corp\n10.0.0.0/8\n")
+        .unwrap();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let info = format!("url={BLOCK_LIST_URL}\nfetched={now}\nrules=2\n");
+    std::fs::write(state.join("ipfilter-url.txt"), info).unwrap();
+    let options = format!(
+        r#"{{"options":{{"ipfilter.enable":"1","ipfilter.from_url":"1","ipfilter.url":"{BLOCK_LIST_URL}"}}}}"#
+    );
+    std::fs::write(state.join(STATE_FILE), options).unwrap();
+    let t = Harness::start_in(dir, Some(PASS));
+    let sid = t.login();
+    let status = s(t.get(&sid, "/pa/prefs/ipfilter").json().get("status")).to_owned();
+    assert!(status.starts_with("2 rules, downloaded "), "{status}");
+    let (bytes, hash) = torrent_named("ipfilter-kept", None);
+    assert_eq!(t.pa_upload(&sid, "/pa/add", r#"{"start":false}"#, &bytes).status, 204);
+    t.wait_for(&sid, &hash, "the added torrent", |_| true);
+    let lines = logger_lines(&t, &sid, &hash);
+    assert!(
+        lines.iter().any(|l| l.starts_with("IP filter: 2 rules from ") && l.contains("ipfilter-url.dat")),
+        "{lines:?}"
+    );
+    assert!(!lines.iter().any(|l| l.contains("127.0.0.1:9")), "nothing fetched: {lines:?}");
+    // another address: the copy of the old one goes
+    let body =
+        format!(r#"{{"ipfilter.url":"https://127.0.0.1:9/other.p2p","webui.current_password":"{PASS}"}}"#);
+    assert_eq!(t.pa(&sid, "/pa/prefs", &body).status, 204);
+    assert!(!t.dir.join("state").join("ipfilter-url.dat").exists());
+    assert!(!t.dir.join("state").join("ipfilter-url.txt").exists());
+}

@@ -70,6 +70,8 @@ impl Core {
                 self.ev.errors.push((tr!(CannotExport, name = done.name), error.clone()));
             }
         }
+        // magnets added without the dialog: their files once known (D74)
+        self.excluded.on_alert(&alert, &self.handle);
         if self.awaiting.on_alert(&alert, &self.handle, &mut self.prefs) {
             self.ev.magnet_ready = true;
         }

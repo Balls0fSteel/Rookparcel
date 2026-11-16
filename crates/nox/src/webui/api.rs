@@ -16,7 +16,7 @@ use rookparcel_core::{
 };
 use rookparcel_frontend::detail::peer_flags;
 use rookparcel_frontend::seeding::SeedGoal;
-use rookparcel_frontend::{icons, lang};
+use rookparcel_frontend::{icons, lang, pref_pages};
 
 use super::auth::{self, constant_time_eq, random_hex};
 use super::commands::{self, AddOptions, Source};
@@ -1042,6 +1042,12 @@ fn proxy_type_number(t: ProxyType) -> i64 {
     }
 }
 
+/// The excluded file names as qBittorrent's API gives them: one pattern per line (the
+/// preferences keep them `; `-separated, `frontend::exclude::to_stored`).
+fn exclude_lines(stored: &str) -> String {
+    stored.split(';').map(str::trim).filter(|p| !p.is_empty()).collect::<Vec<_>>().join("\n")
+}
+
 /// `app/preferences`: the subset we support.
 fn preferences(st: &State, shared: &Shared, local: bool) -> Json {
     let s = &st.settings;
@@ -1063,6 +1069,14 @@ fn preferences(st: &State, shared: &Shared, local: bool) -> Json {
         .with("temp_path_enabled", false)
         .with("temp_path", "")
         .with("start_paused_enabled", p.start_paused)
+        // "Do not download files named" (D74): qBittorrent's patterns are one per line
+        .with("excluded_file_names_enabled", p.exclude_names)
+        .with("excluded_file_names", exclude_lines(&p.exclude_list))
+        // read-only here: setPreferences does not take them (a block list is read under the
+        // lock there, and the shim cannot report one that does not load); the list from an
+        // address (D75) has no qBittorrent key
+        .with("ip_filter_enabled", p.ip_filter)
+        .with("ip_filter_path", p.ip_filter_path.as_str())
         .with("listen_port", listen_port(s))
         .with("upnp", s.enable_upnp || s.enable_natpmp)
         .with("dl_limit", kib_or_unlimited(p.dl_limit))
@@ -1148,6 +1162,9 @@ pub(crate) fn apply_preferences(shared: &Shared, st: &mut State, v: &Json, keep:
         let mapped: Vec<(&str, Json)> = match key.as_str() {
             "save_path" => one("dir.download", Some(val.clone())),
             "start_paused_enabled" => one("ui.add_stopped", Some(val.clone())),
+            // D74; the patterns come one per line and are kept `; `-separated
+            "excluded_file_names_enabled" => one(pref_pages::EXCLUDE_NAMES, Some(val.clone())),
+            "excluded_file_names" => one(pref_pages::EXCLUDE_LIST, val.as_str().map(Json::from)),
             "dl_limit" => one("download_rate_limit", kib(val)),
             "up_limit" => one("upload_rate_limit", kib(val)),
             "alt_dl_limit" => one("alt_dl_limit", kib(val)),
@@ -1202,7 +1219,10 @@ pub(crate) fn apply_preferences(shared: &Shared, st: &mut State, v: &Json, keep:
             "web_ui_ban_duration" => one("webui.ban_duration", clamp(val, 1, 86_400 * 365)),
             "web_ui_session_timeout" => one("webui.session_timeout", clamp(val, 1, 86_400 * 365)),
             // never here: `add_trackers`, `add_trackers_enabled` and anything else of the
-            // trackers added to new downloads (D66) are read-only in the shim
+            // trackers added to new downloads (D66) are read-only in the shim; so are
+            // `ip_filter_enabled` and `ip_filter_path` (this commit reads a block list under the
+            // State lock, which SEC-05 keeps for the page's own commit, and answers 200 whatever
+            // it found)
             // never here either: `autorun_enabled`, `autorun_program`,
             // `autorun_on_torrent_added_enabled`, `autorun_on_torrent_added_program` (Run
             // Program, D67). qBittorrent takes them from anyone who is logged in, which was

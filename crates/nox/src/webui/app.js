@@ -2813,6 +2813,10 @@
         node.prio = f.prio;
         node.done = f.done;
         node.row = f.row;
+      } else if (f.excluded) {
+        // "Do not download files named" (D74): unchecked as a click would leave it; the
+        // caller's summarize() gives the folders their states, and the user can tick it back
+        node.wanted = false;
       }
       nodes.push(node);
       (parent < 0 ? roots : nodes[parent].children).push(n);
@@ -3283,10 +3287,13 @@
     };
     const name = $("add-name").value.trim();
     if (name && name !== st.info.name) options.name = name;
+    // with files the preferences left out (D74), every file's priority is sent, so the
+    // server takes this choice even when the user ticked them all back
+    const every = (st.info.files || []).some((f) => f.excluded);
     for (const node of st.tree.nodes) {
       if (node.dir) continue;
       const p = node.wanted ? node.prio : 0;
-      if (p !== 4) options.priorities[node.i] = p;
+      if (p !== 4 || every) options.priorities[node.i] = p;
     }
     try {
       if (st.file.hash) {
@@ -4414,15 +4421,17 @@
       b.dataset.action = it.action;
       if (it.help) b.title = it.help;
       if (it.enabled_by) b.dataset.enabledBy = it.enabled_by;
+      if (it.disabled_by) b.dataset.disabledBy = it.disabled_by;
       return b;
     }
-    if (it.status === "trackers") {
-      // the fetched tracker list's status line (D66), refreshed after Update Now
+    if (it.status === "trackers" || it.status === "ipfilter") {
+      // the fetched tracker list's (D66) or block list's (D75) status line, refreshed after
+      // Update Now
       const p = document.createElement("p");
       p.className = "pf-note";
       p.dataset.status = it.status;
       p.setAttribute("aria-live", "polite");
-      p.textContent = prefsModel.trackers_status || "";
+      p.textContent = (it.status === "trackers" ? prefsModel.trackers_status : prefsModel.ipfilter_status) || "";
       return p;
     }
     if (it.local === "theme") {
@@ -4546,6 +4555,7 @@
       l.classList.add("disabled");
     }
     if (it.enabled_by) l.dataset.enabledBy = it.enabled_by;
+    if (it.disabled_by) l.dataset.disabledBy = it.disabled_by;
     markHelp(l, it.f);
     if (f.help) inp.title = f.help;
     return l;
@@ -4574,10 +4584,13 @@
     updateEnabled($("prefs-page"));
   });
   /// "Move completed downloads to" and the like gate the controls under them, as in µTorrent
-  /// (several space-separated ids: all must be on).
+  /// (several space-separated ids: all must be on); a `disabled_by` box greys them while it is
+  /// on (the IP filter's file while the list comes from an address, D75).
   function updateEnabled(root) {
-    for (const l of root.querySelectorAll("[data-enabled-by]")) {
-      const on = l.dataset.enabledBy.split(" ").every((id) => !!prefValue(id));
+    const ids = (s) => (s ? s.split(" ") : []);
+    for (const l of root.querySelectorAll("[data-enabled-by],[data-disabled-by]")) {
+      const on =
+        ids(l.dataset.enabledBy).every((id) => !!prefValue(id)) && !ids(l.dataset.disabledBy).some((id) => !!prefValue(id));
       for (const c of l.querySelectorAll("input,select,button,textarea")) c.disabled = !on;
       if (l.tagName === "BUTTON") l.disabled = !on;
       l.classList.toggle("disabled", !on);
@@ -4753,6 +4766,8 @@
       inp.dispatchEvent(new Event("input", { bubbles: true }));
     } else if (b.dataset.action === "update_trackers") {
       updateTrackers();
+    } else if (b.dataset.action === "update_ipfilter") {
+      updateIpFilter();
     }
   });
 
@@ -4786,6 +4801,39 @@
       }
       if (poll !== trackersPoll || !prefsDlg.open) return;
       showTrackersStatus(r.status);
+    }
+  }
+
+  // BitTorrent > IP Filter (D75): Update Now as the trackers' one, for the block list from an
+  // address: the dialog applied first, then the status line follows the fetch.
+  let ipFilterPoll = 0;
+  function showIpFilterStatus(text) {
+    prefsModel.ipfilter_status = text;
+    const el = $("prefs-page").querySelector('[data-status="ipfilter"]');
+    if (el) el.textContent = text;
+  }
+  async function updateIpFilter() {
+    if (!(await applyPrefs(false))) return; // the error shows at its field
+    let r;
+    try {
+      r = await pa("prefs/ipfilter/update", {});
+    } catch (e) {
+      setPrefsMsg(e.msg || T("WebPrefsNotApplied"), true);
+      return;
+    }
+    showIpFilterStatus(r.status);
+    // a block list is several megabytes: its answer shows here within a minute or so
+    const poll = ++ipFilterPoll;
+    for (let i = 0; i < 20; i++) {
+      await new Promise((ok) => setTimeout(ok, i < 4 ? 1500 : 4000));
+      if (poll !== ipFilterPoll || !prefsDlg.open || !prefsModel) return;
+      try {
+        r = await pa("prefs/ipfilter");
+      } catch (e) {
+        return;
+      }
+      if (poll !== ipFilterPoll || !prefsDlg.open) return;
+      showIpFilterStatus(r.status);
     }
   }
 

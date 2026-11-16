@@ -1204,6 +1204,23 @@ NetAdapterMissing={name} (not connected)
 
 # {range} is what the user typed.
 PrefBadRange="{range}" is not an address range such as 10.2.0.0/16 or fd00::/8.
+
+# Preferences > UI Settings > When Adding Torrents: check box above a field of file name
+# patterns such as *.lnk; Thumbs.db. Files with such names start unchecked (not downloaded)
+# when a torrent is added.
+PrefExcludeNames=Do not download files named:
+
+# Preferences > BitTorrent > IP Filter: check box above a field for a web address
+# (https://...) of a block list, used instead of the file above. Keep https as it is.
+PrefIpFilterFromUrl=Get the block list from this address (https):
+
+# The IP filter's status line for the list from the web. {count} is a number of rules (blocked
+# address ranges), {time} a date and time.
+IpFilterStatusOk={count} rules, downloaded {time}.
+
+# Error: what the web address returned is not a block list (a web page, say). ipfilter.dat,
+# P2P and CIDR are format names: keep them.
+IpFilterErrNotList=the file is not a block list in ipfilter.dat, P2P or CIDR format
 RssTitle=RSS Downloader
 RssAddFeed=Add RSS Feed
 RssEditFeed=Edit RSS Feed
@@ -1910,6 +1927,7 @@ help.PrefMinimizeToTray=Minimizing hides the window in the tray instead of the t
 help.PrefDontStart=New torrents are added stopped and outside the queue, so nothing is downloaded until you start them.
 help.PrefActivateWindow=Brings the main window to the front when another program, such as a browser, hands Rookparcel a torrent. Off, only the Add New Torrent window comes up.
 help.PrefShowAddDialog=Opens the Add New Torrent window for each torrent you add, to choose the folder and the files first; for a magnet link, once its file list has arrived. Off, torrents are added at once with the defaults.
+help.PrefExcludeNames=Files whose names match one of these patterns are not downloaded: they start unchecked in torrents you add from now on. Separate the patterns with semicolons; * stands for any characters and ? for one, and case does not matter, as in *.lnk; Thumbs.db; *sample*. Only a file's own name counts, not its folders. You can still tick such a file in the Add New Torrent window, or later on the Files tab. A torrent whose every file matches is left alone.
 help.PrefNewDownloadsIn=The folder new torrents are saved in, unless you choose another one when adding them.
 help.PrefMoveCompleted=When a torrent finishes downloading, its files are moved to the folder below and it keeps seeding from there. Applies to torrents that finish from now on.
 help.PrefMoveAddLabel=Moves a finished torrent that has a label into a folder named after the label, inside the folder for completed downloads. The label it has when it finishes counts.
@@ -1953,8 +1971,10 @@ help.PrefPex=Lets connected peers tell each other about more peers for the same 
 help.PrefUtp=Connects to and accepts peers over uTP, a UDP transport that slows down when the network is busy, as well as over TCP. bt.transp_disposition on the Advanced page sets each direction separately.
 help.PrefOutgoing=How the connections Rookparcel opens are encrypted. Disabled: never. Enabled: plain and encrypted attempts alternate per peer, keeping what worked. Forced: encrypted only, losing peers that cannot encrypt.
 help.PrefLegacy=Accepts incoming connections that are not encrypted. Off, only encrypted incoming connections are accepted, which loses peers that cannot encrypt.
-help.PrefIpFilterEnable=Blocks peers whose addresses are in the block list below, in eMule ipfilter.dat or PeerGuardian P2P format; an empty path means ipfilter.dat in the settings folder. Loaded at start and when Apply changes the box or the path; Reload reads an edited list.
+help.PrefIpFilterEnable=Blocks peers whose addresses are in the block list below, in eMule ipfilter.dat or PeerGuardian P2P format, or CIDR lines such as 10.0.0.0/8; an empty path means ipfilter.dat in the settings folder. Loaded at start and when Apply changes the box or the path; Reload reads an edited list.
 help.PrefReload=Loads the block list from the path now, without waiting for Apply, and shows how many rules it holds. The IP filter must be enabled.
+help.PrefIpFilterFromUrl=Takes the block list from the https address below instead of the file above, through the proxy when one is set. The copy downloaded last is used at once at start, and the list is downloaded again once a day. It can be in ipfilter.dat, PeerGuardian P2P or CIDR (10.0.0.0/8) form, plain or gzip-compressed; zip archives are not supported. When a download fails or is not such a list, the rules in use stay.
+help.PrefIpFilterUpdate=Applies the page and downloads the block list from the address now, without waiting for the daily update. The line below shows the result.
 help.PrefActive=The most queued torrents running at once, downloads and seeds together; the rest wait. -1 means no limit. Forced torrents run outside the queue.
 help.PrefActiveDownloads=The most queued torrents downloading at once; the next one in the queue starts when one finishes or stops. -1 means no limit.
 help.PrefActiveSeeds=The most finished queued torrents seeding at once; the others wait. -1 means no limit.

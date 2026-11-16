@@ -45,12 +45,14 @@ use objc2_foundation::{
     NSTimer, NSURL,
 };
 use rookparcel_frontend::help;
+use rookparcel_frontend::ip_filter_list;
 use rookparcel_frontend::lang::{self, H};
 use rookparcel_frontend::options::{self, Options};
 use rookparcel_frontend::pref_pages::live::Live;
 use rookparcel_frontend::pref_pages::{
-    self, Action, Control, Features, Field, Item, Page, SCHED_ENABLE, TRACKERS_APPEND, TRACKERS_FROM_URL,
-    TRACKERS_LIST, TRACKERS_URL, TextKind, is_on,
+    self, Action, Control, Features, Field, IPFILTER_ENABLE, IPFILTER_FROM_URL, IPFILTER_PATH, IPFILTER_URL,
+    Item, Page, SCHED_ENABLE, TRACKERS_APPEND, TRACKERS_FROM_URL, TRACKERS_LIST, TRACKERS_URL, TextKind,
+    is_on,
 };
 use rookparcel_frontend::scheduler::{CELLS, Mode};
 use rookparcel_frontend::tr;
@@ -608,6 +610,7 @@ pub fn run(i: u16) {
         }
         Act::Button(Action::ReloadIpFilter) => reload_ip_filter(&st),
         Act::Button(Action::UpdateTrackerList) => update_tracker_list(&st),
+        Act::Button(Action::UpdateIpFilter) => update_ip_filter(&st),
         // D71: the PIN dialogs, out of this action (`lock::pin_dialog`); saved on their OK
         Act::Button(action @ (Action::SetPin | Action::ChangePin | Action::RemovePin)) => {
             if let Some(form) = action.pin_form() {
@@ -639,6 +642,10 @@ fn commit(st: &State, key: &'static str) {
     match c.options {
         Some(o) => apply(st, o),
         None => update_greying(st),
+    }
+    // the IP filter's line follows the page's box and address, stored or not (D75)
+    if key.starts_with("ipfilter.") {
+        update_ip_status(st, None);
     }
     // a multi-line box that committed shows what was stored of it (the list tidied), though
     // it may still have the focus (`write_values` leaves such a box alone)
@@ -672,7 +679,10 @@ pub(crate) fn apply(st: &State, o: Options) {
     now.integration = crate::mac::integration();
     let values = st.live.borrow_mut().write(&st.pages, &now);
     let language = now.gui.language != old.gui.language;
-    let ip_changed = now.gui.ip_filter_path != old.gui.ip_filter_path;
+    let ip_source = |o: &Options| {
+        (o.gui.ip_filter_path.clone(), o.gui.ip_filter_from_url, o.gui.ip_filter_url.trim().to_owned())
+    };
+    let ip_changed = ip_source(&now) != ip_source(&old);
     *st.applied.borrow_mut() = now;
     write_values(st, &values);
     if ip_changed {
@@ -730,16 +740,23 @@ fn browse(st: &State, key: &'static str) {
     );
 }
 
-/// BitTorrent > Reload: loads the block list in the path field now (as GTK).
+/// BitTorrent > Reload: loads the block list the page names now (as GTK): the path field's file,
+/// or, with the list from an address (where Reload is greyed), the copy kept of it
+/// (`ip_filter_list::list_file`, as `Core` loads it).
 fn reload_ip_filter(st: &State) {
-    if value_of(st, "ipfilter.enable") != "true" {
+    if value_of(st, IPFILTER_ENABLE) != "true" {
         update_ip_status(st, Some(Err(tr!(PrefIpFilterOff).to_owned())));
         return;
     }
     let Some(settings) = peek(|c| c.dirs().settings.clone()) else { return };
     let mut gui = st.applied.borrow().gui.clone();
-    gui.ip_filter_path = value_of(st, "ipfilter.path").trim().to_owned();
-    let file = gui.ip_filter_file(&settings);
+    gui.ip_filter_path = value_of(st, IPFILTER_PATH).trim().to_owned();
+    gui.ip_filter_from_url = value_of(st, IPFILTER_FROM_URL) == "true";
+    gui.ip_filter_url = value_of(st, IPFILTER_URL).trim().to_owned();
+    // nothing fetched from that address yet: the line says so
+    let Some(file) = ip_filter_list::list_file(&gui, &settings) else {
+        return update_ip_status(st, None);
+    };
     let result = with_core(|c| c.reload_ip_filter(&file))
         .unwrap_or_else(|| Err(tr!(ErrNotRunning).to_owned()))
         .map_err(|e| format!("{}: {e}", file.display()));
@@ -748,19 +765,38 @@ fn reload_ip_filter(st: &State) {
     crate::app::apply(with_core(|c| c.events()));
 }
 
-/// The IP filter's status line: the reload's result, or where an empty path looks.
+/// BitTorrent > Update Now (D75): the IP filter's fields commit (the address being typed too),
+/// then the list is fetched at the next tick; the status line and the Logger say how it went.
+fn update_ip_filter(st: &State) {
+    for key in [IPFILTER_ENABLE, IPFILTER_FROM_URL, IPFILTER_URL] {
+        if st.fields.contains_key(key) {
+            commit(st, key);
+        }
+    }
+    // a field that could not be stored has its message; the applied address is fetched
+    with_core(|c| c.update_ip_filter());
+    update_ip_status(st, None);
+}
+
+/// The IP filter's status line (`ip_filter_list::page_status`): Reload's result, else the list
+/// from the address the page shows (`IpFilterList::status_for`, its fetch time or error), else
+/// where an empty path looks.
 fn update_ip_status(st: &State, result: Option<Result<usize, String>>) {
     let Some(label) = &st.ip_status else { return };
-    let text = match result {
-        Some(Ok(n)) => tr!(PrefIpFilterLoaded, count = n),
-        Some(Err(e)) => e,
-        None if value_of(st, "ipfilter.path").trim().is_empty() => {
-            let dir = peek(|c| c.dirs().settings.clone()).unwrap_or_default();
-            tr!(PrefIpFilterDefault, path = dir.join("ipfilter.dat").display())
-        }
-        None => String::new(),
-    };
-    label.setStringValue(&NSString::from_str(&text));
+    let from_url = value_of(st, IPFILTER_FROM_URL) == "true";
+    let url = value_of(st, IPFILTER_URL);
+    let (url_status, settings) = peek(|c| {
+        // (a remote window has no list of its own: no line)
+        let status =
+            from_url.then(|| c.ip_filter_list().map(|l| l.status_for(true, &url)).unwrap_or_default());
+        (status, c.dirs().settings.clone())
+    })
+    .unwrap_or_default();
+    let text =
+        ip_filter_list::page_status(result.as_ref(), url_status, &value_of(st, IPFILTER_PATH), &settings);
+    if label.stringValue().to_string() != text {
+        label.setStringValue(&NSString::from_str(&text));
+    }
 }
 
 /// Advanced > Trackers' Update Now: the page's fields commit (the address being typed too),
@@ -840,10 +876,14 @@ fn update_lock(st: &State) {
 }
 
 /// The application's 1 s timer: what the open window shows of the engine's doings (the
-/// tracker list's status) and of the lock's state.
+/// tracker list's and the IP filter list's status) and of the lock's state.
 pub fn tick() {
     if let Some(st) = state().filter(|st| st.window.isVisible()) {
         update_tracker_status(&st);
+        // only the list from an address changes by itself; Reload's result stays shown
+        if value_of(&st, IPFILTER_FROM_URL) == "true" {
+            update_ip_status(&st, None);
+        }
         update_lock(&st);
     }
 }
