@@ -65,7 +65,7 @@ A qBittorrent category is a **label** in Rookparcel. The torrents an app adds ge
 
 When the app gives no download folder of its own, a torrent goes to its category's save folder if the category has one, and otherwise to Rookparcel's default download folder.
 
-A qBittorrent tag is a **tag** in Rookparcel (*new in 1.2.61, not in a published release yet*; before, tags were accepted and dropped). A torrent can have any number of them besides its label; they show under **Tags** in the categories list and in the **Tags** column ([Managing torrents](Managing-torrents#tags)). With Sonarr's **Add Series Tags** on, a grab gets the series' tags. Radarr sends no tags. A name with a comma or a control character is skipped without an error, and names are case-sensitive, as in qBittorrent.
+A qBittorrent tag is a **tag** in Rookparcel (*new in 1.2.63*; before, tags were accepted and dropped). A torrent can have any number of them besides its label; they show under **Tags** in the categories list and in the **Tags** column ([Managing torrents](Managing-torrents#tags)). With Sonarr's **Add Series Tags** on, a grab gets the series' tags. Radarr sends no tags. A name with a comma or a control character is skipped without an error, and names are case-sensitive, as in qBittorrent.
 
 ## Download folders and paths
 
@@ -79,7 +79,7 @@ With nox, `--webui-save-root DIR` limits the folders the Web UI, and so the apps
 
 ## Leaving out unwanted files
 
-*New in 1.2.60, not in a published release yet.* **Do not download files named:** in Rookparcel's **Preferences > UI Settings** applies to the apps' grabs too. With it on, files whose names match the patterns, such as `*.lnk; Thumbs.db; *sample*`, are set to not download when the app adds the torrent; for a magnet link, once its file list has arrived. A torrent whose every file matches is downloaded whole. See [Adding torrents](Adding-torrents#files-left-out-by-name).
+*New in 1.2.63.* **Do not download files named:** in Rookparcel's **Preferences > UI Settings** applies to the apps' grabs too. With it on, files whose names match the patterns, such as `*.lnk; Thumbs.db; *sample*`, are set to not download when the app adds the torrent; for a magnet link, once its file list has arrived. A torrent whose every file matches is downloaded whole. See [Adding torrents](Adding-torrents#files-left-out-by-name).
 
 Apps that set qBittorrent's "Excluded file names" through its API reach the same setting: `excluded_file_names_enabled` and `excluded_file_names` (one pattern per line).
 
@@ -104,7 +104,7 @@ Prowlarr only adds torrents; it does not track or import them. Add Rookparcel in
 ## Known limits
 
 - Rookparcel reports itself as qBittorrent's API version 2.11.2.
-- Ignored when an app sends them: the content layout choice and Sonarr's inactive seeding time limit. "First and last piece first" is honoured since 1.2.59 (not in a published release yet); before that it was ignored.
+- Ignored when an app sends them: the content layout choice and Sonarr's inactive seeding time limit. "First and last piece first" is honoured since 1.2.63; before that it was ignored.
 - Adding a torrent that is already in the list is answered as a success; the app then tracks the existing one.
 - The API shows the IP filter's `ip_filter_enabled` and `ip_filter_path` but does not change them, and it has no setting for the block list's web address. Set those in Rookparcel's own Preferences.
 

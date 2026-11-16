@@ -17,7 +17,7 @@ The Windows window keeps everything in one folder: `%APPDATA%\Rookparcel`, which
 | `rss.dat` | RSS feeds and filters |
 | `remote.ini`, `remote\` | remote connections, and the settings of each remote window |
 | `ipfilter.dat` | the default IP filter file, if you use one |
-| `ipfilter-url.dat`, `ipfilter-url.txt` | the IP filter's block list as last downloaded from its web address, and a note of where and when, if you use one (*new in 1.2.60, not in a published release yet*) |
+| `ipfilter-url.dat`, `ipfilter-url.txt` | the IP filter's block list as last downloaded from its web address, and a note of where and when, if you use one (*new in 1.2.63*) |
 | `nox\` | `rookparcel-nox`'s files when it ran from a console |
 | `search-helper\` | the search helper, if you got it ([Searching for torrents on Windows](Searching-for-torrents-on-Windows)) |
 | `profiles\` | the other [profiles](Profiles), each a folder laid out like this one |

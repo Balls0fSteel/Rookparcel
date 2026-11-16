@@ -36,7 +36,7 @@ If you quit while files are moving, the closing window waits for the moves, with
 
 ### Incomplete files and .!ut
 
-*New in 1.2.62, not in a published release yet.* With **Options > Preferences > General > Append .!ut to incomplete files** ticked (under **When Downloading**, off by default), a file that is still downloading is stored with `.!ut` after its name, for example `film.mkv.!ut`. As soon as all of the file has downloaded and passed its check, it gets its normal name, while the rest of the torrent carries on.
+*New in 1.2.63.* With **Options > Preferences > General > Append .!ut to incomplete files** ticked (under **When Downloading**, off by default), a file that is still downloading is stored with `.!ut` after its name, for example `film.mkv.!ut`. As soon as all of the file has downloaded and passed its check, it gets its normal name, while the rest of the torrent carries on.
 
 - **Why:** media players, file watchers and [Sonarr and Radarr](Sonarr-Radarr-and-Prowlarr) see a file under its real name only once it is complete, so nothing opens or imports half a file. This is how µTorrent names unfinished files.
 - **Turning it on or off** renames the files of running torrents at once, and those of stopped torrents when they next start.

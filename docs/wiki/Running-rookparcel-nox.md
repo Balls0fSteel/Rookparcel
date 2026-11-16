@@ -77,7 +77,7 @@ To stop it, type `q` and press <kbd>Enter</kbd>, or press <kbd>Ctrl</kbd>+<kbd>C
 | `--port N` | The listening port for peers. Default 6881. |
 | `--listen LIST` | Listening interfaces instead of `--port`: `IP:PORT`, `[IPv6]:PORT` or `DEVICE:PORT`, separated by commas. |
 | `--dl-limit KIB`, `--ul-limit KIB` | Download and upload limits in KiB/s; 0 is unlimited. |
-| `--ip-filter FILE` | Blocks the address ranges in FILE (`ipfilter.dat`, P2P or CIDR format; CIDR is new in 1.2.60, not in a published release yet). |
+| `--ip-filter FILE` | Blocks the address ranges in FILE (`ipfilter.dat`, P2P or CIDR format; CIDR is new in 1.2.63). |
 | `--proxy TYPE://[USER:PASS@]HOST:PORT` | Connects through a proxy; TYPE is `socks4`, `socks5` or `http`. Nothing incoming is accepted while peers go through it. |
 | `--no-proxy-peers` | Connect to peers and web seeds directly; only trackers use the proxy. |
 | `--no-proxy-trackers` | Contact trackers directly. |

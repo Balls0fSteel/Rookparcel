@@ -9,13 +9,13 @@ For each torrent, Rookparcel takes:
 - the data, which stays where it is: nothing is copied or moved;
 - the statistics, the file priorities (skipped files stay skipped) and the trackers;
 - the label: qBittorrent's category, or µTorrent's label;
-- qBittorrent's tags, as tags (*new in 1.2.61, not in a published release yet*; before, the first tag became the label of a torrent without a category). A tag name with a comma or a control character is left out;
+- qBittorrent's tags, as tags (*new in 1.2.63*; before, the first tag became the label of a torrent without a category). A tag name with a comma or a control character is left out;
 - a stopped or paused state;
 - from qBittorrent, the torrent's own share limits (ratio and seeding time), which become its own [seeding goal](Torrent-details-and-files#torrent-properties).
 
 Rookparcel does not trust the other program's record of which pieces are complete: it checks the files before it relies on them. Large torrents therefore show **Checking** for a while after the import.
 
-The other program's files are only read, never changed. Partial data files that µTorrent left as `.!ut` or qBittorrent as `.!qB` are picked up, and renamed when the torrent runs: see [Incomplete files and .!ut](Disk-and-storage#incomplete-files-and-ut) (*new in 1.2.62, not in a published release yet*). Torrents already in Rookparcel's list are left out, so you can run the import again safely.
+The other program's files are only read, never changed. Partial data files that µTorrent left as `.!ut` or qBittorrent as `.!qB` are picked up, and renamed when the torrent runs: see [Incomplete files and .!ut](Disk-and-storage#incomplete-files-and-ut) (*new in 1.2.63*). Torrents already in Rookparcel's list are left out, so you can run the import again safely.
 
 ## Before you start
 

@@ -11,7 +11,7 @@ The lock is for privacy, not security. It hides the windows; it does not encrypt
 3. Type a PIN of 4 to 6 digits in **New PIN (4 to 6 digits)**, and again in **Repeat the new PIN**.
 4. Click **OK**. The PIN is saved at once; you do not need to click **OK** in Preferences.
 
-*Before 1.2.58, the PIN was set in **Options > Lock PIN**.*
+*Before 1.2.63, the PIN was set in **Options > Lock PIN**.*
 
 To lock, choose **File > Lock Rookparcel** or press <kbd>Ctrl</kbd>+<kbd>L</kbd>. Once a PIN is set, the tray menu has **Lock Rookparcel** too. If no PIN is set yet, **Lock Rookparcel** asks for one first, then locks.
 

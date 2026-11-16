@@ -70,7 +70,7 @@ The list on the left narrows the torrent list. Each entry shows how many torrent
 | **Tags** > *a tag* | torrents with that tag; one entry per tag, also for a tag no torrent has (0) |
 | **Feeds** | your RSS feeds; picking one shows its items in the list |
 
-Labels are made and given from the torrent list's right-click menu. See [Managing torrents](Managing-torrents#labels). Tags are given the same way; right-click the **Tags** branch for **New Tag...**, or a tag for **Delete Tag**. See [Managing torrents](Managing-torrents#tags) (*tags are new in 1.2.61, not in a published release yet*). The Feeds branch has its own right-click menu; see [RSS Downloader](RSS-Downloader).
+Labels are made and given from the torrent list's right-click menu. See [Managing torrents](Managing-torrents#labels). Tags are given the same way; right-click the **Tags** branch for **New Tag...**, or a tag for **Delete Tag**. See [Managing torrents](Managing-torrents#tags) (*tags are new in 1.2.63*). The Feeds branch has its own right-click menu; see [RSS Downloader](RSS-Downloader).
 
 ## The torrent list
 
@@ -105,7 +105,7 @@ Right-click the column headers to show or hide columns. **Name** is always shown
 | **Seeds/Peers** | seeds per peer in the swarm | no |
 | **Save As** | the folder its files are in | no |
 | **Wasted** | data thrown away (failed checks, duplicates) | no |
-| **Tags** | its tags, separated by commas (*new in 1.2.61*) | no |
+| **Tags** | its tags, separated by commas (*new in 1.2.63*) | no |
 
 ### Sorting
 

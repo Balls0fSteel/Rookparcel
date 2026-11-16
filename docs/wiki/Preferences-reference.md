@@ -34,7 +34,7 @@ The texts below are short versions of that built-in help. Rates on the pages are
 
 On Windows the integration boxes are under **Windows Integration**; in the GTK version the group is called **Desktop Integration**.
 
-*Append .!ut to incomplete files is new in 1.2.62, not in a published release yet.* Files left as `.!ut` by µTorrent or as `.!qB` by qBittorrent are picked up whether the box is ticked or not. A file another program holds open keeps its name until it can be renamed. A file whose name with `.!ut` is another file of the same torrent keeps its plain name, and Remove And > Delete Data deletes a `.!ut` or `.!qB` file only when it holds this torrent's data.
+*Append .!ut to incomplete files is new in 1.2.63.* Files left as `.!ut` by µTorrent or as `.!qB` by qBittorrent are picked up whether the box is ticked or not. A file another program holds open keeps its name until it can be renamed. A file whose name with `.!ut` is another file of the same torrent keeps its plain name, and Remove And > Delete Data deletes a `.!ut` or `.!qB` file only when it holds this torrent's data.
 
 More: [Tray, notifications and startup](Tray-notifications-and-startup), [Adding torrents](Adding-torrents), [Updating Rookparcel](Updating-Rookparcel), [Profiles](Profiles), [Disk and storage](Disk-and-storage#incomplete-files-and-ut).
 
@@ -56,7 +56,7 @@ More: [Tray, notifications and startup](Tray-notifications-and-startup), [Adding
 | **Show a window that displays the files inside the torrent** | Opens the Add New Torrent window for each torrent you add, to choose the folder and the files first; for a magnet link, once its file list has arrived. Off, torrents are added at once with the defaults. |
 | **Do not download files named:** (When Adding Torrents) | Files whose names match one of the patterns in the box below start unticked, so they are not downloaded, in torrents you add from now on. Separate the patterns with semicolons; `*` stands for any characters and `?` for one, and case does not matter, as in `*.lnk; Thumbs.db; *sample*`. Only a file's own name counts, not its folders. Off by default. |
 
-*Do not download files named is new in 1.2.60, not in a published release yet.* You can still tick such a file in the Add New Torrent window, or later on the Files tab. A torrent whose every file matches is left alone. The list also applies to torrents added without the Add New Torrent window, such as from the watched folder, RSS or Sonarr and Radarr, but not to torrents already in the list. See [Adding torrents](Adding-torrents#files-left-out-by-name).
+*Do not download files named is new in 1.2.63.* You can still tick such a file in the Add New Torrent window, or later on the Files tab. A torrent whose every file matches is left alone. The list also applies to torrents added without the Add New Torrent window, such as from the watched folder, RSS or Sonarr and Radarr, but not to torrents already in the list. See [Adding torrents](Adding-torrents#files-left-out-by-name).
 
 More: [Tray, notifications and startup](Tray-notifications-and-startup), [Adding torrents](Adding-torrents), [Managing torrents](Managing-torrents), [The main window](The-main-window).
 
@@ -135,7 +135,7 @@ More: [Speed limits and scheduler](Speed-limits-and-scheduler), [Keep ping low](
 | **Get the block list from this address (https):** | Takes the block list from the `https://` address below instead of the file above, through the proxy when one is set. The copy downloaded last from that address is used at once at start, and the list is downloaded again once a day. While it is ticked, the file and **Reload** are greyed. |
 | **Update Now** | Downloads the block list from the address now. The line below shows how many rules it holds and when it was downloaded, or why the last download failed. |
 
-*The block list from an address is new in 1.2.60, not in a published release yet.* The list can be in `ipfilter.dat`, PeerGuardian P2P or CIDR (`10.0.0.0/8`) form, plain or gzip-compressed; zip archives are not supported. When a download fails or is not such a list, the rules in use stay. A new address keeps the old address's copy until a list from the new one has been downloaded, so a failed first download loses nothing; in the Windows program, **Update Now** with an address not applied yet only tries it until **OK** or **Apply**.
+*The block list from an address is new in 1.2.63.* The list can be in `ipfilter.dat`, PeerGuardian P2P or CIDR (`10.0.0.0/8`) form, plain or gzip-compressed; zip archives are not supported. When a download fails or is not such a list, the rules in use stay. A new address keeps the old address's copy until a list from the new one has been downloaded, so a failed first download loses nothing; in the Windows program, **Update Now** with an address not applied yet only tries it until **OK** or **Apply**.
 
 More: [Connection, ports and firewall](Connection-ports-and-firewall#ip-filter).
 
@@ -306,7 +306,7 @@ Good to know:
 
 ## UI Lock
 
-The PIN that locks Rookparcel's windows, and the switch that turns the lock off. Unlike the rest of Preferences, everything on this page takes effect at once: **OK**, **Apply** and **Cancel** do not change it. *New in 1.2.58; before, the PIN was set in **Options > Lock PIN**.*
+The PIN that locks Rookparcel's windows, and the switch that turns the lock off. Unlike the rest of Preferences, everything on this page takes effect at once: **OK**, **Apply** and **Cancel** do not change it. *New in 1.2.63; before, the PIN was set in **Options > Lock PIN**.*
 
 | Setting | What it does |
 |---|---|

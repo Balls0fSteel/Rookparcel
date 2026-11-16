@@ -45,6 +45,25 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.63" data-date="2026-11-17" aria-labelledby="v1.2.63-h">
+      <h2 id="v1.2.63-h"><a href="#v1.2.63"><time datetime="2026-11-17">Tue 17 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.63</span></a></h2>
+      <p class="news-lede">Tags, download order for previewing a video, <code>.!ut</code> names for unfinished files, files left out by name, and a block list kept current from a web address. The window lock gets its own settings page.</p>
+      <ul class="changes">
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Tags, as in qBittorrent: Torrent menu &gt; Tags, a Tags group in the category list with counts and No Tag, and a Tags column. Apps that set tags through the qBittorrent-compatible Web API keep them, and a qBittorrent import brings them over.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Download in Sequential Order and Download First and Last Pieces First, under Torrent menu &gt; Advanced, in the Add New Torrent window and in Properties, so a player can open a video while it downloads.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Copy Magnet Link and Export .torrent... in the torrent menu.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Append .!ut to incomplete files (Preferences &gt; General, off by default): a file gets its real name only once it is complete, so players and Sonarr and Radarr never pick up half a file. Delete Data removes such a file only when it holds the torrent's data.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Partial <code>.!ut</code> and <code>.!qB</code> files left by µTorrent and qBittorrent are picked up, so an imported torrent carries on instead of starting over.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Do not download files named (Preferences &gt; UI Settings): files such as <code>*.lnk</code> or <code>*sample*</code> are unticked when a torrent is added, also for magnets, RSS and Sonarr and Radarr.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>The IP filter's block list from an https address, downloaded once a day and kept for the next start; CIDR lines such as <code>10.0.0.0/8</code> are read too.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Preferences &gt; Advanced &gt; UI Lock sets, changes and removes the PIN, and turns the lock off, which removes every Lock command.</span></li>
+        <li><span class="tag tag-sec">Security</span><span class="vh">:</span> <span>While locked, the Windows program opens no right-click menu but the tray's, and the Linux program refuses actions sent to it over D-Bus. The Web UI's Preferences no longer receive the tracker list's address with a password in it.</span></li>
+        <li><span class="tag tag-plat">Windows</span><span class="vh">:</span> <span>A crash in dark mode about three seconds after pointing at a label's or a profile's name in a menu is fixed.</span></li>
+      </ul>
+      <p class="news-note">This release covers the development versions 1.2.58 to 1.2.62. The remote protocol is now 20: a window and the <code>rookparcel-nox</code> it drives must both be updated. Before going back to an older version, untick Append .!ut and let the files be renamed. The new texts are machine translations in every language but English.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.63">Download 1.2.63 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.63.md">Full release notes</a></p>
+    </article>
+
     <article class="news-entry" id="v1.2.57" data-date="2026-11-15" aria-labelledby="v1.2.57-h">
       <h2 id="v1.2.57-h"><a href="#v1.2.57"><time datetime="2026-11-15">Sun 15 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.57</span></a></h2>
       <p class="news-lede">Rookparcel looks after your settings across updates. If a new version reads your proxy or your network binding differently from the version that saved them, it stops all transfers and asks you to check, instead of quietly connecting without them.</p>

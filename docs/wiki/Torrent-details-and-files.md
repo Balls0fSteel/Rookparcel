@@ -134,7 +134,7 @@ Select one or more files and right-click:
 
 Double-clicking a file, or pressing <kbd>Enter</kbd> on it, opens it like **Open**.
 
-**Don't Download** is how you skip files after adding a torrent. Choosing a priority again downloads a skipped file. To skip files before the download starts, untick them in the [Add New Torrent window](Adding-torrents#torrent-contents). To skip files with certain names in every torrent you add, use **Do not download files named:** in Preferences > UI Settings ([Files left out by name](Adding-torrents#files-left-out-by-name); *new in 1.2.60, not in a published release yet*).
+**Don't Download** is how you skip files after adding a torrent. Choosing a priority again downloads a skipped file. To skip files before the download starts, untick them in the [Add New Torrent window](Adding-torrents#torrent-contents). To skip files with certain names in every torrent you add, use **Do not download files named:** in Preferences > UI Settings ([Files left out by name](Adding-torrents#files-left-out-by-name); *new in 1.2.63*).
 
 After **Relocate...** to a file that was not on disk, run **Force Re-Check** so Rookparcel counts what it found there. Relocate never replaces a file that is already at the new place.
 
@@ -204,7 +204,7 @@ With both set, both must be reached. What happens then is set in Preferences > Q
 | **Download in sequential order** | downloads the pieces in order, as **Advanced > Download in Sequential Order** in the right-click menu does; greyed out when every torrent is finished |
 | **Download first and last pieces first** | downloads both ends of each wanted file first, as **Advanced > Download First and Last Pieces First** does |
 
-*The two download order boxes are new in 1.2.59, not in a published release yet.* See [Managing torrents](Managing-torrents#download-order) for when they help.
+*The two download order boxes are new in 1.2.63.* See [Managing torrents](Managing-torrents#download-order) for when they help.
 
 Private torrents never use the DHT or Peer Exchange.
 

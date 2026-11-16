@@ -158,7 +158,7 @@ Each line of a list is one rule:
 | PeerGuardian P2P | `Some name:1.2.4.0-1.2.4.255` |
 | CIDR, IPv4 or IPv6 | `10.0.0.0/8` or `fd00::/8` |
 
-*CIDR lines are new in 1.2.60, not in a published release yet.* They work in a file on your computer too.
+*CIDR lines are new in 1.2.63.* They work in a file on your computer too.
 
 ### A list file on your computer
 
@@ -172,7 +172,7 @@ In the Web UI there is no Reload button: the list loads when you apply.
 
 ### A list from a web address
 
-*New in 1.2.60, not in a published release yet.* Rookparcel can download the block list from the web and keep it current:
+*New in 1.2.63.* Rookparcel can download the block list from the web and keep it current:
 
 1. Tick **Enable IP filter**.
 2. Tick **Get the block list from this address (https):** and type the list's address in the box below it. It must start with `https://`.

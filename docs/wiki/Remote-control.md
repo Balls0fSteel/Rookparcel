@@ -8,7 +8,7 @@ The alternative is the [Web UI](Web-UI) in a browser, which needs nothing instal
 
 - A `rookparcel-nox` running with its Web UI on, for example `rookparcel-nox run --webui 0.0.0.0:8443 --webui-https` ([Running rookparcel-nox](Running-rookparcel-nox)). The remote window uses the Web UI's port and login.
 - The Web UI's user name and password.
-- The same Rookparcel version on both sides. A server that speaks another version refuses the connection with "the server refused the connection (HTTP 426): this server speaks remote protocol ...". Version 1.2.62 changed the remote protocol (for **Append .!ut to incomplete files**), so update the server and the computers with remote windows together.
+- The same Rookparcel version on both sides. A server that speaks another version refuses the connection with "the server refused the connection (HTTP 426): this server speaks remote protocol ...". Version 1.2.63 changed the remote protocol (for **Append .!ut to incomplete files**), so update the server and the computers with remote windows together.
 
 A remote window connects to `rookparcel-nox`. The Windows program's own Web UI (**Preferences > Web UI**) is for browsers.
 
@@ -52,7 +52,7 @@ Nearly everything works as in a local window, acting on the server:
 - Adding torrents: `.torrent` files from this computer are sent to the server; magnet links too.
 - Start, stop, pause, force start, remove (also with the data, deleted on the server), recheck, queue order, labels, tags, speed limits, trackers, file priorities, renaming, Torrent Properties.
 - The detail tabs, with the server's peers, pieces, files and speed graph.
-- **Copy Magnet Link** and **Export .torrent...** (*new in 1.2.59, not in a published release yet*). An exported `.torrent` file is saved on this computer.
+- **Copy Magnet Link** and **Export .torrent...** (*new in 1.2.63*). An exported `.torrent` file is saved on this computer.
 - **Preferences:** the engine's settings (connection, bandwidth, BitTorrent, queueing and the like) are the server's. What you change there is applied on the server and kept there.
 
 What is different:

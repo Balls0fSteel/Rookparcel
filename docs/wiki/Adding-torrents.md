@@ -65,7 +65,7 @@ The folder the torrent's files go into. The list holds the default download fold
 | **Download in sequential order** | Downloads the pieces in order, from the start of the data to its end, so a video can be played while it downloads. Use it only for what you want to preview: the usual rarest-first order is better for the other peers. |
 | **Download first and last pieces first** | Downloads the first and last pieces of each wanted file before the rest, so a player can read a video's header and index early. |
 
-*The two download order boxes are new in 1.2.59, not in a published release yet.* Both start unticked for every torrent; Rookparcel does not remember them. To change them after adding, use **Advanced** in the right-click menu or Properties. See [Managing torrents](Managing-torrents#download-order).
+*The two download order boxes are new in 1.2.63.* Both start unticked for every torrent; Rookparcel does not remember them. To change them after adding, use **Advanced** in the right-click menu or Properties. See [Managing torrents](Managing-torrents#download-order).
 
 ### Torrent Contents
 
@@ -94,7 +94,7 @@ To add torrents without downloading anything until you say so, turn on **Don't s
 
 ## Files left out by name
 
-*New in 1.2.60, not in a published release yet.* Some torrents carry files you never want, such as shortcuts, thumbnail caches or sample videos. Rookparcel can leave them out by name:
+*New in 1.2.63.* Some torrents carry files you never want, such as shortcuts, thumbnail caches or sample videos. Rookparcel can leave them out by name:
 
 1. Open **Options > Preferences > UI Settings**.
 2. Under **When Adding Torrents**, tick **Do not download files named:**.

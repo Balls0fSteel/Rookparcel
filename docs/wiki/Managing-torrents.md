@@ -91,7 +91,7 @@ To open a single file, use the [Files tab](Torrent-details-and-files#files).
 
 ## Copy Magnet Link and Export .torrent
 
-*New in 1.2.59, not in a published release yet.*
+*New in 1.2.63.*
 
 **Copy Magnet Link** puts the selected torrents' magnet links on the clipboard, one per line. Each link holds the torrent's info-hash, its name and its trackers. Paste it into another torrent program, or send it to someone, to share the torrent without a file.
 
@@ -119,7 +119,7 @@ With **Append the torrent's label** on next to **Move completed downloads to:** 
 
 ## Tags
 
-*New in 1.2.61, not in a published release yet.*
+*New in 1.2.63.*
 
 A torrent has one label, but it can have any number of tags besides it, such as "4K", "keep" and "Linux ISOs". Tags work as qBittorrent's do. Each tag appears under **Tags** in the category list, below the labels, with a count; a torrent with several tags is counted under each. **No Tag** shows the torrents without any tag.
 
@@ -143,7 +143,7 @@ The **Tags** column shows a torrent's tags; it is hidden at first (see [The main
 
 ## Download order
 
-*New in 1.2.59, not in a published release yet.*
+*New in 1.2.63.*
 
 By default Rookparcel downloads the pieces that are rarest among the peers first. That keeps every piece available in the swarm and is best for everyone sharing the torrent. Two items under **Advanced** change the order, mainly so you can watch a video while it downloads. Each is ticked while it is on; choose it again to turn it off.
 
