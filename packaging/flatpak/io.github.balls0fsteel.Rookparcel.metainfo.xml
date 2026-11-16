@@ -70,6 +70,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="1.2.63" date="2026-11-17" type="stable">
+      <description>
+        <p>Tags, as in qBittorrent. Sequential download and first and last pieces first for previewing a video. Unfinished files can carry .!ut until complete, and partial files from µTorrent and qBittorrent are picked up. Files can be left out by name, and the IP filter's block list can come from an https address. The window lock has its own page under Preferences > Advanced.</p>
+      </description>
+    </release>
     <release version="1.2.57" date="2026-11-15" type="stable">
       <description>
         <p>Settings are checked after every update: if a new version reads the proxy or the network binding differently from the one that saved them, the transfers are held until you confirm the settings, and a copy of the old settings file is kept. A settings file that cannot be read is never overwritten.</p>

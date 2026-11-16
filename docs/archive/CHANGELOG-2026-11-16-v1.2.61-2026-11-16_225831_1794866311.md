@@ -1,0 +1,22 @@
+# Changelog archive: 2026-11-16, version 1.2.61 (feature wave 3)
+
+1 entry moved verbatim from the root changelog on 2026-11-16_225831_1794866311 to keep it under budget.
+
+## 2026-11-16_162657_1794842817: Version 1.2.61: tags in every interface and the API (D76); feature wave 3
+
+- **Asked for (owner, 2026-11-16):** wave 3 of the feature plan (PLAN.md): tags as qBittorrent has them, in the API, the three GUIs and the Web UI.
+- **Shared:** `tags.rs`: one check for every interface and the API (`normalize`: trimmed, no comma or control character, case-sensitive, cut at 128 bytes; at most 1024 known), kept as `torrent.<key>.tags` and `tags.list`; a tag exists until deleted, with no torrent too. `TorrentList` keeps the tags, the Tags group's counts and No Tag, `Filter::Tag` and a Tags column (off by default). The new strings translated into the 34 tables (machine translations).
+- **Import:** a qBittorrent import brings the tags over as tags; the label comes from the category only (before, a torrent without a category took its first tag as its label).
+- **Win32, GTK, Mac:** Torrent menu > Tags after Label (New Tag..., Remove All Tags, then the tags as check items; a mixed selection shows unchecked on Win32 and GTK, mixed on the Mac); the category list's Tags group under Labels with counts and No Tag, a click filtering, a right click giving New Tag... (only makes the tag) and Delete Tag (asked first); the Tags column.
+- **nox:** native `/pa/tags`, `/pa/tags/create`, `/pa/tags/delete`, `/pa/torrents/add-tag`, `remove-tag`, `clear-tags`; the page's Tags group, menu and column. Shim: `torrents/tags`, `createTags`, `deleteTags`, `addTags`, `removeTags`, `setTags`, `tags` on `torrents/add`, in `torrents/info` and `sync/maindata` (with `tags_removed`), `torrents/info?tag=`; the stubs answering 200 since 1.1.8 are gone. Hosted by the Windows program, the tag keys go both ways through the preferences journal.
+- **Win32 dark-mode crash:** highlighting a menu item without help text (a label's or a profile's name) crashed about 3 s later: the status bar handed `DrawTextW` an empty buffer's dangling pointer (`theme.rs`, now NUL-terminated). `sched_grid.rs` and `closing.rs` built their text the same way; guarded alike.
+- **Review** by a separate subagent; fixed:
+  - Tags ▸ in Label's order on Win32, GTK and the Mac: New Tag..., Remove All Tags, a separator, the tags.
+  - A deleted tag stays deleted: nox reads only `tags.list` at start (a torrent's key adds its names at its first sight), and Delete Tag takes the name out of every `torrent.*.tags` key, those of torrents gone too (`tags::forget_everywhere`).
+  - The Web page hides a column its saved layout has not seen when the server has it off (existing users were shown Tags), and a stored tag or label filter naming one the server no longer has falls back to All.
+  - The Mac's menu validation looks at one tag per item (`Core::tag_state`, `can_clear_tags`); `MenuState` no longer computes every tag for each validated item. Its sidebar shows Delete Tag greyed on the Tags heading and No Tag.
+  - Hosted: `tags.list` is written only when the known tags change (tests on both sides). A New Tag in the window and one in a browser within the same second can still lose one (BACKLOG "Tags").
+  - New Tag's help text covers both menus (en.lng and HELP_TEXTS.md regenerated). WEBUI.md says that `torrents/add` with `tags` adds them to a torrent already in the list (unlike qBittorrent; labels do the same). The wiki's "tags kept on this computer per server" for a remote window holds (the remote protocol carries no labels or tags).
+- **Checked before the review:** Win32 on the hidden desktop in light, dark and German; GTK live on the Xubuntu VM; the Mac live on the macOS VM in light and dark; real Sonarr 4.0.20 and Radarr 6.4.4 against the daemon (client tests and grabs), with Sonarr's `addTags` call replayed by hand because neither version can send tags. The fixes were not rerun live.
+- **Checked after the fixes and the bump:** fmt clean; clippy `-D warnings` clean for core, frontend, nox and Win32, both Mac cross-lints and GTK's; tests core 1,101, frontend 442 (and 8 in its test files), Win32 167 (one thread), nox 233, the Mac's portable 23, all passing; GTK's 26 on the Xubuntu VM, the Tags ▸ order among them. The settings fixtures pass unchanged (tags are no setting), so no 1.2.61 fixture. `node --check` on `app.js`; the page's two fixes were reasoned through, not run in a browser.
+- **Open:** BACKLOG "Tags".
