@@ -359,7 +359,14 @@ impl Storage {
 
     fn update_bits(&self, file: usize, change: impl Fn(u8) -> u8) {
         if let Some(n) = self.names.get(file) {
-            let _ = n.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| Some(change(v)));
+            // A compare-exchange loop, not `fetch_update`: newer toolchains deprecate that
+            // name for `try_update`, which the MSRV does not have.
+            let mut old = n.load(Ordering::Relaxed);
+            while let Err(seen) =
+                n.compare_exchange_weak(old, change(old), Ordering::Relaxed, Ordering::Relaxed)
+            {
+                old = seen;
+            }
         }
     }
 
