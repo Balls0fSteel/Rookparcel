@@ -143,6 +143,21 @@ impl TrackerEntry {
         }
     }
 
+    /// Announce as soon as the tracker allows (its `min interval`), for a change in what the
+    /// torrent needs rather than a user's request: a tracker not announced to yet, busy or
+    /// waiting out a failure is left to its own schedule.
+    pub fn announce_soon(&mut self, now: Instant) {
+        let Some(r) = self.run.as_deref_mut() else { return };
+        if !r.start_sent || r.updating || r.fails > 0 {
+            return;
+        }
+        // `None` is due at the next tick
+        let soonest = r.min_announce.filter(|&m| m > now);
+        if r.next_announce.is_some_and(|n| soonest.is_none_or(|s| s < n)) {
+            r.next_announce = soonest;
+        }
+    }
+
     /// An announce reply (libtorrent `tracker_response` for the endpoint): `event` was sent,
     /// the tracker asked for `interval` (at least `min_announce_interval`, unless it asked for
     /// less than a minute itself) and `min_interval`.
@@ -1532,6 +1547,33 @@ mod tests {
         e.run_mut().updating = true;
         e.reset();
         assert!(e.run.is_none(), "an announce that never came back leaves nothing");
+    }
+
+    #[test]
+    fn announce_soon_keeps_the_min_interval_and_the_backoff() {
+        let now = Instant::now();
+        let mut e = TrackerEntry::new("x".into(), 0);
+        e.announce_soon(now);
+        assert!(e.run.is_none(), "not announced to yet: the `started` announce is due anyway");
+        e.announced(Some(Event::Started), None, 1800, None, 0, now);
+        e.announce_soon(now);
+        assert_eq!(e.next_announce(), None, "due at the next tick");
+        e.announced(None, None, 1800, Some(300), 0, now);
+        e.announce_soon(now);
+        assert_eq!(e.next_announce(), Some(now + Duration::from_secs(300)), "once the min interval is over");
+        e.announce_soon(now + Duration::from_secs(100));
+        assert_eq!(e.next_announce(), Some(now + Duration::from_secs(300)), "not put off again");
+        e.announce_soon(now + Duration::from_secs(301));
+        assert_eq!(e.next_announce(), None);
+        e.failed("x".into(), now);
+        let retry = e.next_announce();
+        e.announce_soon(now);
+        assert_eq!(e.next_announce(), retry, "a failing tracker keeps its backoff");
+        e.run_mut().fails = 0;
+        e.run_mut().updating = true;
+        e.run_mut().next_announce = Some(now + Duration::from_secs(60));
+        e.announce_soon(now);
+        assert_eq!(e.next_announce(), Some(now + Duration::from_secs(60)), "nor while one is in flight");
     }
 
     #[test]

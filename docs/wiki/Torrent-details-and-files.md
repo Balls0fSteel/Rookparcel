@@ -109,6 +109,17 @@ The torrent's files in their folders, as the [Add New Torrent window](Adding-tor
 
 A folder row adds up its files' **Size** and **Done**; it has no piece columns.
 
+### Sorting the file list
+
+*New in 1.2.64, not in a published release yet.*
+
+Click a column header to sort the files by it; an arrow in the header shows the column and direction.
+
+- The first click sorts names, sizes and pieces from the smallest, and **Done**, **%** and **Priority** from the top. A second click reverses the order, and a third goes back to the torrent's own order.
+- In the tree, the files and folders inside each folder are sorted, with folders first.
+- A list sorted by **Done** or **%** moves as the download goes on, and one sorted by **Priority** when you change priorities. The selected files stay selected.
+- Rookparcel remembers the sort. **Prioritize by File Order** still follows the order in the torrent, whatever the sort.
+
 ### Tree view or one list
 
 *New in 1.2.21.*
@@ -218,6 +229,7 @@ Select several torrents and open Properties to change them together. A field who
 
 - The same seven tabs with the same columns, the same Files tab menu and filter box, and the same Properties window.
 - **Open** and **Open Containing Folder** use your desktop's default programs and file manager.
+- The Files tab cannot be sorted by its columns yet; the macOS app's cannot either.
 
 ## In the Web UI
 

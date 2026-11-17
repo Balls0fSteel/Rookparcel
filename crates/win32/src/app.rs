@@ -1406,6 +1406,7 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
         crate::theme::check_box(files_tree_box);
         let mut detail = Detail::default();
         detail.set_files_tree(prefs.get_bool(detail::FILES_TREE_KEY, true));
+        detail.set_file_sort(prefs.get(detail::FILES_SORT_KEY).and_then(detail::file_sort_from_pref));
         let file_icons = crate::add::ShellIcons::load();
         let files_lv = pages[Page::Files.index()];
         file_icons.set_on(files_lv, detail.files_tree());
@@ -1567,6 +1568,15 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
                     page.columns().iter().map(|&(t, w, r)| (lang::text(t), scale(w, dpi), r)).collect();
                 controls::set_columns(pages[page.index()], &cols);
             }
+        }
+        if let Some(sort) = with_app(|a| a.detail.file_sort()) {
+            let lv = pages[Page::Files.index()];
+            controls::set_sort_arrow(
+                lv,
+                detail::FILE_COLUMNS.len(),
+                sort.map(|s| s.0),
+                sort.is_some_and(|s| s.1),
+            );
         }
         let cols: Vec<(&str, i32, bool)> =
             detail::PIECE_COLUMNS.iter().map(|&(t, w, r)| (lang::text(t), scale(w, dpi), r)).collect();
@@ -2771,6 +2781,89 @@ fn on_files_filter() {
     }
 }
 
+// ---- The Files tab's sort ------------------------------------------------------------------
+
+/// The Files tab's selected rows and focused row as what they show ([`Detail::file_marks`]),
+/// to put the selection back once a sort moved the rows.
+struct FilesSelection {
+    selected: detail::FileMarks,
+    focused: Option<detail::FileMarks>,
+}
+
+/// Reads the Files tab's selection. Only asks the list for its states, which sends no
+/// notifications, so it may run inside `with_app`.
+fn files_selection(a: &App) -> FilesSelection {
+    let lv = a.pages[Page::Files.index()];
+    let (rows, focused) = unsafe { (controls::selected(lv), controls::focused(lv)) };
+    FilesSelection {
+        selected: a.detail.file_marks(&rows),
+        focused: focused.map(|f| a.detail.file_marks(&[f])),
+    }
+}
+
+/// Selects the rows that now show what `sel` named, and focuses the one that had the focus;
+/// with `show`, scrolls to it (a header click; a sort by progress leaves the scrolling alone).
+unsafe fn reselect_files(sel: &FilesSelection, show: bool) {
+    let Some((lv, rows, focused, count)) = with_app(|a| {
+        let lv = a.pages[Page::Files.index()];
+        let focused = sel.focused.as_ref().and_then(|f| a.detail.file_rows_of(f).first().copied());
+        (lv, a.detail.file_rows_of(&sel.selected), focused, a.detail.rows(Page::Files))
+    }) else {
+        return;
+    };
+    unsafe {
+        let before = controls::selected(lv);
+        let mut sorted = rows.clone();
+        sorted.sort_unstable();
+        if sorted != before {
+            if rows.len() == count && count > 0 {
+                controls::set_state(lv, None, true, false);
+            } else {
+                controls::set_state(lv, None, false, false);
+                for &r in &rows {
+                    controls::set_state(lv, Some(r), true, false);
+                }
+            }
+        }
+        if let Some(f) = focused {
+            if controls::focused(lv) != Some(f) {
+                controls::set_state(lv, Some(f), sorted.binary_search(&f).is_ok(), true);
+            }
+            if show {
+                send(lv, LVM_ENSUREVISIBLE, f, 0);
+            }
+        }
+        InvalidateRect(lv, null(), 0);
+    }
+}
+
+/// A click on the header of Files tab column `col`: [`Detail::toggle_file_sort`] (ascending or
+/// the column's natural direction, reversed, then the torrent's order), kept as
+/// `ui.files_sort`, with the header's arrow and the selection on the same files.
+fn files_sort_click(col: usize) {
+    let Some((lv, sel, sort)) = with_app(|a| {
+        let sel = files_selection(a);
+        let sort = a.detail.toggle_file_sort(col);
+        match detail::file_sort_pref(sort) {
+            Some(v) => a.prefs.set(detail::FILES_SORT_KEY, v),
+            None => a.prefs.remove(detail::FILES_SORT_KEY),
+        }
+        (a.pages[Page::Files.index()], sel, sort)
+    }) else {
+        return;
+    };
+    unsafe {
+        controls::set_sort_arrow(
+            lv,
+            detail::FILE_COLUMNS.len(),
+            sort.map(|s| s.0),
+            sort.is_some_and(|s| s.1),
+        );
+        update_detail_lists();
+        reselect_files(&sel, true);
+    }
+}
+
 // ---- The Files tab's folder tree (D62) ---------------------------------------------------
 
 /// Tree View (the box left of the filter, the menu's item): the Files tab shows the files in
@@ -3160,7 +3253,7 @@ unsafe fn on_alerts(hwnd: HWND) {
     let mut magnet_ready = false;
     let mut adapters = false;
     let mut prefs_changed = false;
-    let Some((lists_changed, removed_any, repaint_page)) = with_app(|a| {
+    let Some((lists_changed, removed_any, repaint_page, files_moved)) = with_app(|a| {
         // the alerts a dialog saved while it waited (fetch_trackers) come first
         let mut alerts = properties::take_alerts(&a.handle, &mut a.alerts);
         if let Some(w) = &a.web {
@@ -3170,6 +3263,8 @@ unsafe fn on_alerts(hwnd: HWND) {
         let mut removed_any = false;
         let generation = a.list.generation();
         let mut repaint_page = false;
+        // a sorted Files tab whose rows move keeps its selection on the same files
+        let mut files_moved: Option<(u64, FilesSelection)> = None;
         for alert in alerts.drain(..) {
             let label_of = |id| Some(a.list.extra(id).label.to_owned());
             if let Some((id, dir)) =
@@ -3331,10 +3426,18 @@ unsafe fn on_alerts(hwnd: HWND) {
                     lists_changed = true;
                 }
                 Alert::FileList { id, files } if a.detail.id == Some(id) => {
+                    if a.detail.file_sort().is_some() && files_moved.is_none() {
+                        files_moved = Some((a.detail.file_order(), files_selection(a)));
+                    }
                     a.detail.set_files(files);
                     lists_changed = true;
                 }
                 Alert::FileProgress { id, done } if a.detail.id == Some(id) => {
+                    // only a sort by Done or % moves rows as the download goes on
+                    let by_progress = a.detail.file_sort().is_some_and(|(col, _)| col == 2 || col == 3);
+                    if by_progress && files_moved.is_none() {
+                        files_moved = Some((a.detail.file_order(), files_selection(a)));
+                    }
                     a.detail.set_file_done(done);
                     lists_changed = true;
                 }
@@ -3378,7 +3481,9 @@ unsafe fn on_alerts(hwnd: HWND) {
         sync_web(a);
         // The General tab shows the selected torrent's status.
         repaint_page |= a.list.generation() != generation;
-        (lists_changed, removed_any, repaint_page)
+        let files_moved =
+            files_moved.filter(|(order, _)| a.detail.file_order() != *order).map(|(_, sel)| sel);
+        (lists_changed, removed_any, repaint_page, files_moved)
     }) else {
         return;
     };
@@ -3391,6 +3496,9 @@ unsafe fn on_alerts(hwnd: HWND) {
         }
         if lists_changed || removed_any {
             update_detail_lists();
+        }
+        if let Some(sel) = files_moved {
+            reselect_files(&sel, false);
         }
         if repaint_page {
             invalidate_page();
@@ -6897,6 +7005,133 @@ mod search_tests {
         }
     }
 
+    /// A click on a Files tab column's header sorts by it (the arrow shows how), a second
+    /// reverses it, a third goes back to the torrent's order; the choice is kept and the
+    /// selection stays on the same file. Noted first, checked once the window is gone.
+    #[test]
+    fn the_files_tab_sorts_by_a_header_click() {
+        use windows_sys::Win32::UI::Controls::{HDF_SORTDOWN, HDF_SORTUP, HDI_FORMAT, HDITEMW, HDM_GETITEMW};
+        unsafe {
+            let icc = INITCOMMONCONTROLSEX {
+                dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
+                dwICC: ICC_WIN95_CLASSES
+                    | ICC_BAR_CLASSES
+                    | ICC_TAB_CLASSES
+                    | ICC_LISTVIEW_CLASSES
+                    | ICC_TREEVIEW_CLASSES,
+            };
+            InitCommonControlsEx(&icc);
+            let instance = GetModuleHandleW(null());
+            let mut wc: WNDCLASSEXW = zeroed();
+            wc.cbSize = size_of::<WNDCLASSEXW>() as u32;
+            wc.lpfnWndProc = Some(wndproc);
+            wc.hInstance = instance;
+            wc.lpszClassName = w!("RookparcelFilesSortTestWnd");
+            RegisterClassExW(&wc);
+            wc.lpfnWndProc = Some(panel_proc);
+            wc.lpszClassName = PANEL_CLASS;
+            RegisterClassExW(&wc);
+            let hwnd = CreateWindowExW(
+                0,
+                w!("RookparcelFilesSortTestWnd"),
+                w!("Rookparcel files sort test"),
+                WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+                0,
+                0,
+                900,
+                600,
+                null_mut(),
+                null_mut(),
+                instance,
+                null(),
+            );
+            assert!(!hwnd.is_null());
+            let session = Session::start_mock(
+                Settings::default(),
+                MockConfig { initial_torrents: 0, active_fraction: 0.0, ..MockConfig::default() },
+            );
+            let mut prefs = Prefs::default();
+            prefs.set_bool("ui.show_add_dialog", false);
+            prefs.set_bool(detail::FILES_TREE_KEY, false);
+            init(hwnd, session, prefs);
+            select_page(Page::Files);
+            let lv = with_app(|a| a.pages[Page::Files.index()]).unwrap();
+            let sized = |path: &str, size: u64| rookparcel_core::FileEntry { size, ..file(path, false) };
+            let files: Arc<[rookparcel_core::FileEntry]> =
+                Arc::from(vec![sized("Show/b.mkv", 30), sized("Show/a.mkv", 10), sized("Show/c.mkv", 20)]);
+            with_app(|a| a.detail.set_files(files));
+            update_detail_lists();
+            controls::set_state(lv, Some(0), true, true);
+
+            let click = |col: i32| {
+                let mut nm: NMLISTVIEW = zeroed();
+                nm.hdr =
+                    NMHDR { hwndFrom: lv, idFrom: IDC_PAGE + Page::Files.index(), code: LVN_COLUMNCLICK };
+                nm.iItem = -1;
+                nm.iSubItem = col;
+                SendMessageW(hwnd, WM_NOTIFY, nm.hdr.idFrom, &nm as *const _ as LPARAM);
+            };
+            let arrows = || {
+                let header = send(lv, LVM_GETHEADER, 0, 0) as HWND;
+                (0..detail::FILE_COLUMNS.len())
+                    .map(|i| {
+                        let mut it: HDITEMW = zeroed();
+                        it.mask = HDI_FORMAT;
+                        send(header, HDM_GETITEMW, i, &mut it as *mut _ as LPARAM);
+                        match it.fmt & (HDF_SORTUP | HDF_SORTDOWN) {
+                            f if f == HDF_SORTUP => '^',
+                            f if f == HDF_SORTDOWN => 'v',
+                            _ => '-',
+                        }
+                    })
+                    .collect::<String>()
+            };
+            let state = || {
+                let names: Vec<String> =
+                    (0..3).filter_map(|r| with_app(|a| a.detail.cell(Page::Files, r, 0))).collect();
+                (
+                    names.join(" "),
+                    controls::selected(lv),
+                    controls::focused(lv),
+                    arrows(),
+                    with_app(|a| a.prefs.get(detail::FILES_SORT_KEY).map(str::to_owned)).flatten(),
+                )
+            };
+            let start = state();
+            click(0);
+            let by_name = state();
+            click(0);
+            let by_name_desc = state();
+            click(0);
+            let unsorted = state();
+            click(1);
+            let by_size = state();
+            DestroyWindow(hwnd);
+
+            let s = |v: &str| Some(v.to_owned());
+            assert_eq!(
+                start,
+                ("Show/b.mkv Show/a.mkv Show/c.mkv".into(), vec![0], Some(0), "-------".into(), None)
+            );
+            assert_eq!(
+                by_name,
+                ("Show/a.mkv Show/b.mkv Show/c.mkv".into(), vec![1], Some(1), "^------".into(), s("0:asc"))
+            );
+            assert_eq!(
+                by_name_desc,
+                ("Show/c.mkv Show/b.mkv Show/a.mkv".into(), vec![1], Some(1), "v------".into(), s("0:desc"))
+            );
+            assert_eq!(
+                unsorted,
+                ("Show/b.mkv Show/a.mkv Show/c.mkv".into(), vec![0], Some(0), "-------".into(), None)
+            );
+            assert_eq!(
+                by_size,
+                ("Show/a.mkv Show/c.mkv Show/b.mkv".into(), vec![2], Some(2), "-^-----".into(), s("1:asc"))
+            );
+        }
+    }
+
     #[test]
     fn the_waiting_window_keeps_a_second_starts_torrents() {
         unsafe {
@@ -7868,6 +8103,11 @@ unsafe fn on_notify(hwnd: HWND, nm: *const NMHDR) -> LRESULT {
                         open_file(hwnd, row, false);
                     }
                 }
+                0
+            }
+            // a click on a column's header sorts the files by it
+            (i, LVN_COLUMNCLICK) if i == IDC_PAGE + Page::Files.index() => {
+                files_sort_click((*(nm as *const NMLISTVIEW)).iSubItem.max(0) as usize);
                 0
             }
             // a click on a folder's icon opens or closes it

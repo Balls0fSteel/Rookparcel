@@ -672,6 +672,8 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
 
 ## Engine networking and protocol follow-ups
 
+**Finished torrent turned back into a download (1.2.64, the owner's "Downloading, no peers"):** `resume_download` removes the two delays the swarm tests reproduced (the redundant-closed seeds' reconnect delay; no re-announce for up to an interval). Nothing shows these were what the owner hit; a hand check with a real torrent is open. If the symptom persists, look first at the tick's connect loop: it hands out `connect_budget` greedily in slot order, where libtorrent goes round-robin and favours downloads, so with many torrents one late in the slot order can be starved. Also open: while finished, `connect_peers_for` takes the top candidates before dropping seeds, so leechers ranked behind seeds can be starved (libtorrent filters seeds in `is_connect_candidate`); Force Re-Check and pause/resume still leave every peer in the 60 s reconnect delay (as libtorrent); the reap-before-forget ordering and the stopped branch's `needs_auto_manage` are reasoned, not tested; a per-torrent connection limit filled with leechers while finished leaves no room for seeds.
+
 - **Keep ping low** (D49, [LOWPING.md](LOWPING.md)): slice 1 in 1.1.29 (2026-11-02_130357_1793621037),
   slice 2 (Linux and macOS pings) in 1.1.30 (2026-11-02_162406_1793633046), run on the Xubuntu
   VM (2026-11-02_165221_1793634741). Still to run on a Mac: `probe::tests::real_trace`, `real_pings` and
@@ -1083,6 +1085,12 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
 - **GTK:** Open / Open Containing Folder on files and folders, Prioritize by File Order and Relocate on real files, a dark theme. Re-check the row shading fix on older GTK 4 (Debian 12, the Flatpak runtime) and decide whether it needs a release of its own.
 - **macOS:** clicks, real right-click (the clicked row as target), Select All, Open, Reveal and Relocate in the tree were not run (the VM's screen was locked; checks went through a tick-driven hack). Return does not open a file in the tree: the outline has no key hook (an `RPOutlineView` subclass needs approval).
 - **Web UI:** a real phone (long press), Windows nox paths.
+
+## Files tab sort and the unfocused selection (D78; built 2026-11-17_092503_1794903903, 1.2.64)
+
+- **Win32 sort:** checked by unit and window tests and one hidden-desktop picture (light, by Size descending from the profile). Not seen: real header clicks with the mouse, a sort by Done or % while a real download moves rows (the selection is put back on the same files, scrolling left alone), a 100,000-file torrent in the window (the model sorts one in 1-66 ms in a release build), the classic theme and 150-200 % DPI.
+- **GTK and macOS:** no detail table sorts there (Trackers and Peers neither). The shared model (`Detail::toggle_file_sort`, `file_marks` / `file_rows_of`) is ready: GTK's `ColumnView` header and the Mac outline's sort descriptors would call it. The Web UI already sorted its Files tab.
+- **Unfocused selection (Win32):** pictured light and dark on the hidden desktop (the main list without the focus). Not seen: a selection on a shaded row after a real Alt+Tab, custom system colours, High Contrast (keeps the highlight itself).
 
 ## Files tab filter and help text (D50, D55; built 2026-11-04)
 

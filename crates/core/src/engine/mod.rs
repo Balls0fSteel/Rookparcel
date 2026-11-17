@@ -2980,17 +2980,42 @@ impl Engine {
         let finished = t.is_finished();
         if t.checking || t.storage.is_none() {
             if finished != was_finished {
-                if finished { self.remove_from_queue(id) } else { self.add_to_queue(id) }
+                if finished {
+                    self.remove_from_queue(id);
+                } else {
+                    self.add_to_queue(id);
+                }
+                // a seed the auto-manager stopped may get a download slot now
+                self.needs_auto_manage = true;
             }
             return;
         }
         if finished && !was_finished {
             self.on_finished(id);
         } else if !finished && was_finished {
-            self.set_state(id, TorrentState::Downloading);
-            self.add_to_queue(id);
-            self.needs_auto_manage = true;
+            self.resume_download(id);
         }
+    }
+
+    /// A finished torrent wants pieces again (libtorrent `torrent::resume_download`): a download
+    /// again, at the end of the queue. Beyond libtorrent, which leaves the rest to the timers, it
+    /// looks for peers at once. The seeds `on_finished` closed as redundant would wait out
+    /// `min_reconnect_time` after that close, so every known peer may be tried again now, as on
+    /// leaving upload mode; and the trackers, which next hear from a finished torrent up to an
+    /// interval later (with `numwant` 0 when it had many peers), the DHT and LSD are asked again.
+    fn resume_download(&mut self, id: TorrentId) {
+        self.set_state(id, TorrentState::Downloading);
+        self.add_to_queue(id);
+        self.needs_auto_manage = true;
+        // closes not recorded yet would set the close time again after the reset
+        self.reap_closing_peers(id);
+        let now = Instant::now();
+        let Some(t) = self.torrent(id) else { return };
+        t.peer_list.forget_last_connected();
+        t.trackers.iter_mut().chain(&mut t.trackers_v2).for_each(|tr| tr.announce_soon(now));
+        self.prioritize_dht(id);
+        self.prioritize_lsd(id);
+        self.connect_peers_for(id, 10);
     }
 
     /// Every wanted piece is done (libtorrent `torrent::finished`).

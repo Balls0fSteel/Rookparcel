@@ -254,6 +254,11 @@ fn windows_dark(u: Option<&Uxtheme>) -> Option<bool> {
     u.map(|u| unsafe { (u.should_apps_use_dark_mode)() })
 }
 
+/// Whether Windows High Contrast is on now, for colours that must leave the user's own alone.
+pub fn high_contrast_on() -> bool {
+    high_contrast()
+}
+
 /// Windows High Contrast is on (`ROOKPARCEL_FORCE_HIGH_CONTRAST=1` for tests).
 fn high_contrast() -> bool {
     if std::env::var_os("ROOKPARCEL_FORCE_HIGH_CONTRAST").is_some_and(|v| v == "1") {

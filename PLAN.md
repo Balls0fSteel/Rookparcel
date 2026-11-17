@@ -1,8 +1,8 @@
 # Rookparcel plan
 
-Last updated: 2026-11-17_001800_1794871080
+Last updated: 2026-11-17_092503_1794903903
 
-Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D77](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
+Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D78](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
 ## Vision
 
@@ -20,6 +20,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 ## Current status
 
 - **Release 1.2.63 (published 2026-11-17):** the feature plan of 2026-11-16 in four waves, **1.2.59** (D72-D73 download order, Copy Magnet Link / Export), **1.2.60** (D74-D75 excluded names, block list from an https address), **1.2.61** (D76 tags), **1.2.62** (D77 `.!ut`), and **1.2.63** the security review's fixes (SECURITY-REVIEW.md; open items in BACKLOG "Security review 1.2.63"). Notes in `docs/releases/1.2.63.md`. Hand checks: BACKLOG "Download order, magnet links and export", "Excluded file names and the IP filter address", "Tags", "Append .!ut to incomplete files".
+- **1.2.64 (not released):** the owner's three points of 2026-11-17: a finished torrent whose file is turned on looks for peers at once (reconnect delay cleared, trackers, DHT and LSD asked again); Win32 Files tab sorts by its headers and an unfocused selection stays visible (D78). Hand checks: BACKLOG "Files tab sort and the unfocused selection"; GTK and macOS sorting open there.
 - **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.
@@ -83,7 +84,7 @@ Q1-Q15 are resolved; their answers and the original Q10 interop setup are in the
 
 - UI artwork (D27-D30): the bold family is integrated (gate 10). Optional: hand-drawn 20 px globe and pylon, dedicated 48/64 px drawings, and a web-ui globe matching the network globe.
 - Compare Properties > Advanced, `rss.*`, the Add dialog's wording and all 15 Preferences pages with the owner's µTorrent 2.2.1 captures in `z_exclude_uTorrent/` (BACKLOG "Win32 layout and dialogs"; Road to 1.0 item 9).
-- D46 and D50-D77 are settled; no decision is proposed.
+- D46 and D50-D78 are settled; no decision is proposed.
 - Decide the Flathub permission/submission approach (item 7); the recorded exception policy requires the owner's own text.
 
 ## V1.1

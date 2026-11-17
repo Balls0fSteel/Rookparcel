@@ -355,11 +355,37 @@ pub unsafe fn selection_post_paint(cd: &NMLVCUSTOMDRAW) {
     }
 }
 
-/// (background, text) of a selected row: the highlight while the list has the focus, else the
-/// button face and text (their dark stand-ins under D64).
+/// (background, text) of a selected row: the highlight while the list has the focus, else
+/// [`unfocused_selection`].
 unsafe fn selection_colours(lv: HWND) -> (COLORREF, COLORREF) {
     let s = crate::theme::sys();
-    if unsafe { GetFocus() } == lv { (s.highlight, s.highlight_text) } else { (s.pressed, s.button_text) }
+    if unsafe { GetFocus() } == lv {
+        (s.highlight, s.highlight_text)
+    } else {
+        unfocused_selection(&s, crate::theme::is_dark(), crate::theme::high_contrast_on())
+    }
+}
+
+/// (background, text) of a selected row while its list does not have the focus (another
+/// control has it, or the window is in the background after Alt+Tab): the highlight mixed into
+/// the window colour (30 % when light, 70 % of the darker highlight of D64) under the window's
+/// text. µTorrent's button face is almost the shade of every other row (`COLOR_BTNFACE`
+/// 0xF0F0F0 against [`row_background`]'s 0xEFEFEF), so a selection on a shaded row vanished.
+/// Under High Contrast the highlight itself, whose colours the user chose.
+fn unfocused_selection(
+    s: &crate::theme::SysPalette,
+    dark: bool,
+    high_contrast: bool,
+) -> (COLORREF, COLORREF) {
+    if high_contrast {
+        return (s.highlight, s.highlight_text);
+    }
+    let share = if dark { 70 } else { 30 };
+    let mix = |shift: u32| {
+        let (h, w) = ((s.highlight >> shift) & 0xff, (s.window >> shift) & 0xff);
+        ((h * share + w * (100 - share) + 50) / 100) << shift
+    };
+    (mix(0) | mix(8) | mix(16), s.window_text)
 }
 
 /// The whole custom-draw handler of a list with no cells of its own: the selection bar and
@@ -379,5 +405,59 @@ pub unsafe fn selection_custom_draw(cd: &mut NMLVCUSTOMDRAW) -> LRESULT {
             }
             _ => CDRF_DODEFAULT as LRESULT,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::theme::{DARK_SYS_RGB, SysPalette, bgr};
+
+    /// Windows 10/11's light system colours, as `GetSysColor` gives them (`COLORREF`s).
+    fn light() -> SysPalette {
+        SysPalette {
+            window: 0xffffff,
+            window_text: 0,
+            gray_text: bgr(0x6d6d6d),
+            highlight: bgr(0x0078d7),
+            highlight_text: 0xffffff,
+            button_face: 0xf0f0f0,
+            button_text: 0,
+            shadow: 0xa0a0a0,
+            border: 0xa0a0a0,
+            header: 0xffffff,
+            hot: bgr(0x0078d7),
+            pressed: 0xf0f0f0,
+        }
+    }
+
+    /// The largest difference of one colour channel.
+    fn distance(a: COLORREF, b: COLORREF) -> u32 {
+        (0..3).map(|i| ((a >> (i * 8)) & 0xff).abs_diff((b >> (i * 8)) & 0xff)).max().unwrap()
+    }
+
+    #[test]
+    fn an_unfocused_selection_stands_out_from_shaded_rows() {
+        let s = light();
+        let (bk, text) = unfocused_selection(&s, false, false);
+        assert_eq!((bk, text), (bgr(0xb3d7f3), 0), "30 % of the highlight under the window's text");
+        // the old button face was one step from the shaded rows (0xEFEFEF)
+        assert!(distance(s.pressed, 0xefefef) <= 1);
+        for row in [0xffffff, 0xefefef] {
+            assert!(distance(bk, row) >= 40, "{bk:06x} against {row:06x}");
+        }
+        let dark = SysPalette {
+            window: bgr(DARK_SYS_RGB.window),
+            highlight: bgr(DARK_SYS_RGB.highlight),
+            window_text: bgr(DARK_SYS_RGB.window_text),
+            ..s
+        };
+        let (bk, text) = unfocused_selection(&dark, true, false);
+        assert_eq!(text, bgr(DARK_SYS_RGB.window_text));
+        for row in [bgr(DARK_SYS_RGB.window), bgr(0x2c2d30)] {
+            assert!(distance(bk, row) >= 40, "{bk:06x} against {row:06x}");
+        }
+        // High Contrast keeps the user's highlight
+        assert_eq!(unfocused_selection(&s, false, true), (s.highlight, s.highlight_text));
     }
 }

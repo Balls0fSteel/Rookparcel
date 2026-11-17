@@ -12,7 +12,7 @@ use rookparcel_core::{
     PeerSource, TorrentId, TorrentStatus, TrackerStatus,
 };
 
-use crate::add::FileTree;
+use crate::add::{FileTree, Row};
 use crate::lang::S;
 use crate::status::status_text;
 use crate::{fmt, tr};
@@ -92,6 +92,47 @@ impl Tab {
 /// 2.2.1's plain list), read with `Prefs::get_bool(FILES_TREE_KEY, true)` (D62).
 pub const FILES_TREE_KEY: &str = "ui.files_tree";
 
+/// The preference that keeps the Files tab's sort ([`file_sort_pref`]); none is the torrent's
+/// order.
+pub const FILES_SORT_KEY: &str = "ui.files_sort";
+
+/// The Files tab's sort: a column of [`FILE_COLUMNS`] and whether it is descending.
+pub type FileSort = (usize, bool);
+
+/// The Files tab's sort as [`FILES_SORT_KEY`] keeps it ("1:desc"), `None` to remove the key.
+pub fn file_sort_pref(sort: Option<FileSort>) -> Option<String> {
+    sort.map(|(col, desc)| format!("{col}:{}", if desc { "desc" } else { "asc" }))
+}
+
+/// [`FILES_SORT_KEY`]'s value as a sort; `None` for the torrent's order or a value it does not
+/// know.
+pub fn file_sort_from_pref(value: &str) -> Option<FileSort> {
+    let (col, dir) = value.split_once(':').unwrap_or((value, "asc"));
+    let col: usize = col.trim().parse().ok().filter(|&c| c < FILE_COLUMNS.len())?;
+    Some((col, dir.trim() == "desc"))
+}
+
+/// Whether a click on Files tab column `col` sorts it descending first: the progress and
+/// priority columns, whose interesting end is the top one; names, sizes and pieces start
+/// ascending.
+fn file_sort_starts_descending(col: usize) -> bool {
+    matches!(col, 2 | 3 | 6)
+}
+
+/// What the Files tab's rows showed (files in the plain list, tree nodes in the tree), to find
+/// the same rows again after a sort moved them: [`Detail::file_marks`].
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FileMarks {
+    tree: bool,
+    ids: Vec<usize>,
+}
+
+impl FileMarks {
+    pub fn is_empty(&self) -> bool {
+        self.ids.is_empty()
+    }
+}
+
 /// Lines the Logger keeps.
 pub const LOG_LINES: usize = 1000;
 /// Seconds of speed history.
@@ -115,6 +156,11 @@ pub struct Detail {
     flat_files: bool,
     /// The Files tab's folder tree, while it shows one and the file list is known.
     tree: Option<FileTree>,
+    /// The Files tab's sort; `None` is the torrent's order.
+    file_sort: Option<FileSort>,
+    /// Counts the times the Files tab's rows were put in a new order, so a view can tell when
+    /// to put its selection back on the rows it was on ([`Detail::file_order`]).
+    file_order: u64,
     pub have: Option<Bitfield>,
     pub availability: Vec<u32>,
     /// The pieces being downloaded, ascending (the Pieces list).
@@ -145,12 +191,19 @@ impl Detail {
     /// priority change) refreshes the tree in place, so collapsed folders stay collapsed.
     pub fn set_files(&mut self, files: Arc<[FileEntry]>) {
         self.file_rows = self.file_filter.rows(&files);
+        let mut new_tree = false;
         if let Some(t) = self.tree.as_mut().filter(|t| t.has_files(&files)) {
             t.set_file_states(&files);
         } else {
             self.tree = (!self.flat_files).then(|| self.build_tree(&files));
+            new_tree = true;
         }
         self.files = Some(files);
+        // the plain list's rows come back in the torrent's order; the tree keeps its order
+        // unless the priorities it is sorted by changed
+        if self.file_sort.is_some_and(|(col, _)| self.flat_files || new_tree || col == 6) {
+            self.sort_files();
+        }
     }
 
     fn build_tree(&self, files: &[FileEntry]) -> FileTree {
@@ -165,7 +218,117 @@ impl Detail {
         if let Some(t) = &mut self.tree {
             t.set_done(&done);
         }
+        let moved = done != self.file_done;
         self.file_done = done;
+        if moved && self.file_sort.is_some_and(|(col, _)| col == 2 || col == 3) {
+            self.sort_files();
+        }
+    }
+
+    /// The Files tab's sort ([`FileSort`]); `None` is the torrent's order.
+    pub fn file_sort(&self) -> Option<FileSort> {
+        self.file_sort
+    }
+
+    /// Sorts the Files tab (`None`: the torrent's order); true when the sort changed, so the
+    /// rows moved. In the tree each folder's entries are sorted, folders first; ties keep the
+    /// torrent's order.
+    pub fn set_file_sort(&mut self, sort: Option<FileSort>) -> bool {
+        let sort = sort.filter(|&(col, _)| col < FILE_COLUMNS.len());
+        if sort == self.file_sort {
+            return false;
+        }
+        self.file_sort = sort;
+        self.sort_files();
+        true
+    }
+
+    /// A click on the header of Files tab column `col`: a new column starts in its natural
+    /// direction (ascending, descending for Done, % and Priority), a second click reverses it
+    /// and a third goes back to the torrent's order, which "Prioritize by File Order" follows.
+    /// Returns the new sort.
+    pub fn toggle_file_sort(&mut self, col: usize) -> Option<FileSort> {
+        let first = file_sort_starts_descending(col);
+        let next = match self.file_sort {
+            Some((c, desc)) if c == col && desc == first => Some((col, !first)),
+            Some((c, _)) if c == col => None,
+            _ => Some((col, first)),
+        };
+        self.set_file_sort(next);
+        self.file_sort
+    }
+
+    /// Changes each time the Files tab's rows are put in a new order (a sort, or progress or
+    /// priorities moving rows of a sorted list): a view whose selection is by row puts it back
+    /// with [`Detail::file_marks`] taken before and [`Detail::file_rows_of`] after.
+    pub fn file_order(&self) -> u64 {
+        self.file_order
+    }
+
+    /// What Files tab rows `rows` show, to find them again after the rows moved.
+    pub fn file_marks(&self, rows: &[usize]) -> FileMarks {
+        match &self.tree {
+            Some(t) => FileMarks { tree: true, ids: t.nodes_of_rows(rows).into_iter().flatten().collect() },
+            None => FileMarks {
+                tree: false,
+                ids: rows.iter().filter_map(|&r| self.file_rows.get(r).map(|&f| f as usize)).collect(),
+            },
+        }
+    }
+
+    /// The rows that show what `marks` named now, in the marks' order; none of them when the
+    /// view switched between the tree and the plain list since.
+    pub fn file_rows_of(&self, marks: &FileMarks) -> Vec<usize> {
+        match &self.tree {
+            Some(t) if marks.tree => t.rows_of_nodes(&marks.ids),
+            None if !marks.tree => {
+                let mut at = vec![usize::MAX; self.files.as_ref().map_or(0, |f| f.len())];
+                for (row, &f) in self.file_rows.iter().enumerate() {
+                    if let Some(a) = at.get_mut(f as usize) {
+                        *a = row;
+                    }
+                }
+                marks.ids.iter().filter_map(|&f| at.get(f).copied().filter(|&r| r != usize::MAX)).collect()
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Puts the Files tab's rows in [`Detail::file_sort`]'s order: the tree's while it shows
+    /// one, else the plain list's (whose order the tree does not use; switching to the plain
+    /// list sorts it).
+    fn sort_files(&mut self) {
+        self.file_order += 1;
+        let sort = self.file_sort;
+        let files = self.files.clone();
+        let files = files.as_deref().unwrap_or(&[]);
+        if let Some(t) = &mut self.tree {
+            match sort {
+                None => t.sort_nodes(None),
+                Some((col, desc)) => {
+                    let cmp = |a: &Row<'_>, b: &Row<'_>| {
+                        let o = tree_row_cmp(col, files, a, b);
+                        if desc { o.reverse() } else { o }
+                    };
+                    t.sort_nodes(Some(&cmp));
+                }
+            }
+            return;
+        }
+        match sort {
+            None => self.file_rows.sort_unstable(),
+            Some((col, desc)) => {
+                let done = &self.file_done;
+                let key = |i: u32| {
+                    let f = &files[i as usize];
+                    (f, done.get(i as usize).copied().unwrap_or(0))
+                };
+                self.file_rows.sort_unstable_by(|&a, &b| {
+                    let o = flat_file_cmp(col, key(a), key(b));
+                    (if desc { o.reverse() } else { o }).then(a.cmp(&b))
+                });
+            }
+        }
     }
 
     /// Completed bytes per file, empty until the engine reported them.
@@ -190,6 +353,9 @@ impl Detail {
             (Some(files), true) => Some(self.build_tree(files)),
             _ => None,
         };
+        if self.file_sort.is_some() {
+            self.sort_files();
+        }
         true
     }
 
@@ -223,6 +389,10 @@ impl Detail {
         }
         if let Some(files) = &self.files {
             self.file_rows = self.file_filter.rows(files);
+            // the tree keeps its order under a filter
+            if self.file_sort.is_some() && self.tree.is_none() {
+                self.sort_files();
+            }
         }
         if let Some(t) = &mut self.tree {
             t.set_filter(text);
@@ -358,6 +528,58 @@ impl Detail {
     /// How many files the filter shows (all but pad files without one).
     pub fn shown_files(&self) -> usize {
         self.file_rows.len()
+    }
+}
+
+/// `done` of `size` against `done2` of `size2` as fractions, without rounding (an empty file
+/// counts as complete, as [`percent_text`] shows it).
+fn fraction_cmp((done, size): (u64, u64), (done2, size2): (u64, u64)) -> std::cmp::Ordering {
+    let (d, s) = if size == 0 { (1, 1) } else { (done.min(size), size) };
+    let (d2, s2) = if size2 == 0 { (1, 1) } else { (done2.min(size2), size2) };
+    (d as u128 * s2 as u128).cmp(&(d2 as u128 * s as u128))
+}
+
+/// µTorrent's priority levels in order (Don't Download, Low, Normal, High), as
+/// [`priority_text`] names them; a folder whose files differ ("Mixed") after them.
+fn priority_rank(p: Option<DownloadPriority>) -> u8 {
+    match p.map(|p| p.0) {
+        Some(0) => 0,
+        Some(1..=3) => 1,
+        Some(4) => 2,
+        Some(_) => 3,
+        None => 4,
+    }
+}
+
+/// The Files tab's ascending order by column `col` for two tree nodes as rows (folders are
+/// only compared with folders: they have no piece columns, so those keep them in order).
+fn tree_row_cmp(col: usize, files: &[FileEntry], a: &Row<'_>, b: &Row<'_>) -> std::cmp::Ordering {
+    let pieces = |r: &Row<'_>| {
+        r.file.and_then(|f| files.get(f)).map(|f| (f.last_piece - f.first_piece, f.first_piece))
+    };
+    match col {
+        0 => crate::columns::natural_cmp(a.name, b.name),
+        1 => a.size.cmp(&b.size),
+        2 => a.done.cmp(&b.done),
+        3 => fraction_cmp((a.done, a.size), (b.done, b.size)),
+        4 => pieces(a).map(|p| p.0).cmp(&pieces(b).map(|p| p.0)),
+        5 => pieces(a).map(|p| p.1).cmp(&pieces(b).map(|p| p.1)),
+        6 => priority_rank(a.priority).cmp(&priority_rank(b.priority)),
+        _ => std::cmp::Ordering::Equal,
+    }
+}
+
+/// The plain list's ascending order by column `col` for two files and their completed bytes.
+fn flat_file_cmp(col: usize, (a, da): (&FileEntry, u64), (b, db): (&FileEntry, u64)) -> std::cmp::Ordering {
+    match col {
+        0 => crate::columns::natural_cmp(&a.path, &b.path),
+        1 => a.size.cmp(&b.size),
+        2 => da.cmp(&db),
+        3 => fraction_cmp((da, a.size), (db, b.size)),
+        4 => (a.last_piece - a.first_piece).cmp(&(b.last_piece - b.first_piece)),
+        5 => a.first_piece.cmp(&b.first_piece),
+        6 => priority_rank(Some(a.priority)).cmp(&priority_rank(Some(b.priority))),
+        _ => std::cmp::Ordering::Equal,
     }
 }
 
@@ -1074,6 +1296,115 @@ mod tests {
         assert_eq!(d.file_path(0, save), Some(PathBuf::from(save).join("Show").join("Season 1")));
         assert_eq!(d.file_path(4, save), Some(PathBuf::from(save).join("Show").join("Subs").join("e01.srt")));
         assert_eq!(d.file_parent_row(4), Some(3));
+    }
+
+    #[test]
+    fn the_files_tab_sorts_by_its_columns() {
+        let mut d = Detail::default();
+        d.set_files(show());
+        let torrent_order = ["Season 1", "e01.mkv", "e02.mkv", "Subs", "e01.srt", "info.nfo"];
+        assert_eq!(d.file_sort(), None);
+        // Size: ascending first, folders before files in each folder
+        assert_eq!(d.toggle_file_sort(1), Some((1, false)));
+        assert_eq!(names(&d), ["Subs", "e01.srt", "Season 1", "e01.mkv", "e02.mkv", "info.nfo"]);
+        assert_eq!(d.toggle_file_sort(1), Some((1, true)));
+        assert_eq!(names(&d), ["Season 1", "e02.mkv", "e01.mkv", "Subs", "e01.srt", "info.nfo"]);
+        // a third click goes back to the torrent's order
+        assert_eq!(d.toggle_file_sort(1), None);
+        assert_eq!(names(&d), torrent_order);
+        // Priority starts with the top: Mixed, High, Normal, Low, Don't Download
+        assert_eq!(d.toggle_file_sort(6), Some((6, true)));
+        assert_eq!(names(&d), ["Season 1", "e02.mkv", "e01.mkv", "Subs", "e01.srt", "info.nfo"]);
+
+        // the plain list sorts its paths
+        let marks = d.file_marks(&[1]);
+        assert!(d.set_files_tree(false));
+        assert_eq!(
+            names(&d),
+            ["Show/Season 1/e02.mkv", "Show/Season 1/e01.mkv", "Show/info.nfo", "Show/Subs/e01.srt"]
+        );
+        assert_eq!(d.file_rows_of(&marks), Vec::<usize>::new(), "tree marks do not name list rows");
+        let marks = d.file_marks(&[0, 3]);
+        let order = d.file_order();
+        assert!(d.set_file_sort(Some((0, false))));
+        assert!(!d.set_file_sort(Some((0, false))), "unchanged");
+        assert!(d.file_order() > order);
+        assert_eq!(
+            names(&d),
+            ["Show/info.nfo", "Show/Season 1/e01.mkv", "Show/Season 1/e02.mkv", "Show/Subs/e01.srt"]
+        );
+        assert_eq!(d.file_rows_of(&marks), [2, 3], "the same files, where they are now");
+        assert_eq!(d.file_indexes(&[0, 1]), [0, 4], "actions take the files the rows show");
+
+        // progress moves rows of a list sorted by it; the same progress again does not
+        assert!(d.set_file_sort(Some((3, true))));
+        d.set_file_done(vec![500, 3000, 0, 10, 0]);
+        assert_eq!(
+            names(&d),
+            ["Show/Season 1/e02.mkv", "Show/Subs/e01.srt", "Show/Season 1/e01.mkv", "Show/info.nfo"]
+        );
+        let order = d.file_order();
+        d.set_file_done(vec![500, 3000, 0, 10, 0]);
+        assert_eq!(d.file_order(), order);
+        d.set_file_done(vec![900, 3000, 0, 10, 5]);
+        assert!(d.file_order() > order);
+        assert_eq!(
+            names(&d),
+            ["Show/Season 1/e02.mkv", "Show/Subs/e01.srt", "Show/info.nfo", "Show/Season 1/e01.mkv"]
+        );
+        // a filter keeps the sort
+        assert!(d.set_file_filter("mkv"));
+        assert_eq!(names(&d), ["Show/Season 1/e02.mkv", "Show/Season 1/e01.mkv"]);
+        assert!(d.set_file_filter(""));
+
+        // back in the tree, by name; a new list of the same files keeps the order
+        assert!(d.set_files_tree(true));
+        assert!(d.set_file_sort(Some((0, true))));
+        assert_eq!(names(&d), ["Subs", "e01.srt", "Season 1", "e02.mkv", "e01.mkv", "info.nfo"]);
+        let marks = d.file_marks(&[3]);
+        d.set_files(show());
+        assert_eq!(names(&d), ["Subs", "e01.srt", "Season 1", "e02.mkv", "e01.mkv", "info.nfo"]);
+        assert!(d.set_file_sort(None));
+        assert_eq!(names(&d), torrent_order);
+        assert_eq!(d.file_rows_of(&marks), [2], "e02.mkv");
+    }
+
+    #[test]
+    fn the_files_sort_preference() {
+        assert_eq!(file_sort_pref(Some((3, true))).as_deref(), Some("3:desc"));
+        assert_eq!(file_sort_pref(None), None);
+        assert_eq!(file_sort_from_pref("3:desc"), Some((3, true)));
+        assert_eq!(file_sort_from_pref("0:asc"), Some((0, false)));
+        assert_eq!(file_sort_from_pref("1"), Some((1, false)));
+        assert_eq!(file_sort_from_pref("7:asc"), None, "no such column");
+        assert_eq!(file_sort_from_pref("name"), None);
+    }
+
+    /// 100,000 files in one folder sort by name in the tree and in the plain list; run with
+    /// `--release --ignored` to see the times.
+    #[test]
+    #[ignore]
+    fn sorting_a_hundred_thousand_files() {
+        let files: Vec<FileEntry> = (0..100_000u64)
+            .map(|i| {
+                entry(&format!("Big/Part {}/file {:06} name.bin", i % 7, (i * 7919) % 100_000), i, 4, false)
+            })
+            .collect();
+        let mut d = Detail::default();
+        let t = std::time::Instant::now();
+        d.set_files(Arc::from(files));
+        let built = t.elapsed();
+        for (col, desc) in [(0, false), (0, true), (1, true), (3, true), (6, true)] {
+            let t = std::time::Instant::now();
+            d.set_file_sort(Some((col, desc)));
+            eprintln!("tree, column {col} desc {desc}: {:?} (built in {built:?})", t.elapsed());
+        }
+        d.set_files_tree(false);
+        for (col, desc) in [(0, false), (0, true), (1, true)] {
+            let t = std::time::Instant::now();
+            d.set_file_sort(Some((col, desc)));
+            eprintln!("list, column {col} desc {desc}: {:?}", t.elapsed());
+        }
     }
 
     #[test]

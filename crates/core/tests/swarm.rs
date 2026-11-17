@@ -12,7 +12,8 @@
 //! that sent the rest of the piece is kept; and the IP and port filters: blocked peers are never
 //! connected, refused when they connect, and dropped when a new filter blocks them, and blocked
 //! trackers are not announced to; a skipped file kept in the part file across a restart and
-//! a recheck, then unskipped; a sequential download that asks for each file's first and
+//! a recheck, then unskipped; a file turned on in a finished download, which connects to the
+//! seed it closed again at once and announces again; a sequential download that asks for each file's first and
 //! last pieces first; and "Append .!ut to incomplete files" (D77): a download under `.!ut` names
 //! that ends with the plain ones, a stop and restart from resume data, µTorrent's `.!ut` and
 //! qBittorrent's `.!qB` partial files picked up with the option off and on, the option turned
@@ -2451,12 +2452,10 @@ fn a_skipped_file_stays_in_the_part_file_until_it_is_unskipped() {
     assert_eq!(st.total_wanted_done, wanted, "the recheck reads the part file");
     assert!(!beta.exists());
 
-    // Unskip: the boundary blocks move into beta and the rest is downloaded. The restarted
-    // leech closed its connection to the first seed as redundant (finished, and the other end
-    // is a seed) and waits min_reconnect_time before trying it again, so use a second seed.
+    // Unskip: the boundary blocks move into beta and the rest is downloaded from the seed,
+    // which the recheck disconnected and the unskip lets the leech connect to again at once
+    // (a_file_turned_on_after_the_download_finished_reconnects_to_the_seed).
     leech.handle().torrent(id).set_file_priority(1, DownloadPriority::NORMAL);
-    let (seed2, seed2_dir, port2, _) = seeder(&f);
-    leech.handle().torrent(id).connect_peer(SocketAddr::from(([127, 0, 0, 1], port2)));
     let st = wait_state(&mut w, id, TorrentState::Seeding, 60);
     assert_eq!(st.total_failed_bytes, 0);
     assert_files(&f, &dir);
@@ -2472,9 +2471,141 @@ fn a_skipped_file_stays_in_the_part_file_until_it_is_unskipped() {
     });
     leech.shutdown();
     seed.shutdown();
+    assert_files(&f, &dir);
+    for d in [dir, state, seed_dir] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// A finished download closes its connection to the seed as redundant; a file turned on then
+/// makes it a download again, which must connect to that seed again by itself and finish. The
+/// close started the seed's reconnect delay (an hour here), so up to 1.2.63 the torrent sat in
+/// Downloading with no peers until it was over.
+#[test]
+fn a_file_turned_on_after_the_download_finished_reconnects_to_the_seed() {
+    use rookparcel_core::DownloadPriority;
+    let f = fixture(None);
+    let (seed, seed_dir, port, _) = seeder(&f);
+    let dir = temp_dir("leech-unskip-reconnect");
+    let (leech, mut w, _) = start_with(|s| s.min_reconnect_time = 3600);
+    let mut p = AddTorrentParams::new(TorrentSource::TorrentFile(f.torrent.clone()), dir.to_string_lossy());
+    p.flags = TorrentFlags::empty();
+    p.file_priorities = vec![DownloadPriority::NORMAL, DownloadPriority::DONT_DOWNLOAD];
+    leech.handle().add_torrent(p);
+    let id = wait(&mut w, 5, "add", |a| match a {
+        Alert::TorrentAdded { id, .. } => Some(*id),
+        _ => None,
+    });
+    leech.handle().torrent(id).connect_peer(SocketAddr::from(([127, 0, 0, 1], port)));
+    wait(&mut w, 60, "finished without the seed", |a| {
+        status_of(a, id).filter(|s| s.state == TorrentState::Finished && s.num_peers == 0)
+    });
+    leech.handle().torrent(id).set_file_priority(1, DownloadPriority::NORMAL);
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 30);
+    assert_eq!(st.total_failed_bytes, 0);
+    leech.shutdown();
+    seed.shutdown();
+    assert_files(&f, &dir);
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(seed_dir);
+}
+
+/// An HTTP tracker that hands every announcer the peers in `peers` at the time, with a
+/// half-hour interval, and sends each announce's `event` and `left` down `log`.
+fn recording_http_tracker(
+    peers: std::sync::Arc<std::sync::Mutex<Vec<SocketAddr>>>,
+    log: std::sync::mpsc::Sender<(String, u64)>,
+) -> String {
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/announce", l.local_addr().unwrap());
+    std::thread::spawn(move || {
+        use std::io::{Read, Write};
+        for conn in l.incoming() {
+            let Ok(mut c) = conn else { continue };
+            let mut buf = vec![0u8; 4096];
+            let mut n = 0;
+            while !buf[..n].windows(4).any(|w| w == b"\r\n\r\n") {
+                match c.read(&mut buf[n..]) {
+                    Ok(0) | Err(_) => break,
+                    Ok(k) => n += k,
+                }
+            }
+            let req = String::from_utf8_lossy(&buf[..n]).into_owned();
+            let target = req.split_whitespace().nth(1).unwrap_or_default();
+            let Some(query) = target.strip_prefix("/announce?") else { continue };
+            let param = |k: &str| {
+                query.split('&').find_map(|kv| kv.strip_prefix(k).and_then(|v| v.strip_prefix('=')))
+            };
+            let event = param("event").unwrap_or_default().to_owned();
+            let left = param("left").and_then(|v| v.parse().ok()).unwrap_or(u64::MAX);
+            let mut compact = Vec::new();
+            for a in peers.lock().unwrap().iter() {
+                let SocketAddr::V4(a) = a else { unreachable!() };
+                compact.extend_from_slice(&a.ip().octets());
+                compact.extend_from_slice(&a.port().to_be_bytes());
+            }
+            // the counts spare a scrape
+            let mut body = format!("d8:completei1e10:incompletei1e8:intervali1800e5:peers{}:", compact.len())
+                .into_bytes();
+            body.extend_from_slice(&compact);
+            body.push(b'e');
+            let head =
+                format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+            let _ = c.write_all(head.as_bytes());
+            let _ = c.write_all(&body);
+            if log.send((event, left)).is_err() {
+                return;
+            }
+        }
+    });
+    url
+}
+
+/// A file turned on in a finished download announces again at once, as a download (`left`
+/// above zero, no event), rather than half an hour later: the seed it finished from is gone,
+/// and only the tracker knows the one that is left.
+#[test]
+fn a_file_turned_on_after_the_download_finished_announces_again() {
+    use rookparcel_core::DownloadPriority;
+    use std::sync::{Arc, Mutex, mpsc};
+    let f = fixture(None);
+    let (seed, seed_dir, port, _) = seeder(&f);
+    let peers = Arc::new(Mutex::new(vec![SocketAddr::from(([127, 0, 0, 1], port))]));
+    let (tx, announces) = mpsc::channel();
+    let url = recording_http_tracker(peers.clone(), tx);
+    let dir = temp_dir("leech-unskip-announce");
+    let (leech, mut w, _) = start_with(|s| s.min_reconnect_time = 3600);
+    let mut p = AddTorrentParams::new(TorrentSource::TorrentFile(f.torrent.clone()), dir.to_string_lossy());
+    p.flags = TorrentFlags::empty();
+    p.trackers = vec![url];
+    p.file_priorities = vec![DownloadPriority::NORMAL, DownloadPriority::DONT_DOWNLOAD];
+    leech.handle().add_torrent(p);
+    let id = wait(&mut w, 5, "add", |a| match a {
+        Alert::TorrentAdded { id, .. } => Some(*id),
+        _ => None,
+    });
+    wait(&mut w, 60, "finished without the seed", |a| {
+        status_of(a, id).filter(|s| s.state == TorrentState::Finished && s.num_peers == 0)
+    });
+    let next = |what: &str| {
+        announces.recv_timeout(Duration::from_secs(10)).unwrap_or_else(|_| panic!("no {what} announce"))
+    };
+    assert_eq!(next("first").0, "started");
+    assert_eq!(next("completed").0, "completed");
+    // the first seed leaves; a second one comes, which only the tracker knows about
+    seed.shutdown();
+    let (seed2, seed2_dir, port2, _) = seeder(&f);
+    *peers.lock().unwrap() = vec![SocketAddr::from(([127, 0, 0, 1], port2))];
+    leech.handle().torrent(id).set_file_priority(1, DownloadPriority::NORMAL);
+    let (event, left) = next("download");
+    assert_eq!(event, "", "a regular announce");
+    assert!(left > 0 && left < u64::MAX, "announced as a download: left={left}");
+    let st = wait_state(&mut w, id, TorrentState::Seeding, 30);
+    assert_eq!(st.total_failed_bytes, 0);
+    leech.shutdown();
     seed2.shutdown();
     assert_files(&f, &dir);
-    for d in [dir, state, seed_dir, seed2_dir] {
+    for d in [dir, seed_dir, seed2_dir] {
         let _ = std::fs::remove_dir_all(d);
     }
 }

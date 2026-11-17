@@ -73,6 +73,9 @@ pub struct Row<'a> {
     pub file: Option<usize>,
 }
 
+/// An order of two rows, for [`FileTree::sort_nodes`].
+pub type RowCmp<'a> = dyn Fn(&Row<'_>, &Row<'_>) -> std::cmp::Ordering + 'a;
+
 /// The torrent's files as a tree. Folders come before the files of their parent in the order
 /// the torrent lists them; pad files are left out (and never downloaded).
 #[derive(Debug)]
@@ -395,12 +398,17 @@ impl FileTree {
     /// Node `n` as a row (whether or not its folders are expanded here); `None` for a node the
     /// filter hides. While the filter is on, folders say they are open (`folder: Some(true)`).
     pub fn node(&self, n: usize) -> Option<Row<'_>> {
-        let node = self.nodes.get(n)?;
-        if !self.is_shown(n as u32) {
+        if n >= self.nodes.len() || !self.is_shown(n as u32) {
             return None;
         }
+        Some(self.node_row(n))
+    }
+
+    /// Node `n` (an index below `nodes.len()`) as a row, whether or not the filter shows it.
+    fn node_row(&self, n: usize) -> Row<'_> {
+        let node = &self.nodes[n];
         let filtering = self.filter.is_on();
-        Some(match &node.kind {
+        match &node.kind {
             &Kind::File(fi) => {
                 let fi = fi as usize;
                 Row {
@@ -438,7 +446,53 @@ impl FileTree {
                 },
                 file: None,
             },
-        })
+        }
+    }
+
+    /// Orders the entries of every folder (and the top ones): with `cmp`, folders before files,
+    /// each by `cmp` (given the two nodes as rows, see [`FileTree::node`]), ties in the
+    /// torrent's order; with `None`, back to the torrent's order. The rows are rebuilt, so the
+    /// view must reload them. Expansion, the filter and node indices stay as they were.
+    ///
+    /// A folder of 100,000 files sorts by name in a few tens of milliseconds: the folders are
+    /// sorted one by one and the comparisons read the nodes in place.
+    pub fn sort_nodes(&mut self, cmp: Option<&RowCmp<'_>>) {
+        let order = |t: &FileTree, ids: &mut Vec<u32>| match cmp {
+            None => ids.sort_unstable(),
+            Some(cmp) => ids.sort_unstable_by(|&a, &b| {
+                let (ra, rb) = (t.node_row(a as usize), t.node_row(b as usize));
+                rb.folder.is_some().cmp(&ra.folder.is_some()).then_with(|| cmp(&ra, &rb)).then(a.cmp(&b))
+            }),
+        };
+        let mut roots = std::mem::take(&mut self.roots);
+        order(self, &mut roots);
+        self.roots = roots;
+        for i in 0..self.nodes.len() {
+            let mut ids = match &mut self.nodes[i].kind {
+                Kind::Dir { children, .. } if children.len() > 1 => std::mem::take(children),
+                _ => continue,
+            };
+            order(self, &mut ids);
+            if let Kind::Dir { children, .. } = &mut self.nodes[i].kind {
+                *children = ids;
+            }
+        }
+        self.rebuild_rows();
+    }
+
+    /// The node in each of `rows` (`None` past the end), to find them again after the rows
+    /// moved ([`FileTree::rows_of_nodes`]).
+    pub fn nodes_of_rows(&self, rows: &[usize]) -> Vec<Option<usize>> {
+        rows.iter().map(|&r| self.row_node(r)).collect()
+    }
+
+    /// The visible rows of `nodes`, those still shown, in `nodes`' order.
+    pub fn rows_of_nodes(&self, nodes: &[usize]) -> Vec<usize> {
+        let mut at = vec![usize::MAX; self.nodes.len()];
+        for (row, &n) in self.rows.iter().enumerate() {
+            at[n as usize] = row;
+        }
+        nodes.iter().filter_map(|&n| at.get(n).copied().filter(|&r| r != usize::MAX)).collect()
     }
 
     /// Expands or collapses the folder in row `i`; false for files. See
