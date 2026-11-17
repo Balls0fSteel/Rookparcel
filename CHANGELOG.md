@@ -4,6 +4,14 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-17_151824_1794925104: Release 1.2.65 published; the site's news and the wiki pushed
+
+- **On the owner's word** ("check CI, release; if not, fix and release"): CI, FreeBSD and Fuzz green on `a871cd5f` (1.2.64); the release review's fixes made 1.2.65 (`3ecc8106`), green on all three; tag `v1.2.65`; the Release run [44099418866](https://github.com/Balls0fSteel/Rookparcel/actions/runs/44099418866) passed all 11 jobs on the first attempt.
+- **Checked on the draft:** all 13 files' GitHub SHA-256 digests match `SHA256SUMS`, the downloaded zip too; the zip holds the two exes, `LICENSE.md` and `THIRD-PARTY-NOTICES.md`; both exes say 1.2.65 in their version resources, and `rookparcel-nox --version` prints `rookparcel-nox 1.2.65`.
+- **Published** with `gh release edit v1.2.65 --draft=false --latest`; then `d801b5d5` (the news entry, the README's and the wiki's version lines, "New in 1.2.65" for the sort section) pushed to `main`, and the GitHub wiki got the four changed pages (`2e75882`); a page-by-page comparison shows nothing else differing.
+- **Checked live:** `update.txt` says `stable=1.2.65`; `news.atom` leads with 1.2.65; the download page links the 1.2.65 setup.
+- **Still open:** RELEASING.md step 5 by hand, the owner's retest of the reconnect fix with a real torrent, and BACKLOG "Files tab sort and the unfocused selection".
+
 ## 2026-11-17_144407_1794923047: Version 1.2.65: the security review of 1.2.64 and its fixes; release 1.2.65 prepared
 
 - **Before the release (owner: "check CI, release; if not, fix and release"):** CI, FreeBSD and Fuzz were green on `a871cd5f` (1.2.64). The per-release review over `v1.2.63..HEAD -- crates` by one read-only reviewer: nothing critical, high or medium, and nothing a peer, tracker or `.torrent` can drive. Recorded in SECURITY-REVIEW.md "Release 1.2.65".
