@@ -25,7 +25,7 @@ use rookparcel_frontend::auto_shutdown::{self, AutoShutdown, Mode as AutoMode, S
 use rookparcel_frontend::columns::Column;
 use rookparcel_frontend::detail::{
     Detail, FILES_SORT_KEY, FILES_TREE_KEY, FileMarks, FileSort, PRIORITIES, Tab, file_sort_from_pref,
-    file_sort_pref, on_disk_path,
+    file_sort_pref, on_disk_path, sort_from_pref_of, sort_key,
 };
 use rookparcel_frontend::exclude::Pending;
 use rookparcel_frontend::export::{self, ExportTarget, Exports};
@@ -51,7 +51,7 @@ use rookparcel_frontend::ui_lock::{self, Form};
 use rookparcel_frontend::update::{self, Checker, Kind, Manifest, Version};
 use rookparcel_frontend::{actions, add, create, fmt, help, profile, settings, setup_guide, tr};
 
-use crate::detail::{Details, Visit, files_header_changed};
+use crate::detail::{Details, Visit, files_header_changed, header_changed};
 use crate::list::{Content, List};
 use crate::paths;
 use crate::shutdown::{self, Power};
@@ -735,6 +735,52 @@ fn files_sort_changed(header: Option<FileSort>) {
     // outside `with_app`: this signals again (and changes nothing), and the cells read the state
     ui.details.show_files_sort(sort);
     ui.details.files_reordered(&rows, show);
+}
+
+/// The Trackers or the Peers tab's headers show `header` now (D78): as [`files_sort_changed`],
+/// through [`header_changed`] (the column's natural direction, reversed, then the engine's
+/// order), kept under [`sort_key`]; the selection stays on the same trackers or peers
+/// ([`Detail::row_keys`]), the focused one (or the first selected) in view.
+fn list_sort_changed(tab: Tab, header: Option<FileSort>) {
+    let Some(ui) = ui() else { return };
+    let (selected, focused) = (ui.details.selected_list_rows(tab), ui.details.focused_list_row(tab));
+    let Some(Some((sort, rows, show))) = with_app(|a| {
+        let keys = a.detail.row_keys(tab, &selected);
+        let focus_key = focused.map(|f| a.detail.row_keys(tab, &[f]));
+        let sort = header_changed(&mut a.detail, tab, header)?;
+        if let Some(key) = sort_key(tab) {
+            match file_sort_pref(sort) {
+                Some(v) => a.prefs.set(key, v),
+                None => a.prefs.remove(key),
+            }
+        }
+        let rows = a.detail.rows_of_keys(tab, &keys);
+        let show = match focus_key.and_then(|k| a.detail.rows_of_keys(tab, &k).first().copied()) {
+            Some(f) => Some((f, true)),
+            None => rows.first().map(|&r| (r, false)),
+        };
+        Some((sort, rows, show))
+    }) else {
+        return;
+    };
+    // outside `with_app`: this signals again (and changes nothing), and the cells read the state
+    ui.details.show_list_sort(tab, sort);
+    ui.details.list_reordered(tab, &rows, show);
+}
+
+/// What the Trackers or the Peers tab's selected rows show, while the tab is on screen with a
+/// sort and a selection: an update re-sorts the rows, and the selection follows them (D78).
+fn sorted_list_keys(a: &App, tab: Tab) -> Option<Vec<String>> {
+    a.detail.sort_of(tab)?;
+    let ui = ui()?;
+    if ui.details.tab() != tab {
+        return None;
+    }
+    let selected = ui.details.selected_list_rows(tab);
+    if selected.is_empty() {
+        return None;
+    }
+    Some(a.detail.row_keys(tab, &selected))
 }
 
 /// What the Files tab's selected rows show, to select them again once the rows moved.
@@ -1526,6 +1572,12 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
     // the Files tab's sort as last left (D78); its headers show it once the state is there
     detail.set_file_sort(prefs.get(FILES_SORT_KEY).and_then(file_sort_from_pref));
     let files_sort = detail.file_sort();
+    // the Trackers and the Peers tab's sorts as last left (D78)
+    for tab in [Tab::Trackers, Tab::Peers] {
+        let sort = sort_key(tab).and_then(|k| prefs.get(k)).and_then(|v| sort_from_pref_of(tab, v));
+        detail.set_sort_of(tab, sort);
+    }
+    let list_sorts = [Tab::Trackers, Tab::Peers].map(|tab| (tab, detail.sort_of(tab)));
     let ui = Rc::new(Ui {
         list,
         sidebar,
@@ -1626,6 +1678,10 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
     if let Some(ui) = self::ui() {
         ui.details.connect_files_sort(files_sort_changed);
         ui.details.show_files_sort(files_sort);
+        for (tab, sort) in list_sorts {
+            ui.details.connect_list_sort(tab, move |header| list_sort_changed(tab, header));
+            ui.details.show_list_sort(tab, sort);
+        }
     }
     // File > Lock Rookparcel only while the lock is on (D71), and what `--reset-lock` did before the Logger was there
     pin_changed();
@@ -2271,6 +2327,9 @@ fn on_alerts() {
     let mut completed = Vec::new();
     // the Files tab's sort order and selection before a file list or progress moved its rows
     let mut files_moved: Option<(u64, FileMarks)> = None;
+    // the Peers and the Trackers tab's selected rows' keys before an update re-sorted them
+    let mut peers_moved: Option<Vec<String>> = None;
+    let mut trackers_moved: Option<Vec<String>> = None;
     let done = with_app(|a| {
         // the alerts a dialog saved while it waited (fetch_trackers) come first
         let mut alerts = properties::take_alerts(&a.handle, &mut a.alerts);
@@ -2388,9 +2447,17 @@ fn on_alerts() {
                         a.handle.torrent(id).post_file_list();
                     }
                 }
-                Alert::PeerInfo { id, peers } if a.detail.id == Some(id) => a.detail.set_peers(peers),
+                Alert::PeerInfo { id, peers } if a.detail.id == Some(id) => {
+                    if peers_moved.is_none() {
+                        peers_moved = sorted_list_keys(a, Tab::Peers);
+                    }
+                    a.detail.set_peers(peers)
+                }
                 Alert::TrackerList { id, trackers } if a.detail.id == Some(id) => {
-                    a.detail.trackers = trackers
+                    if trackers_moved.is_none() {
+                        trackers_moved = sorted_list_keys(a, Tab::Trackers);
+                    }
+                    a.detail.set_trackers(trackers)
                 }
                 Alert::FileList { id, files } if a.detail.id == Some(id) => {
                     if a.detail.file_sort().is_some() && files_moved.is_none() {
@@ -2438,11 +2505,18 @@ fn on_alerts() {
         }
         a.alerts = alerts;
         // the Files tab's rows that show the files selected before they moved
-        files_moved
+        let files_moved = files_moved
             .filter(|(order, _)| a.detail.file_order() != *order)
-            .map(|(_, marks)| a.detail.file_rows_of(&marks))
+            .map(|(_, marks)| a.detail.file_rows_of(&marks));
+        // the Peers and the Trackers tab's rows that show the selected ones now (none: gone)
+        let lists_moved: Vec<(Tab, Vec<usize>)> =
+            [(Tab::Peers, peers_moved), (Tab::Trackers, trackers_moved)]
+                .into_iter()
+                .filter_map(|(tab, keys)| Some((tab, a.detail.rows_of_keys(tab, &keys?))))
+                .collect();
+        (files_moved, lists_moved)
     });
-    let Some(files_moved) = done else {
+    let Some((files_moved, lists_moved)) = done else {
         return;
     };
     refresh();
@@ -2453,6 +2527,12 @@ fn on_alerts() {
     // not scrolled
     if let (Some(rows), Some(ui)) = (files_moved, ui()) {
         ui.details.files_reordered(&rows, None);
+    }
+    // so did the Peers or the Trackers tab's: the selection follows its peers or trackers
+    if let Some(ui) = ui() {
+        for (tab, rows) in lists_moved {
+            ui.details.list_reordered(tab, &rows, None);
+        }
     }
     update_status();
     // while locked, the boxes and the magnets' Add dialogs wait for the unlock, and the

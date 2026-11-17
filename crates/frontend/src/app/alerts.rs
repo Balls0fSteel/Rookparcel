@@ -175,7 +175,7 @@ impl Core {
                 self.ev.detail = true;
             }
             Alert::TrackerList { id, trackers } if shown(id) => {
-                self.detail.trackers = trackers;
+                self.detail.set_trackers(trackers);
                 self.ev.detail = true;
             }
             Alert::FileList { id, files } if shown(id) => {

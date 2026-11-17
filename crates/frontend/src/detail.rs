@@ -107,9 +107,56 @@ pub fn file_sort_pref(sort: Option<FileSort>) -> Option<String> {
 /// [`FILES_SORT_KEY`]'s value as a sort; `None` for the torrent's order or a value it does not
 /// know.
 pub fn file_sort_from_pref(value: &str) -> Option<FileSort> {
+    sort_from_pref(value, FILE_COLUMNS.len())
+}
+
+/// The preferences that keep the Trackers and the Peers tab's sort ([`file_sort_pref`]'s
+/// format); none is the engine's order.
+pub const TRACKERS_SORT_KEY: &str = "ui.trackers_sort";
+pub const PEERS_SORT_KEY: &str = "ui.peers_sort";
+
+/// The preference that keeps a tab's sort: Files, Trackers and Peers sort; the others do not.
+pub fn sort_key(tab: Tab) -> Option<&'static str> {
+    match tab {
+        Tab::Files => Some(FILES_SORT_KEY),
+        Tab::Trackers => Some(TRACKERS_SORT_KEY),
+        Tab::Peers => Some(PEERS_SORT_KEY),
+        _ => None,
+    }
+}
+
+/// A tab's sort as [`sort_key`] keeps it; `None` for the tab's own order or a value it does not
+/// know (a column the tab does not have).
+pub fn sort_from_pref_of(tab: Tab, value: &str) -> Option<FileSort> {
+    sort_key(tab)?;
+    sort_from_pref(value, tab.columns().len())
+}
+
+fn sort_from_pref(value: &str, columns: usize) -> Option<FileSort> {
     let (col, dir) = value.split_once(':').unwrap_or((value, "asc"));
-    let col: usize = col.trim().parse().ok().filter(|&c| c < FILE_COLUMNS.len())?;
+    let col: usize = col.trim().parse().ok().filter(|&c| c < columns)?;
     Some((col, dir.trim() == "desc"))
+}
+
+/// Whether a click on column `col` of the Trackers or the Peers tab sorts it descending first:
+/// the counts, progress, speeds and totals, whose interesting end is the top one; names,
+/// addresses, clients, flags, statuses and the time to the next announce start ascending.
+fn list_sort_starts_descending(tab: Tab, col: usize) -> bool {
+    match tab {
+        Tab::Trackers => matches!(col, 3..=5),
+        Tab::Peers => col >= 3,
+        _ => false,
+    }
+}
+
+/// The next sort of a header's three-click cycle: the column in its first direction, then
+/// reversed, then none (the rows' own order).
+fn next_sort(now: Option<FileSort>, col: usize, first_descending: bool) -> Option<FileSort> {
+    match now {
+        Some((c, desc)) if c == col && desc == first_descending => Some((col, !first_descending)),
+        Some((c, _)) if c == col => None,
+        _ => Some((col, first_descending)),
+    }
 }
 
 /// Whether a click on Files tab column `col` sorts it descending first: the progress and
@@ -143,8 +190,17 @@ pub const SPEED_SAMPLES: usize = 600;
 #[derive(Default)]
 pub struct Detail {
     pub id: Option<TorrentId>,
+    /// The Peers tab's rows, in [`Detail::sort_of`]'s order; set with [`Detail::set_peers`].
     pub peers: Vec<PeerInfo>,
+    /// The Trackers tab's rows, in [`Detail::sort_of`]'s order; set with
+    /// [`Detail::set_trackers`].
     pub trackers: Vec<AnnounceEntry>,
+    /// Each of `peers` / `trackers`' place in the engine's list, to go back to it.
+    peer_pos: Vec<u32>,
+    tracker_pos: Vec<u32>,
+    /// The Peers and the Trackers tab's sorts; `None` is the engine's order.
+    peer_sort: Option<FileSort>,
+    tracker_sort: Option<FileSort>,
     pub files: Option<Arc<[FileEntry]>>,
     /// The Files tab's rows: indices into `files` without pad files, only those
     /// [`Detail::file_filter`] lets through.
@@ -181,6 +237,8 @@ impl Detail {
             self.id = id;
             self.peers.clear();
             self.trackers.clear();
+            self.peer_pos.clear();
+            self.tracker_pos.clear();
             self.files = None;
             self.file_rows.clear();
             self.file_done.clear();
@@ -267,14 +325,113 @@ impl Detail {
     /// and a third goes back to the torrent's order, which "Prioritize by File Order" follows.
     /// Returns the new sort.
     pub fn toggle_file_sort(&mut self, col: usize) -> Option<FileSort> {
-        let first = file_sort_starts_descending(col);
-        let next = match self.file_sort {
-            Some((c, desc)) if c == col && desc == first => Some((col, !first)),
-            Some((c, _)) if c == col => None,
-            _ => Some((col, first)),
-        };
+        let next = next_sort(self.file_sort, col, file_sort_starts_descending(col));
         self.set_file_sort(next);
         self.file_sort
+    }
+
+    /// The sort of the Files, Trackers or Peers tab; `None` for the rows' own order (the
+    /// torrent's, or the engine's) and for the tabs that do not sort.
+    pub fn sort_of(&self, tab: Tab) -> Option<FileSort> {
+        match tab {
+            Tab::Files => self.file_sort,
+            Tab::Trackers => self.tracker_sort,
+            Tab::Peers => self.peer_sort,
+            _ => None,
+        }
+    }
+
+    /// Sorts the Files, Trackers or Peers tab (`None`: the rows' own order); true when the sort
+    /// changed, so the rows moved. A column the tab does not have is no sort.
+    pub fn set_sort_of(&mut self, tab: Tab, sort: Option<FileSort>) -> bool {
+        let sort = sort.filter(|&(col, _)| col < tab.columns().len());
+        match tab {
+            Tab::Files => self.set_file_sort(sort),
+            Tab::Trackers if self.tracker_sort != sort => {
+                self.tracker_sort = sort;
+                self.sort_trackers();
+                true
+            }
+            Tab::Peers if self.peer_sort != sort => {
+                self.peer_sort = sort;
+                self.sort_peers();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// A click on the header of column `col` of the Files, Trackers or Peers tab: the column in
+    /// its natural direction, reversed by a second click, back to the rows' own order by a third
+    /// ([`Detail::toggle_file_sort`] for Files). Returns the new sort.
+    pub fn toggle_sort_of(&mut self, tab: Tab, col: usize) -> Option<FileSort> {
+        if tab == Tab::Files {
+            return self.toggle_file_sort(col);
+        }
+        let next = next_sort(self.sort_of(tab), col, list_sort_starts_descending(tab, col));
+        self.set_sort_of(tab, next);
+        self.sort_of(tab)
+    }
+
+    /// The engine's trackers for the Trackers tab, in [`Detail::sort_of`]'s order.
+    pub fn set_trackers(&mut self, trackers: Vec<AnnounceEntry>) {
+        self.tracker_pos = (0..trackers.len() as u32).collect();
+        self.trackers = trackers;
+        self.sort_trackers();
+    }
+
+    /// What Trackers or Peers tab rows show (a tracker's URL; a peer's address and port, or a
+    /// web seed's URL), to find the same rows with [`Detail::rows_of_keys`] after an update
+    /// moved them. Empty for other tabs.
+    pub fn row_keys(&self, tab: Tab, rows: &[usize]) -> Vec<String> {
+        match tab {
+            Tab::Trackers => {
+                rows.iter().filter_map(|&r| self.trackers.get(r)).map(|t| t.url.clone()).collect()
+            }
+            Tab::Peers => rows.iter().filter_map(|&r| self.peers.get(r)).map(peer_key).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The rows that show `keys` now ([`Detail::row_keys`]), in the keys' order; a key no row
+    /// shows any more (a peer gone) is left out.
+    pub fn rows_of_keys(&self, tab: Tab, keys: &[String]) -> Vec<usize> {
+        let shown: Vec<String> = match tab {
+            Tab::Trackers => self.trackers.iter().map(|t| t.url.clone()).collect(),
+            Tab::Peers => self.peers.iter().map(peer_key).collect(),
+            _ => return Vec::new(),
+        };
+        let mut at = std::collections::HashMap::with_capacity(shown.len());
+        for (row, key) in shown.iter().enumerate().rev() {
+            at.insert(key.as_str(), row);
+        }
+        let mut rows: Vec<usize> = keys.iter().filter_map(|k| at.get(k.as_str()).copied()).collect();
+        let mut seen = std::collections::HashSet::new();
+        rows.retain(|r| seen.insert(*r));
+        rows
+    }
+
+    /// Puts the Trackers tab's rows in [`Detail::sort_of`]'s order; ties (and no sort) keep the
+    /// engine's order, the tiers'.
+    fn sort_trackers(&mut self) {
+        let sort = self.tracker_sort;
+        sort_rows(&mut self.trackers, &mut self.tracker_pos, |a, b| match sort {
+            None => std::cmp::Ordering::Equal,
+            Some((col, desc)) => tracker_cmp(col, desc, a, b),
+        });
+    }
+
+    /// Puts the Peers tab's rows in [`Detail::sort_of`]'s order; ties go by address, so equal
+    /// rows do not swap at each update. No sort keeps the engine's order.
+    fn sort_peers(&mut self) {
+        let Some((col, desc)) = self.peer_sort else {
+            sort_rows(&mut self.peers, &mut self.peer_pos, |_, _| std::cmp::Ordering::Equal);
+            return;
+        };
+        sort_rows(&mut self.peers, &mut self.peer_pos, |a, b| {
+            let o = peer_cmp(col, a, b);
+            (if desc { o.reverse() } else { o }).then_with(|| peer_order(a, b))
+        });
     }
 
     /// Changes each time the Files tab's rows are put in a new order (a sort, or progress or
@@ -468,9 +625,12 @@ impl Detail {
         self.log.push_back(line);
     }
 
-    /// The engine's peer list for the Peers tab (see [`listed_peers`]).
+    /// The engine's peer list for the Peers tab (see [`listed_peers`]), in
+    /// [`Detail::sort_of`]'s order.
     pub fn set_peers(&mut self, peers: Vec<PeerInfo>) {
         self.peers = listed_peers(peers);
+        self.peer_pos = (0..self.peers.len() as u32).collect();
+        self.sort_peers();
     }
 
     pub fn push_speed(&mut self, down: u32, up: u32) {
@@ -877,6 +1037,86 @@ pub const PEER_COLUMNS: [ColumnDef; 9] = [
     (S::ColUploaded, 75, true),
 ];
 
+/// Orders `items` (with `pos`, each one's place in the engine's list) by `cmp`, ties by `pos`:
+/// with a `cmp` that finds every pair equal, back to the engine's order.
+fn sort_rows<T>(items: &mut Vec<T>, pos: &mut Vec<u32>, cmp: impl Fn(&T, &T) -> std::cmp::Ordering) {
+    if pos.len() != items.len() {
+        *pos = (0..items.len() as u32).collect();
+    }
+    let mut order: Vec<usize> = (0..items.len()).collect();
+    order.sort_by(|&a, &b| cmp(&items[a], &items[b]).then(pos[a].cmp(&pos[b])));
+    if order.iter().enumerate().all(|(i, &j)| i == j) {
+        return;
+    }
+    let mut old: Vec<Option<T>> = std::mem::take(items).into_iter().map(Some).collect();
+    let old_pos = std::mem::take(pos);
+    for i in order {
+        if let Some(item) = old[i].take() {
+            items.push(item);
+            pos.push(old_pos[i]);
+        }
+    }
+}
+
+/// Two counts or times where one may be unknown: by value in the sort's direction, the unknown
+/// last either way.
+fn known_first_cmp(a: Option<u32>, b: Option<u32>, desc: bool) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    match (a, b) {
+        (Some(a), Some(b)) if desc => b.cmp(&a),
+        (Some(a), Some(b)) => a.cmp(&b),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    }
+}
+
+/// Two trackers by Trackers tab column `col`, in the sort's direction.
+fn tracker_cmp(col: usize, desc: bool, a: &AnnounceEntry, b: &AnnounceEntry) -> std::cmp::Ordering {
+    let dir = |o: std::cmp::Ordering| if desc { o.reverse() } else { o };
+    match col {
+        0 => dir(crate::columns::natural_cmp(&a.url, &b.url)),
+        1 => dir(crate::columns::natural_cmp(&tracker_status(a), &tracker_status(b))),
+        2 => known_first_cmp(a.next_announce, b.next_announce, desc),
+        3 => known_first_cmp(a.scrape_complete, b.scrape_complete, desc),
+        4 => known_first_cmp(a.scrape_incomplete, b.scrape_incomplete, desc),
+        5 => known_first_cmp(a.scrape_downloaded, b.scrape_downloaded, desc),
+        _ => std::cmp::Ordering::Equal,
+    }
+}
+
+/// Two peers by Peers tab column `col`, ascending.
+fn peer_cmp(col: usize, a: &PeerInfo, b: &PeerInfo) -> std::cmp::Ordering {
+    match col {
+        0 => peer_order(a, b),
+        1 => crate::columns::natural_cmp(&a.client, &b.client),
+        2 => peer_flags(a).cmp(&peer_flags(b)),
+        3 => a.progress_ppm.cmp(&b.progress_ppm),
+        4 => a.down_speed.cmp(&b.down_speed),
+        5 => a.up_speed.cmp(&b.up_speed),
+        6 => (a.download_queue_length, a.upload_queue_length)
+            .cmp(&(b.download_queue_length, b.upload_queue_length)),
+        7 => a.total_download.cmp(&b.total_download),
+        8 => a.total_upload.cmp(&b.total_upload),
+        _ => std::cmp::Ordering::Equal,
+    }
+}
+
+/// Peers by address (IPv4 before IPv6, by number, then port), web seeds after them by URL.
+fn peer_order(a: &PeerInfo, b: &PeerInfo) -> std::cmp::Ordering {
+    match (&a.url, &b.url) {
+        (None, None) => a.ip.cmp(&b.ip),
+        (Some(x), Some(y)) => crate::columns::natural_cmp(x, y),
+        (None, Some(_)) => std::cmp::Ordering::Less,
+        (Some(_), None) => std::cmp::Ordering::Greater,
+    }
+}
+
+/// What finds a Peers tab row again: a web seed's URL, a peer's address and port.
+fn peer_key(p: &PeerInfo) -> String {
+    p.url.clone().unwrap_or_else(|| p.ip.to_string())
+}
+
 /// The peers the Peers tab lists: those past the handshake, as in µTorrent, whose tab showed
 /// the connected peers its Peers column counts. A connection still being made or in its
 /// handshake has no client, no progress and no flags yet, and would show as an empty row.
@@ -1126,6 +1366,84 @@ mod tests {
         };
         assert_eq!(peer_cell(&w, 0), "http://mirror.example/ubuntu.iso");
         assert_eq!(peer_cell(&w, 1), "nginx");
+    }
+
+    #[test]
+    fn the_trackers_and_peers_tabs_sort_by_their_columns() {
+        let mut d = Detail::default();
+        let p = |ip: &str, client: &str, down: u32| PeerInfo {
+            ip: ip.parse().unwrap(),
+            client: client.into(),
+            down_speed: down,
+            ..peer(PeerFlags::INTERESTING, PeerSource::TRACKER)
+        };
+        let ips = |d: &Detail| (0..d.rows(Tab::Peers)).map(|r| d.cell(Tab::Peers, r, 0)).collect::<Vec<_>>();
+        let engine = || {
+            vec![
+                p("10.0.0.9:1", "Transmission 4.0", 500),
+                p("10.0.0.10:1", "qBittorrent 5.2", 0),
+                p("[::1]:7", "Deluge 2.1", 500),
+                p("10.0.0.2:1", "libtorrent", 9000),
+            ]
+        };
+        d.set_peers(engine());
+        assert_eq!(ips(&d), ["10.0.0.9:1", "10.0.0.10:1", "[::1]:7", "10.0.0.2:1"], "the engine's order");
+
+        // the speed starts with the fastest; equal speeds go by address, IPv4 first
+        assert_eq!(d.toggle_sort_of(Tab::Peers, 4), Some((4, true)));
+        assert_eq!(ips(&d), ["10.0.0.2:1", "10.0.0.9:1", "[::1]:7", "10.0.0.10:1"]);
+        let keys = d.row_keys(Tab::Peers, &[0, 2]);
+        assert_eq!(keys, ["10.0.0.2:1", "[::1]:7"]);
+        // an update re-sorts; the selection's rows are found again, a peer gone is left out
+        let mut next = engine();
+        next[3].down_speed = 0;
+        next.remove(2);
+        d.set_peers(next);
+        assert_eq!(ips(&d), ["10.0.0.9:1", "10.0.0.2:1", "10.0.0.10:1"]);
+        assert_eq!(d.rows_of_keys(Tab::Peers, &keys), [1]);
+        // reversed, then the engine's order again
+        assert_eq!(d.toggle_sort_of(Tab::Peers, 4), Some((4, false)));
+        assert_eq!(ips(&d), ["10.0.0.2:1", "10.0.0.10:1", "10.0.0.9:1"]);
+        assert_eq!(d.toggle_sort_of(Tab::Peers, 4), None);
+        assert_eq!(ips(&d), ["10.0.0.9:1", "10.0.0.10:1", "10.0.0.2:1"]);
+        // the address column sorts by number, the client by name
+        assert_eq!(d.toggle_sort_of(Tab::Peers, 0), Some((0, false)));
+        assert_eq!(ips(&d), ["10.0.0.2:1", "10.0.0.9:1", "10.0.0.10:1"]);
+        assert_eq!(d.toggle_sort_of(Tab::Peers, 1), Some((1, false)));
+        assert_eq!(d.cell(Tab::Peers, 0, 1), "libtorrent");
+
+        // trackers: counts start with the most, unknown counts last either way
+        let t = |url: &str, seeds: Option<u32>| AnnounceEntry {
+            url: url.into(),
+            scrape_complete: seeds,
+            ..Default::default()
+        };
+        let urls =
+            |d: &Detail| (0..d.rows(Tab::Trackers)).map(|r| d.cell(Tab::Trackers, r, 0)).collect::<Vec<_>>();
+        d.set_trackers(vec![t("udp://b", None), t("udp://a", Some(5)), t("udp://c", Some(40))]);
+        assert_eq!(d.toggle_sort_of(Tab::Trackers, 3), Some((3, true)));
+        assert_eq!(urls(&d), ["udp://c", "udp://a", "udp://b"]);
+        assert_eq!(d.toggle_sort_of(Tab::Trackers, 3), Some((3, false)));
+        assert_eq!(urls(&d), ["udp://a", "udp://c", "udp://b"]);
+        assert_eq!(d.toggle_sort_of(Tab::Trackers, 0), Some((0, false)), "another column starts anew");
+        assert_eq!(urls(&d), ["udp://a", "udp://b", "udp://c"]);
+        assert_eq!(d.rows_of_keys(Tab::Trackers, &d.row_keys(Tab::Trackers, &[2])), [2]);
+        assert!(d.set_sort_of(Tab::Trackers, None));
+        assert_eq!(urls(&d), ["udp://b", "udp://a", "udp://c"], "the tiers' order");
+        assert!(!d.set_sort_of(Tab::Trackers, Some((6, false))), "no such column: no sort");
+        assert!(!d.set_sort_of(Tab::Pieces, Some((0, false))), "Pieces does not sort");
+
+        // the sorts are kept per tab; another torrent keeps them
+        d.select(Some(TorrentId::from_raw(7)));
+        assert_eq!(d.sort_of(Tab::Peers), Some((1, false)));
+        assert_eq!(d.rows(Tab::Peers), 0);
+        assert_eq!(sort_key(Tab::Peers), Some(PEERS_SORT_KEY));
+        assert_eq!(sort_key(Tab::Logger), None);
+        assert_eq!(sort_from_pref_of(Tab::Trackers, "5:desc"), Some((5, true)));
+        assert_eq!(sort_from_pref_of(Tab::Trackers, "6:desc"), None);
+        assert_eq!(sort_from_pref_of(Tab::Peers, "8"), Some((8, false)));
+        assert_eq!(sort_from_pref_of(Tab::Logger, "0:asc"), None);
+        assert_eq!(file_sort_from_pref("6:desc"), Some((6, true)));
     }
 
     #[test]

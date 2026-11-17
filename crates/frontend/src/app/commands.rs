@@ -438,6 +438,23 @@ impl Core {
         sort
     }
 
+    /// The sort of the Files, Trackers or Peers tab ([`crate::detail::Detail::set_sort_of`]);
+    /// true when it changed. The GUI keeps it as [`crate::detail::sort_key`] names.
+    pub fn set_sort_of(&mut self, tab: crate::detail::Tab, sort: Option<crate::detail::FileSort>) -> bool {
+        let changed = self.detail.set_sort_of(tab, sort);
+        self.ev.detail |= changed;
+        changed
+    }
+
+    /// A click on the header of column `col` of the Files, Trackers or Peers tab
+    /// ([`crate::detail::Detail::toggle_sort_of`]'s cycle). Returns the new sort.
+    pub fn toggle_sort_of(&mut self, tab: crate::detail::Tab, col: usize) -> Option<crate::detail::FileSort> {
+        let before = self.detail.sort_of(tab);
+        let sort = self.detail.toggle_sort_of(tab, col);
+        self.ev.detail |= sort != before;
+        sort
+    }
+
     /// The Files tab's row `row`: the torrent's save path and the file's path (Open, Open
     /// Containing Folder, Relocate). `None` in a remote window.
     pub fn file_path(&self, row: usize) -> Option<(PathBuf, PathBuf)> {

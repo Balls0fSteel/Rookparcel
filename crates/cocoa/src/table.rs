@@ -659,6 +659,15 @@ impl RPTableSource {
         let Some(tv) = self.table() else { return };
         let rows = (self.ivars().hooks.rows_of)(ids);
         tv.selectRowIndexes_byExtendingSelection(&index_set(rows), false);
+        // no notification when AppKit's selection stayed as it was, though the ids it was kept
+        // as may not be (a reload that dropped rows while restoring)
+        let now: Vec<u64> = rows_of_set(&tv.selectedRowIndexes())
+            .into_iter()
+            .filter_map(|r| self.id_of_row(&tv, r))
+            .collect();
+        if now != *self.ivars().selected.borrow() {
+            self.selection_did_change();
+        }
     }
 
     /// Shows or hides the column with spec index `i`.

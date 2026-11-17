@@ -1406,7 +1406,13 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
         crate::theme::check_box(files_tree_box);
         let mut detail = Detail::default();
         detail.set_files_tree(prefs.get_bool(detail::FILES_TREE_KEY, true));
-        detail.set_file_sort(prefs.get(detail::FILES_SORT_KEY).and_then(detail::file_sort_from_pref));
+        // the Files, Trackers and Peers tabs' sorts, before their pages show rows (D78)
+        for page in SORTED_PAGES {
+            let sort = detail::sort_key(page)
+                .and_then(|key| prefs.get(key))
+                .and_then(|v| detail::sort_from_pref_of(page, v));
+            detail.set_sort_of(page, sort);
+        }
         let file_icons = crate::add::ShellIcons::load();
         let files_lv = pages[Page::Files.index()];
         file_icons.set_on(files_lv, detail.files_tree());
@@ -1569,14 +1575,17 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
                 controls::set_columns(pages[page.index()], &cols);
             }
         }
-        if let Some(sort) = with_app(|a| a.detail.file_sort()) {
-            let lv = pages[Page::Files.index()];
-            controls::set_sort_arrow(
-                lv,
-                detail::FILE_COLUMNS.len(),
-                sort.map(|s| s.0),
-                sort.is_some_and(|s| s.1),
-            );
+        // the columns are new, so the stored sorts' arrows go on them now
+        for page in SORTED_PAGES {
+            if let Some(sort) = with_app(|a| a.detail.sort_of(page)) {
+                let lv = pages[page.index()];
+                controls::set_sort_arrow(
+                    lv,
+                    page.columns().len(),
+                    sort.map(|s| s.0),
+                    sort.is_some_and(|s| s.1),
+                );
+            }
         }
         let cols: Vec<(&str, i32, bool)> =
             detail::PIECE_COLUMNS.iter().map(|&(t, w, r)| (lang::text(t), scale(w, dpi), r)).collect();
@@ -2864,6 +2873,114 @@ fn files_sort_click(col: usize) {
     }
 }
 
+// ---- The Trackers and Peers tabs' sort -----------------------------------------------------
+
+/// The detail tabs whose headers sort ([`detail::sort_key`]). Their lists have every column of
+/// [`Page::columns`] in its own order (no header drag-and-drop), so a header's index is the
+/// model's column.
+const SORTED_PAGES: [Page; 3] = [Page::Files, Page::Trackers, Page::Peers];
+
+/// The Trackers or Peers tab's selected rows and focused row as what they show
+/// ([`Detail::row_keys`]: a tracker's URL, a peer's address), to put the selection back once
+/// a sort or an update moved the rows.
+struct ListSelection {
+    page: Page,
+    selected: Vec<String>,
+    focused: Option<String>,
+}
+
+/// Reads the selection of the Trackers or Peers tab; `None` when no row is selected or
+/// focused, so the Peers tab's update every second costs two messages when nothing is. Only
+/// asks the list for its states, which sends no notifications, so it may run inside `with_app`.
+fn list_selection(a: &App, page: Page) -> Option<ListSelection> {
+    let lv = a.pages[page.index()];
+    let (rows, focused) = unsafe { (controls::selected(lv), controls::focused(lv)) };
+    if rows.is_empty() && focused.is_none() {
+        return None;
+    }
+    Some(ListSelection {
+        page,
+        selected: a.detail.row_keys(page, &rows),
+        focused: focused.and_then(|f| a.detail.row_keys(page, &[f]).pop()),
+    })
+}
+
+/// Notes the selection of a sorted Trackers or Peers tab before an update re-sorts its rows,
+/// once per batch of alerts (the first notes the rows the list still shows).
+fn note_list_selection(a: &App, page: Page, noted: &mut Vec<ListSelection>) {
+    if a.detail.sort_of(page).is_some() && !noted.iter().any(|s| s.page == page) {
+        noted.extend(list_selection(a, page));
+    }
+}
+
+/// Selects the rows that now show what `sel` named (a peer gone is left out) and focuses the
+/// one that had the focus; with `show`, scrolls to it (a header click; an update leaves the
+/// scrolling alone). Touches the list only when the rows differ, as they seldom do between
+/// two of the Peers tab's updates.
+unsafe fn reselect_list(sel: &ListSelection, show: bool) {
+    let Some((lv, mut rows, focused, count)) = with_app(|a| {
+        let focused =
+            sel.focused.as_ref().and_then(|f| a.detail.rows_of_keys(sel.page, std::slice::from_ref(f)).pop());
+        (
+            a.pages[sel.page.index()],
+            a.detail.rows_of_keys(sel.page, &sel.selected),
+            focused,
+            a.detail.rows(sel.page),
+        )
+    }) else {
+        return;
+    };
+    rows.sort_unstable();
+    unsafe {
+        if rows != controls::selected(lv) {
+            if rows.len() == count && count > 0 {
+                controls::set_state(lv, None, true, false);
+            } else {
+                controls::set_state(lv, None, false, false);
+                for &r in &rows {
+                    controls::set_state(lv, Some(r), true, false);
+                }
+            }
+        }
+        if let Some(f) = focused {
+            if controls::focused(lv) != Some(f) {
+                controls::set_state(lv, Some(f), rows.binary_search(&f).is_ok(), true);
+            }
+            if show {
+                send(lv, LVM_ENSUREVISIBLE, f, 0);
+            }
+        }
+        InvalidateRect(lv, null(), 0);
+    }
+}
+
+/// A click on the header of column `col` of the Trackers or Peers tab:
+/// [`Detail::toggle_sort_of`] (the column's natural direction, reversed, then the engine's
+/// order), kept under [`detail::sort_key`], with the header's arrow and the selection on the
+/// same trackers or peers.
+fn list_sort_click(page: Page, col: usize) {
+    let Some((lv, sel, sort)) = with_app(|a| {
+        let sel = list_selection(a, page);
+        let sort = a.detail.toggle_sort_of(page, col);
+        if let Some(key) = detail::sort_key(page) {
+            match detail::file_sort_pref(sort) {
+                Some(v) => a.prefs.set(key, v),
+                None => a.prefs.remove(key),
+            }
+        }
+        (a.pages[page.index()], sel, sort)
+    }) else {
+        return;
+    };
+    unsafe {
+        controls::set_sort_arrow(lv, page.columns().len(), sort.map(|s| s.0), sort.is_some_and(|s| s.1));
+        update_detail_lists();
+        if let Some(sel) = sel {
+            reselect_list(&sel, true);
+        }
+    }
+}
+
 // ---- The Files tab's folder tree (D62) ---------------------------------------------------
 
 /// Tree View (the box left of the filter, the menu's item): the Files tab shows the files in
@@ -3253,7 +3370,7 @@ unsafe fn on_alerts(hwnd: HWND) {
     let mut magnet_ready = false;
     let mut adapters = false;
     let mut prefs_changed = false;
-    let Some((lists_changed, removed_any, repaint_page, files_moved)) = with_app(|a| {
+    let Some((lists_changed, removed_any, repaint_page, files_moved, lists_moved)) = with_app(|a| {
         // the alerts a dialog saved while it waited (fetch_trackers) come first
         let mut alerts = properties::take_alerts(&a.handle, &mut a.alerts);
         if let Some(w) = &a.web {
@@ -3265,6 +3382,8 @@ unsafe fn on_alerts(hwnd: HWND) {
         let mut repaint_page = false;
         // a sorted Files tab whose rows move keeps its selection on the same files
         let mut files_moved: Option<(u64, FilesSelection)> = None;
+        // and sorted Trackers and Peers tabs keep theirs on the same trackers and peers
+        let mut lists_moved: Vec<ListSelection> = Vec::new();
         for alert in alerts.drain(..) {
             let label_of = |id| Some(a.list.extra(id).label.to_owned());
             if let Some((id, dir)) =
@@ -3418,11 +3537,13 @@ unsafe fn on_alerts(hwnd: HWND) {
                     lists_changed = true;
                 }
                 Alert::PeerInfo { id, peers } if a.detail.id == Some(id) => {
+                    note_list_selection(a, Page::Peers, &mut lists_moved);
                     a.detail.set_peers(peers);
                     lists_changed = true;
                 }
                 Alert::TrackerList { id, trackers } if a.detail.id == Some(id) => {
-                    a.detail.trackers = trackers;
+                    note_list_selection(a, Page::Trackers, &mut lists_moved);
+                    a.detail.set_trackers(trackers);
                     lists_changed = true;
                 }
                 Alert::FileList { id, files } if a.detail.id == Some(id) => {
@@ -3483,7 +3604,7 @@ unsafe fn on_alerts(hwnd: HWND) {
         repaint_page |= a.list.generation() != generation;
         let files_moved =
             files_moved.filter(|(order, _)| a.detail.file_order() != *order).map(|(_, sel)| sel);
-        (lists_changed, removed_any, repaint_page, files_moved)
+        (lists_changed, removed_any, repaint_page, files_moved, lists_moved)
     }) else {
         return;
     };
@@ -3499,6 +3620,9 @@ unsafe fn on_alerts(hwnd: HWND) {
         }
         if let Some(sel) = files_moved {
             reselect_files(&sel, false);
+        }
+        for sel in &lists_moved {
+            reselect_list(sel, false);
         }
         if repaint_page {
             invalidate_page();
@@ -7132,6 +7256,208 @@ mod search_tests {
         }
     }
 
+    /// A click on a Peers or Trackers column's header sorts by it in the column's natural
+    /// direction (the arrow shows which), a second reverses it, a third goes back to the
+    /// engine's order; the choice is kept, and the selection stays on the same peer when a
+    /// click or the engine's next update moves it (and goes when the peer does). Noted first,
+    /// checked once the window is gone.
+    #[test]
+    fn the_peers_and_trackers_tabs_sort_by_a_header_click() {
+        use rookparcel_core::{AnnounceEntry, PeerFlags, PeerInfo, PeerSource};
+        use windows_sys::Win32::UI::Controls::{HDF_SORTDOWN, HDF_SORTUP, HDI_FORMAT, HDITEMW, HDM_GETITEMW};
+        unsafe {
+            let icc = INITCOMMONCONTROLSEX {
+                dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
+                dwICC: ICC_WIN95_CLASSES
+                    | ICC_BAR_CLASSES
+                    | ICC_TAB_CLASSES
+                    | ICC_LISTVIEW_CLASSES
+                    | ICC_TREEVIEW_CLASSES,
+            };
+            InitCommonControlsEx(&icc);
+            let instance = GetModuleHandleW(null());
+            let mut wc: WNDCLASSEXW = zeroed();
+            wc.cbSize = size_of::<WNDCLASSEXW>() as u32;
+            wc.lpfnWndProc = Some(wndproc);
+            wc.hInstance = instance;
+            wc.lpszClassName = w!("RookparcelListSortTestWnd");
+            RegisterClassExW(&wc);
+            wc.lpfnWndProc = Some(panel_proc);
+            wc.lpszClassName = PANEL_CLASS;
+            RegisterClassExW(&wc);
+            let hwnd = CreateWindowExW(
+                0,
+                w!("RookparcelListSortTestWnd"),
+                w!("Rookparcel list sort test"),
+                WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+                0,
+                0,
+                900,
+                600,
+                null_mut(),
+                null_mut(),
+                instance,
+                null(),
+            );
+            assert!(!hwnd.is_null());
+            let session = Session::start_mock(
+                Settings::default(),
+                MockConfig { initial_torrents: 0, active_fraction: 0.0, ..MockConfig::default() },
+            );
+            let mut prefs = Prefs::default();
+            prefs.set_bool("ui.show_add_dialog", false);
+            // a stored sort shows from the start, its arrow included
+            prefs.set(detail::TRACKERS_SORT_KEY, "3:desc".to_owned());
+            init(hwnd, session, prefs);
+            select_page(Page::Peers);
+            let id = TorrentId::from_raw(7);
+            with_app(|a| a.detail.select(Some(id)));
+            let (peers_lv, trackers_lv) =
+                with_app(|a| (a.pages[Page::Peers.index()], a.pages[Page::Trackers.index()])).unwrap();
+            let peer = |ip: &str, down: u32| PeerInfo {
+                ip: ip.parse().unwrap(),
+                client: "libtorrent".into(),
+                flags: PeerFlags::INTERESTING,
+                source: PeerSource::TRACKER,
+                progress_ppm: 0,
+                down_speed: down,
+                up_speed: 0,
+                total_download: 0,
+                total_upload: 0,
+                download_queue_length: 0,
+                upload_queue_length: 0,
+                num_hashfails: 0,
+                is_web_seed: false,
+                url: None,
+            };
+            let update = |peers: Vec<PeerInfo>| {
+                with_app(|a| a.alerts.push(Alert::PeerInfo { id, peers }));
+                on_alerts(hwnd);
+            };
+            update(vec![peer("10.0.0.9:1", 500), peer("10.0.0.10:1", 0), peer("10.0.0.2:1", 9000)]);
+            // 10.0.0.9, the engine's first
+            controls::set_state(peers_lv, Some(0), true, true);
+
+            let click = |page: Page, col: i32| {
+                let lv = with_app(|a| a.pages[page.index()]).unwrap();
+                let mut nm: NMLISTVIEW = zeroed();
+                nm.hdr = NMHDR { hwndFrom: lv, idFrom: IDC_PAGE + page.index(), code: LVN_COLUMNCLICK };
+                nm.iItem = -1;
+                nm.iSubItem = col;
+                SendMessageW(hwnd, WM_NOTIFY, nm.hdr.idFrom, &nm as *const _ as LPARAM);
+            };
+            let arrows = |lv: HWND, n: usize| {
+                let header = send(lv, LVM_GETHEADER, 0, 0) as HWND;
+                (0..n)
+                    .map(|i| {
+                        let mut it: HDITEMW = zeroed();
+                        it.mask = HDI_FORMAT;
+                        send(header, HDM_GETITEMW, i, &mut it as *mut _ as LPARAM);
+                        match it.fmt & (HDF_SORTUP | HDF_SORTDOWN) {
+                            f if f == HDF_SORTUP => '^',
+                            f if f == HDF_SORTDOWN => 'v',
+                            _ => '-',
+                        }
+                    })
+                    .collect::<String>()
+            };
+            let state = |page: Page| {
+                let lv = with_app(|a| a.pages[page.index()]).unwrap();
+                let rows = with_app(|a| a.detail.rows(page)).unwrap();
+                let names: Vec<String> =
+                    (0..rows).filter_map(|r| with_app(|a| a.detail.cell(page, r, 0))).collect();
+                let key = detail::sort_key(page).unwrap();
+                (
+                    names.join(" "),
+                    controls::selected(lv),
+                    controls::focused(lv),
+                    arrows(lv, page.columns().len()),
+                    with_app(|a| a.prefs.get(key).map(str::to_owned)).flatten(),
+                )
+            };
+            let start = state(Page::Peers);
+            let trackers_start = arrows(trackers_lv, detail::TRACKER_COLUMNS.len());
+            click(Page::Peers, 4);
+            let by_speed = state(Page::Peers);
+            // the engine's next update re-sorts: 10.0.0.9 is now the fastest
+            update(vec![peer("10.0.0.9:1", 9000), peer("10.0.0.10:1", 100), peer("10.0.0.2:1", 0)]);
+            let updated = state(Page::Peers);
+            // and 10.0.0.9 leaves: the selection goes with it
+            update(vec![peer("10.0.0.10:1", 100), peer("10.0.0.2:1", 0)]);
+            let left = state(Page::Peers);
+            controls::set_state(peers_lv, None, false, false);
+            controls::set_state(peers_lv, Some(1), true, true);
+            click(Page::Peers, 4);
+            let reversed = state(Page::Peers);
+            click(Page::Peers, 4);
+            let unsorted = state(Page::Peers);
+
+            // the stored tracker sort (seeds, most first); a click on the name starts anew
+            let tracker = |url: &str, seeds: u32| AnnounceEntry {
+                url: url.into(),
+                scrape_complete: Some(seeds),
+                ..Default::default()
+            };
+            with_app(|a| {
+                a.alerts.push(Alert::TrackerList {
+                    id,
+                    trackers: vec![tracker("udp://a", 5), tracker("udp://c", 1), tracker("udp://b", 40)],
+                })
+            });
+            on_alerts(hwnd);
+            // udp://b, the most seeds
+            controls::set_state(trackers_lv, Some(0), true, true);
+            let trackers_stored = state(Page::Trackers);
+            click(Page::Trackers, 0);
+            let trackers_by_name = state(Page::Trackers);
+            DestroyWindow(hwnd);
+
+            let s = |v: &str| Some(v.to_owned());
+            assert_eq!(
+                start,
+                ("10.0.0.9:1 10.0.0.10:1 10.0.0.2:1".into(), vec![0], Some(0), "---------".into(), None)
+            );
+            assert_eq!(trackers_start, "---v--", "the stored sort's arrow from the start");
+            assert_eq!(
+                by_speed,
+                (
+                    "10.0.0.2:1 10.0.0.9:1 10.0.0.10:1".into(),
+                    vec![1],
+                    Some(1),
+                    "----v----".into(),
+                    s("4:desc")
+                )
+            );
+            assert_eq!(
+                updated,
+                (
+                    "10.0.0.9:1 10.0.0.10:1 10.0.0.2:1".into(),
+                    vec![0],
+                    Some(0),
+                    "----v----".into(),
+                    s("4:desc")
+                )
+            );
+            assert_eq!((left.0.as_str(), left.1.as_slice()), ("10.0.0.10:1 10.0.0.2:1", &[][..]));
+            assert_eq!(
+                reversed,
+                ("10.0.0.2:1 10.0.0.10:1".into(), vec![0], Some(0), "----^----".into(), s("4:asc"))
+            );
+            assert_eq!(
+                unsorted,
+                ("10.0.0.10:1 10.0.0.2:1".into(), vec![1], Some(1), "---------".into(), None)
+            );
+            assert_eq!(
+                trackers_stored,
+                ("udp://b udp://a udp://c".into(), vec![0], Some(0), "---v--".into(), s("3:desc"))
+            );
+            assert_eq!(
+                trackers_by_name,
+                ("udp://a udp://b udp://c".into(), vec![1], Some(1), "^-----".into(), s("0:asc"))
+            );
+        }
+    }
+
     #[test]
     fn the_waiting_window_keeps_a_second_starts_torrents() {
         unsafe {
@@ -8108,6 +8434,14 @@ unsafe fn on_notify(hwnd: HWND, nm: *const NMHDR) -> LRESULT {
             // a click on a column's header sorts the files by it
             (i, LVN_COLUMNCLICK) if i == IDC_PAGE + Page::Files.index() => {
                 files_sort_click((*(nm as *const NMLISTVIEW)).iSubItem.max(0) as usize);
+                0
+            }
+            // and the trackers or the peers
+            (i, LVN_COLUMNCLICK)
+                if i == IDC_PAGE + Page::Trackers.index() || i == IDC_PAGE + Page::Peers.index() =>
+            {
+                let page = if i == IDC_PAGE + Page::Trackers.index() { Page::Trackers } else { Page::Peers };
+                list_sort_click(page, (*(nm as *const NMLISTVIEW)).iSubItem.max(0) as usize);
                 0
             }
             // a click on a folder's icon opens or closes it

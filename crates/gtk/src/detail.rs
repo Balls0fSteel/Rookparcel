@@ -361,6 +361,52 @@ impl Details {
         }
     }
 
+    /// The Trackers or the Peers tab's table (the lists that sort as Files does, D78).
+    fn list(&self, tab: Tab) -> Option<&Table> {
+        match tab {
+            Tab::Trackers => Some(&self.trackers),
+            Tab::Peers => Some(&self.peers),
+            _ => None,
+        }
+    }
+
+    /// Lets the Trackers or the Peers tab's headers sort, as [`Details::connect_files_sort`]:
+    /// `changed` gets their sort each time it changed ([`header_changed`]).
+    pub fn connect_list_sort(&self, tab: Tab, changed: impl Fn(Option<FileSort>) + 'static) {
+        if let Some(t) = self.list(tab) {
+            t.set_sortable(changed);
+        }
+    }
+
+    /// Shows the Trackers or the Peers tab's sort (`None`: the engine's order) on its headers.
+    pub fn show_list_sort(&self, tab: Tab, sort: Option<FileSort>) {
+        if let Some(t) = self.list(tab) {
+            t.show_sort(sort);
+        }
+    }
+
+    /// The Trackers or the Peers tab's selected rows.
+    pub fn selected_list_rows(&self, tab: Tab) -> Vec<usize> {
+        self.list(tab).map(Table::selected).unwrap_or_default()
+    }
+
+    /// The Trackers or the Peers tab's row with the keyboard focus, while its list has it.
+    pub fn focused_list_row(&self, tab: Tab) -> Option<usize> {
+        self.list(tab).and_then(Table::focused_row)
+    }
+
+    /// The Trackers or the Peers tab's rows were put in a new order: the list shows it (even
+    /// while another tab is shown) with `rows` selected (the same trackers or peers as before);
+    /// `show` scrolls to a row, giving it the focus with its flag.
+    pub fn list_reordered(&self, tab: Tab, rows: &[usize], show: Option<(usize, bool)>) {
+        let Some(t) = self.list(tab) else { return };
+        t.update(self::rows(self.peek, tab));
+        t.select_rows(rows);
+        if let Some((row, focus)) = show {
+            t.show_row(row, focus);
+        }
+    }
+
     /// Ctrl+A in the Files list: the rows the filter shows.
     pub fn select_all_files(&self) {
         self.files.selection.select_all();
@@ -469,19 +515,28 @@ fn folder_keys(peek: Peek, files: &Table, expand: ExpandFolder) -> gtk::EventCon
 /// torrent's order. Returns the new sort, which the headers must show, or `None` when they show
 /// the rows' sort already (the window's own change of the headers, which signals too).
 pub fn files_header_changed(d: &mut Detail, header: Option<FileSort>) -> Option<Option<FileSort>> {
-    if header == d.file_sort() {
+    header_changed(d, Tab::Files, header)
+}
+
+/// [`files_header_changed`] for any tab that sorts (Files, Trackers, Peers; D78): a change of
+/// `tab`'s headers to `header` is a click on the column they show, which goes through
+/// [`Detail::toggle_sort_of`] (the column's natural direction, reversed, then the rows' own
+/// order). Returns the new sort, which the headers must show, or `None` when they show the
+/// rows' sort already.
+pub fn header_changed(d: &mut Detail, tab: Tab, header: Option<FileSort>) -> Option<Option<FileSort>> {
+    if header == d.sort_of(tab) {
         return None;
     }
     match header {
         Some((col, _)) => {
-            d.toggle_file_sort(col);
+            d.toggle_sort_of(tab, col);
         }
-        // a click never clears the headers; back to the torrent's order all the same
+        // a click never clears the headers; back to the rows' own order all the same
         None => {
-            d.set_file_sort(None);
+            d.set_sort_of(tab, None);
         }
     }
-    Some(d.file_sort())
+    Some(d.sort_of(tab))
 }
 
 fn rows(peek: Peek, tab: Tab) -> usize {
@@ -917,6 +972,62 @@ mod tests {
         d.set_file_sort(Some((1, true)));
         assert_eq!(files_header_changed(&mut d, None), Some(None));
         assert_eq!(d.file_sort(), None);
+    }
+
+    /// [`click`] on `tab`'s headers.
+    fn click_on(d: &mut Detail, tab: Tab, header: &mut Option<FileSort>, col: usize) -> Option<FileSort> {
+        *header = gtk_click(*header, col);
+        if let Some(sort) = header_changed(d, tab, *header) {
+            *header = sort;
+        }
+        assert_eq!(header_changed(d, tab, *header), None);
+        assert_eq!(*header, d.sort_of(tab), "the arrow shows the rows' sort");
+        *header
+    }
+
+    #[test]
+    fn the_trackers_and_peers_headers_cycle_as_on_win32() {
+        let mut d = Detail::default();
+        let (mut ht, mut hp) = (None, None);
+        // Trackers: Name, Status and Update In start ascending; Seeds, Peers, Downloaded descending
+        for col in 0..3 {
+            assert_eq!(click_on(&mut d, Tab::Trackers, &mut ht, col), Some((col, false)));
+            assert_eq!(click_on(&mut d, Tab::Trackers, &mut ht, col), Some((col, true)));
+            assert_eq!(click_on(&mut d, Tab::Trackers, &mut ht, col), None);
+        }
+        for col in 3..6 {
+            assert_eq!(click_on(&mut d, Tab::Trackers, &mut ht, col), Some((col, true)));
+            assert_eq!(click_on(&mut d, Tab::Trackers, &mut ht, col), Some((col, false)));
+            assert_eq!(click_on(&mut d, Tab::Trackers, &mut ht, col), None);
+        }
+        // Peers: IP, Client and Flags ascending; the counts and speeds descending
+        for col in 0..3 {
+            assert_eq!(click_on(&mut d, Tab::Peers, &mut hp, col), Some((col, false)));
+            assert_eq!(click_on(&mut d, Tab::Peers, &mut hp, col), Some((col, true)));
+            assert_eq!(click_on(&mut d, Tab::Peers, &mut hp, col), None);
+        }
+        for col in 3..9 {
+            assert_eq!(click_on(&mut d, Tab::Peers, &mut hp, col), Some((col, true)));
+            assert_eq!(click_on(&mut d, Tab::Peers, &mut hp, col), Some((col, false)));
+            assert_eq!(click_on(&mut d, Tab::Peers, &mut hp, col), None);
+        }
+        // the tabs keep their own sorts; another column starts over
+        assert_eq!(click_on(&mut d, Tab::Peers, &mut hp, 4), Some((4, true)));
+        assert_eq!(click_on(&mut d, Tab::Trackers, &mut ht, 0), Some((0, false)));
+        assert_eq!(click_on(&mut d, Tab::Peers, &mut hp, 1), Some((1, false)));
+        assert_eq!(d.sort_of(Tab::Trackers), Some((0, false)));
+        assert_eq!(d.sort_of(Tab::Files), None);
+        // a stored second click (Down Speed ascending) shown at the start is no click; the next
+        // one goes back to the engine's order
+        let mut d = Detail::default();
+        d.set_sort_of(Tab::Peers, Some((4, false)));
+        assert_eq!(header_changed(&mut d, Tab::Peers, Some((4, false))), None);
+        let mut hp = Some((4, false));
+        assert_eq!(click_on(&mut d, Tab::Peers, &mut hp, 4), None);
+        // headers cleared by other means: the engine's order
+        d.set_sort_of(Tab::Trackers, Some((3, true)));
+        assert_eq!(header_changed(&mut d, Tab::Trackers, None), Some(None));
+        assert_eq!(d.sort_of(Tab::Trackers), None);
     }
 
     #[test]

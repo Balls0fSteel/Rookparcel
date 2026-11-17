@@ -34,7 +34,7 @@ use objc2_user_notifications::{
 use rookparcel_core::util::lockfile::Lock;
 use rookparcel_core::{MockConfig, Session, SessionParams, TorrentId};
 use rookparcel_frontend::app::{self as fapp, Core, Events, Layout, Start, Wakeup};
-use rookparcel_frontend::detail::{FILES_SORT_KEY, file_sort_from_pref};
+use rookparcel_frontend::detail::{FILES_SORT_KEY, Tab, file_sort_from_pref, sort_from_pref_of, sort_key};
 use rookparcel_frontend::prefs::Prefs;
 use rookparcel_frontend::{profile, tr, ui_lock};
 
@@ -314,6 +314,11 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
     // and its sort (D78), whose indicator the tab shows when it is built
     let files_sort = core.prefs().get(FILES_SORT_KEY).and_then(file_sort_from_pref);
     core.set_file_sort(files_sort);
+    // the Trackers and the Peers tab's too
+    for tab in [Tab::Trackers, Tab::Peers] {
+        let kept = sort_key(tab).and_then(|k| core.prefs().get(k)).and_then(|v| sort_from_pref_of(tab, v));
+        core.set_sort_of(tab, kept);
+    }
     let sort = core.list().sort();
     let alternate_rows = core.gui_options().alternate_rows;
     // D69: a locked Rookparcel starts locked
