@@ -4,6 +4,13 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-17_184916_1794937756: Version 1.2.67: the security review of 1.2.66 and its fix; release 1.2.67 prepared
+
+- **Before the release (owner: "check CI, release"):** CI, FreeBSD and Fuzz ran on `68bb29c6` (1.2.66). The per-release review over `v1.2.65..HEAD -- crates` by one read-only reviewer: nothing critical, high or medium. Recorded in SECURITY-REVIEW.md "Release 1.2.67".
+- **Fixed (low):** sorted by Done or %, `set_file_done` counted every progress alert with changed bytes as a new order, so Win32, GTK and the Mac reloaded every row and reselected each second even when nothing moved. Now `file_order` changes only when the order does (`FileTree::node_order` or the plain list's rows compared). **Left open:** a header click dropped while the app state is borrowed keeps the toolkit's arrow until the next click (cosmetic; BACKLOG).
+- **Release:** `docs/releases/1.2.67.md` (covers 1.2.66, which is not tagged); the Flatpak metainfo's first `<release>` is 1.2.67; the wiki's sort note says 1.2.67.
+- **Checked after the fix:** fmt clean; clippy `-D warnings` clean for frontend and Win32; frontend 451 tests and Win32 172 (one thread) passing.
+
 ## 2026-11-17_183218_1794936738: Version 1.2.66: the GTK and macOS Files tabs sort by their headers (D78)
 
 - **On the owner's word** ("do the Linux/Mac sort job"): both GUIs now call the shared model Win32 uses. `Core::set_file_sort` and `Core::toggle_file_sort` are new (they flag the detail event) for the Mac, which holds `Core`, not a `Detail`.

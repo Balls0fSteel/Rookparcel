@@ -1089,7 +1089,7 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
 ## Files tab sort and the unfocused selection (D78; built 2026-11-17_092503_1794903903, 1.2.64; released in 1.2.65)
 
 - **Win32 sort:** checked by unit and window tests and one hidden-desktop picture (light, by Size descending from the profile). Not seen: real header clicks with the mouse, a sort by Done or % while a real download moves rows (the selection is put back on the same files, scrolling left alone), a 100,000-file torrent in the window (the model sorts one in 1-66 ms in a release build), the classic theme and 150-200 % DPI.
-- **GTK and macOS Files sort (1.2.66, 2026-11-17_183218_1794936738):** both sort the Files tab like Win32 (the same cycle, `ui.files_sort`, the selection kept on the same files); Trackers and Peers still do not sort there. Seen: GTK under Xvfb on Xubuntu (all three clicks, Done descending first, the plain list, a priority change moving the selection, the sort after a restart and gone after the third click, 60 files scrolled); the Mac app on the Intel VM through Accessibility (tree and plain list, the cycle, the selection, priorities moving rows, restart). Not seen on either: a real download moving rows while sorted by Done or % (the code path is the one priority changes took); GTK's keyboard cursor stays at its row index when rows move in the background, not on the file; a sort by Done or % redraws the whole list (the Mac tree reloads fully) at each progress update, a cost for tens of thousands of files; Mac dark mode, Retina and arm64.
+- **GTK and macOS Files sort (1.2.66, 2026-11-17_183218_1794936738):** both sort the Files tab like Win32 (the same cycle, `ui.files_sort`, the selection kept on the same files); Trackers and Peers still do not sort there. Seen: GTK under Xvfb on Xubuntu (all three clicks, Done descending first, the plain list, a priority change moving the selection, the sort after a restart and gone after the third click, 60 files scrolled); the Mac app on the Intel VM through Accessibility (tree and plain list, the cycle, the selection, priorities moving rows, restart). Not seen on either: a real download moving rows while sorted by Done or % (the code path is the one priority changes took); GTK's keyboard cursor stays at its row index when rows move in the background, not on the file; a sort by Done or % re-sorts at each progress update and redraws the whole list (the Mac tree reloads fully) whenever a row moves (1.2.67: no longer when none moves), a cost for tens of thousands of files; Mac dark mode, Retina and arm64.
 - **Unfocused selection (Win32):** pictured light and dark on the hidden desktop (the main list without the focus). Not seen: a selection on a shaded row after a real Alt+Tab, custom system colours, High Contrast (keeps the highlight itself).
 
 ## Files tab filter and help text (D50, D55; built 2026-11-04)
@@ -1293,6 +1293,12 @@ Found and left:
 - **GTK:** the hover-help box under a Preferences page cuts this setting's long help at three lines; the tooltip shows all of it.
 - **Logger:** the failed-rename line mixes `\` and `/` in the path on Windows.
 - **Text:** the two new strings are machine-translated in 34 tables; hu and nl start the check box with ".!ut", which wants a native review.
+
+## Security review 1.2.67 (v1.2.65..1.2.67; SECURITY-REVIEW.md)
+
+Left open by decision (Low, cosmetic):
+
+- **A dropped header click:** a click while the app state is borrowed leaves the toolkit's own arrow until the next click (GTK `files_sort_changed`, Mac `Files::sort_clicked`).
 
 ## Security review 1.2.65 (v1.2.63..1.2.65; SECURITY-REVIEW.md)
 

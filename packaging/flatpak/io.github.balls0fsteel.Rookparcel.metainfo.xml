@@ -70,6 +70,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="1.2.67" date="2026-11-17" type="stable">
+      <description>
+        <p>The Files tab sorts by its columns: click a header to sort, again to reverse, a third time for the torrent's own order. Selected files stay selected as their rows move.</p>
+      </description>
+    </release>
     <release version="1.2.65" date="2026-11-17" type="stable">
       <description>
         <p>A finished torrent in which you tick another file now looks for peers at once: it asks its trackers, the DHT and local peer discovery again and reconnects to the seeds it had let go, instead of showing Downloading without peers for a minute or more.</p>

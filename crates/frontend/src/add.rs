@@ -480,6 +480,18 @@ impl FileTree {
         self.rebuild_rows();
     }
 
+    /// The order [`FileTree::sort_nodes`] sets: the top entries, then every folder's entries,
+    /// collapsed folders included. Equal before and after a sort when nothing moved.
+    pub fn node_order(&self) -> Vec<u32> {
+        let mut order = self.roots.clone();
+        for n in &self.nodes {
+            if let Kind::Dir { children, .. } = &n.kind {
+                order.extend_from_slice(children);
+            }
+        }
+        order
+    }
+
     /// The node in each of `rows` (`None` past the end), to find them again after the rows
     /// moved ([`FileTree::rows_of_nodes`]).
     pub fn nodes_of_rows(&self, rows: &[usize]) -> Vec<Option<usize>> {

@@ -287,6 +287,42 @@ only show a lower round trip, with the same effect as a zero delay.
   `qbittorrent_flags` are private behind a file-based entry. The new runs are one short local
   run each.
 
+## Release 1.2.67 (since v1.2.65)
+
+Date: 2026-11-17_184916_1794937756. Scope: `git diff v1.2.65..HEAD -- crates` (1.2.66): the GTK and macOS Files
+tab sort (header clicks mapped onto `Detail::toggle_file_sort`, the Mac outline's
+`outlineView:sortDescriptorsDidChange:` and `sort_click` hook, `RPTableSource::set_sort` /
+`reload_select`, selection keeping by `file_marks` / node, the stored `ui.files_sort`) and
+`Core::set_file_sort` / `toggle_file_sort`. One read-only reviewer, its findings checked
+against the code here. Nothing critical, high or medium; nothing a peer, tracker, `.torrent`
+or remote daemon sends reaches a panic, an unbounded loop or an allocation beyond the
+torrent's own file count.
+
+### Found and fixed
+
+| Severity | Where | Problem | Fix | Test |
+|---|---|---|---|---|
+| Low | `frontend/detail.rs` `set_file_done` | Sorted by Done or %, every progress alert whose byte counts changed counted as a new order (`file_order`), so all three GUIs reloaded every row and set the selection back each second, O(files) work with a large torrent even when nothing moved. | The order is compared before and after the re-sort (`FileTree::node_order`, or the plain list's rows) and counted only when it differs. | `the_files_tab_sorts_by_its_columns` (progress that moves no row, in the list and the tree) |
+
+### Reviewed and judged fine
+
+- The stored column is range-checked twice (`file_sort_from_pref`, `set_file_sort`); GTK's
+  `show_sort` and the Mac's `set_sort` look columns up with bounds; the Files headers do not
+  move, and the Mac finds columns by key.
+- Marks only map to rows of the current model: a rebuilt tree (`tree_gen`), a list/tree
+  switch and, on the Mac, another torrent drop them; GTK bounds rows by `n_items` after the
+  refresh, the Mac reselects after `reloadData`.
+- GTK's header signal settles (`files_header_changed` returns nothing when the header equals
+  the model, `show_sort` returns early when unchanged); the Mac's `sorting` flag keeps
+  `setSortDescriptors` from re-entering the click hook; no `RefCell` is borrowed mutably on
+  either path while a shared borrow is held. No new `unsafe` blocks; no let-chains (MSRV 1.85).
+
+### Open
+
+- A header click that arrives while the app state is borrowed (a nested main loop) is
+  dropped and the header keeps the toolkit's own arrow until the next click; cosmetic, and
+  the model cannot be read then to put it back.
+
 ## Release 1.2.65 (since v1.2.63)
 
 Date: 2026-11-17_144407_1794923047. Scope: `git diff v1.2.63..HEAD -- crates` (1.2.64): `Engine::resume_download` and

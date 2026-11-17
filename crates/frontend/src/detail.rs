@@ -226,7 +226,21 @@ impl Detail {
         let moved = done != self.file_done;
         self.file_done = done;
         if moved && self.file_sort.is_some_and(|(col, _)| col == 2 || col == 3) {
-            self.sort_files();
+            // progress comes every second: only rows that really moved count as a new order,
+            // so the views do not reload and reselect every row for nothing
+            let before = self.file_order_now();
+            self.put_files_in_order();
+            if self.file_order_now() != before {
+                self.file_order += 1;
+            }
+        }
+    }
+
+    /// The Files tab's order as [`Detail::put_files_in_order`] left it.
+    fn file_order_now(&self) -> Vec<u32> {
+        match &self.tree {
+            Some(t) => t.node_order(),
+            None => self.file_rows.clone(),
         }
     }
 
@@ -307,6 +321,11 @@ impl Detail {
     /// list sorts it).
     fn sort_files(&mut self) {
         self.file_order += 1;
+        self.put_files_in_order();
+    }
+
+    /// [`Detail::sort_files`] without counting a new order.
+    fn put_files_in_order(&mut self) {
         let sort = self.file_sort;
         let files = self.files.clone();
         let files = files.as_deref().unwrap_or(&[]);
@@ -1361,6 +1380,18 @@ mod tests {
             names(&d),
             ["Show/Season 1/e02.mkv", "Show/Subs/e01.srt", "Show/info.nfo", "Show/Season 1/e01.mkv"]
         );
+        // progress that moves no row is not a new order (the views would reload every row)
+        let order = d.file_order();
+        d.set_file_done(vec![950, 3000, 0, 10, 5]);
+        assert_eq!(d.file_order(), order, "e01 still last");
+        assert!(d.set_files_tree(true));
+        let order = d.file_order();
+        d.set_file_done(vec![960, 3000, 0, 10, 5]);
+        assert_eq!(d.file_order(), order, "nor in the tree");
+        d.set_file_done(vec![960, 0, 0, 10, 5]);
+        assert!(d.file_order() > order, "e02.mkv moves below e01.mkv in its folder");
+        assert!(d.set_files_tree(false));
+        d.set_file_done(vec![900, 3000, 0, 10, 5]);
         // a filter keeps the sort
         assert!(d.set_file_filter("mkv"));
         assert_eq!(names(&d), ["Show/Season 1/e02.mkv", "Show/Season 1/e01.mkv"]);

@@ -111,7 +111,7 @@ A folder row adds up its files' **Size** and **Done**; it has no piece columns.
 
 ### Sorting the file list
 
-*New in 1.2.65 in the Windows window; in the GTK window and the macOS app new in 1.2.66, not in a published release yet.*
+*New in 1.2.65 in the Windows window; in the GTK window and the macOS app new in 1.2.67, not in a published release yet.*
 
 Click a column header to sort the files by it; an arrow in the header shows the column and direction.
 
