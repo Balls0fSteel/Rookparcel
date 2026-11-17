@@ -111,7 +111,7 @@ A folder row adds up its files' **Size** and **Done**; it has no piece columns.
 
 ### Sorting the file list
 
-*New in 1.2.65.*
+*New in 1.2.65 in the Windows window; in the GTK window and the macOS app new in 1.2.66, not in a published release yet.*
 
 Click a column header to sort the files by it; an arrow in the header shows the column and direction.
 
@@ -229,7 +229,6 @@ Select several torrents and open Properties to change them together. A field who
 
 - The same seven tabs with the same columns, the same Files tab menu and filter box, and the same Properties window.
 - **Open** and **Open Containing Folder** use your desktop's default programs and file manager.
-- The Files tab cannot be sorted by its columns yet; the macOS app's cannot either.
 
 ## In the Web UI
 

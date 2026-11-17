@@ -352,6 +352,79 @@ impl Table {
         self.selection.unselect_all();
     }
 
+    /// Selects exactly `rows` (those there are), leaving the selection alone when it is that
+    /// already.
+    pub fn select_rows(&self, rows: &[usize]) {
+        let n = self.model.n_items();
+        let set = gtk::Bitset::new_empty();
+        for &r in rows.iter().filter(|&&r| r < n as usize) {
+            set.add(r as u32);
+        }
+        if set.equals(&self.selection.selection()) {
+            return;
+        }
+        self.selection.set_selection(&set, &gtk::Bitset::new_range(0, n));
+    }
+
+    /// The row holding the keyboard focus, if the focus is in the table.
+    pub fn focused_row(&self) -> Option<usize> {
+        let focus = self.view.root()?.focus()?;
+        if !focus.is_ancestor(&self.view) {
+            return None;
+        }
+        // the focus is on a row (or a cell of it); the cells' widgets are below it
+        self.bound
+            .borrow()
+            .iter()
+            .find(|b| b.widget.upgrade().is_some_and(|w| w == focus || w.is_ancestor(&focus)))
+            .and_then(Bound::row)
+    }
+
+    /// Scrolls `row` into view; with `focus`, it gets the keyboard focus too (only when the
+    /// table had it, so a filter box keeps the keyboard).
+    pub fn show_row(&self, row: usize, focus: bool) {
+        if row < self.model.n_items() as usize {
+            let flags = if focus { gtk::ListScrollFlags::FOCUS } else { gtk::ListScrollFlags::NONE };
+            self.view.scroll_to(row as u32, None, flags, None);
+        }
+    }
+
+    /// Lets the headers sort: each column gets a sorter that only shows the arrow (the rows are
+    /// the frontend's, which sorts them itself). `changed` gets the headers' sort
+    /// ([`Table::sort`]) whenever it changed: a click, or [`Table::show_sort`].
+    pub fn set_sortable(&self, changed: impl Fn(Option<(usize, bool)>) + 'static) {
+        let columns = self.view.columns();
+        for i in 0..columns.n_items() {
+            if let Some(col) = columns.item(i).and_downcast::<gtk::ColumnViewColumn>() {
+                col.set_sorter(Some(&gtk::CustomSorter::new(|_, _| gtk::Ordering::Equal)));
+            }
+        }
+        let Some(sorter) = self.view.sorter() else { return };
+        let view = self.view.downgrade();
+        sorter.connect_changed(move |_, _| {
+            if let Some(view) = view.upgrade() {
+                changed(header_sort(&view));
+            }
+        });
+    }
+
+    /// The column whose header shows the sort arrow, and whether it points down.
+    pub fn sort(&self) -> Option<(usize, bool)> {
+        header_sort(&self.view)
+    }
+
+    /// Shows `sort`'s arrow on its column's header, or none (`None`).
+    pub fn show_sort(&self, sort: Option<(usize, bool)>) {
+        if self.sort() == sort {
+            return;
+        }
+        let col = sort
+            .and_then(|(c, _)| self.view.columns().item(c as u32).and_downcast::<gtk::ColumnViewColumn>());
+        let order =
+            if sort.is_some_and(|s| s.1) { gtk::SortType::Descending } else { gtk::SortType::Ascending };
+        self.view.sort_by_column(col.as_ref(), order);
+    }
+
     /// Shows the last row.
     pub fn scroll_to_end(&self) {
         let n = self.model.n_items();
@@ -359,6 +432,16 @@ impl Table {
             self.view.scroll_to(n - 1, None, gtk::ListScrollFlags::NONE, None);
         }
     }
+}
+
+/// The column (its index) whose header shows `view`'s sort, and whether it is descending.
+fn header_sort(view: &gtk::ColumnView) -> Option<(usize, bool)> {
+    let sorter = view.sorter().and_downcast::<gtk::ColumnViewSorter>()?;
+    let col = sorter.primary_sort_column()?;
+    let columns = view.columns();
+    let col: &glib::Object = col.upcast_ref();
+    let index = (0..columns.n_items()).find(|&i| columns.item(i).as_ref() == Some(col))?;
+    Some((index as usize, sorter.primary_sort_order() == gtk::SortType::Descending))
 }
 
 /// Marks the row holding `item`'s cell `pa-alt` when it is an odd one, for the alternate row

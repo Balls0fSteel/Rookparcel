@@ -15,7 +15,8 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use rookparcel_core::TorrentStatus;
 use rookparcel_frontend::detail::{
-    self, BlockKind, Detail, PIECE_BLOCKS_COLUMN, PIECE_COLUMNS, PRIORITIES, PieceShade, SPEED_SAMPLES, Tab,
+    self, BlockKind, Detail, FileSort, PIECE_BLOCKS_COLUMN, PIECE_COLUMNS, PRIORITIES, PieceShade,
+    SPEED_SAMPLES, Tab,
 };
 use rookparcel_frontend::fmt;
 use rookparcel_frontend::icons::{tab_icon, tracker_icon};
@@ -333,6 +334,33 @@ impl Details {
         }
     }
 
+    /// Lets the Files tab's headers sort; `changed` gets their sort each time it changed (a
+    /// click, or [`Details::show_files_sort`]): see [`files_header_changed`]. Before the first
+    /// [`Details::show_files_sort`], which needs the headers' sorters.
+    pub fn connect_files_sort(&self, changed: impl Fn(Option<FileSort>) + 'static) {
+        self.files.set_sortable(changed);
+    }
+
+    /// Shows the Files tab's sort (`None`: the torrent's order) on its headers.
+    pub fn show_files_sort(&self, sort: Option<FileSort>) {
+        self.files.show_sort(sort);
+    }
+
+    /// The Files tab's row with the keyboard focus, while its list has it.
+    pub fn focused_file(&self) -> Option<usize> {
+        self.files.focused_row()
+    }
+
+    /// The Files tab's rows were put in a new order: the list shows it with `rows` selected
+    /// (the same files as before); `show` scrolls to a row, giving it the focus with its flag.
+    pub fn files_reordered(&self, rows: &[usize], show: Option<(usize, bool)>) {
+        self.refresh_files();
+        self.files.select_rows(rows);
+        if let Some((row, focus)) = show {
+            self.files.show_row(row, focus);
+        }
+    }
+
     /// Ctrl+A in the Files list: the rows the filter shows.
     pub fn select_all_files(&self) {
         self.files.selection.select_all();
@@ -432,6 +460,28 @@ fn folder_keys(peek: Peek, files: &Table, expand: ExpandFolder) -> gtk::EventCon
         glib::Propagation::Stop
     });
     key
+}
+
+/// The Files tab's headers show `header` now, the rows `d`'s sort. GTK's header click flips
+/// the direction of the column it shows or shows another column ascending; here a change is a
+/// click on the column it shows, which goes through [`Detail::toggle_file_sort`] as on Win32:
+/// the column's natural direction (descending for Done, % and Priority), reversed, then the
+/// torrent's order. Returns the new sort, which the headers must show, or `None` when they show
+/// the rows' sort already (the window's own change of the headers, which signals too).
+pub fn files_header_changed(d: &mut Detail, header: Option<FileSort>) -> Option<Option<FileSort>> {
+    if header == d.file_sort() {
+        return None;
+    }
+    match header {
+        Some((col, _)) => {
+            d.toggle_file_sort(col);
+        }
+        // a click never clears the headers; back to the torrent's order all the same
+        None => {
+            d.set_file_sort(None);
+        }
+    }
+    Some(d.file_sort())
 }
 
 fn rows(peek: Peek, tab: Tab) -> usize {
@@ -813,6 +863,61 @@ pub fn files_menu(local: bool) -> gio::Menu {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A click on header `col` as GTK's `ColumnViewSorter` takes it: the column it shows flips,
+    /// another column shows ascending.
+    fn gtk_click(header: Option<FileSort>, col: usize) -> Option<FileSort> {
+        match header {
+            Some((c, desc)) if c == col => Some((c, !desc)),
+            _ => Some((col, false)),
+        }
+    }
+
+    /// Clicks `col` and returns what the headers show once the window put them right.
+    fn click(d: &mut Detail, header: &mut Option<FileSort>, col: usize) -> Option<FileSort> {
+        *header = gtk_click(*header, col);
+        if let Some(sort) = files_header_changed(d, *header) {
+            *header = sort;
+        }
+        // the window's own change of the headers signals too, and changes nothing
+        assert_eq!(files_header_changed(d, *header), None);
+        assert_eq!(*header, d.file_sort(), "the arrow shows the rows' sort");
+        *header
+    }
+
+    #[test]
+    fn a_files_header_cycles_as_on_win32() {
+        let mut d = Detail::default();
+        let mut h = None;
+        // Name: ascending, descending, the torrent's order
+        assert_eq!(click(&mut d, &mut h, 0), Some((0, false)));
+        assert_eq!(click(&mut d, &mut h, 0), Some((0, true)));
+        assert_eq!(click(&mut d, &mut h, 0), None);
+        // Done, % and Priority start descending
+        for col in [2, 3, 6] {
+            assert_eq!(click(&mut d, &mut h, col), Some((col, true)));
+            assert_eq!(click(&mut d, &mut h, col), Some((col, false)));
+            assert_eq!(click(&mut d, &mut h, col), None);
+        }
+        // another column starts over in its own direction
+        assert_eq!(click(&mut d, &mut h, 1), Some((1, false)));
+        assert_eq!(click(&mut d, &mut h, 6), Some((6, true)));
+        assert_eq!(click(&mut d, &mut h, 2), Some((2, true)));
+        assert_eq!(click(&mut d, &mut h, 2), Some((2, false)));
+        assert_eq!(click(&mut d, &mut h, 5), Some((5, false)));
+        assert_eq!(click(&mut d, &mut h, 5), Some((5, true)));
+        assert_eq!(click(&mut d, &mut h, 4), Some((4, false)));
+        // a stored sort shown at the start is no click
+        let mut d = Detail::default();
+        d.set_file_sort(Some((3, false)));
+        assert_eq!(files_header_changed(&mut d, Some((3, false))), None);
+        let mut h = Some((3, false));
+        assert_eq!(click(&mut d, &mut h, 3), None, "% ascending was its second click");
+        // headers cleared by other means: the torrent's order
+        d.set_file_sort(Some((1, true)));
+        assert_eq!(files_header_changed(&mut d, None), Some(None));
+        assert_eq!(d.file_sort(), None);
+    }
 
     #[test]
     fn the_piece_map_grows_a_row_at_a_time() {

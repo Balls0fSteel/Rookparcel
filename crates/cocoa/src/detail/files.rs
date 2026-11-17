@@ -12,28 +12,40 @@
 //! file (in the tree, it opens or closes a folder); Return opens a file in the plain list; ⌘A
 //! selects the files the filter shows (the table's own Select All); ⌘F in the tab goes to the
 //! field.
+//!
+//! A click on a column's header sorts by it (D78, `Core::toggle_file_sort`): in the column's
+//! natural direction first (descending for Done, % and Priority), reversed by a second click,
+//! back to the torrent's order (no indicator) by a third; the tree sorts each folder's
+//! entries, folders first. The sort is kept (`ui.files_sort`) and the header's indicator is
+//! always the model's. The selection stays on the same files when the rows move (a header
+//! click, or progress, priorities or a new file list while sorted): the tree's items are its
+//! nodes, which a sort keeps; the plain list's rows are found again from `Detail::file_marks`
+//! taken at each selection change.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::Arc;
 
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2_app_kit::{
-    NSButton, NSColor, NSFont, NSOutlineView, NSScrollView, NSSearchField, NSStackView, NSTextField, NSView,
-    NSWorkspace,
+    NSButton, NSColor, NSFont, NSOutlineView, NSScrollView, NSSearchField, NSStackView, NSTableView,
+    NSTextField, NSView, NSWorkspace,
 };
-use objc2_foundation::{NSArray, NSNumber, NSString, NSURL};
+use objc2_foundation::{NSArray, NSNotFound, NSNumber, NSString, NSURL};
 use rookparcel_core::TorrentId;
-use rookparcel_frontend::detail::{FILES_TREE_KEY, PRIORITIES, Tab, priority_text};
+use rookparcel_frontend::detail::{
+    FILES_SORT_KEY, FILES_TREE_KEY, FileMarks, FileSort, PRIORITIES, Tab, file_sort_pref, priority_text,
+};
 use rookparcel_frontend::tr;
 
 use super::tables::{self, Table};
 use crate::app::{apply, peek, with_core};
 use crate::commands::Command;
 use crate::menu::{self, Item, Role};
-use crate::table::{self, CellValue, Hooks, Key, RPTableSource, TableKind};
+use crate::table::{self, CellValue, ColumnSpec, Hooks, Key, RPTableSource, TableKind};
 use crate::ui::{self, layout};
 
 /// The tab's views.
@@ -52,9 +64,37 @@ pub struct Files {
 /// What the tab shows its files in.
 enum List {
     /// 2.2.1's plain list of paths, by row.
-    Flat(Table),
+    Flat(Flat),
     /// The folder tree, by node.
     Tree(Tree),
+}
+
+/// The plain list, and what puts its selection back on the same files when the rows move.
+struct Flat {
+    table: Table,
+    moves: Rc<Moves>,
+}
+
+/// The plain list's selection by the files it shows, and the order the list was last drawn in.
+#[derive(Default)]
+struct Moves {
+    /// The selection as of its last change (`Detail::file_marks`, taken while the rows on screen
+    /// were the model's).
+    marks: RefCell<FileMarks>,
+    /// The torrent and `Detail::file_order` at the last refresh.
+    torrent: Cell<Option<TorrentId>>,
+    order: Cell<u64>,
+}
+
+impl Moves {
+    fn new() -> Moves {
+        let m = Moves::default();
+        if let Some((id, order)) = peek(|c| (c.detail().id, c.detail().file_order())) {
+            m.torrent.set(id);
+            m.order.set(order);
+        }
+        m
+    }
 }
 
 /// The folder tree: an outline over `Detail::file_tree`'s nodes.
@@ -75,6 +115,9 @@ struct Shape {
     files: usize,
     tree: bool,
     filter: String,
+    /// `Detail::file_order`: the rows were sorted again (a header click, or progress or
+    /// priorities moving the rows of a sorted tree).
+    order: u64,
 }
 
 /// What a command acts on.
@@ -136,9 +179,32 @@ fn local() -> bool {
     peek(|c| !c.is_remote()).unwrap_or(false)
 }
 
+/// The Files tab's columns, each sortable by a click on its header.
+fn specs() -> Vec<ColumnSpec> {
+    let mut specs = tables::specs(Tab::Files.columns());
+    for s in &mut specs {
+        s.sortable = true;
+    }
+    specs
+}
+
+/// A click on the header of column `col` (either view): the next sort of its cycle.
+fn sort_clicked(col: usize) {
+    if let Some(t) = super::tabs() {
+        t.files.sort_clicked(col);
+    }
+}
+
 /// The plain list: `Detail`'s rows and cells.
-fn flat_list(mtm: MainThreadMarker) -> Table {
+fn flat_list(mtm: MainThreadMarker) -> Flat {
+    let moves = Rc::new(Moves::new());
     let mut hooks = tables::hooks(Tab::Files);
+    hooks.sort_click = Some(Box::new(sort_clicked));
+    let m = moves.clone();
+    hooks.selection = Some(Box::new(move |ids| {
+        let rows: Vec<usize> = ids.iter().map(|&r| r as usize).collect();
+        *m.marks.borrow_mut() = peek(|c| c.detail().file_marks(&rows)).unwrap_or_default();
+    }));
     hooks.activate = Some(Box::new(|row| open(At::Row(row as usize), false)));
     hooks.key = Some(Box::new(|k, rows| match (k, rows.first()) {
         (Key::Return, Some(&row)) => {
@@ -149,7 +215,28 @@ fn flat_list(mtm: MainThreadMarker) -> Table {
     }));
     hooks.menu =
         Some(Box::new(|_rows| Some(menu::build("", &menu_items(local()), MainThreadMarker::new()?))));
-    Table::new(Tab::Files, tables::specs(Tab::Files.columns()), hooks, mtm)
+    Flat { table: Table::new(Tab::Files, specs(), hooks, mtm), moves }
+}
+
+impl Flat {
+    /// `Table::refresh`; when the rows were sorted again since (same torrent), every row is
+    /// reloaded and the selection put back on the files it was on, without scrolling.
+    fn refresh(&self) {
+        let Some((id, order)) = peek(|c| (c.detail().id, c.detail().file_order())) else { return };
+        let same = self.moves.torrent.replace(id) == id;
+        let moved = self.moves.order.replace(order) != order && same;
+        let marks = moved.then(|| self.moves.marks.borrow().clone());
+        self.table.refresh();
+        if let Some(marks) = marks {
+            let rows = peek(|c| c.detail().file_rows_of(&marks)).unwrap_or_default();
+            let ids: Vec<u64> = rows.into_iter().map(|r| r as u64).collect();
+            self.table.source.reload_select(&ids);
+            // what the rows on screen show now (`Table::refresh` may have had the selection
+            // hook read the moved rows; a selection that stayed the same tells it nothing)
+            let rows = table::rows_of_set(&self.table.view.selectedRowIndexes());
+            *self.moves.marks.borrow_mut() = peek(|c| c.detail().file_marks(&rows)).unwrap_or_default();
+        }
+    }
 }
 
 /// The node of a tree item's id.
@@ -182,6 +269,7 @@ impl Tree {
                 peek(|c| CellValue::Text(c.detail().file_node_cell(n, col))).unwrap_or(CellValue::Empty)
             },
         );
+        hooks.sort_click = Some(Box::new(sort_clicked));
         hooks.children = Some(Box::new(|parent| {
             let parent = match parent {
                 None => None,
@@ -214,8 +302,7 @@ impl Tree {
                 None => {}
             }
         }));
-        let (scroll, outline, source) =
-            table::tree_table(TableKind("files-tree"), tables::specs(Tab::Files.columns()), hooks, mtm);
+        let (scroll, outline, source) = table::tree_table(TableKind("files-tree"), specs(), hooks, mtm);
         // the outline has no menu hook: its menu is set once (it acts on the clicked or the
         // selected rows, `Tree::targets`)
         // SAFETY: the outline keeps its menu; the items' target is the shared RPTarget.
@@ -244,7 +331,8 @@ impl Tree {
     /// Another torrent, its first file list or another filter: the tree again with every
     /// folder open (another torrent: at the top, nothing selected). The engine's list again
     /// (new priorities, a relocated file): the rows reload, the open folders stay open.
-    /// Otherwise the rows on screen are redrawn (the progress).
+    /// Rows sorted again reload too, keeping the selection (by node) and the open folders,
+    /// without scrolling. Otherwise the rows on screen are redrawn (the progress).
     fn refresh(&self) {
         let now = shape();
         let before = self.shown.replace(now.clone());
@@ -258,7 +346,7 @@ impl Tree {
         } else if before.tree != now.tree || before.filter != now.filter {
             self.source.reload_keep_selection();
             self.expand_all();
-        } else if before.files != now.files {
+        } else if before.files != now.files || before.order != now.order {
             self.source.reload_keep_selection();
         } else {
             self.source.reload_visible();
@@ -275,40 +363,64 @@ fn shape() -> Shape {
             files: d.files.as_ref().map_or(0, |f| Arc::as_ptr(f).cast::<u8>() as usize),
             tree: d.file_tree().is_some(),
             filter: d.file_filter.text().to_owned(),
+            order: d.file_order(),
         }
     })
     .unwrap_or_default()
 }
 
 impl List {
+    /// The list or the tree, its header showing the model's sort.
     fn new(tree: bool, mtm: MainThreadMarker) -> List {
-        if tree { List::Tree(Tree::new(mtm)) } else { List::Flat(flat_list(mtm)) }
+        let list = if tree { List::Tree(Tree::new(mtm)) } else { List::Flat(flat_list(mtm)) };
+        list.show_sort(peek(|c| c.detail().file_sort()).flatten());
+        list
     }
 
     fn scroll(&self) -> &NSScrollView {
         match self {
-            List::Flat(t) => &t.scroll,
+            List::Flat(f) => &f.table.scroll,
             List::Tree(t) => &t.scroll,
+        }
+    }
+
+    /// The table or outline view.
+    fn view(&self) -> &NSTableView {
+        match self {
+            List::Flat(f) => &f.table.view,
+            List::Tree(t) => &t.outline,
+        }
+    }
+
+    fn source(&self) -> &RPTableSource {
+        match self {
+            List::Flat(f) => &f.table.source,
+            List::Tree(t) => &t.source,
         }
     }
 
     fn refresh(&self) {
         match self {
-            List::Flat(t) => t.refresh(),
+            List::Flat(f) => f.refresh(),
             List::Tree(t) => t.refresh(),
         }
     }
 
+    /// The header's sort indicator for `sort` (`None`: none, the torrent's order).
+    fn show_sort(&self, sort: Option<FileSort>) {
+        self.source().set_sort(sort.map(|(col, desc)| (col, !desc)));
+    }
+
     fn deselect(&self) {
         match self {
-            List::Flat(t) => t.deselect(),
+            List::Flat(f) => f.table.deselect(),
             List::Tree(t) => deselect(&t.outline),
         }
     }
 
     fn targets(&self) -> Targets {
         match self {
-            List::Flat(t) => Targets::Rows(t.selected()),
+            List::Flat(f) => Targets::Rows(f.table.selected()),
             List::Tree(t) => Targets::Nodes(t.targets()),
         }
     }
@@ -316,10 +428,7 @@ impl List {
     /// Lets go of the view (another one replaces it).
     fn detach(&self) {
         self.scroll().removeFromSuperview();
-        match self {
-            List::Flat(t) => table::detach(&t.view),
-            List::Tree(t) => table::detach(&t.outline),
-        }
+        table::detach(self.view());
     }
 }
 
@@ -407,14 +516,33 @@ impl Files {
         drop(old);
         self.place();
         if let (true, Some(w)) = (had_focus, &window) {
-            let list = self.list.borrow();
-            let view: &NSView = match &*list {
-                List::Flat(t) => &t.view,
-                List::Tree(t) => &t.outline,
-            };
-            w.makeFirstResponder(Some(view));
+            w.makeFirstResponder(Some(self.list.borrow().view()));
         }
         apply(with_core(|c| c.events()));
+    }
+
+    /// A click on the header of column `col`: the next sort of the column's cycle, kept in the
+    /// preferences and shown by the header's indicator; the rows reload (`refresh`) with the
+    /// selection on the same files, its first row scrolled into view.
+    fn sort_clicked(&self, col: usize) {
+        let sort = with_core(|c| {
+            let sort = c.toggle_file_sort(col);
+            match file_sort_pref(sort) {
+                Some(v) => c.prefs_mut().set(FILES_SORT_KEY, v),
+                None => c.prefs_mut().remove(FILES_SORT_KEY),
+            }
+            sort
+        });
+        let Some(sort) = sort else { return };
+        // AppKit's own change of the descriptors (the clicked column reversed, or put first)
+        // gives way to the model's
+        self.list.borrow().show_sort(sort);
+        apply(with_core(|c| c.events()));
+        let list = self.list.borrow();
+        let first = list.view().selectedRowIndexes().firstIndex();
+        if first != NSNotFound as usize {
+            list.view().scrollRowToVisible(first as isize);
+        }
     }
 
     /// A double click on a folder of the tree: it opens, or closes when open.

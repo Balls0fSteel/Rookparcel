@@ -34,6 +34,7 @@ use objc2_user_notifications::{
 use rookparcel_core::util::lockfile::Lock;
 use rookparcel_core::{MockConfig, Session, SessionParams, TorrentId};
 use rookparcel_frontend::app::{self as fapp, Core, Events, Layout, Start, Wakeup};
+use rookparcel_frontend::detail::{FILES_SORT_KEY, file_sort_from_pref};
 use rookparcel_frontend::prefs::Prefs;
 use rookparcel_frontend::{profile, tr, ui_lock};
 
@@ -310,6 +311,9 @@ fn open(mtm: MainThreadMarker, args: Args, remote: Option<crate::remote::Connect
     });
     // the Files tab's folder tree or plain list (D62), before the tab is built
     core.set_files_tree(layout.files_tree);
+    // and its sort (D78), whose indicator the tab shows when it is built
+    let files_sort = core.prefs().get(FILES_SORT_KEY).and_then(file_sort_from_pref);
+    core.set_file_sort(files_sort);
     let sort = core.list().sort();
     let alternate_rows = core.gui_options().alternate_rows;
     // D69: a locked Rookparcel starts locked

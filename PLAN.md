@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-17_151824_1794925104
+Last updated: 2026-11-17_183218_1794936738
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D78](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -20,7 +20,8 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 ## Current status
 
 - **Release 1.2.63 (published 2026-11-17):** the feature plan of 2026-11-16 in four waves, **1.2.59** (D72-D73 download order, Copy Magnet Link / Export), **1.2.60** (D74-D75 excluded names, block list from an https address), **1.2.61** (D76 tags), **1.2.62** (D77 `.!ut`), and **1.2.63** the security review's fixes (SECURITY-REVIEW.md; open items in BACKLOG "Security review 1.2.63"). Notes in `docs/releases/1.2.63.md`. Hand checks: BACKLOG "Download order, magnet links and export", "Excluded file names and the IP filter address", "Tags", "Append .!ut to incomplete files".
-- **Release 1.2.65 (published 2026-11-17):** **1.2.64**, the owner's three points of 2026-11-17: a finished torrent whose file is turned on looks for peers at once (reconnect delay cleared, trackers, DHT and LSD asked again); Win32 Files tab sorts by its headers and an unfocused selection stays visible (D78). **1.2.65** the security review's fixes (SECURITY-REVIEW.md; open items in BACKLOG "Security review 1.2.65"). Notes in `docs/releases/1.2.65.md`. Hand checks: BACKLOG "Files tab sort and the unfocused selection"; GTK and macOS sorting open there; the owner's retest with a real torrent.
+- **Release 1.2.65 (published 2026-11-17):** **1.2.64**, the owner's three points of 2026-11-17: a finished torrent whose file is turned on looks for peers at once (reconnect delay cleared, trackers, DHT and LSD asked again); Win32 Files tab sorts by its headers and an unfocused selection stays visible (D78). **1.2.65** the security review's fixes (SECURITY-REVIEW.md; open items in BACKLOG "Security review 1.2.65"). Notes in `docs/releases/1.2.65.md`. Hand checks: BACKLOG "Files tab sort and the unfocused selection"; the owner's retest with a real torrent.
+- **1.2.66 (not released):** the GTK and macOS Files tabs sort by their headers as Win32 does (D78); unchecked parts in that BACKLOG section.
 - **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.

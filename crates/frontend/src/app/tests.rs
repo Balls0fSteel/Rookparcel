@@ -771,6 +771,19 @@ fn the_files_tree_acts_on_nodes() {
     core.relocate_file_node(season, &save.join("elsewhere"));
     assert!(core.set_files_tree(false));
     assert_eq!(core.file_node_path(e02), None);
+
+    // a header's three clicks (D78): Size ascending, descending, the torrent's order; each a redraw
+    core.events();
+    assert_eq!(core.toggle_file_sort(1), Some((1, false)));
+    assert!(core.events().detail);
+    assert_eq!(core.toggle_file_sort(1), Some((1, true)));
+    assert_eq!(core.detail().file_sort(), Some((1, true)));
+    assert_eq!(core.toggle_file_sort(1), None);
+    assert!(core.events().detail);
+    assert!(core.set_file_sort(Some((3, true))));
+    assert!(!core.set_file_sort(Some((3, true))), "unchanged");
+    assert!(core.events().detail);
+    assert!(!core.events().detail, "nothing new");
 }
 
 #[test]

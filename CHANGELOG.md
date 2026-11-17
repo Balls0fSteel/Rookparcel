@@ -4,6 +4,13 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-17_183218_1794936738: Version 1.2.66: the GTK and macOS Files tabs sort by their headers (D78)
+
+- **On the owner's word** ("do the Linux/Mac sort job"): both GUIs now call the shared model Win32 uses. `Core::set_file_sort` and `Core::toggle_file_sort` are new (they flag the detail event) for the Mac, which holds `Core`, not a `Detail`.
+- **GTK:** the `ColumnView`'s columns get sorters that never reorder (the model sorts); a header change becomes the next step of the cycle (`files_header_changed`, tested), so GTK's own two-state toggle cannot disagree with the model, and the header shows the model's sort (cleared on the third click). Columns no longer move, so header indices stay the column ids. The selection is taken as `file_marks` before a sort, a new file list or a progress update of a sorted Done/% column, and put back by `file_rows_of` after.
+- **macOS:** the outline had no `outlineView:sortDescriptorsDidChange:`, so its header clicks went nowhere; it now has one, and a new `sort_click` hook lets the Files tab choose the sort and set the descriptors itself (a `sorting` flag keeps that from counting as a click). The tree keeps its selection by node and reloads when `Detail::file_order` changes; the plain list keeps its selection's marks from each selection change and reselects after a re-sort, without scrolling. The stored sort is read before the tab is built.
+- **Validation:** fmt clean; clippy `-D warnings` clean for core, frontend, nox and Win32, GTK (cross, stand-in pkg-config) and the Mac (x86_64 and aarch64 Darwin); frontend 451 tests. On the VMs: GTK built, its 28 tests and the frontend's passed, and the Xvfb run checked the cycle, the selection and the restart; the Mac app built and signed, 24 tests, and an Accessibility-driven run checked the same. Not seen: a real download moving rows (BACKLOG).
+
 ## 2026-11-17_151824_1794925104: Release 1.2.65 published; the site's news and the wiki pushed
 
 - **On the owner's word** ("check CI, release; if not, fix and release"): CI, FreeBSD and Fuzz green on `a871cd5f` (1.2.64); the release review's fixes made 1.2.65 (`3ecc8106`), green on all three; tag `v1.2.65`; the Release run [44099418866](https://github.com/Balls0fSteel/Rookparcel/actions/runs/44099418866) passed all 11 jobs on the first attempt.

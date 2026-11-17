@@ -23,7 +23,10 @@ use rookparcel_core::{
 };
 use rookparcel_frontend::auto_shutdown::{self, AutoShutdown, Mode as AutoMode, Step};
 use rookparcel_frontend::columns::Column;
-use rookparcel_frontend::detail::{Detail, FILES_TREE_KEY, PRIORITIES, Tab, on_disk_path};
+use rookparcel_frontend::detail::{
+    Detail, FILES_SORT_KEY, FILES_TREE_KEY, FileMarks, FileSort, PRIORITIES, Tab, file_sort_from_pref,
+    file_sort_pref, on_disk_path,
+};
 use rookparcel_frontend::exclude::Pending;
 use rookparcel_frontend::export::{self, ExportTarget, Exports};
 use rookparcel_frontend::icons::{Icon, network_icon};
@@ -48,7 +51,7 @@ use rookparcel_frontend::ui_lock::{self, Form};
 use rookparcel_frontend::update::{self, Checker, Kind, Manifest, Version};
 use rookparcel_frontend::{actions, add, create, fmt, help, profile, settings, setup_guide, tr};
 
-use crate::detail::{Details, Visit};
+use crate::detail::{Details, Visit, files_header_changed};
 use crate::list::{Content, List};
 use crate::paths;
 use crate::shutdown::{self, Power};
@@ -703,6 +706,41 @@ fn set_file_filter(text: &str) {
             ui.details.files_filter_changed();
         }
     }
+}
+
+/// The Files tab's headers show `header` now (D78): a click on one sorts the rows as the Win32
+/// header does ([`files_header_changed`]: the column's natural direction, reversed, then the
+/// torrent's order), kept as [`FILES_SORT_KEY`]; the headers show the new sort and the selection
+/// stays on the same files, the focused one (or the first selected) in view.
+fn files_sort_changed(header: Option<FileSort>) {
+    let Some(ui) = ui() else { return };
+    let (selected, focused) = (ui.details.selected_files(), ui.details.focused_file());
+    let Some(Some((sort, rows, show))) = with_app(|a| {
+        let marks = a.detail.file_marks(&selected);
+        let focus_marks = focused.map(|f| a.detail.file_marks(&[f]));
+        let sort = files_header_changed(&mut a.detail, header)?;
+        match file_sort_pref(sort) {
+            Some(v) => a.prefs.set(FILES_SORT_KEY, v),
+            None => a.prefs.remove(FILES_SORT_KEY),
+        }
+        let rows = a.detail.file_rows_of(&marks);
+        let show = match focus_marks.and_then(|m| a.detail.file_rows_of(&m).first().copied()) {
+            Some(f) => Some((f, true)),
+            None => rows.first().map(|&r| (r, false)),
+        };
+        Some((sort, rows, show))
+    }) else {
+        return;
+    };
+    // outside `with_app`: this signals again (and changes nothing), and the cells read the state
+    ui.details.show_files_sort(sort);
+    ui.details.files_reordered(&rows, show);
+}
+
+/// What the Files tab's selected rows show, to select them again once the rows moved.
+fn files_marks(a: &App) -> FileMarks {
+    let selected = ui().map(|ui| ui.details.selected_files()).unwrap_or_default();
+    a.detail.file_marks(&selected)
 }
 
 thread_local! {
@@ -1485,6 +1523,9 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
     let files_tree = prefs.get_bool(FILES_TREE_KEY, true);
     let mut detail = Detail::default();
     detail.set_files_tree(files_tree);
+    // the Files tab's sort as last left (D78); its headers show it once the state is there
+    detail.set_file_sort(prefs.get(FILES_SORT_KEY).and_then(file_sort_from_pref));
+    let files_sort = detail.file_sort();
     let ui = Rc::new(Ui {
         list,
         sidebar,
@@ -1580,6 +1621,12 @@ fn build(app: &gtk::Application, remote_session: Option<Session>) {
     });
     // the Files tab's view as last left (D62): the toggle button and the menu's check mark
     show_files_tree(files_tree);
+    // the Files tab's sort (D78): the headers show the stored one (the model has it, so the
+    // signal this gives is no click)
+    if let Some(ui) = self::ui() {
+        ui.details.connect_files_sort(files_sort_changed);
+        ui.details.show_files_sort(files_sort);
+    }
     // File > Lock Rookparcel only while the lock is on (D71), and what `--reset-lock` did before the Logger was there
     pin_changed();
     if PIN_RESET.with(|r| r.replace(false)) {
@@ -2222,6 +2269,8 @@ fn on_alerts() {
     let mut magnet_ready = false;
     let mut suspend = None;
     let mut completed = Vec::new();
+    // the Files tab's sort order and selection before a file list or progress moved its rows
+    let mut files_moved: Option<(u64, FileMarks)> = None;
     let done = with_app(|a| {
         // the alerts a dialog saved while it waited (fetch_trackers) come first
         let mut alerts = properties::take_alerts(&a.handle, &mut a.alerts);
@@ -2343,8 +2392,20 @@ fn on_alerts() {
                 Alert::TrackerList { id, trackers } if a.detail.id == Some(id) => {
                     a.detail.trackers = trackers
                 }
-                Alert::FileList { id, files } if a.detail.id == Some(id) => a.detail.set_files(files),
-                Alert::FileProgress { id, done } if a.detail.id == Some(id) => a.detail.set_file_done(done),
+                Alert::FileList { id, files } if a.detail.id == Some(id) => {
+                    if a.detail.file_sort().is_some() && files_moved.is_none() {
+                        files_moved = Some((a.detail.file_order(), files_marks(a)));
+                    }
+                    a.detail.set_files(files);
+                }
+                Alert::FileProgress { id, done } if a.detail.id == Some(id) => {
+                    // only a sort by Done or % moves rows as the download goes on
+                    let by_progress = a.detail.file_sort().is_some_and(|(col, _)| col == 2 || col == 3);
+                    if by_progress && files_moved.is_none() {
+                        files_moved = Some((a.detail.file_order(), files_marks(a)));
+                    }
+                    a.detail.set_file_done(done);
+                }
                 Alert::PieceInfo { id, have, availability, downloading } if a.detail.id == Some(id) => {
                     a.detail.have = Some(have);
                     a.detail.availability = availability;
@@ -2376,14 +2437,23 @@ fn on_alerts() {
             }
         }
         a.alerts = alerts;
+        // the Files tab's rows that show the files selected before they moved
+        files_moved
+            .filter(|(order, _)| a.detail.file_order() != *order)
+            .map(|(_, marks)| a.detail.file_rows_of(&marks))
     });
-    if done.is_none() {
+    let Some(files_moved) = done else {
         return;
-    }
+    };
     refresh();
     // a removed torrent may have been the one shown
     selection_changed();
     refresh_details();
+    // a sort moved the Files tab's rows (D78): the selection follows its files, and the list is
+    // not scrolled
+    if let (Some(rows), Some(ui)) = (files_moved, ui()) {
+        ui.details.files_reordered(&rows, None);
+    }
     update_status();
     // while locked, the boxes and the magnets' Add dialogs wait for the unlock, and the
     // completions, which name torrents, are not announced at all (D69)

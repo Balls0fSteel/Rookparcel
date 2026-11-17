@@ -420,6 +420,24 @@ impl Core {
         changed
     }
 
+    /// The Files tab's sort (D78; `None`: the torrent's order); true when it changed (the rows
+    /// moved). The GUI keeps it as [`crate::detail::FILES_SORT_KEY`].
+    pub fn set_file_sort(&mut self, sort: Option<crate::detail::FileSort>) -> bool {
+        let changed = self.detail.set_file_sort(sort);
+        self.ev.detail |= changed;
+        changed
+    }
+
+    /// A click on the header of Files tab column `col`: [`crate::detail::Detail::toggle_file_sort`]'s
+    /// cycle (the column's natural direction, reversed, then the torrent's order). Returns the
+    /// new sort.
+    pub fn toggle_file_sort(&mut self, col: usize) -> Option<crate::detail::FileSort> {
+        let before = self.detail.file_sort();
+        let sort = self.detail.toggle_file_sort(col);
+        self.ev.detail |= sort != before;
+        sort
+    }
+
     /// The Files tab's row `row`: the torrent's save path and the file's path (Open, Open
     /// Containing Folder, Relocate). `None` in a remote window.
     pub fn file_path(&self, row: usize) -> Option<(PathBuf, PathBuf)> {

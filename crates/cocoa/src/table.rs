@@ -9,7 +9,8 @@
 //! act on clicks. What the table gives:
 //!
 //! - sort descriptors: a click on a header calls `hooks.sort(column, ascending)`, then reloads
-//!   keeping the selection;
+//!   keeping the selection (or only `hooks.sort_click(column)`, which shows the sort it
+//!   chose with [`RPTableSource::set_sort`] and reloads itself);
 //! - the header's menu shows and hides the columns that may hide; moving, resizing, showing or
 //!   hiding one calls `hooks.layout` (to keep it in prefs);
 //! - selection: `hooks.selection(ids)` with the selected rows' ids; double-click
@@ -151,6 +152,10 @@ pub struct Hooks {
     /// A tree's group rows (source-list headings).
     pub is_group: Option<Box<dyn Fn(u64) -> bool>>,
     pub sort: Option<Hook<(usize, bool), ()>>,
+    /// A click on the header of column (spec index) `i`, in place of `sort`: the hook decides
+    /// the sort, shows it ([`RPTableSource::set_sort`]) and reloads the rows itself (the Files
+    /// tab, whose third click goes back to the torrent's order).
+    pub sort_click: Option<Hook<usize, ()>>,
     pub selection: Option<IdsHook<()>>,
     pub activate: Option<Hook<u64, ()>>,
     /// Return or ⌫ with the selection's ids; true when handled.
@@ -180,6 +185,7 @@ impl Hooks {
             children: None,
             is_group: None,
             sort: None,
+            sort_click: None,
             selection: None,
             activate: None,
             key: None,
@@ -202,6 +208,8 @@ pub struct Ivars {
     selected: RefCell<Vec<u64>>,
     /// Set while a reload puts the selection back: its selection changes are not the user's.
     restoring: Cell<bool>,
+    /// Set while [`RPTableSource::set_sort`] sets the sort descriptors: not a header click.
+    sorting: Cell<bool>,
     /// A tree's items: one `NSNumber` per id, so AppKit sees the same object each time.
     items: RefCell<HashMap<u64, Retained<NSNumber>>>,
     /// A tree's children as last counted, by parent (`None`: the top). `numberOfChildrenOfItem:`
@@ -279,14 +287,7 @@ define_class!(
 
         #[unsafe(method(tableView:sortDescriptorsDidChange:))]
         fn sort_changed(&self, tv: &NSTableView, _old: &NSArray<NSSortDescriptor>) {
-            let Some(d) = tv.sortDescriptors().firstObject() else { return };
-            let Some(key) = d.key() else { return };
-            let key = key.to_string();
-            let Some(i) = self.ivars().specs.iter().position(|s| s.id == key) else { return };
-            if let Some(f) = &self.ivars().hooks.sort {
-                f((i, d.ascending()));
-            }
-            self.reload_keep_selection();
+            self.sort_did_change(tv);
         }
     }
 
@@ -346,6 +347,12 @@ define_class!(
                 None => self.children(item).get(index).copied(),
             };
             self.item(id.unwrap_or(0))
+        }
+
+        /// A header click in a tree that looks like a table (the Files tab's folder tree).
+        #[unsafe(method(outlineView:sortDescriptorsDidChange:))]
+        fn outline_sort_changed(&self, ov: &NSOutlineView, _old: &NSArray<NSSortDescriptor>) {
+            self.sort_did_change(ov);
         }
 
         #[unsafe(method(outlineView:isItemExpandable:))]
@@ -426,6 +433,7 @@ impl RPTableSource {
             view: RefCell::new(Weak::default()),
             selected: RefCell::new(Vec::new()),
             restoring: Cell::new(false),
+            sorting: Cell::new(false),
             items: RefCell::new(HashMap::new()),
             counted: RefCell::new(HashMap::new()),
         });
@@ -552,6 +560,42 @@ impl RPTableSource {
         self.ivars().selected.borrow().clone()
     }
 
+    /// The sort descriptors changed: a header click (the first descriptor is the clicked
+    /// column's), unless [`RPTableSource::set_sort`] set them.
+    fn sort_did_change(&self, tv: &NSTableView) {
+        if self.ivars().sorting.get() {
+            return;
+        }
+        let Some(d) = tv.sortDescriptors().firstObject() else { return };
+        let Some(key) = d.key() else { return };
+        let key = key.to_string();
+        let Some(i) = self.ivars().specs.iter().position(|s| s.id == key) else { return };
+        let hooks = &self.ivars().hooks;
+        if let Some(f) = &hooks.sort_click {
+            return f(i);
+        }
+        if let Some(f) = &hooks.sort {
+            f((i, d.ascending()));
+        }
+        self.reload_keep_selection();
+    }
+
+    /// Shows a sort in the header: column (spec index) `i`'s indicator, ascending or not, or
+    /// none (`None`: the rows' own order). Not a header click: no hook is called.
+    pub fn set_sort(&self, sort: Option<(usize, bool)>) {
+        let Some(tv) = self.table() else { return };
+        let d = sort.and_then(|(i, ascending)| {
+            let s = self.ivars().specs.get(i)?;
+            Some(NSSortDescriptor::sortDescriptorWithKey_ascending(
+                Some(&NSString::from_str(&s.id)),
+                ascending,
+            ))
+        });
+        self.ivars().sorting.set(true);
+        tv.setSortDescriptors(&NSArray::from_retained_slice(d.as_slice()));
+        self.ivars().sorting.set(false);
+    }
+
     fn layout_changed(&self) {
         let Some(f) = &self.ivars().hooks.layout else { return };
         let Some(tv) = self.table() else { return };
@@ -598,6 +642,16 @@ impl RPTableSource {
         if now.len() != ids.len() {
             self.selection_did_change();
         }
+    }
+
+    /// Reloads every row (they moved) and selects these ids instead of the rows selected before,
+    /// as the user would (the selection hook hears of a change); nothing scrolls.
+    pub fn reload_select(&self, ids: &[u64]) {
+        let Some(tv) = self.table() else { return };
+        self.ivars().restoring.set(true);
+        tv.reloadData();
+        self.ivars().restoring.set(false);
+        self.select(ids);
     }
 
     /// Selects these ids (none: clears the selection), as the user would.
