@@ -287,6 +287,32 @@ only show a lower round trip, with the same effect as a zero delay.
   `qbittorrent_flags` are private behind a file-based entry. The new runs are one short local
   run each.
 
+## Release 1.2.69 (since v1.2.67)
+
+Date: 2026-11-17_211440_1794946480. Scope: `git diff v1.2.67..HEAD -- crates` (1.2.68): the Trackers and Peers tab
+sort in the shared model (`Detail::set_sort_of` / `toggle_sort_of`, in-place sorting of each
+peer and tracker update with engine positions, `row_keys` / `rows_of_keys`, the two
+preferences) and its wiring in Win32, GTK and the Mac (`RPTableSource::select` re-reading a
+stale selection). One read-only reviewer, its findings checked against the code here. Nothing
+critical, high or medium; the comparators are total orders (ties end at the unique engine
+position), so the sort cannot panic on an inconsistent order.
+
+### Found and fixed
+
+| Severity | Where | Problem | Fix | Test |
+|---|---|---|---|---|
+| Low | `frontend/detail.rs` `sort_peers` / `sort_trackers` | The comparators built `peer_flags` and `tracker_status` strings at every comparison and compared whole client names, which a peer sets at any length (extension handshake `v`): thousands of peers with long names made each one-second update cost O(n log n · len) plus allocations on the GUI thread. | The Client, Flags and Status texts are made once per row per update, client names and statuses cut to 128 bytes at a character (`capped`); the cells still show the whole text. | `the_trackers_and_peers_tabs_sort_by_their_columns` (a 10,000-byte client, a cut inside a character, flags, statuses) |
+| Low | `gtk/app.rs` `sorted_list_keys` | GTK noted a sorted tab's selection only while that tab was shown, so an update for a hidden sorted tab moved its selection to other rows (visual only; nothing acts on it). | Noted whether shown or not, as Win32 and the Mac do. | (GTK, checked by reading) |
+
+### Reviewed and judged fine
+
+- `sort_rows` rebuilds the positions whenever their count differs from the list's, so a
+  direct write to `peers` or `trackers` cannot index out of bounds; every writer uses the
+  setters; out-of-range columns from the ini or a header are no sort.
+- No `RefCell` re-entrancy panic (`with_app`, `with_core`, `peek` try to borrow); GTK's header
+  signal settles; the Mac's `select` cannot loop and only re-fires a hook when the kept ids
+  were stale. No let-chains (MSRV 1.85), no new `unwrap` outside tests.
+
 ## Release 1.2.67 (since v1.2.65)
 
 Date: 2026-11-17_184916_1794937756. Scope: `git diff v1.2.65..HEAD -- crates` (1.2.66): the GTK and macOS Files

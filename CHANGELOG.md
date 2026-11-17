@@ -4,6 +4,14 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-17_211440_1794946480: Version 1.2.69: the security review of 1.2.68 and its fixes; release 1.2.69 prepared
+
+- **Before the release (owner: "check CI, release"):** the review over `v1.2.67..HEAD -- crates` by one read-only reviewer: nothing critical, high or medium. Recorded in SECURITY-REVIEW.md "Release 1.2.69".
+- **Fixed (low):** the peer and tracker sorts made the Client, Flags and Status texts at each comparison and compared whole client names (any length a peer sends); now once per row per update, names and statuses cut to 128 bytes at a character (`capped`). GTK noted a sorted tab's selection only while the tab was shown; now always, as Win32 and the Mac.
+- **Found on the way:** CI on `fd496301` (the 1.2.67 publication, docs only) failed on macOS in `a_download_stopped_midway_resumes_with_its_names_and_pieces`: one 16 KiB block downloaded again after the restart. Not this release's code; recorded in BACKLOG "Validation".
+- **Release:** `docs/releases/1.2.69.md` (covers 1.2.68, which is not tagged); the Flatpak metainfo's first `<release>` is 1.2.69; the wiki's sort notes say 1.2.69.
+- **Checked after the fixes:** fmt clean; clippy `-D warnings` clean for frontend, nox, Win32, GTK (cross) and the Mac (aarch64); frontend tests and Win32 173 (one thread) passing.
+
 ## 2026-11-17_210056_1794945656: Version 1.2.68: the Trackers and Peers tabs sort by their headers (D78)
 
 - **On the owner's word** ("Trackers/Peers sort", the next item after 1.2.67): no GUI sorted these tabs, Win32 included. The shared model (`Detail::sort_of` / `set_sort_of` / `toggle_sort_of` for Files, Trackers and Peers; `Core` wrappers for the Mac) uses the Files tab's three-click cycle: counts, progress, speeds and totals start descending, names, addresses, clients, flags, statuses and Update In ascending, the third click back to the engine's order. `set_peers` / `set_trackers` sort each update in place (with each row's engine position, to go back), so `peers[row]` / `trackers[row]` stay the displayed rows; every direct `detail.trackers =` became `set_trackers`. Ties go by address for peers, so equal rows do not swap every second; trackers without a reported count stay last in both directions. `row_keys` / `rows_of_keys` (a peer's address or web seed URL, a tracker's URL) keep the selection. Kept as `ui.trackers_sort`, `ui.peers_sort` (`sort_key`, `sort_from_pref_of`).

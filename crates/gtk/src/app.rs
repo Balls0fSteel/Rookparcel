@@ -768,14 +768,12 @@ fn list_sort_changed(tab: Tab, header: Option<FileSort>) {
     ui.details.list_reordered(tab, &rows, show);
 }
 
-/// What the Trackers or the Peers tab's selected rows show, while the tab is on screen with a
-/// sort and a selection: an update re-sorts the rows, and the selection follows them (D78).
+/// What the Trackers or the Peers tab's selected rows show, while the tab has a sort and a
+/// selection (shown or not: an update for a hidden tab re-sorts it too): the selection
+/// follows them (D78).
 fn sorted_list_keys(a: &App, tab: Tab) -> Option<Vec<String>> {
     a.detail.sort_of(tab)?;
     let ui = ui()?;
-    if ui.details.tab() != tab {
-        return None;
-    }
     let selected = ui.details.selected_list_rows(tab);
     if selected.is_empty() {
         return None;

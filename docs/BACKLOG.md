@@ -1092,7 +1092,7 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
 - **GTK and macOS Files sort (1.2.66, 2026-11-17_183218_1794936738):** both sort the Files tab like Win32 (the same cycle, `ui.files_sort`, the selection kept on the same files); Trackers and Peers still do not sort there. Seen: GTK under Xvfb on Xubuntu (all three clicks, Done descending first, the plain list, a priority change moving the selection, the sort after a restart and gone after the third click, 60 files scrolled); the Mac app on the Intel VM through Accessibility (tree and plain list, the cycle, the selection, priorities moving rows, restart). Not seen on either: a real download moving rows while sorted by Done or % (the code path is the one priority changes took); GTK's keyboard cursor stays at its row index when rows move in the background, not on the file; a sort by Done or % re-sorts at each progress update and redraws the whole list (the Mac tree reloads fully) whenever a row moves (1.2.67: no longer when none moves), a cost for tens of thousands of files; Mac dark mode, Retina and arm64.
 - **Unfocused selection (Win32):** pictured light and dark on the hidden desktop (the main list without the focus). Not seen: a selection on a shaded row after a real Alt+Tab, custom system colours, High Contrast (keeps the highlight itself).
 
-## Trackers and Peers tab sort (D78; built 2026-11-17_210056_1794945656, 1.2.68)
+## Trackers and Peers tab sort (D78; built 2026-11-17_210056_1794945656, 1.2.68; released in 1.2.69)
 
 - **All three GUIs** sort both tabs by a header click (`Detail::toggle_sort_of`; `ui.trackers_sort`, `ui.peers_sort`); the model sorts each update in place, ties by address (peers) or tier order (trackers), unknown tracker counts last. Seen: Win32 by window tests and one hidden-desktop picture (Peers by % from the profile, dark); GTK under Xvfb on Xubuntu against a mock `rookparcel-nox` in remote mode (all clicks, IP by number, the selection kept across 6 s of updates, restart, keys removed); the Mac app on the Intel VM through Accessibility (the same, with `--demo`).
 - **Differences:** the Mac keeps a selected peer or tracker by key even while unsorted (peers coming and going no longer move it); Win32 and GTK only while sorted, by row otherwise as before. GTK's keyboard cursor stays at its row when rows move.
@@ -1300,6 +1300,10 @@ Found and left:
 - **Logger:** the failed-rename line mixes `\` and `/` in the path on Windows.
 - **Text:** the two new strings are machine-translated in 34 tables; hu and nl start the check box with ".!ut", which wants a native review.
 
+## Security review 1.2.69 (v1.2.67..1.2.69; SECURITY-REVIEW.md)
+
+Both findings fixed; nothing left open.
+
 ## Security review 1.2.67 (v1.2.65..1.2.67; SECURITY-REVIEW.md)
 
 Left open by decision (Low, cosmetic):
@@ -1340,6 +1344,8 @@ Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/fr
 - The auto-rate-limit's ping probes (D49) are not torrent traffic, so the hold does not stop them, just as the network rule does not bind them.
 
 ## Validation and development environment
+
+- **macOS CI flake, `a_download_stopped_midway_resumes_with_its_names_and_pieces` (D77, seen 2026-11-17 on `fd496301`):** after the restart the leech downloaded one 16 KiB block more than it lacked (payload 34,393 against 18,009 left, none counted redundant), so a block counted as done in the restored state was fetched again. Unlike 1.2.63's flake, `done` is now read while the torrent is still paused. Find whether the resume data keeps a block it then re-requests (a real waste on every restart) or the test reads too early.
 
 - The remaining 100k measurements are a low-end 2-core/4 GB/HDD machine on
   Windows/light Linux, GTK using the compact model, Web UI per-client models,

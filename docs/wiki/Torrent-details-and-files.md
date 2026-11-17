@@ -54,7 +54,7 @@ The torrent's trackers, one row each.
 
 To contact the trackers now, use **Update Tracker** in the right-click menu. To add, remove or reorder trackers, use [Properties](#torrent-properties).
 
-Click a column header to sort the trackers by it, as in the [file list](#sorting-the-file-list): **Seeds**, **Peers** and **Downloaded** start with the most, the other columns from the smallest; a second click reverses the order, a third goes back to the torrent's own order (its tiers). A tracker that has not reported a number stays at the bottom either way. Rookparcel remembers the sort. *New in 1.2.68, not in a published release yet.*
+Click a column header to sort the trackers by it, as in the [file list](#sorting-the-file-list): **Seeds**, **Peers** and **Downloaded** start with the most, the other columns from the smallest; a second click reverses the order, a third goes back to the torrent's own order (its tiers). A tracker that has not reported a number stays at the bottom either way. Rookparcel remembers the sort. *New in 1.2.69, not in a published release yet.*
 
 ## Peers
 
@@ -72,7 +72,7 @@ The peers you are connected to. A web seed shows its address in the **IP** colum
 | **Reqs** | requests waiting, from us and to us |
 | **Downloaded**, **Uploaded** | totals with this peer |
 
-Click a column header to sort the peers by it: **%**, the speeds, **Reqs** and the totals start with the most, **IP**, **Client** and **Flags** from the smallest (addresses by number); a second click reverses the order, a third goes back to the order the peers came in. The list keeps its sort as peers come and go and their numbers change, and the selected peers stay selected. Rookparcel remembers the sort. *New in 1.2.68, not in a published release yet.*
+Click a column header to sort the peers by it: **%**, the speeds, **Reqs** and the totals start with the most, **IP**, **Client** and **Flags** from the smallest (addresses by number); a second click reverses the order, a third goes back to the order the peers came in. The list keeps its sort as peers come and go and their numbers change, and the selected peers stay selected. Rookparcel remembers the sort. *New in 1.2.69, not in a published release yet.*
 
 The **Flags** are µTorrent's letters:
 

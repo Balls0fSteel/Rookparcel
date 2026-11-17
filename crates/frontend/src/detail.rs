@@ -415,8 +415,17 @@ impl Detail {
     /// engine's order, the tiers'.
     fn sort_trackers(&mut self) {
         let sort = self.tracker_sort;
-        sort_rows(&mut self.trackers, &mut self.tracker_pos, |a, b| match sort {
+        // the status text is made once per row, not at each comparison
+        let status: Vec<String> = match sort {
+            Some((1, _)) => self.trackers.iter().map(|t| capped(tracker_status(t))).collect(),
+            _ => Vec::new(),
+        };
+        sort_rows(&mut self.trackers, &mut self.tracker_pos, |(a, i), (b, j)| match sort {
             None => std::cmp::Ordering::Equal,
+            Some((1, desc)) => {
+                let o = crate::columns::natural_cmp(&status[i], &status[j]);
+                if desc { o.reverse() } else { o }
+            }
             Some((col, desc)) => tracker_cmp(col, desc, a, b),
         });
     }
@@ -428,8 +437,19 @@ impl Detail {
             sort_rows(&mut self.peers, &mut self.peer_pos, |_, _| std::cmp::Ordering::Equal);
             return;
         };
-        sort_rows(&mut self.peers, &mut self.peer_pos, |a, b| {
-            let o = peer_cmp(col, a, b);
+        // the client (a name the peer chose, as long as it liked) and the flag letters are
+        // made once per row and capped, not at each comparison
+        let text: Vec<String> = match col {
+            1 => self.peers.iter().map(|p| capped(p.client.clone())).collect(),
+            2 => self.peers.iter().map(peer_flags).collect(),
+            _ => Vec::new(),
+        };
+        sort_rows(&mut self.peers, &mut self.peer_pos, |(a, i), (b, j)| {
+            let o = match col {
+                1 => crate::columns::natural_cmp(&text[i], &text[j]),
+                2 => text[i].cmp(&text[j]),
+                _ => peer_cmp(col, a, b),
+            };
             (if desc { o.reverse() } else { o }).then_with(|| peer_order(a, b))
         });
     }
@@ -1039,12 +1059,18 @@ pub const PEER_COLUMNS: [ColumnDef; 9] = [
 
 /// Orders `items` (with `pos`, each one's place in the engine's list) by `cmp`, ties by `pos`:
 /// with a `cmp` that finds every pair equal, back to the engine's order.
-fn sort_rows<T>(items: &mut Vec<T>, pos: &mut Vec<u32>, cmp: impl Fn(&T, &T) -> std::cmp::Ordering) {
+///
+/// `cmp` gets each item with its index in `items` as they were, for keys made beforehand.
+fn sort_rows<T>(
+    items: &mut Vec<T>,
+    pos: &mut Vec<u32>,
+    cmp: impl Fn((&T, usize), (&T, usize)) -> std::cmp::Ordering,
+) {
     if pos.len() != items.len() {
         *pos = (0..items.len() as u32).collect();
     }
     let mut order: Vec<usize> = (0..items.len()).collect();
-    order.sort_by(|&a, &b| cmp(&items[a], &items[b]).then(pos[a].cmp(&pos[b])));
+    order.sort_by(|&a, &b| cmp((&items[a], a), (&items[b], b)).then(pos[a].cmp(&pos[b])));
     if order.iter().enumerate().all(|(i, &j)| i == j) {
         return;
     }
@@ -1071,12 +1097,26 @@ fn known_first_cmp(a: Option<u32>, b: Option<u32>, desc: bool) -> std::cmp::Orde
     }
 }
 
-/// Two trackers by Trackers tab column `col`, in the sort's direction.
+/// The bytes of a peer's or tracker's text a sort compares: the start of a long one, cut at a
+/// character (a client name or tracker message is as long as the other side made it).
+fn capped(mut s: String) -> String {
+    const SORT_TEXT: usize = 128;
+    if s.len() > SORT_TEXT {
+        let mut end = SORT_TEXT;
+        while !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        s.truncate(end);
+    }
+    s
+}
+
+/// Two trackers by Trackers tab column `col`, in the sort's direction (the Status column by
+/// text made beforehand, [`Detail::sort_trackers`]).
 fn tracker_cmp(col: usize, desc: bool, a: &AnnounceEntry, b: &AnnounceEntry) -> std::cmp::Ordering {
     let dir = |o: std::cmp::Ordering| if desc { o.reverse() } else { o };
     match col {
         0 => dir(crate::columns::natural_cmp(&a.url, &b.url)),
-        1 => dir(crate::columns::natural_cmp(&tracker_status(a), &tracker_status(b))),
         2 => known_first_cmp(a.next_announce, b.next_announce, desc),
         3 => known_first_cmp(a.scrape_complete, b.scrape_complete, desc),
         4 => known_first_cmp(a.scrape_incomplete, b.scrape_incomplete, desc),
@@ -1085,12 +1125,11 @@ fn tracker_cmp(col: usize, desc: bool, a: &AnnounceEntry, b: &AnnounceEntry) -> 
     }
 }
 
-/// Two peers by Peers tab column `col`, ascending.
+/// Two peers by Peers tab column `col`, ascending (the Client and Flags columns by text made
+/// beforehand, [`Detail::sort_peers`]).
 fn peer_cmp(col: usize, a: &PeerInfo, b: &PeerInfo) -> std::cmp::Ordering {
     match col {
         0 => peer_order(a, b),
-        1 => crate::columns::natural_cmp(&a.client, &b.client),
-        2 => peer_flags(a).cmp(&peer_flags(b)),
         3 => a.progress_ppm.cmp(&b.progress_ppm),
         4 => a.down_speed.cmp(&b.down_speed),
         5 => a.up_speed.cmp(&b.up_speed),
@@ -1411,6 +1450,19 @@ mod tests {
         assert_eq!(ips(&d), ["10.0.0.2:1", "10.0.0.9:1", "10.0.0.10:1"]);
         assert_eq!(d.toggle_sort_of(Tab::Peers, 1), Some((1, false)));
         assert_eq!(d.cell(Tab::Peers, 0, 1), "libtorrent");
+        // a client name compares by its start (cut at a character), the cell keeps all of it
+        let mut long = engine();
+        long[0].client = "Z".repeat(10_000);
+        long[1].client = format!("{}é", "Y".repeat(127));
+        long[2].flags = PeerFlags::INTERESTING | PeerFlags::SNUBBED;
+        d.set_peers(long);
+        assert_eq!(ips(&d), ["[::1]:7", "10.0.0.2:1", "10.0.0.10:1", "10.0.0.9:1"]);
+        assert_eq!(d.cell(Tab::Peers, 3, 1).len(), 10_000);
+        // the flags by their letters, ties by address
+        assert_eq!(d.toggle_sort_of(Tab::Peers, 2), Some((2, false)));
+        assert_eq!(ips(&d), ["10.0.0.2:1", "10.0.0.9:1", "10.0.0.10:1", "[::1]:7"]);
+        assert_eq!(d.cell(Tab::Peers, 3, 2), "DS");
+        assert!(d.set_sort_of(Tab::Peers, Some((1, false))));
 
         // trackers: counts start with the most, unknown counts last either way
         let t = |url: &str, seeds: Option<u32>| AnnounceEntry {
@@ -1432,6 +1484,17 @@ mod tests {
         assert_eq!(urls(&d), ["udp://b", "udp://a", "udp://c"], "the tiers' order");
         assert!(!d.set_sort_of(Tab::Trackers, Some((6, false))), "no such column: no sort");
         assert!(!d.set_sort_of(Tab::Pieces, Some((0, false))), "Pieces does not sort");
+        // the status by its text: not contacted (empty), an error's message, Working
+        let mut ts = vec![t("udp://b", None), t("udp://a", Some(5)), t("udp://c", Some(40))];
+        ts[0].status = TrackerStatus::Working;
+        ts[1].status = TrackerStatus::Error;
+        ts[1].message = "timed out".into();
+        d.set_trackers(ts);
+        assert_eq!(d.toggle_sort_of(Tab::Trackers, 1), Some((1, false)));
+        assert_eq!(urls(&d), ["udp://c", "udp://a", "udp://b"]);
+        assert_eq!(d.toggle_sort_of(Tab::Trackers, 1), Some((1, true)));
+        assert_eq!(urls(&d), ["udp://b", "udp://a", "udp://c"]);
+        assert!(d.set_sort_of(Tab::Trackers, None));
 
         // the sorts are kept per tab; another torrent keeps them
         d.select(Some(TorrentId::from_raw(7)));
