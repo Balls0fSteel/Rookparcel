@@ -2545,8 +2545,11 @@ fn recording_http_tracker(
                 compact.extend_from_slice(&a.port().to_be_bytes());
             }
             // the counts spare a scrape
-            let mut body = format!("d8:completei1e10:incompletei1e8:intervali1800e5:peers{}:", compact.len())
-                .into_bytes();
+            let mut body = format!(
+                "d8:completei1e10:incompletei1e8:intervali1800e12:min intervali1e5:peers{}:",
+                compact.len()
+            )
+            .into_bytes();
             body.extend_from_slice(&compact);
             body.push(b'e');
             let head =

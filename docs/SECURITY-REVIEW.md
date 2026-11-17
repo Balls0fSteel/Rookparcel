@@ -287,6 +287,50 @@ only show a lower round trip, with the same effect as a zero delay.
   `qbittorrent_flags` are private behind a file-based entry. The new runs are one short local
   run each.
 
+## Release 1.2.65 (since v1.2.63)
+
+Date: 2026-11-17_144407_1794923047. Scope: `git diff v1.2.63..HEAD -- crates` (1.2.64): `Engine::resume_download` and
+`TrackerEntry::announce_soon` (a finished torrent whose file is turned on), the Files tab sort
+(`FileTree::sort_nodes`, `Detail` sort, `file_marks` / `file_rows_of`, the `ui.files_sort`
+preference) and the Win32 header click, selection keeping and unfocused selection colours
+(D78). One read-only reviewer given the areas, its findings checked against the code here. A
+throwaway check of `natural_cmp` (400 strings with digits, leading zeros, `İ`, U+0307, the
+Kelvin sign, ß/ẞ, Σ/ς/σ; every triple) found no antisymmetry or transitivity violation, so the
+sorts cannot panic on an inconsistent order. Nothing critical, high or medium; nothing a peer,
+tracker or `.torrent` sends reaches the new paths (only `SetFilePriority`, from the user or an
+authenticated remote or Web API client).
+
+### Found and fixed
+
+| Severity | Where | Problem | Fix | Test |
+|---|---|---|---|---|
+| Low | `engine/tracker.rs` `announce_soon` / `announced` | A tracker that gave no `min interval` (every UDP tracker, many HTTP ones) had no floor: turning a file off and on in a finished torrent announced to every working tracker once per toggle. | libtorrent's defaults: an HTTP reply without `min interval` counts as 30 s, every UDP reply as 60 s, so `announce_soon` waits at least that long after the last announce. | `announce_soon_keeps_the_min_interval_and_the_backoff` (the HTTP and UDP defaults) |
+| Low | `engine/mod.rs` `resume_download`, `peer_list.rs` | Forgetting every peer's last connection also dropped the growing delay of peers that keep failing, so each toggle retried them all. | Only peers without a failure forget it (`forget_last_connected_of_sound`); leaving upload mode still forgets all, as in libtorrent. | `the_reconnect_delay_runs_from_the_close` |
+| Low | `frontend/detail.rs` `FileMarks` (Win32 selection keeping) | Tree marks are node ids. A file list that rebuilds the tree (a rename) with a sort on could put the kept selection on other files, which a following priority change would then take. | Marks carry the tree's generation (`tree_gen`, counted at each build); marks of an earlier tree name nothing, so the selection is dropped rather than moved. | `the_files_tab_sorts_by_its_columns` (a rename) |
+| Info | `frontend/detail.rs` Pieces column and its sort | `last_piece - first_piece` underflowed for a file entry with `first_piece > last_piece`, which only a remote daemon could send (wrapping in release, a panic in debug). | `saturating_sub` in the cell and both comparators. | the same test (an inverted range sorted in both views) |
+
+### Reviewed and judged fine
+
+- `announce_soon` never moves an announce later, keeps a failing tracker's backoff and leaves
+  busy, never-started, paused and stopped torrents' trackers alone.
+- DHT and LSD: the private, paused and disabled checks are in the consumers, so asking them
+  again cannot leak a private torrent's info-hash; `connect_peers_for` checks active, checking,
+  error and the connection limits.
+- `file_sort_from_pref` rejects malformed, overflowing and out-of-range values; the header
+  click's column is clamped, and header drag-and-drop keeps original column indices.
+- The comparators are total orders (ties broken by index, `fraction_cmp` cross-multiplies in
+  u128); `sort_nodes(None)` restores the torrent's order exactly.
+- Selection keeping uses rows of the current model only (below the item count), outside the
+  app borrow; the unfocused colour mix cannot overflow; High Contrast keeps the user's colours.
+
+### Open
+
+- `resume_download` connects at once even when the auto-manager is about to queue the torrent
+  (download slots full); those connections are closed when it is paused.
+- While sorted by Done or %, each progress alert re-sorts (tens of ms at 100,000 files) and
+  may set a large partial selection back row by row.
+- BACKLOG "Security review 1.2.65".
+
 ## Release 1.2.63 (since v1.2.57)
 
 Date: 2026-11-16_213625_1794861385. Scope: `git diff v1.2.57..HEAD` (1.2.58-1.2.62) without the

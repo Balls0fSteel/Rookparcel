@@ -672,7 +672,7 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
 
 ## Engine networking and protocol follow-ups
 
-**Finished torrent turned back into a download (1.2.64, the owner's "Downloading, no peers"):** `resume_download` removes the two delays the swarm tests reproduced (the redundant-closed seeds' reconnect delay; no re-announce for up to an interval). Nothing shows these were what the owner hit; a hand check with a real torrent is open. If the symptom persists, look first at the tick's connect loop: it hands out `connect_budget` greedily in slot order, where libtorrent goes round-robin and favours downloads, so with many torrents one late in the slot order can be starved. Also open: while finished, `connect_peers_for` takes the top candidates before dropping seeds, so leechers ranked behind seeds can be starved (libtorrent filters seeds in `is_connect_candidate`); Force Re-Check and pause/resume still leave every peer in the 60 s reconnect delay (as libtorrent); the reap-before-forget ordering and the stopped branch's `needs_auto_manage` are reasoned, not tested; a per-torrent connection limit filled with leechers while finished leaves no room for seeds.
+**Finished torrent turned back into a download (1.2.64, the owner's "Downloading, no peers"; 1.2.65 keeps failing peers' delay and gives trackers without `min interval` libtorrent's 30 s / 60 s):** `resume_download` removes the two delays the swarm tests reproduced (the redundant-closed seeds' reconnect delay; no re-announce for up to an interval). Nothing shows these were what the owner hit; a hand check with a real torrent is open. If the symptom persists, look first at the tick's connect loop: it hands out `connect_budget` greedily in slot order, where libtorrent goes round-robin and favours downloads, so with many torrents one late in the slot order can be starved. Also open: while finished, `connect_peers_for` takes the top candidates before dropping seeds, so leechers ranked behind seeds can be starved (libtorrent filters seeds in `is_connect_candidate`); Force Re-Check and pause/resume still leave every peer in the 60 s reconnect delay (as libtorrent); the reap-before-forget ordering and the stopped branch's `needs_auto_manage` are reasoned, not tested; a per-torrent connection limit filled with leechers while finished leaves no room for seeds.
 
 - **Keep ping low** (D49, [LOWPING.md](LOWPING.md)): slice 1 in 1.1.29 (2026-11-02_130357_1793621037),
   slice 2 (Linux and macOS pings) in 1.1.30 (2026-11-02_162406_1793633046), run on the Xubuntu
@@ -1086,7 +1086,7 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
 - **macOS:** clicks, real right-click (the clicked row as target), Select All, Open, Reveal and Relocate in the tree were not run (the VM's screen was locked; checks went through a tick-driven hack). Return does not open a file in the tree: the outline has no key hook (an `RPOutlineView` subclass needs approval).
 - **Web UI:** a real phone (long press), Windows nox paths.
 
-## Files tab sort and the unfocused selection (D78; built 2026-11-17_092503_1794903903, 1.2.64)
+## Files tab sort and the unfocused selection (D78; built 2026-11-17_092503_1794903903, 1.2.64; released in 1.2.65)
 
 - **Win32 sort:** checked by unit and window tests and one hidden-desktop picture (light, by Size descending from the profile). Not seen: real header clicks with the mouse, a sort by Done or % while a real download moves rows (the selection is put back on the same files, scrolling left alone), a 100,000-file torrent in the window (the model sorts one in 1-66 ms in a release build), the classic theme and 150-200 % DPI.
 - **GTK and macOS:** no detail table sorts there (Trackers and Peers neither). The shared model (`Detail::toggle_file_sort`, `file_marks` / `file_rows_of`) is ready: GTK's `ColumnView` header and the Mac outline's sort descriptors would call it. The Web UI already sorted its Files tab.
@@ -1293,6 +1293,14 @@ Found and left:
 - **GTK:** the hover-help box under a Preferences page cuts this setting's long help at three lines; the tooltip shows all of it.
 - **Logger:** the failed-rename line mixes `\` and `/` in the path on Windows.
 - **Text:** the two new strings are machine-translated in 34 tables; hu and nl start the check box with ".!ut", which wants a native review.
+
+## Security review 1.2.65 (v1.2.63..1.2.65; SECURITY-REVIEW.md)
+
+Left open by decision (all Info):
+
+- **Eager connect before queueing:** a file turned on in a finished auto-managed torrent connects up to 10 peers at once even when the download slots are full and the auto-manager then queues it; the connections close when it is paused.
+- **Re-sort per progress alert:** sorted by Done or %, each progress alert re-sorts (tens of ms at 100,000 files) and may set a large partial selection back one row at a time. Throttle to every few seconds if it shows.
+- The remote wire's `FileEntry` piece range is not validated on decode (the frontend's Files tab now saturates; nox's native page computes from the engine's own list).
 
 ## Security review 1.2.63 (v1.2.57..1.2.63; SECURITY-REVIEW.md)
 

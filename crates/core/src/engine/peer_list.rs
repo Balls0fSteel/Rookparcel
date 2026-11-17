@@ -283,7 +283,15 @@ impl PeerList {
     /// never been connected.
     pub fn forget_last_connected(&mut self) {
         if let PeerList::Live(l) = self {
-            l.forget_last_connected();
+            l.forget_last_connected(false);
+        }
+    }
+
+    /// As [`forget_last_connected`](Self::forget_last_connected), only for peers with no
+    /// failures: those that keep failing wait out their growing delay as before.
+    pub fn forget_last_connected_of_sound(&mut self) {
+        if let PeerList::Live(l) = self {
+            l.forget_last_connected(true);
         }
     }
 
@@ -555,9 +563,10 @@ impl Peers {
         }
     }
 
-    /// Forgets every peer's last connection time, so none waits out its reconnect delay.
-    pub fn forget_last_connected(&mut self) {
-        for p in &mut self.peers {
+    /// Forgets every peer's last connection time (with `only_sound`, of peers without a
+    /// failure), so none waits out its reconnect delay.
+    pub fn forget_last_connected(&mut self, only_sound: bool) {
+        for p in self.peers.iter_mut().filter(|p| !only_sound || p.failcount == 0) {
             p.last_connected = None;
         }
     }
@@ -822,6 +831,16 @@ mod tests {
         assert!(pl.connect_candidates(5, closed, r).is_empty());
         pl.forget_last_connected();
         assert_eq!(pl.connect_candidates(5, closed, r), [a]);
+        // a file turned on again forgets it only for peers without failures
+        let b: SocketAddr = "10.0.0.2:1".parse().unwrap();
+        assert!(pl.add(b, PeerSource::TRACKER, ExternalIp::default(), 9));
+        for (addr, conn, failed) in [(a, 4, false), (b, 5, true)] {
+            pl.connecting(addr, conn, PeerSource::TRACKER, closed);
+            pl.disconnected(&addr, failed, false, false, closed);
+        }
+        assert!(pl.connect_candidates(5, closed, r).is_empty());
+        pl.forget_last_connected_of_sound();
+        assert_eq!(pl.connect_candidates(5, closed, r), [a], "the failing peer waits its delay");
     }
 
     #[test]

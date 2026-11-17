@@ -123,7 +123,8 @@ fn file_sort_starts_descending(col: usize) -> bool {
 /// the same rows again after a sort moved them: [`Detail::file_marks`].
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FileMarks {
-    tree: bool,
+    /// The tree's generation for node ids, `None` for file indices of the plain list.
+    tree: Option<u64>,
     ids: Vec<usize>,
 }
 
@@ -161,6 +162,9 @@ pub struct Detail {
     /// Counts the times the Files tab's rows were put in a new order, so a view can tell when
     /// to put its selection back on the rows it was on ([`Detail::file_order`]).
     file_order: u64,
+    /// Counts the folder trees built, so node ids of an earlier tree are not taken for this
+    /// one's (a rename can number the nodes anew).
+    tree_gen: u64,
     pub have: Option<Bitfield>,
     pub availability: Vec<u32>,
     /// The pieces being downloaded, ascending (the Pieces list).
@@ -196,6 +200,7 @@ impl Detail {
             t.set_file_states(&files);
         } else {
             self.tree = (!self.flat_files).then(|| self.build_tree(&files));
+            self.tree_gen += 1;
             new_tree = true;
         }
         self.files = Some(files);
@@ -268,20 +273,23 @@ impl Detail {
     /// What Files tab rows `rows` show, to find them again after the rows moved.
     pub fn file_marks(&self, rows: &[usize]) -> FileMarks {
         match &self.tree {
-            Some(t) => FileMarks { tree: true, ids: t.nodes_of_rows(rows).into_iter().flatten().collect() },
+            Some(t) => FileMarks {
+                tree: Some(self.tree_gen),
+                ids: t.nodes_of_rows(rows).into_iter().flatten().collect(),
+            },
             None => FileMarks {
-                tree: false,
+                tree: None,
                 ids: rows.iter().filter_map(|&r| self.file_rows.get(r).map(|&f| f as usize)).collect(),
             },
         }
     }
 
     /// The rows that show what `marks` named now, in the marks' order; none of them when the
-    /// view switched between the tree and the plain list since.
+    /// view switched between the tree and the plain list since, or the tree was built anew.
     pub fn file_rows_of(&self, marks: &FileMarks) -> Vec<usize> {
         match &self.tree {
-            Some(t) if marks.tree => t.rows_of_nodes(&marks.ids),
-            None if !marks.tree => {
+            Some(t) if marks.tree == Some(self.tree_gen) => t.rows_of_nodes(&marks.ids),
+            None if marks.tree.is_none() => {
                 let mut at = vec![usize::MAX; self.files.as_ref().map_or(0, |f| f.len())];
                 for (row, &f) in self.file_rows.iter().enumerate() {
                     if let Some(a) = at.get_mut(f as usize) {
@@ -353,6 +361,7 @@ impl Detail {
             (Some(files), true) => Some(self.build_tree(files)),
             _ => None,
         };
+        self.tree_gen += 1;
         if self.file_sort.is_some() {
             self.sort_files();
         }
@@ -555,7 +564,7 @@ fn priority_rank(p: Option<DownloadPriority>) -> u8 {
 /// only compared with folders: they have no piece columns, so those keep them in order).
 fn tree_row_cmp(col: usize, files: &[FileEntry], a: &Row<'_>, b: &Row<'_>) -> std::cmp::Ordering {
     let pieces = |r: &Row<'_>| {
-        r.file.and_then(|f| files.get(f)).map(|f| (f.last_piece - f.first_piece, f.first_piece))
+        r.file.and_then(|f| files.get(f)).map(|f| (f.last_piece.saturating_sub(f.first_piece), f.first_piece))
     };
     match col {
         0 => crate::columns::natural_cmp(a.name, b.name),
@@ -576,7 +585,7 @@ fn flat_file_cmp(col: usize, (a, da): (&FileEntry, u64), (b, db): (&FileEntry, u
         1 => a.size.cmp(&b.size),
         2 => da.cmp(&db),
         3 => fraction_cmp((da, a.size), (db, b.size)),
-        4 => (a.last_piece - a.first_piece).cmp(&(b.last_piece - b.first_piece)),
+        4 => a.last_piece.saturating_sub(a.first_piece).cmp(&b.last_piece.saturating_sub(b.first_piece)),
         5 => a.first_piece.cmp(&b.first_piece),
         6 => priority_rank(Some(a.priority)).cmp(&priority_rank(Some(b.priority))),
         _ => std::cmp::Ordering::Equal,
@@ -999,7 +1008,7 @@ pub fn file_cell(f: &FileEntry, done: Option<u64>, col: usize) -> String {
         1 => fmt::size(f.size),
         2 => done.map(fmt::size).unwrap_or_default(),
         3 => done.map(|d| percent_text(d, f.size)).unwrap_or_default(),
-        4 => (f.last_piece - f.first_piece + 1).to_string(),
+        4 => (u64::from(f.last_piece.saturating_sub(f.first_piece)) + 1).to_string(),
         5 => f.first_piece.to_string(),
         6 => priority_text(f.priority).to_owned(),
         _ => String::new(),
@@ -1367,6 +1376,22 @@ mod tests {
         assert!(d.set_file_sort(None));
         assert_eq!(names(&d), torrent_order);
         assert_eq!(d.file_rows_of(&marks), [2], "e02.mkv");
+
+        // a rename builds the tree anew, whose node ids may name other files: marks of the
+        // old tree name nothing
+        let marks = d.file_marks(&[2]);
+        let mut renamed = show().to_vec();
+        renamed[3].path = "Show/Extras/e01.srt".into();
+        d.set_files(Arc::from(renamed));
+        assert_eq!(d.file_rows_of(&marks), Vec::<usize>::new());
+        assert_eq!(d.file_rows_of(&d.file_marks(&[2])), [2], "marks of the new tree do");
+        // a piece range read from a remote daemon cannot underflow the Pieces column's sort
+        let mut odd = show().to_vec();
+        odd[0].last_piece = 0;
+        odd[0].first_piece = 3;
+        d.set_files(Arc::from(odd));
+        assert!(d.set_file_sort(Some((4, false))));
+        assert!(d.set_files_tree(false));
     }
 
     #[test]

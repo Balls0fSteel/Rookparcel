@@ -160,7 +160,8 @@ impl TrackerEntry {
 
     /// An announce reply (libtorrent `tracker_response` for the endpoint): `event` was sent,
     /// the tracker asked for `interval` (at least `min_announce_interval`, unless it asked for
-    /// less than a minute itself) and `min_interval`.
+    /// less than a minute itself) and `min_interval`. Without one, libtorrent's: 30 s for an
+    /// HTTP reply (`http_tracker_connection`), 60 s for every UDP reply.
     pub fn announced(
         &mut self,
         event: Option<Event>,
@@ -171,6 +172,11 @@ impl TrackerEntry {
         now: Instant,
     ) {
         self.interval = NonZeroU32::new(interval);
+        let min_interval = min_interval.unwrap_or(if string_begins_no_case(b"udp://", self.url.as_bytes()) {
+            60
+        } else {
+            30
+        });
         let r = self.run_mut();
         r.updating = false;
         r.fails = 0;
@@ -185,7 +191,7 @@ impl TrackerEntry {
         }
         let wait = interval.max(min_announce_interval.min(interval.max(60)));
         r.next_announce = Some(now + Duration::from_secs(wait as u64));
-        r.min_announce = min_interval.map(|m| now + Duration::from_secs(m as u64));
+        r.min_announce = Some(now + Duration::from_secs(min_interval as u64));
     }
 
     /// libtorrent `announce_endpoint::failed` with the default `tracker_backoff` (250 %):
@@ -1555,9 +1561,22 @@ mod tests {
         let mut e = TrackerEntry::new("x".into(), 0);
         e.announce_soon(now);
         assert!(e.run.is_none(), "not announced to yet: the `started` announce is due anyway");
-        e.announced(Some(Event::Started), None, 1800, None, 0, now);
+        e.announced(Some(Event::Started), None, 1800, Some(0), 0, now);
         e.announce_soon(now);
         assert_eq!(e.next_announce(), None, "due at the next tick");
+        e.announced(None, None, 1800, None, 0, now);
+        e.announce_soon(now);
+        assert_eq!(
+            e.next_announce(),
+            Some(now + Duration::from_secs(30)),
+            "an HTTP tracker's default min interval"
+        );
+        let mut u = TrackerEntry::new("udp://t:1/announce".into(), 0);
+        u.announced(Some(Event::Started), None, 1800, None, 0, now);
+        u.announce_soon(now);
+        assert_eq!(u.next_announce(), Some(now + Duration::from_secs(60)), "a UDP tracker's");
+        u.announce_soon(now + Duration::from_secs(61));
+        assert_eq!(u.next_announce(), None);
         e.announced(None, None, 1800, Some(300), 0, now);
         e.announce_soon(now);
         assert_eq!(e.next_announce(), Some(now + Duration::from_secs(300)), "once the min interval is over");
