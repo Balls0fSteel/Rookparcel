@@ -45,6 +45,18 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.69" data-date="2026-11-17" aria-labelledby="v1.2.69-h">
+      <h2 id="v1.2.69-h"><a href="#v1.2.69"><time datetime="2026-11-17">Tue 17 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.69</span></a></h2>
+      <p class="news-lede">The Trackers and Peers tabs sort by their columns in the Windows, Linux and Mac programs, as the Files tab already did.</p>
+      <ul class="changes">
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Click a header of the Trackers or Peers tab to sort by it, again to reverse, a third time for the original order. Counts, %, speeds and totals start with the most.</span></li>
+        <li><span class="tag tag-area">Peers</span><span class="vh">:</span> <span>Addresses sort by number, and peers that tie stay in address order, so rows do not swap every second. The selected peers stay selected as the list updates.</span></li>
+        <li><span class="tag tag-area">Trackers</span><span class="vh">:</span> <span>A tracker that has not reported a number stays at the bottom either way. Each tab remembers its own sort.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>From the release review: the sort reads each row's text once per update, with long client names cut, so thousands of peers stay cheap to sort. The engine, <code>rookparcel-nox</code> and the Web UI are as in 1.2.67.</span></li>
+      </ul>
+      <p class="news-note">The remote protocol is still 20, so a 1.2.69 window and a 1.2.63 to 1.2.67 <code>rookparcel-nox</code> drive each other.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.69">Download 1.2.69 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.69.md">Full release notes</a></p>
+    </article>
     <article class="news-entry" id="v1.2.67" data-date="2026-11-17" aria-labelledby="v1.2.67-h">
       <h2 id="v1.2.67-h"><a href="#v1.2.67"><time datetime="2026-11-17">Tue 17 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.67</span></a></h2>
       <p class="news-lede">The Files tab of the Linux and Mac programs sorts by its columns, as the Windows program's has since 1.2.65.</p>

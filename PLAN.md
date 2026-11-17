@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-17_211440_1794946480
+Last updated: 2026-11-17_214949_1794948589
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D78](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -20,18 +20,18 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 ## Current status
 
 - **Release 1.2.63 (2026-11-17):** D72-D77 (download order, magnet links and export, excluded names, the block list's address, tags, `.!ut`) and its review's fixes. Hand checks: the BACKLOG sections of those names; "Security review 1.2.63".
-- **Release 1.2.65 (published 2026-11-17):** **1.2.64**, the owner's three points of 2026-11-17: a finished torrent whose file is turned on looks for peers at once (reconnect delay cleared, trackers, DHT and LSD asked again); Win32 Files tab sorts by its headers and an unfocused selection stays visible (D78). **1.2.65** the security review's fixes (SECURITY-REVIEW.md; open items in BACKLOG "Security review 1.2.65"). Notes in `docs/releases/1.2.65.md`. Hand checks: BACKLOG "Files tab sort and the unfocused selection"; the owner's retest with a real torrent.
+- **Release 1.2.65 (2026-11-17):** a finished torrent whose file is turned on looks for peers at once; the Win32 Files tab sort and a visible unfocused selection (D78). Hand checks: BACKLOG "Files tab sort and the unfocused selection", "Security review 1.2.65"; the owner's retest with a real torrent.
 - **Release 1.2.67 (published 2026-11-17):** **1.2.66** the GTK and macOS Files tabs sort by their headers as Win32 does (D78); **1.2.67** its security review's fix (progress that moves no row is not a new order). Notes in `docs/releases/1.2.67.md`; unchecked parts in that BACKLOG section. The Release workflow now copies the Flatpak runtimes into the container's own layer (EXDEV on runner image `20261111.127`).
-- **Release 1.2.69 (prepared):** **1.2.68** the Trackers and Peers tabs sort by their headers in all three GUIs, kept as `ui.trackers_sort` / `ui.peers_sort` (D78); **1.2.69** its review's two low fixes. Notes in `docs/releases/1.2.69.md`; checks and gaps in BACKLOG "Trackers and Peers tab sort". A macOS swarm-test flake is in BACKLOG "Validation".
+- **Release 1.2.69 (published 2026-11-17):** **1.2.68** the Trackers and Peers tabs sort by their headers in all three GUIs, kept as `ui.trackers_sort` / `ui.peers_sort` (D78); **1.2.69** its review's two low fixes. Notes in `docs/releases/1.2.69.md`; checks and gaps in BACKLOG "Trackers and Peers tab sort". A macOS swarm-test flake is in BACKLOG "Validation".
 - **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.
 - **Artwork:** the Postal Rook won ([small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
-- **Releases:** 1.0.1 to 1.2.67 published ([notes](docs/releases/)). 1.2.0 shipped profiles (D42), D50-D55 and the bug-hunt fixes; 1.2.54 the UI lock (D69); 1.2.57 the settings guard (D70); **1.2.63** (2026-11-17) D71-D77, its draft checked by checksum, the zip's contents and versions and `rookparcel-nox --version`; **1.2.65** and **1.2.67** (2026-11-17) D78 and the reconnect fix, drafts checked the same way; RELEASING.md step 5 by hand is open for these.
-- **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.67. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`. A small nox add race is in BACKLOG "Remote mode and Web UI".
+- **Releases:** 1.0.1 to 1.2.69 published ([notes](docs/releases/)). 1.2.0 shipped profiles (D42), D50-D55 and the bug-hunt fixes; 1.2.54 the UI lock (D69); 1.2.57 the settings guard (D70); **1.2.63** (2026-11-17) D71-D77, its draft checked by checksum, the zip's contents and versions and `rookparcel-nox --version`; **1.2.65**, **1.2.67** and **1.2.69** (2026-11-17) D78 and the reconnect fix, drafts checked the same way; RELEASING.md step 5 by hand is open for these.
+- **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.69. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`. A small nox add race is in BACKLOG "Remote mode and Web UI".
 - **UI lock (D69, 1.2.47-1.2.50; released in 1.2.54):** a PIN of 4 to 6 digits hides all three GUIs' windows in the tray; Ctrl or Option at start, or `--reset-lock`, removes a forgotten one; wiki page `Locking-Rookparcel`. **1.2.58 (D71, released in 1.2.63):** Preferences > Advanced > UI Lock with an off switch that removes every Lock command, no Options > Lock PIN, a narrower Win32 PIN dialog; checked on all three. Open: BACKLOG "UI lock".
 - **Benchmarks:** [2026-11-11 results](docs/BENCHMARKS.md) for 1.2.46: 10,000 torrents use 67 MB after restart (qBittorrent 612 MB) and idle at 0.07 % of a core; Win32 lists 100,000 in 1.37-1.49 s. Not rerun since (no hot-path change).
-- CI and FreeBSD were green for `7cd4b92f` (1.2.67 with the Flatpak workflow fix, 2026-11-17; Fuzz on `5a920c98`), and the Release run for `v1.2.67` passed all 11 jobs.
+- CI, FreeBSD and Fuzz were green for `661b5477` (1.2.69, 2026-11-17), and the Release run for `v1.2.69` passed all 11 jobs on its first attempt.
 - Scale baselines on this PC: [plan snapshot](docs/archive/PLAN-2026-11-13.md), [BENCHMARKS.md](docs/BENCHMARKS.md); the low-end-machine gate remains open.
 - The app icon is the Postal Rook (D60): drawn marks below 48 px, the generated stamp from 48 px (`assets/rookparcel-icons`).
 
