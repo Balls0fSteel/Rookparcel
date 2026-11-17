@@ -547,6 +547,58 @@ fn a_check_waiting_for_its_drive_is_reported_as_queued() {
     }
 }
 
+/// A seed whose file cannot be read (here a directory in its place; a scanner's lock or a
+/// permission alike) stops with an error and keeps its pieces: before, the check took every
+/// failed read as a missing piece, so such a seed came out with nothing and downloaded it all
+/// again. Once the file is back, Start finds it seeding, without hashing anything.
+#[test]
+fn a_seed_whose_file_cannot_be_read_stops_with_an_error_and_keeps_its_pieces() {
+    let f = fixture(None);
+    let dir = temp_dir("unreadable-seed");
+    let state = temp_dir("state-unreadable-seed");
+    write_files(&f, &dir);
+    let hash = {
+        let s = start(Some(state.clone()));
+        let mut w = Watch::new(s.handle());
+        let id = add(&mut w, &f, &dir);
+        let st = wait_state(&mut w, id, TorrentState::Seeding, 20);
+        s.shutdown();
+        st.info_hashes
+    };
+    let beta = dir.join("swarm-test/sub/beta.bin");
+    std::fs::remove_file(&beta).unwrap();
+    std::fs::create_dir(&beta).unwrap();
+    let s = start(Some(state.clone()));
+    let mut w = Watch::new(s.handle());
+    let mut hashed = false;
+    let st = wait(&mut w, 20, "the error", |a| {
+        hashed |= matches!(a, Alert::StateChanged { state: TorrentState::CheckingFiles, .. });
+        match a {
+            Alert::StateUpdate(v) => v.iter().find(|s| s.info_hashes == hash && !s.error.is_empty()).cloned(),
+            _ => None,
+        }
+    });
+    assert!(st.error.contains("beta.bin"), "{}", st.error);
+    assert!(st.state != TorrentState::Downloading, "{st:?}");
+    // the file back: a Start (pause and resume, as the GUIs' Start of an errored torrent) takes
+    // the stored pieces, which the error did not touch
+    std::fs::remove_dir(&beta).unwrap();
+    std::fs::write(&beta, &f.files[1].1).unwrap();
+    let t = s.handle().torrent(st.id);
+    t.pause();
+    wait(&mut w, 10, "paused", |a| status_of(a, st.id).filter(|s| s.flags.contains(TorrentFlags::PAUSED)));
+    t.resume();
+    let st = wait(&mut w, 20, "seeding again", |a| {
+        hashed |= matches!(a, Alert::StateChanged { state: TorrentState::CheckingFiles, .. });
+        status_of(a, st.id).filter(|s| s.state == TorrentState::Seeding && s.error.is_empty())
+    });
+    assert_eq!(st.total_done, st.total);
+    assert!(!hashed, "nothing was hashed as a new download");
+    s.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(state);
+}
+
 /// A session closed while a torrent's resume check is still queued or running saves what the
 /// resume data said, not "pieces unknown": the next start does not hash the files. (The owner's
 /// client rechecked every torrent after a restart, 2026-11-10: checks run one at a time per
@@ -825,8 +877,13 @@ fn magnet_fetches_metadata_from_the_seed_then_downloads() {
 #[test]
 fn connection_attempts_go_round_robin_over_the_torrents() {
     let f = fixture(None);
-    // the seed's port, free until the seed starts below
-    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    // the seed's port, free until the seed starts below: below every system's ephemeral range,
+    // so no other test's socket is given it meanwhile
+    let start = (std::process::id() % 10_000) as u16;
+    let port = (0..10_000u16)
+        .map(|i| 20_000 + (start + i) % 10_000)
+        .find(|&p| std::net::TcpListener::bind(("127.0.0.1", p)).is_ok())
+        .expect("a free port");
     let dir = temp_dir("leech-round-robin");
     // (failures do not use the peer up: it is refused until the seed starts)
     let slow = Settings { connection_speed: 1, min_reconnect_time: 1, max_failcount: 100, ..settings() };
@@ -842,7 +899,8 @@ fn connection_attempts_go_round_robin_over_the_torrents() {
     let other = format!("magnet:?xt=urn:btih:{}{dead}", hex(&[0x5a; 20]));
     add_magnet(&mut w, other, &dir.join("other"));
     // the second's one peer is refused at its start (the boost; Windows takes a few seconds to
-    // say so on loopback), so it is the tick's to retry
+    // say so on loopback), so it is the tick's to retry. (A listener closed under the attempt
+    // would not do: the reset is retried at once, outside the tick.)
     let uri = format!("magnet:?xt=urn:btih:{}&x.pe=127.0.0.1:{port}", hex(&f.info_hash));
     let id = add_magnet(&mut w, uri, &dir);
     std::thread::sleep(Duration::from_secs(6));

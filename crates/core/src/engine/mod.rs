@@ -3876,10 +3876,10 @@ impl Engine {
             }
             if t.is_finished() { finished.push(id) } else { downloading.push(id) }
         }
-        let torrents = downloading.len() + finished.len();
         let limit = self.settings.connections_limit;
-        let mut since_last = 0;
-        while torrents > 0 && self.connect_budget >= 1.0 {
+        // (libtorrent's lists hold only torrents that want peers: here one that has no peer to
+        // try now leaves the tick's list at its first miss, so it is not asked again and again)
+        while (!downloading.is_empty() || !finished.is_empty()) && self.connect_budget >= 1.0 {
             if limit >= 0 && self.peers.len() >= limit as usize {
                 break;
             }
@@ -3889,27 +3889,32 @@ impl Engine {
             if self.next_finished_connect >= finished.len() {
                 self.next_finished_connect = 0;
             }
-            let id = if (self.download_connect_attempts >= CONNECT_SEED_EVERY_N_DOWNLOAD
+            let from_finished = (self.download_connect_attempts >= CONNECT_SEED_EVERY_N_DOWNLOAD
                 && !finished.is_empty())
-                || downloading.is_empty()
-            {
+                || downloading.is_empty();
+            let at = if from_finished {
                 self.download_connect_attempts = 0;
-                self.next_finished_connect += 1;
-                finished[self.next_finished_connect - 1]
+                self.next_finished_connect
             } else {
                 self.download_connect_attempts += 1;
-                self.next_download_connect += 1;
-                downloading[self.next_download_connect - 1]
+                self.next_download_connect
             };
+            let list = if from_finished { &mut finished } else { &mut downloading };
+            let id = list[at];
             if self.connect_peers_for(id, 1) > 0 {
                 self.connect_budget -= 1.0;
-                since_last = 0;
-            } else {
-                since_last += 1;
-                // a whole round without a connection: nobody has a peer to try now
-                if since_last > torrents + 1 {
-                    break;
+                if from_finished {
+                    self.next_finished_connect = at + 1;
+                } else {
+                    self.next_download_connect = at + 1;
                 }
+            } else {
+                // the cursor stays: the torrent after it moves into its place
+                if from_finished {
+                    finished.remove(at)
+                } else {
+                    downloading.remove(at)
+                };
             }
         }
     }

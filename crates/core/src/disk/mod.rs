@@ -1998,9 +1998,9 @@ fn read_slices(
 }
 
 /// libtorrent `torrent::on_piece_hashed` while checking: a file that is not there or too short
-/// only has no pieces; any other read error (a file locked by a scanner, a share that went
-/// away, no permission) is the torrent's error. Taken as "not had", it made a seed come out
-/// of its check with nothing and download everything again.
+/// only has no pieces; any other read error (a file another program holds, no permission, a
+/// directory in its place) is the torrent's error. Taken as "not had", it made a seed whose
+/// files could not be read come out of a full check with nothing and download it all again.
 fn absent(e: &Error) -> bool {
     matches!(e, Error::Io { kind: io::ErrorKind::NotFound | io::ErrorKind::UnexpectedEof, .. })
 }

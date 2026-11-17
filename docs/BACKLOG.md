@@ -614,13 +614,15 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   in Play) came out of a check with no pieces and downloaded everything again
   (`total_downloaded` doubled), and others (Mixtape, The Midnight Walk, Repella Fella, Planet of
   Lana II, Moncage, Mr. Sleepy Man) were saved with an empty set and with the full one 30 s
-  later. A likely cause, fixed in 1.2.70: a full check took every read error (a file Defender
-  or another program held, a share gone for a moment, no permission) as "piece not had", so a
-  seed whose files could not be read came out with nothing; now, as libtorrent's
-  `on_piece_hashed`, only a missing or short file means that, and any other error stops the
-  torrent with a file error (Force Re-Check once the file is free). Not proven to be the
-  owner's case: watch for "Error:" rows where a seed would have restarted. The "saved with an
-  empty set" half was closed earlier (the stored set is kept until the check is done).
+  later. One possible cause, fixed in 1.2.70: a full check took every read error (a file
+  another program held, no permission) as "piece not had", so a seed whose files could not be
+  read came out with nothing; now, as libtorrent's `on_piece_hashed`, only a missing or short
+  file means that, and any other error stops the torrent with a file error (Start once the file
+  is free). Still open: a restart reads nothing while the resume data matches, so this needs a
+  mismatch first; and a file not found at all (a drive not ready, perhaps an unreachable
+  share: which error Windows gives there is unchecked) still loses its pieces by 1.2.46's rule
+  and downloads again. The "saved with an empty set" half was closed earlier (the stored set is
+  kept until the check is done).
   (b) Fixed in 1.2.70: a check waiting for its drive reads "Queued for checking". (c) A file a virus scanner removes is downloaded again at every
   start (cheap since 1.2.46); a line that names the loop, or not fetching a file that vanished
   twice, would end it.
