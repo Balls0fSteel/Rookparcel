@@ -4,6 +4,12 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-17_194447_1794941087: Release workflow: the Flatpak runtimes copied into the container's own layer
+
+- **Problem:** the v1.2.67 Release run built ten of eleven jobs; `flatpak (x86_64)` failed three times in a row (two re-runs), each on runner image `ubuntu24/20261111.127`: every runtime update in the builder container failed with "Invalid cross-device link", the GNOME SDK's too, and flatpak-builder exited. 1.2.65's run that morning (image `.370`) and the aarch64 leg passed with the same container digest and cache.
+- **Found with a probe branch** (`ubuntu-24.04`, the same container, deleted afterwards): the runtimes are installed in the image's layers at `/var/lib/flatpak` (3.9 GB) and the container's overlay has no `redirect_dir`, so flatpak cannot rename their directories; `flatpak --system update` failed with EXDEV, and after copying the installation into the container's own layer (25 s) the same update succeeded.
+- **Fix:** the `flatpak` job copies the installation before flatpak-builder (both legs, skipped if it is a mount point); RELEASING.md "Flatpak" says why. No program changed, so the version stays 1.2.67; the unpublished tag `v1.2.67` moves to this commit (no draft had been made).
+
 ## 2026-11-17_184916_1794937756: Version 1.2.67: the security review of 1.2.66 and its fix; release 1.2.67 prepared
 
 - **Before the release (owner: "check CI, release"):** CI, FreeBSD and Fuzz ran on `68bb29c6` (1.2.66). The per-release review over `v1.2.65..HEAD -- crates` by one read-only reviewer: nothing critical, high or medium. Recorded in SECURITY-REVIEW.md "Release 1.2.67".

@@ -262,7 +262,11 @@ and `linux/arm64` with the GNOME 51 runtime and SDK installed; flatpak-builder i
 `rust-stable` SDK extension from Flathub, which builds it for both architectures. Each leg runs
 every check below (the metainfo, the icon, the `cargo-sources.json` comparison, the linter) and
 uploads its bundle as the `flatpak-x86_64` or `flatpak-aarch64` artifact; its flatpak-builder
-cache key carries the architecture.
+cache key carries the architecture. Before flatpak-builder runs, the job copies the image's
+runtime installation (`/var/lib/flatpak`) into the container's own layer: on runner image
+`ubuntu24/20261111.127` the container's overlay could not rename directories of the image's
+layers, so every runtime update failed with "Invalid cross-device link" (seen with v1.2.67,
+three times in a row; a probe branch reproduced it and showed the copy fixes it).
 
 - `io.github.balls0fsteel.Rookparcel.yml`: the flatpak-builder manifest (GNOME 51 runtime, the
   Rust SDK extension, an offline `cargo build --release --locked -p rookparcel-gtk`). It

@@ -377,6 +377,26 @@ jobs:
       - name: Flathub's linter on the manifest (advisory)
         continue-on-error: true
         run: flatpak-builder-lint --exceptions --user-exceptions packaging/flatpak/lint-exceptions.json manifest "packaging/flatpak/$APP_ID.yml"
+      # The image ships the runtimes in its own layers. On some ubuntu-24.04 hosts (runner image
+      # 20261111.127) the container's overlay has no redirect_dir, so flatpak cannot rename a
+      # directory of those layers and every runtime update fails with "Invalid cross-device
+      # link" (EXDEV), the GNOME SDK's too, and flatpak-builder with it. A copy of the
+      # installation lives in the container's own layer, where renames work (about 25 s, 4 GB).
+      - name: The runtimes, into the container's own layer
+        shell: bash
+        run: |
+          set -euo pipefail
+          loc=$(flatpak info --show-location org.gnome.Sdk//51)
+          root=${loc%%/runtime/*}
+          if mountpoint -q "$root"; then
+            echo "$root is a mount point: left as it is"
+            exit 0
+          fi
+          du -sh "$root"
+          df -h /
+          cp -a "$root" "$root.copy"
+          rm -rf "$root"
+          mv "$root.copy" "$root"
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: packaging/flatpak/${{ env.APP_ID }}.yml
