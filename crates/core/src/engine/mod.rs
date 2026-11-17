@@ -106,6 +106,9 @@ const BANDWIDTH_TICK: Duration = Duration::from_millis(100);
 /// tenth of a second of it is already a queue on a slow line.
 const BANDWIDTH_TICK_FINE: Duration = Duration::from_millis(25);
 const SAVE_INTERVAL: Duration = Duration::from_secs(30);
+/// libtorrent `connect_seed_every_n_download` (default 10): one connection attempt in this
+/// many goes to a finished torrent while downloads want peers.
+const CONNECT_SEED_EVERY_N_DOWNLOAD: u32 = 10;
 /// Adds and removals reach `resume.db` within this delay, so bulk adds rewrite it once.
 const STORE_FLUSH_DELAY: Duration = Duration::from_secs(2);
 /// libtorrent `piece_timeout`: no block from a peer with requests outstanding this long (since
@@ -470,6 +473,11 @@ pub(crate) struct Engine {
     external_ip: ExternalIp,
     needs_auto_manage: bool,
     connect_budget: f64,
+    /// libtorrent `m_next_downloading_connect_torrent` / `m_next_finished_connect_torrent` /
+    /// `m_download_connect_attempts`: where the round robin of connection attempts goes on.
+    next_download_connect: usize,
+    next_finished_connect: usize,
+    download_connect_attempts: u32,
 
     last_tick: Instant,
     last_bandwidth: Instant,
@@ -680,6 +688,9 @@ impl Engine {
             external_ip: ExternalIp::default(),
             needs_auto_manage: true,
             connect_budget: 0.0,
+            next_download_connect: 0,
+            next_finished_connect: 0,
+            download_connect_attempts: 0,
             last_tick: now,
             last_bandwidth: now,
             last_unchoke: now,
@@ -2695,7 +2706,7 @@ impl Engine {
         // the new picker knows nothing until this check is done, whatever an earlier run of the
         // torrent found: it is not what resume data or a stop may save
         t.checked = false;
-        t.checked_pieces = 0;
+        t.checked_pieces = torrent::CHECK_QUEUED;
         t.started_at = Some(Instant::now());
         t.status_dirty = true;
         let state = if matches!(mode, CheckMode::Resume(_)) {
@@ -3411,6 +3422,17 @@ impl Engine {
                     }
                 }
             }
+            Completion::CheckStarted { storage } => {
+                if let Some(&id) = self.storages.get(&storage) {
+                    let current = |t: &&mut Torrent| t.storage.as_ref().is_some_and(|s| s.id == storage);
+                    if let Some(t) = self.torrent(id).filter(current) {
+                        if t.checked_pieces == torrent::CHECK_QUEUED {
+                            t.checked_pieces = 0;
+                        }
+                        t.status_dirty = true;
+                    }
+                }
+            }
             Completion::Checked { storage, result } => {
                 let Some(&id) = self.storages.get(&storage) else { return };
                 let current =
@@ -3661,14 +3683,7 @@ impl Engine {
         // Connection pacing (libtorrent `connection_speed` per second, shared by torrents).
         self.connect_budget = (self.connect_budget + self.settings.connection_speed.max(0) as f64 * dt)
             .min(self.settings.connection_speed.max(1) as f64);
-        for &id in &running {
-            let n = self.connect_budget as usize;
-            if n == 0 {
-                break;
-            }
-            let made = self.connect_peers_for(id, n);
-            self.connect_budget -= made as f64;
-        }
+        self.try_connect_more_peers(&running);
         if now.duration_since(self.last_unchoke)
             >= Duration::from_secs(self.settings.unchoke_interval.max(1) as u64)
         {
@@ -3844,6 +3859,61 @@ impl Engine {
         self.trackers.start(job, &self.resolver, self.poll.registry(), now);
     }
 
+    /// libtorrent `session_impl::try_connect_more_peers`: hands the tick's connection attempts
+    /// out one at a time, round robin, to the downloads, with every
+    /// [`CONNECT_SEED_EVERY_N_DOWNLOAD`]th to a finished torrent; until a whole round makes
+    /// none. Before, the budget went to the torrents in list order, each taking all it could
+    /// use: with many torrents, one late in the order could wait for peers indefinitely.
+    fn try_connect_more_peers(&mut self, running: &[TorrentId]) {
+        if self.connect_budget < 1.0 {
+            return;
+        }
+        let (mut downloading, mut finished) = (Vec::new(), Vec::new());
+        for &id in running {
+            let Some(t) = self.torrent_ref(id) else { continue };
+            if !t.is_active() || t.checking || t.error.is_some() || t.peer_list.len() == 0 {
+                continue;
+            }
+            if t.is_finished() { finished.push(id) } else { downloading.push(id) }
+        }
+        let torrents = downloading.len() + finished.len();
+        let limit = self.settings.connections_limit;
+        let mut since_last = 0;
+        while torrents > 0 && self.connect_budget >= 1.0 {
+            if limit >= 0 && self.peers.len() >= limit as usize {
+                break;
+            }
+            if self.next_download_connect >= downloading.len() {
+                self.next_download_connect = 0;
+            }
+            if self.next_finished_connect >= finished.len() {
+                self.next_finished_connect = 0;
+            }
+            let id = if (self.download_connect_attempts >= CONNECT_SEED_EVERY_N_DOWNLOAD
+                && !finished.is_empty())
+                || downloading.is_empty()
+            {
+                self.download_connect_attempts = 0;
+                self.next_finished_connect += 1;
+                finished[self.next_finished_connect - 1]
+            } else {
+                self.download_connect_attempts += 1;
+                self.next_download_connect += 1;
+                downloading[self.next_download_connect - 1]
+            };
+            if self.connect_peers_for(id, 1) > 0 {
+                self.connect_budget -= 1.0;
+                since_last = 0;
+            } else {
+                since_last += 1;
+                // a whole round without a connection: nobody has a peer to try now
+                if since_last > torrents + 1 {
+                    break;
+                }
+            }
+        }
+    }
+
     /// Opens up to `max` new outgoing connections for a torrent. Returns how many were started.
     fn connect_peers_for(&mut self, id: TorrentId, max: usize) -> usize {
         if !self.settings.enable_outgoing_tcp && !self.settings.enable_outgoing_utp {
@@ -3865,13 +3935,14 @@ impl Engine {
         if room == 0 {
             return 0;
         }
-        let candidates = t.peer_list.connect_candidates(room, now, Reconnect::from_settings(&self.settings));
-        let finished = t.is_finished();
+        let candidates = t.peer_list.connect_candidates(
+            room,
+            now,
+            Reconnect::from_settings(&self.settings),
+            t.is_finished(),
+        );
         let mut made = 0;
         for addr in candidates {
-            if finished && t_is_seed(self.torrent_ref(id), &addr) {
-                continue;
-            }
             if self.connect_to_peer(id, addr, now) {
                 made += 1;
             }
@@ -4416,10 +4487,6 @@ impl Engine {
         peers.extend(self.web_peer_infos(id));
         self.alert(Alert::PeerInfo { id, peers });
     }
-}
-
-fn t_is_seed(t: Option<&Torrent>, addr: &SocketAddr) -> bool {
-    t.and_then(|t| t.peer_list.get(addr)).is_some_and(|p| p.seed)
 }
 
 /// Copies fast-resume fields onto a torrent.

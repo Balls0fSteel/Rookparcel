@@ -889,6 +889,10 @@ pub(crate) enum Completion {
         storage: u64,
         checked: u32,
     },
+    /// A check's thread took it up: until then it waited for its drive (D48).
+    CheckStarted {
+        storage: u64,
+    },
     Checked {
         storage: u64,
         result: Result<CheckResult, (String, Error)>,
@@ -1639,6 +1643,7 @@ impl Worker {
             }
             Job::Check { storage, mode } => {
                 if !aborted(&storage) {
+                    ctx.send(Completion::CheckStarted { storage: storage.id });
                     let result =
                         check_files(&storage, ctx, mode, &mut || self.poll_during_check(&storage, ctx));
                     ctx.send(Completion::Checked { storage: storage.id, result });
@@ -1950,31 +1955,54 @@ fn read_into(
     offset: u32,
     buf: &mut [u8],
 ) -> Result<(), Error> {
+    read_slices(storage, pool, piece, offset, buf).map_err(|(_, e)| e)
+}
+
+/// [`read_into`], naming the file a failed read was in (`None`: past the torrent's end).
+fn read_slices(
+    storage: &Storage,
+    pool: &FilePool,
+    piece: u32,
+    offset: u32,
+    buf: &mut [u8],
+) -> Result<(), (Option<usize>, Error)> {
     let fs = storage.info.files();
     let mut pos = 0usize;
     for slice in fs.map_block(piece, offset as u64, buf.len() as u64) {
         let n = slice.size as usize;
-        if storage.skip_file(slice.file_index) {
+        let f = slice.file_index;
+        let err = |e: io::Error| (Some(f), Error::from(e));
+        if storage.skip_file(f) {
             // pad files read as zeros (the buffer may hold an earlier piece)
             buf[pos..pos + n].fill(0);
-        } else if let Some(part) = storage.part_file_for(slice.file_index) {
-            part.read(&mut buf[pos..pos + n], piece, offset + pos as u32)?;
+        } else if let Some(part) = storage.part_file_for(f) {
+            part.read(&mut buf[pos..pos + n], piece, offset + pos as u32).map_err(err)?;
         } else {
-            let file =
-                pool.open(storage.id, slice.file_index as u32, &storage.file_path(slice.file_index), false)?;
-            if read_at(&file, &mut buf[pos..pos + n], slice.offset)? != n {
-                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "file too short").into());
+            let file = pool.open(storage.id, f as u32, &storage.file_path(f), false).map_err(err)?;
+            if read_at(&file, &mut buf[pos..pos + n], slice.offset).map_err(err)? != n {
+                return Err(err(io::Error::new(io::ErrorKind::UnexpectedEof, "file too short")));
             }
         }
         pos += n;
     }
     if pos != buf.len() {
-        return Err(Error::Io {
-            kind: io::ErrorKind::InvalidInput,
-            message: "read past the end of the torrent".into(),
-        });
+        return Err((
+            None,
+            Error::Io {
+                kind: io::ErrorKind::InvalidInput,
+                message: "read past the end of the torrent".into(),
+            },
+        ));
     }
     Ok(())
+}
+
+/// libtorrent `torrent::on_piece_hashed` while checking: a file that is not there or too short
+/// only has no pieces; any other read error (a file locked by a scanner, a share that went
+/// away, no permission) is the torrent's error. Taken as "not had", it made a seed come out
+/// of its check with nothing and download everything again.
+fn absent(e: &Error) -> bool {
+    matches!(e, Error::Io { kind: io::ErrorKind::NotFound | io::ErrorKind::UnexpectedEof, .. })
 }
 
 /// `poll` is called before the pieces are hashed and after each one: the thread's chance to take
@@ -2094,7 +2122,13 @@ fn check_files(
         }
         let size = storage.info.piece_size(piece) as usize;
         let started = Instant::now();
-        let read = read_into(storage, &pool, piece, 0, &mut buf[..size]);
+        let read = read_slices(storage, &pool, piece, 0, &mut buf[..size]);
+        if let Err((Some(f), e)) = &read {
+            if !absent(e) && !aborted(storage) {
+                ctx.pool.release(storage.id);
+                return Err((storage.file_path(*f).to_string_lossy().into_owned(), e.clone()));
+            }
+        }
         let now = Instant::now();
         let wait = pacer.after_read(size, now.duration_since(started), now);
         if gentle {
@@ -3076,8 +3110,14 @@ pub(crate) mod tests {
         Rig { disk, rx, storage, dir, contents }
     }
 
+    /// The next completion, past a check's start (which only the engine's status needs).
     fn next(rx: &mpsc::Receiver<Completion>) -> Completion {
-        rx.recv_timeout(Duration::from_secs(10)).expect("disk completion")
+        loop {
+            match rx.recv_timeout(Duration::from_secs(10)).expect("disk completion") {
+                Completion::CheckStarted { .. } => {}
+                c => return c,
+            }
+        }
     }
 
     fn torrent_bytes(contents: &[Vec<u8>]) -> Vec<u8> {
@@ -3443,6 +3483,30 @@ pub(crate) mod tests {
 
     // a: pieces 0..=2, b: 2..=5, c: 5..=7, with 16 KiB pieces.
     const SKIP_MIDDLE: &[(&str, usize)] = &[("a", 40_000), ("b", 50_000), ("c", 30_000)];
+
+    /// libtorrent `on_piece_hashed`: a file that is gone only has no pieces, a file that cannot
+    /// be read is the torrent's error; it does not make the check report nothing.
+    #[test]
+    fn a_check_stops_with_an_error_at_a_file_it_cannot_read() {
+        let r = rig_with("disk-unreadable", SKIP_MIDDLE, BLOCK_SIZE, vec![4, 4, 4]);
+        let root = r.dir.join("test");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("a"), &r.contents[0]).unwrap();
+        std::fs::write(root.join("c"), &r.contents[2]).unwrap();
+        // b gone: a's and c's own pieces are found (2 and 5 share bytes with b)
+        r.disk.async_check(&r.storage, CheckMode::Full);
+        assert_eq!(wanted(&checked(&r.rx).have), [0, 1, 6, 7]);
+        // b a directory in its place: opening or reading it fails, but not as "not there"
+        std::fs::create_dir(root.join("b")).unwrap();
+        r.disk.async_check(&r.storage, CheckMode::Full);
+        let error = loop {
+            if let Completion::Checked { result, .. } = next(&r.rx) {
+                break result.expect_err("an unreadable file is an error");
+            }
+        };
+        assert!(error.0.ends_with('b'), "{error:?}");
+        let _ = std::fs::remove_dir_all(&r.dir);
+    }
 
     #[test]
     fn a_skipped_file_lives_in_the_part_file_until_it_is_wanted() {

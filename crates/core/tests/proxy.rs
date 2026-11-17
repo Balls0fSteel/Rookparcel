@@ -100,7 +100,9 @@ fn proxied(kind: ProxyType, proxy: SocketAddr, user: &str, pass: &str) -> Settin
 
 struct Watch {
     h: SessionHandle,
+    /// The alerts no wait has taken yet, oldest first.
     backlog: VecDeque<Alert>,
+    /// Every alert but the state updates, as it came.
     seen: Vec<String>,
 }
 
@@ -108,18 +110,30 @@ impl Watch {
     fn new(h: SessionHandle) -> Watch {
         Watch { h, backlog: VecDeque::new(), seen: Vec::new() }
     }
+
+    /// Forgets the alerts no wait took, so the next wait sees only what comes after.
+    fn forget(&mut self) {
+        self.backlog.clear();
+    }
 }
 
+/// Waits up to `secs` for an alert `f` picks, and takes it. Other alerts stay for later waits,
+/// oldest first (a torrent can finish before the tracker reply a test waits for first); state
+/// updates `f` passes over are dropped, as a later wait wants fresh ones.
 fn wait<T>(w: &mut Watch, secs: u64, what: &str, mut f: impl FnMut(&Alert) -> Option<T>) -> T {
     let deadline = Instant::now() + Duration::from_secs(secs);
     let mut alerts = Vec::new();
+    let mut i = 0;
     loop {
-        while let Some(a) = w.backlog.pop_front() {
-            if !matches!(a, Alert::StateUpdate(_)) {
-                w.seen.push(a.message());
-            }
-            if let Some(v) = f(&a) {
+        while i < w.backlog.len() {
+            if let Some(v) = f(&w.backlog[i]) {
+                w.backlog.remove(i);
                 return v;
+            }
+            if matches!(w.backlog[i], Alert::StateUpdate(_)) {
+                w.backlog.remove(i);
+            } else {
+                i += 1;
             }
         }
         if Instant::now() >= deadline {
@@ -128,7 +142,12 @@ fn wait<T>(w: &mut Watch, secs: u64, what: &str, mut f: impl FnMut(&Alert) -> Op
         w.h.post_torrent_updates();
         std::thread::sleep(Duration::from_millis(30));
         w.h.pop_alerts(&mut alerts);
-        w.backlog.extend(alerts.drain(..));
+        for a in alerts.drain(..) {
+            if !matches!(a, Alert::StateUpdate(_)) {
+                w.seen.push(a.message());
+            }
+            w.backlog.push_back(a);
+        }
     }
     panic!("timed out waiting for {what}; alerts: {:#?}", w.seen);
 }
@@ -747,7 +766,9 @@ fn a_wrong_socks5_password_is_reported() {
         _ => None,
     });
     assert!(message.contains("SOCKS authentication error"), "{message}");
-    // a peer connection fails the same way, and the proxy's refusal is posted once
+    // a peer connection fails the same way, and the proxy's refusal is posted once (the alerts
+    // so far are forgotten: the one awaited is the peer's)
+    w.forget();
     leech.handle().torrent(id).connect_peer(SocketAddr::from(([127, 0, 0, 1], 9)));
     let (op, error) = wait(&mut w, 20, "proxy alert", |a| match a {
         Alert::Proxy { operation, error, proxy } => {

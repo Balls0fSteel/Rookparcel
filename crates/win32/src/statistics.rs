@@ -532,6 +532,7 @@ mod tests {
         for id in [IDCANCEL, IDOK] {
             let dlg = show(null_mut(), &busy());
             assert!(!dlg.is_null());
+            let _window = crate::util::TestWindow(dlg);
             assert_eq!(window(), dlg);
             // asked for again: the same window, with the newer figures
             let newer = SessionStats { num_peers_connected: 7, ..busy() };

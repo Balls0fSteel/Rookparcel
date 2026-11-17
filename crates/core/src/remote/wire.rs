@@ -392,6 +392,7 @@ wire_struct!(TorrentStatus {
     super_seeding,
     moving_storage,
     waiting_for_network,
+    check_queued,
     progress_ppm,
     queue_position,
     download_rate,

@@ -109,7 +109,8 @@ pub fn status_text(st: &TorrentStatus, user_paused: bool) -> String {
     let paused = st.flags.contains(TorrentFlags::PAUSED);
     let auto = st.flags.contains(TorrentFlags::AUTO_MANAGED);
     if checking(st) {
-        return if paused {
+        // queued by the auto-manager (paused), or waiting for its drive (D48)
+        return if paused || st.check_queued {
             tr!(StatusQueuedForChecking).to_owned()
         } else {
             tr!(StatusChecking, percent = fmt::percent(st.progress_ppm))
@@ -152,7 +153,7 @@ pub fn status_class(st: &TorrentStatus, user_paused: bool) -> &'static str {
     let paused = st.flags.contains(TorrentFlags::PAUSED);
     let auto = st.flags.contains(TorrentFlags::AUTO_MANAGED);
     if checking(st) {
-        return if paused { "queued" } else { "checking" };
+        return if paused || st.check_queued { "queued" } else { "checking" };
     }
     if paused {
         return match (auto, user_paused, st.is_finished) {
@@ -188,7 +189,7 @@ pub fn status_icon(st: &TorrentStatus, user_paused: bool) -> StateIcon {
     let paused = st.flags.contains(TorrentFlags::PAUSED);
     let auto = st.flags.contains(TorrentFlags::AUTO_MANAGED);
     if checking(st) {
-        return match (st.state, paused) {
+        return match (st.state, paused || st.check_queued) {
             (TorrentState::CheckingFiles, true) => StateIcon::QueuedChecking,
             (TorrentState::CheckingFiles, false) => StateIcon::CheckingFiles,
             (_, true) => StateIcon::QueuedResumeChecking,
@@ -333,6 +334,14 @@ mod tests {
         checking.progress_ppm = 453_000;
         assert_eq!(status_text(&checking, false), "Checking 45.3 %");
         assert_eq!(status_text(&st(am | p, CheckingFiles, false), false), "Queued for checking");
+        // running, but its drive is checking another torrent (D48): not "Checking 0.0 %"
+        let mut waiting = st(am, CheckingResumeData, false);
+        waiting.check_queued = true;
+        assert_eq!(status_text(&waiting, false), "Queued for checking");
+        assert_eq!(status_class(&waiting, false), "queued");
+        assert_eq!(status_icon(&waiting, false), StateIcon::QueuedResumeChecking);
+        waiting.state = CheckingFiles;
+        assert_eq!(status_icon(&waiting, false), StateIcon::QueuedChecking);
         // added stopped: the engine has not begun its check
         assert_eq!(status_text(&st(p, CheckingResumeData, false), false), "Stopped");
         assert_eq!(status_text(&st(p, CheckingResumeData, false), true), "Paused");

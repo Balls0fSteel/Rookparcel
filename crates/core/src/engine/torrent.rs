@@ -185,6 +185,8 @@ pub(crate) struct Torrent {
     /// True once `have` was verified this session (by a check or by resume verification).
     pub checked: bool,
     pub checking: bool,
+    /// Pieces checked so far; [`CHECK_QUEUED`] while the check waits for its drive (D48).
+    /// (One field for both: a stopped torrent's size counts, D21.)
     pub checked_pieces: u32,
     pub file_priority: Vec<u8>,
     /// The pieces a downloaded file touches, kept while `ti` is not loaded and some piece is
@@ -242,7 +244,15 @@ pub(crate) struct Torrent {
     pub inactive_change_at: Option<NonZeroU32>,
 }
 
+/// [`Torrent::checked_pieces`] of a check the disk has not taken up yet.
+pub const CHECK_QUEUED: u32 = u32::MAX;
+
 impl Torrent {
+    /// Pieces checked so far (none while the check waits for its drive).
+    pub fn checked_pieces_done(&self) -> u32 {
+        if self.checked_pieces == CHECK_QUEUED { 0 } else { self.checked_pieces }
+    }
+
     pub fn new(
         id: TorrentId,
         info_hashes: InfoHashes,
@@ -759,7 +769,7 @@ impl Torrent {
             let (have, total) = f.progress();
             ppm(have as u64, total as u64)
         } else if self.checking || self.state == TorrentState::CheckingFiles {
-            ppm(self.checked_pieces as u64, self.num_pieces as u64)
+            ppm(self.checked_pieces_done() as u64, self.num_pieces as u64)
         } else if finished {
             1_000_000
         } else {
@@ -786,6 +796,7 @@ impl Torrent {
             super_seeding: self.super_seeding(),
             moving_storage: self.moves_pending > 0,
             waiting_for_network: false,
+            check_queued: self.checking && self.checked_pieces == CHECK_QUEUED,
             progress_ppm,
             queue_position: self.queue_position,
             download_rate: rates.0,

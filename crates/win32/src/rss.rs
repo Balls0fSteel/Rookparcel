@@ -1093,6 +1093,7 @@ mod tests {
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::IsWindowEnabled;
 
     use super::*;
+    use crate::util::TestWindow;
 
     #[derive(Default)]
     struct TestHost {
@@ -1420,6 +1421,7 @@ mod tests {
                 &mut st as *mut FeedState as LPARAM,
             );
             assert!(!dlg.is_null());
+            let window = TestWindow(dlg);
             assert!(checked(dlg, ID_NO_AUTO) && IsWindowEnabled(item(dlg, ID_AUTO_SMART)) == 0);
             SendMessageW(dlg, WM_COMMAND, IDOK as usize, 0);
             assert!(st.result.is_none());
@@ -1431,7 +1433,7 @@ mod tests {
             assert!(IsWindowEnabled(item(dlg, ID_AUTO_SMART)) != 0);
             set_check(dlg, ID_AUTO_SMART, true);
             SendMessageW(dlg, WM_COMMAND, IDOK as usize, 0);
-            DestroyWindow(dlg);
+            drop(window);
         }
         assert_eq!(
             st.result,

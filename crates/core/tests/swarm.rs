@@ -503,6 +503,50 @@ fn download_through_a_udp_tracker_then_resume_without_recheck() {
     let _ = std::fs::remove_dir_all(seed_dir);
 }
 
+/// A check waiting for its drive (one check per drive at a time, D48) is reported as queued
+/// until the drive takes it up: the owner saw such torrents at "Checking 0.0 %".
+#[test]
+fn a_check_waiting_for_its_drive_is_reported_as_queued() {
+    let (a, b) = (fixture(None), fixture_padded(None, 10));
+    let (dir_a, dir_b) = (temp_dir("queued-check-a"), temp_dir("queued-check-b"));
+    write_files(&a, &dir_a);
+    write_files(&b, &dir_b);
+    // checks capped at 1 MB/s: B's full check (1.3 MB) holds the drive for about a second
+    let settings = Settings { check_rate_limit: true, check_rate_mb: 1, ..settings() };
+    let s = Session::start(SessionParams { settings, ..Default::default() }).expect("session starts");
+    let mut w = Watch::new(s.handle());
+    let id_a = add(&mut w, &a, &dir_a);
+    let id_b = add(&mut w, &b, &dir_b);
+    wait_state(&mut w, id_a, TorrentState::Seeding, 20);
+    wait_state(&mut w, id_b, TorrentState::Seeding, 20);
+    s.handle().torrent(id_b).force_recheck();
+    let st = wait(&mut w, 10, "B hashing", |x| {
+        status_of(x, id_b).filter(|s| s.state == TorrentState::CheckingFiles && !s.check_queued)
+    });
+    assert!(st.progress_ppm < 1_000_000);
+    s.handle().torrent(id_a).force_recheck();
+    let st = wait_state(&mut w, id_a, TorrentState::CheckingFiles, 10);
+    assert!(st.check_queued, "A waits for B's check: {st:?}");
+    // then the drive takes A's up, and both end as they were (an update names only the
+    // torrents that changed: one wait for both)
+    let mut seeding = std::collections::HashMap::new();
+    wait(&mut w, 20, "both seeding", |x| {
+        for id in [id_a, id_b] {
+            if let Some(st) = status_of(x, id).filter(|s| s.state == TorrentState::Seeding) {
+                seeding.insert(id, st);
+            }
+        }
+        (seeding.len() == 2).then_some(())
+    });
+    for st in seeding.values() {
+        assert!(!st.check_queued && st.total_done == st.total, "{st:?}");
+    }
+    s.shutdown();
+    for d in [dir_a, dir_b] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
 /// A session closed while a torrent's resume check is still queued or running saves what the
 /// resume data said, not "pieces unknown": the next start does not hash the files. (The owner's
 /// client rechecked every torrent after a restart, 2026-11-10: checks run one at a time per
@@ -772,6 +816,53 @@ fn magnet_fetches_metadata_from_the_seed_then_downloads() {
     leech.shutdown();
     let _ = std::fs::remove_dir_all(dir);
     let _ = std::fs::remove_dir_all(state);
+    let _ = std::fs::remove_dir_all(seed_dir);
+}
+
+/// libtorrent `try_connect_more_peers`: the connection attempts go round robin. A torrent with
+/// a long list of peers that never answer, ahead of another in the list, does not take every
+/// attempt: at one attempt a second, the second torrent once waited out the first's 60 peers.
+#[test]
+fn connection_attempts_go_round_robin_over_the_torrents() {
+    let f = fixture(None);
+    // the seed's port, free until the seed starts below
+    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let dir = temp_dir("leech-round-robin");
+    // (failures do not use the peer up: it is refused until the seed starts)
+    let slow = Settings { connection_speed: 1, min_reconnect_time: 1, max_failcount: 100, ..settings() };
+    let leech =
+        Session::start(SessionParams { settings: slow, ..Default::default() }).expect("session starts");
+    let mut w = Watch::new(leech.handle());
+    // first in the list: 60 peers that take the connection and never say a word (a refused
+    // one costs no attempt). Its start tries 10 at once (the start's boost, outside the
+    // per-second attempts); the other 50 wait for the tick's.
+    let mute: Vec<std::net::TcpListener> =
+        (0..60).map(|_| std::net::TcpListener::bind("127.0.0.1:0").unwrap()).collect();
+    let dead: String = mute.iter().map(|l| format!("&x.pe={}", l.local_addr().unwrap())).collect();
+    let other = format!("magnet:?xt=urn:btih:{}{dead}", hex(&[0x5a; 20]));
+    add_magnet(&mut w, other, &dir.join("other"));
+    // the second's one peer is refused at its start (the boost; Windows takes a few seconds to
+    // say so on loopback), so it is the tick's to retry
+    let uri = format!("magnet:?xt=urn:btih:{}&x.pe=127.0.0.1:{port}", hex(&f.info_hash));
+    let id = add_magnet(&mut w, uri, &dir);
+    std::thread::sleep(Duration::from_secs(6));
+    let seed_dir = temp_dir("seed-round-robin");
+    write_files(&f, &seed_dir);
+    let seed_settings = Settings { listen_interfaces: format!("127.0.0.1:{port}"), ..settings() };
+    let seed = Session::start(SessionParams { settings: seed_settings, ..Default::default() }).unwrap();
+    let mut sw = Watch::new(seed.handle());
+    assert_eq!(listen_port(&mut sw), port);
+    let seed_id = add(&mut sw, &f, &seed_dir);
+    wait_state(&mut sw, seed_id, TorrentState::Seeding, 20);
+    // one attempt a second, every other one the second torrent's: before, the first took all
+    // 50 (and then its retries) while the second waited
+    wait(&mut w, 15, "metadata from the seed within a few attempts", |a| {
+        matches!(a, Alert::MetadataReceived { id: i } if *i == id).then_some(())
+    });
+    leech.shutdown();
+    seed.shutdown();
+    drop(mute);
+    let _ = std::fs::remove_dir_all(dir);
     let _ = std::fs::remove_dir_all(seed_dir);
 }
 
@@ -2703,7 +2794,9 @@ fn names_settings(on: bool, rate: u32) -> Settings {
     Settings {
         append_incomplete_ext: on,
         download_rate_limit: rate,
-        alert_mask: (rookparcel_core::AlertCategory::DEFAULT | rookparcel_core::AlertCategory::FILE_PROGRESS)
+        alert_mask: (rookparcel_core::AlertCategory::DEFAULT
+            | rookparcel_core::AlertCategory::FILE_PROGRESS
+            | rookparcel_core::AlertCategory::TORRENT_LOG)
             .bits(),
         ..settings()
     }
@@ -2760,12 +2853,21 @@ fn suffixed(l: &[String]) -> bool {
 /// was rechecked). The bytes done are read while it is paused, so nothing has come in yet; read
 /// after the resume, a block from the seed the restart reconnects to could count in both the
 /// bytes done and the payload (one block over, once on macOS CI).
+///
+/// That once came back (2026-11-17, macOS CI): one block of a half-done piece fetched again
+/// after the restart. Either the restored block was lost at the check (a resume check that
+/// failed hashes the files and keeps no partial blocks; it stays in CheckingResumeData, so
+/// only its Logger line tells) or a block was fetched twice live. The checks below tell which.
 fn resume_after_restart(w: &mut Watch, leech: &Session, id: TorrentId) -> (u64, bool) {
     let mut rechecked = false;
-    let mut checking = |a: &Alert| {
-        if let Alert::StateChanged { id: i, state: TorrentState::CheckingFiles, .. } = a {
-            rechecked |= *i == id;
+    let mut logs = Vec::new();
+    let mut checking = |a: &Alert| match a {
+        Alert::StateChanged { id: i, state: TorrentState::CheckingFiles, .. } => rechecked |= *i == id,
+        Alert::Log { id: Some(i), message } if *i == id => {
+            rechecked |= message.contains("did not match");
+            logs.push(message.clone());
         }
+        _ => {}
     };
     let paused = wait(w, 20, "restored and paused", |a| {
         checking(a);
@@ -2776,11 +2878,20 @@ fn resume_after_restart(w: &mut Watch, leech: &Session, id: TorrentId) -> (u64, 
     assert!(done > 0 && done < paused.total, "{done} of {}", paused.total);
     assert_eq!(paused.total_payload_download, 0);
     leech.handle().torrent(id).resume();
-    wait(w, 20, "downloading after the restart", |a| {
+    wait(w, 20, "checked after the restart", |a| {
+        checking(a);
+        matches!(a, Alert::TorrentChecked { id: i } if *i == id).then_some(())
+    });
+    let resumed = wait(w, 20, "downloading after the restart", |a| {
         checking(a);
         status_of(a, id)
             .filter(|s| s.state == TorrentState::Downloading && !s.flags.contains(TorrentFlags::PAUSED))
     });
+    assert!(
+        resumed.total_done >= done,
+        "the check kept the restored blocks: {} done after it, {done} before; Logger: {logs:?}",
+        resumed.total_done
+    );
     (done, rechecked)
 }
 

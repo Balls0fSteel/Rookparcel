@@ -1882,9 +1882,10 @@ mod tests {
     #[test]
     fn every_control_class_is_themed_without_panicking() {
         use crate::dialogs::{BUTTON, COMBOBOX, Class, EDIT, STATIC, Template};
+        use crate::util::TestWindow;
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             BS_AUTOCHECKBOX, BS_GROUPBOX, BS_PUSHBUTTON, CBS_DROPDOWNLIST, CreateDialogIndirectParamW,
-            DLGTEMPLATE, DestroyWindow, WS_CHILD, WS_VISIBLE,
+            DLGTEMPLATE, WS_CHILD, WS_VISIBLE,
         };
         unsafe extern "system" fn nop(_: HWND, _: u32, _: WPARAM, _: LPARAM) -> isize {
             0
@@ -1912,6 +1913,7 @@ mod tests {
                 0,
             );
             assert!(!dlg.is_null());
+            let window = TestWindow(dlg);
             dialog_init(dlg);
             // light: the WM_CTLCOLOR family is left to the dialog manager
             for msg in
@@ -1921,7 +1923,7 @@ mod tests {
             }
             assert_eq!(dialog_message(dlg, WM_INITDIALOG, 0, 0), None, "the procedure goes on");
             assert_eq!(dialog_message(dlg, WM_APP_THEME, 0, 0), Some(0));
-            DestroyWindow(dlg);
+            drop(window);
         }
     }
 

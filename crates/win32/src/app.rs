@@ -6357,6 +6357,7 @@ mod url_tests {
     use std::time::{Duration, Instant};
 
     use super::*;
+    use crate::util::TestWindow;
 
     /// A one-file v1 torrent named `url-test.bin`.
     fn torrent() -> Vec<u8> {
@@ -6464,6 +6465,7 @@ mod url_tests {
                 null(),
             );
             assert!(!hwnd.is_null());
+            let window = TestWindow(hwnd);
             let session = Session::start_mock(
                 Settings::default(),
                 MockConfig { initial_torrents: 0, active_fraction: 0.0, ..MockConfig::default() },
@@ -6512,7 +6514,7 @@ mod url_tests {
             });
             assert_eq!(title(), profile::name_build());
 
-            DestroyWindow(hwnd);
+            drop(window);
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -6529,6 +6531,7 @@ mod search_tests {
     use rookparcel_frontend::search::{Query, SearchError, SearchResult};
 
     use super::*;
+    use crate::util::TestWindow;
 
     const HASH: &str = "0123456789abcdef0123456789abcdef01234567";
 
@@ -6577,6 +6580,8 @@ mod search_tests {
 
     #[test]
     fn the_drop_down_picks_a_source_and_enter_searches_and_adds() {
+        // its search points the process-wide search helper at the profile folder
+        let _helper = search_ui::helper_test_lock();
         unsafe {
             let icc = INITCOMMONCONTROLSEX {
                 dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
@@ -6612,6 +6617,7 @@ mod search_tests {
                 null(),
             );
             assert!(!hwnd.is_null());
+            let window = TestWindow(hwnd);
             let session = Session::start_mock(
                 Settings::default(),
                 MockConfig { initial_torrents: 0, active_fraction: 0.0, ..MockConfig::default() },
@@ -6752,7 +6758,7 @@ mod search_tests {
             assert_eq!(with_app(|a| a.run_program.as_ref().map(RunProgram::enabled)).unwrap(), Some(false));
             finished(9004);
             assert_eq!(run_lines(), 1);
-            DestroyWindow(hwnd);
+            drop(window);
             assert!(crate::statistics::window().is_null());
         }
     }
@@ -6796,6 +6802,7 @@ mod search_tests {
                 null(),
             );
             assert!(!hwnd.is_null());
+            let window = TestWindow(hwnd);
             let session = Session::start_mock(
                 Settings::default(),
                 MockConfig { initial_torrents: 0, active_fraction: 0.0, ..MockConfig::default() },
@@ -6827,7 +6834,7 @@ mod search_tests {
                 SendMessageW(lv, WM_CHAR, c as WPARAM, 0);
                 seen.push(controls::focused(lv).and_then(name_at));
             }
-            DestroyWindow(hwnd);
+            drop(window);
             let seen: Vec<_> = seen.iter().map(|s| s.as_deref()).collect();
             assert_eq!(seen, [Some("Gamma"), Some("golf"), Some("Gamma")]);
         }
@@ -6885,6 +6892,7 @@ mod search_tests {
                 null(),
             );
             assert!(!hwnd.is_null());
+            let window = TestWindow(hwnd);
             let session = Session::start_mock(
                 Settings::default(),
                 MockConfig { initial_torrents: 0, active_fraction: 0.0, ..MockConfig::default() },
@@ -6962,7 +6970,7 @@ mod search_tests {
             SetWindowTextW(filter, w!("srt"));
             with_app(|a| a.detail.select(Some(TorrentId::from_raw(99))));
             assert_eq!(with_app(|a| a.detail.file_filter.text().to_owned()).as_deref(), Some("srt"));
-            DestroyWindow(hwnd);
+            drop(window);
         }
     }
 
@@ -7008,6 +7016,7 @@ mod search_tests {
                 null(),
             );
             assert!(!hwnd.is_null());
+            let window = TestWindow(hwnd);
             let session = Session::start_mock(
                 Settings::default(),
                 MockConfig { initial_torrents: 0, active_fraction: 0.0, ..MockConfig::default() },
@@ -7112,7 +7121,7 @@ mod search_tests {
                 with_app(|a| a.prefs.get_bool(detail::FILES_TREE_KEY, false)),
                 send(lv, LVM_GETIMAGELIST, LVSIL_SMALL as usize, 0) != 0,
             );
-            DestroyWindow(hwnd);
+            drop(window);
 
             assert_eq!(start, (4, true, (0, true), (1, true), (0, true)));
             assert_eq!((closed, opened), (2, 4));
@@ -7170,6 +7179,7 @@ mod search_tests {
                 null(),
             );
             assert!(!hwnd.is_null());
+            let window = TestWindow(hwnd);
             let session = Session::start_mock(
                 Settings::default(),
                 MockConfig { initial_torrents: 0, active_fraction: 0.0, ..MockConfig::default() },
@@ -7230,7 +7240,7 @@ mod search_tests {
             let unsorted = state();
             click(1);
             let by_size = state();
-            DestroyWindow(hwnd);
+            drop(window);
 
             let s = |v: &str| Some(v.to_owned());
             assert_eq!(
@@ -7300,6 +7310,7 @@ mod search_tests {
                 null(),
             );
             assert!(!hwnd.is_null());
+            let window = TestWindow(hwnd);
             let session = Session::start_mock(
                 Settings::default(),
                 MockConfig { initial_torrents: 0, active_fraction: 0.0, ..MockConfig::default() },
@@ -7410,7 +7421,7 @@ mod search_tests {
             let trackers_stored = state(Page::Trackers);
             click(Page::Trackers, 0);
             let trackers_by_name = state(Page::Trackers);
-            DestroyWindow(hwnd);
+            drop(window);
 
             let s = |v: &str| Some(v.to_owned());
             assert_eq!(
@@ -7463,6 +7474,7 @@ mod search_tests {
         unsafe {
             let waiting = waiting_window();
             assert!(!waiting.is_null());
+            let _window = TestWindow(waiting);
             assert_eq!(FindWindowW(waiting_class(), null()), waiting);
             // what `instance::forward` sends: NUL-separated, ended by an empty string
             let mut payload: Vec<u16> = Vec::new();
@@ -8768,6 +8780,7 @@ mod tests {
     use windows_sys::Win32::Foundation::{CloseHandle, ERROR_ACCESS_DENIED, GetLastError, WAIT_OBJECT_0};
 
     use super::*;
+    use crate::util::TestWindow;
 
     fn rect(left: i32, top: i32, right: i32, bottom: i32) -> RECT {
         RECT { left, top, right, bottom }
@@ -9152,20 +9165,16 @@ mod tests {
     /// that the sender does reach a window that lets it.
     #[test]
     fn lower_integrity_processes_cannot_forward() {
-        let open = copy_window();
-        unsafe { ChangeWindowMessageFilterEx(open, WM_COPYDATA, MSGFLT_ALLOW, null_mut()) };
+        let open = TestWindow(copy_window());
+        unsafe { ChangeWindowMessageFilterEx(open.0, WM_COPYDATA, MSGFLT_ALLOW, null_mut()) };
         let before = COPIED.load(std::sync::atomic::Ordering::SeqCst);
-        assert_eq!(send_from_low_integrity(open), 1, "the control window takes it");
+        assert_eq!(send_from_low_integrity(open.0), 1, "the control window takes it");
         assert_eq!(COPIED.load(std::sync::atomic::Ordering::SeqCst), before + 1);
 
-        let guarded = copy_window();
-        unsafe { refuse_lower_integrity_copydata(guarded) };
-        assert_eq!(send_from_low_integrity(guarded), 2, "Windows refuses it");
+        let guarded = TestWindow(copy_window());
+        unsafe { refuse_lower_integrity_copydata(guarded.0) };
+        assert_eq!(send_from_low_integrity(guarded.0), 2, "Windows refuses it");
         assert_eq!(COPIED.load(std::sync::atomic::Ordering::SeqCst), before + 1);
-        unsafe {
-            DestroyWindow(open);
-            DestroyWindow(guarded);
-        }
     }
 
     #[test]

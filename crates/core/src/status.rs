@@ -49,6 +49,9 @@ pub struct TorrentStatus {
     /// The torrent would run, but the session holds it until "Use only this network" finds its
     /// network again (D54, [`NetworkStatus::Waiting`]). Its own flags are untouched.
     pub waiting_for_network: bool,
+    /// Checking, but still waiting for its drive: a drive checks one torrent at a time (D48),
+    /// so the others read nothing yet. µTorrent shows these as queued, not at 0.0 %.
+    pub check_queued: bool,
 
     /// Progress of the current task (download or check), 0..=1_000_000.
     pub progress_ppm: u32,

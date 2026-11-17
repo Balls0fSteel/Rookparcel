@@ -75,8 +75,14 @@ fn files_in(root: &Path) -> Vec<String> {
     out
 }
 
+/// The next completion, past a check's start (which only the engine's status needs).
 fn next(rx: &mpsc::Receiver<Completion>) -> Completion {
-    rx.recv_timeout(std::time::Duration::from_secs(10)).expect("disk completion")
+    loop {
+        match rx.recv_timeout(std::time::Duration::from_secs(10)).expect("disk completion") {
+            Completion::CheckStarted { .. } => {}
+            c => return c,
+        }
+    }
 }
 
 impl Rig {

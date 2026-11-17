@@ -228,6 +228,7 @@ mod tests {
     use windows_sys::core::w;
 
     use super::*;
+    use crate::util::TestWindow;
 
     #[test]
     fn the_reset_comes_from_the_switch_or_the_key() {
@@ -353,6 +354,7 @@ mod tests {
             let popup = window(WS_POPUP);
             let hidden = window(WS_OVERLAPPEDWINDOW);
             let kept = window(WS_OVERLAPPEDWINDOW);
+            let _windows = [shown, minimized, closed, popup, hidden, kept].map(TestWindow);
             for h in [shown, closed, popup, kept] {
                 ShowWindow(h, SW_SHOWNA);
             }
@@ -381,9 +383,6 @@ mod tests {
             assert_ne!(IsIconic(minimized), 0, "minimized it was, minimized it comes back");
             assert_eq!(IsWindowVisible(hidden), 0, "hidden before, hidden after");
             assert_eq!(restore_windows(&[]), None);
-            for h in [shown, minimized, popup, hidden, kept] {
-                DestroyWindow(h);
-            }
         }
     }
 }

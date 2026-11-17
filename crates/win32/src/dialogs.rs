@@ -790,11 +790,10 @@ mod tests {
 
     use windows_sys::Win32::Graphics::Gdi::{GetObjectW, HFONT, LOGFONTW};
     use windows_sys::Win32::UI::Controls::EM_GETLIMITTEXT;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateDialogIndirectParamW, DestroyWindow, WM_GETFONT,
-    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{CreateDialogIndirectParamW, WM_GETFONT};
 
     use super::*;
+    use crate::util::TestWindow;
 
     unsafe extern "system" fn nop(_: HWND, _: u32, _: WPARAM, _: LPARAM) -> isize {
         0
@@ -817,6 +816,7 @@ mod tests {
                 0,
             );
             assert!(!dlg.is_null());
+            let window = TestWindow(dlg);
             let font = SendMessageW(dlg, WM_GETFONT, 0, 0) as HFONT;
             let mut lf: LOGFONTW = zeroed();
             GetObjectW(font, size_of::<LOGFONTW>() as i32, &mut lf as *mut _ as *mut _);
@@ -824,7 +824,7 @@ mod tests {
             // the button's font too
             let bf = SendMessageW(GetDlgItem(dlg, IDOK), WM_GETFONT, 0, 0) as HFONT;
             assert_eq!(bf, font);
-            DestroyWindow(dlg);
+            drop(window);
         }
     }
 
@@ -861,6 +861,7 @@ mod tests {
                 &mut state as *mut PinState<'_> as LPARAM,
             );
             assert!(!dlg.is_null());
+            let window = TestWindow(dlg);
             let text = |id: u16| window_text(GetDlgItem(dlg, id as i32));
             let set = |id: u16, s: &str| {
                 let w = wide(s);
@@ -918,7 +919,7 @@ mod tests {
             set(ID_PIN_REPEAT, "5678");
             SendMessageW(dlg, WM_COMMAND, IDOK as usize, 0);
             assert!(state_done(dlg));
-            DestroyWindow(dlg);
+            drop(window);
         }
         assert_eq!(*seen.borrow(), ["0000||", "1111|5678|5678", "1234|5678|567", "1234|5678|5678"]);
         assert!(pin_prompt().is_null(), "only the unlock prompt is the prompt");

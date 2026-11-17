@@ -332,7 +332,11 @@ mod tests {
     #[test]
     fn the_setup_round_trips_through_the_preferences() {
         let mut p = Prefs::default();
-        assert_eq!(Setup::load(&p), Setup { port: first_free_port(DEFAULT_PORT), ..Setup::default() });
+        // not serving: the first free port from the default up is proposed (another program may
+        // take or free one at any time, so the setup is compared with the port it proposed)
+        let proposed = Setup::load(&p);
+        assert!((DEFAULT_PORT..DEFAULT_PORT + 100).contains(&proposed.port), "{}", proposed.port);
+        assert_eq!(proposed, Setup { port: proposed.port, ..Setup::default() });
         assert!(!has_password(&p));
         let s = Setup {
             enabled: true,

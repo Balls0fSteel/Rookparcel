@@ -134,3 +134,22 @@ pub fn exe_path() -> PathBuf {
     let n = unsafe { GetModuleFileNameW(null_mut(), buf.as_mut_ptr(), buf.len() as u32) } as usize;
     PathBuf::from(String::from_utf16_lossy(&buf[..n]))
 }
+
+/// A test's window, destroyed when this drops: a failing assertion unwinds through
+/// `DestroyWindow` instead of leaving the window (and what its procedure owns, such as a
+/// session) behind. Dropping it early destroys the window at that point.
+#[cfg(test)]
+pub struct TestWindow(pub HWND);
+
+#[cfg(test)]
+impl Drop for TestWindow {
+    fn drop(&mut self) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{DestroyWindow, IsWindow};
+        // SAFETY: a window of this thread, or one already gone (`IsWindow` false).
+        unsafe {
+            if IsWindow(self.0) != 0 {
+                DestroyWindow(self.0);
+            }
+        }
+    }
+}

@@ -63,9 +63,8 @@ belong in [PORTING.md](PORTING.md); document deliberate setting-default changes.
   a real Windows service. nox takes its certificate files on the command line only;
   the Win32 GUI's Web UI page has an HTTPS box (its own certificate), GTK has no Web UI
   page, the compatibility shim has no certificate fields, and listener changes need a restart.
-- `schannel::tests::keys_left_by_processes_that_are_gone_are_swept` uses a fixed
-  key name and can collide with overlapping tests or a running nox sweep; use a
-  per-run name if fixing it. A Windows WebSocket thread can keep the persisted
+- `schannel::tests::keys_left_by_processes_that_are_gone_are_swept` has used a per-run key
+  name since `7f77205a` (2026-11-05). A Windows WebSocket thread can keep the persisted
   CNG key alive after server stop; closing and joining connections would release
   it at exit rather than the next start.
 - When porting bundled code, update THIRD-PARTY-NOTICES.md's module list and each
@@ -89,9 +88,9 @@ in its title bar. Still open from that round:
   (Ctrl+S / Ctrl+T / Ctrl+Shift+P start / stop / pause, Enter for Properties, Del and
   Shift+Del shown on the context menu). Ctrl+Space was left to the list view, whose own
   key it is (toggle the focused row's selection).
-- **Checking progress:** several newly added torrents sat at "Checking 0.0 %" together;
-  `active_checking` was 1 then (4 since smart disk I/O, D48), so confirm whether the rest should read "Queued for checking"
-  (auto-managed) or whether the checks stall. Not reproduced yet.
+- **Checking progress:** several newly added torrents sat at "Checking 0.0 %" together. Since
+  1.2.70 a check waiting for its drive (one per drive, D48) reads "Queued for checking"
+  (`TorrentStatus::check_queued`); re-check with many adds on one drive.
 - **Hand-check on GTK:** alternate row shading (while scrolling, after a folder opens or
   closes in the Files tab, when sorting, selected and hovered rows, a dark theme, the UI
   Settings box on and off) and the Ctrl+S / Ctrl+T / Ctrl+Shift+P / Enter keys. The
@@ -615,10 +614,14 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   in Play) came out of a check with no pieces and downloaded everything again
   (`total_downloaded` doubled), and others (Mixtape, The Midnight Walk, Repella Fella, Planet of
   Lana II, Moncage, Mr. Sleepy Man) were saved with an empty set and with the full one 30 s
-  later. Cause not found: a check answers "nothing" when no file is found (`any_file`) or every
-  read fails; try to reproduce with seeds the queue stops and starts while another check runs.
-  (b) A torrent waiting for its turn on the drive shows "Checking 0.0 %" like one being hashed;
-  µTorrent says "Queued". (c) A file a virus scanner removes is downloaded again at every
+  later. A likely cause, fixed in 1.2.70: a full check took every read error (a file Defender
+  or another program held, a share gone for a moment, no permission) as "piece not had", so a
+  seed whose files could not be read came out with nothing; now, as libtorrent's
+  `on_piece_hashed`, only a missing or short file means that, and any other error stops the
+  torrent with a file error (Force Re-Check once the file is free). Not proven to be the
+  owner's case: watch for "Error:" rows where a seed would have restarted. The "saved with an
+  empty set" half was closed earlier (the stored set is kept until the check is done).
+  (b) Fixed in 1.2.70: a check waiting for its drive reads "Queued for checking". (c) A file a virus scanner removes is downloaded again at every
   start (cheap since 1.2.46); a line that names the loop, or not fetching a file that vanished
   twice, would end it.
 - Memory: `rookparcel-nox`'s update check (1.1.17) leaves about 5.5 MB resident after its one
@@ -672,7 +675,7 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
 
 ## Engine networking and protocol follow-ups
 
-**Finished torrent turned back into a download (1.2.64, the owner's "Downloading, no peers"; 1.2.65 keeps failing peers' delay and gives trackers without `min interval` libtorrent's 30 s / 60 s):** `resume_download` removes the two delays the swarm tests reproduced (the redundant-closed seeds' reconnect delay; no re-announce for up to an interval). Nothing shows these were what the owner hit; a hand check with a real torrent is open. If the symptom persists, look first at the tick's connect loop: it hands out `connect_budget` greedily in slot order, where libtorrent goes round-robin and favours downloads, so with many torrents one late in the slot order can be starved. Also open: while finished, `connect_peers_for` takes the top candidates before dropping seeds, so leechers ranked behind seeds can be starved (libtorrent filters seeds in `is_connect_candidate`); Force Re-Check and pause/resume still leave every peer in the 60 s reconnect delay (as libtorrent); the reap-before-forget ordering and the stopped branch's `needs_auto_manage` are reasoned, not tested; a per-torrent connection limit filled with leechers while finished leaves no room for seeds.
+**Finished torrent turned back into a download (1.2.64, the owner's "Downloading, no peers"; 1.2.65 keeps failing peers' delay and gives trackers without `min interval` libtorrent's 30 s / 60 s):** `resume_download` removes the two delays the swarm tests reproduced (the redundant-closed seeds' reconnect delay; no re-announce for up to an interval). Nothing shows these were what the owner hit; a hand check with a real torrent is open. Since 1.2.70 the tick's connection attempts go round robin, downloads first and every tenth to a finished torrent (libtorrent `try_connect_more_peers`; before, the budget went greedily in slot order, so one torrent late in the order could be starved: `connection_attempts_go_round_robin_over_the_torrents`), and a finished torrent passes over seeds before it takes its best candidates (`is_connect_candidate`). Not ported: a setting for the every-tenth rule, `smooth_connects`, and deducting the boosts (start, tracker reply: 10 at once) from the tick's attempts. Also open: Force Re-Check and pause/resume still leave every peer in the 60 s reconnect delay (as libtorrent); the reap-before-forget ordering and the stopped branch's `needs_auto_manage` are reasoned, not tested; a per-torrent connection limit filled with leechers while finished leaves no room for seeds.
 
 - **Keep ping low** (D49, [LOWPING.md](LOWPING.md)): slice 1 in 1.1.29 (2026-11-02_130357_1793621037),
   slice 2 (Linux and macOS pings) in 1.1.30 (2026-11-02_162406_1793633046), run on the Xubuntu
@@ -1112,7 +1115,7 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   RSS) and GTK's main-menu items have no help yet; `docs/HELP_TEXTS.md` is for the owner's review
   against the code. Translations of the help texts come with the wiki (fall back to English).
 - **Add Torrent filter and type-ahead** (1.2.20): GTK not run (Escape order between the search entry and the window's shortcut is reasoned, not seen); macOS not run (Escape in an empty search field, type-select in the view-based outline, and clearing the filter re-expands every folder because the outline keeps its own expansion); Win32 at 150-200 % DPI and the classic theme; the Web UI on a phone and RTL. A Space typed within comctl's type-ahead timeout may join its prefix. The Web UI has no PageUp/PageDown in the add list (the static-size budget has about 1.4 KB left).
-- **Win32 app tests can hang on failure:** many `app.rs` tests assert before `DestroyWindow`, so a failing one may block instead of exiting (seen 2026-11-06 with a new test). Destroy first, or guard the window, then assert; run single tests with a hard timeout meanwhile.
+- **Win32 app tests hanging on failure:** fixed in 1.2.70: the tests that asserted before `DestroyWindow` hold their window in `util::TestWindow`, destroyed on drop (a forced failure now ends in 0.3 s instead of hanging). New window tests should use it.
 - **Found while writing the texts:** `hashing_threads` is read by nothing (its label and help
   now say so); `tracker_receive_timeout` and `request_timeout` are unused;
   `max_queued_disk_bytes` acts as at least 4 MB, so the 1 MB default means 4 MB;
@@ -1345,7 +1348,7 @@ Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/fr
 
 ## Validation and development environment
 
-- **macOS CI flake, `a_download_stopped_midway_resumes_with_its_names_and_pieces` (D77, seen 2026-11-17 on `fd496301`):** after the restart the leech downloaded one 16 KiB block more than it lacked (payload 34,393 against 18,009 left, none counted redundant), so a block counted as done in the restored state was fetched again. Unlike 1.2.63's flake, `done` is now read while the torrent is still paused. Find whether the resume data keeps a block it then re-requests (a real waste on every restart) or the test reads too early.
+- **macOS CI flake, `a_download_stopped_midway_resumes_with_its_names_and_pieces` (D77, seen 2026-11-17 on `fd496301`):** after the restart the leech downloaded one 16 KiB block more than it lacked (payload 34,393 against 18,009 left, none counted redundant). The figures fit one half-done piece (1 of 2 blocks restored) downloaded whole: either the check lost the restored block (a resume check that fails hashes the files and keeps no partial blocks; it stays in CheckingResumeData, so the old "rechecked" test missed it) or a block came twice live. 1.2.70 makes the test tell: it watches the Logger's "did not match" line and asserts that the bytes done after the check are not fewer than before. 120 runs under parallel load on Windows passed; wait for a recurrence on macOS CI and read its message.
 
 - The remaining 100k measurements are a low-end 2-core/4 GB/HDD machine on
   Windows/light Linux, GTK using the compact model, Web UI per-client models,
@@ -1377,10 +1380,9 @@ Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/fr
   smoke run that once cost 1.2.29 2.8 CPU s. Not looked into why (first touch of guest
   memory is the guess); `bench.py` could make one unmeasured warm-up download first. Other walks over every slot remain where they run on an event,
   not a tick (`torrent_ids` in the DHT, IP filter, listen and network-rule code).
-- Flaky on CI's Windows runner (2026-11-10, once): `crates/core/tests/proxy.rs`
-  `http_proxy_requests_trackers_and_web_seeds_by_url` timed out "waiting for finished" although
-  "finished downloading" is in its alert list: an earlier `wait` may consume the alert. Make the
-  waits keep what they skip.
+- Fixed in 1.2.70: `proxy.rs`'s `wait` dropped the alerts it skipped, so a `TorrentFinished`
+  ahead of the awaited tracker reply was lost (reproduced with a slow tracker); waits now keep
+  them (state updates excepted).
 - Benchmarks against other clients (`tools/bench`, docs/BENCHMARKS.md): the 2026-11-09 run is
   on the Xubuntu VM, where host load inflates CPU time; rerun on bare metal when possible, and
   before releases, with the last release as `--control`. Not covered yet: 100,000 torrents (the corpus is ~3 GB of metadata, too big
@@ -1436,7 +1438,8 @@ Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/fr
   allocator and a vectored-handler tracer are easy to rebuild (a `.CRT$XCU` initializer
   printing the test thread's name and a backtrace); attach a debugger (cdb) to page-heap
   runs for the stack.
-- Win32 test flakes under parallel load (same date): `search::tests::the_helper_buttons_follow_the_install`
-  races `helper::configure` (process-wide) with `search_helper.rs`; and
-  `webui_host::tests::the_setup_round_trips_through_the_preferences` calls
-  `first_free_port(8080)` twice, so another test or process holding 8080 in between makes it 8081.
+- Win32 test flakes under parallel load, fixed in 1.2.70: `the_helper_buttons_follow_the_install`
+  raced the main window's search test (`app.rs`, whose Enter-search points the process-wide
+  helper at a folder), now both hold `search_helper::test_lock`; the race itself was not
+  reproduced. `the_setup_round_trips_through_the_preferences` compares with the port it proposed
+  (failed 2 of 30 runs with 8080 toggled by another thread, 0 of 60 after).

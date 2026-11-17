@@ -49,6 +49,7 @@ fn status() -> TorrentStatus {
         super_seeding: true,
         moving_storage: false,
         waiting_for_network: true,
+        check_queued: true,
         progress_ppm: 1_000_000,
         queue_position: Some(3),
         download_rate: 1,

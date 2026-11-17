@@ -232,13 +232,21 @@ impl PeerList {
     }
 
     /// libtorrent `find_connect_candidates`: up to `n` peers to connect to now. A peer waits
-    /// `min_reconnect_time` times its fail count plus one after its last connection.
-    pub fn connect_candidates(&self, n: usize, now: Instant, policy: Reconnect) -> Vec<SocketAddr> {
+    /// `min_reconnect_time` times its fail count plus one after its last connection. A
+    /// `finished` torrent passes over seeds (libtorrent `is_connect_candidate`) before taking
+    /// the best `n`, so leechers ranked behind them are reached.
+    pub fn connect_candidates(
+        &self,
+        n: usize,
+        now: Instant,
+        policy: Reconnect,
+        finished: bool,
+    ) -> Vec<SocketAddr> {
         match self {
-            // all equal in the ordering, so in their saved order
+            // all equal in the ordering, so in their saved order (none known to be a seed)
             PeerList::Saved(s) if policy.max_failcount > 0 => s.iter().take(n).collect(),
             PeerList::Saved(_) => Vec::new(),
-            PeerList::Live(l) => l.connect_candidates(n, now, policy),
+            PeerList::Live(l) => l.connect_candidates(n, now, policy, finished),
         }
     }
 
@@ -513,11 +521,18 @@ impl Peers {
 
     /// libtorrent `find_connect_candidates`: up to `n` peers to connect to now. A peer waits
     /// `min_reconnect_time` times its fail count plus one after its last connection.
-    pub fn connect_candidates(&self, n: usize, now: Instant, policy: Reconnect) -> Vec<SocketAddr> {
+    pub fn connect_candidates(
+        &self,
+        n: usize,
+        now: Instant,
+        policy: Reconnect,
+        finished: bool,
+    ) -> Vec<SocketAddr> {
         let mut c: Vec<&KnownPeer> = self
             .peers
             .iter()
             .filter(|p| p.connection.is_none() && !p.banned && p.failcount < policy.max_failcount)
+            .filter(|p| !(finished && p.seed))
             .filter(|p| {
                 p.last_connected.is_none_or(|t| {
                     now.duration_since(t) >= policy.min_reconnect_time * (u32::from(p.failcount) + 1)
@@ -703,25 +718,39 @@ mod tests {
         assert!(pl.get(&a).unwrap().source.contains(PeerSource::PEX));
         assert!(!pl.add("0.0.0.0:5".parse().unwrap(), PeerSource::TRACKER, ExternalIp::default(), 9));
         let r = Reconnect::default();
-        assert_eq!(pl.connect_candidates(5, now, r).len(), 2);
+        assert_eq!(pl.connect_candidates(5, now, r, false).len(), 2);
 
         pl.connecting(a, 1, PeerSource::TRACKER, now);
-        assert_eq!(pl.connect_candidates(5, now, r), [b]);
+        assert_eq!(pl.connect_candidates(5, now, r, false), [b]);
         assert_eq!(pl.num_connect_candidates(false, r), 1, "a connected peer is no candidate");
         pl.set_seed(&b, true);
         assert_eq!(pl.num_connect_candidates(true, r), 0, "a finished torrent skips seeds");
+        assert_eq!(pl.connect_candidates(5, now, r, true), [] as [SocketAddr; 0]);
+        // ... before taking the best: a leecher ranked behind a seed is still reached
+        let d: SocketAddr = "10.0.0.4:1".parse().unwrap();
+        let mut two = PeerList::default();
+        for x in [b, d] {
+            assert!(two.add(x, PeerSource::TRACKER, ExternalIp::default(), 9));
+        }
+        two.set_seed(&b, true);
+        assert_eq!(two.connect_candidates(1, now, r, false), [b]);
+        assert_eq!(two.connect_candidates(1, now, r, true), [d]);
         pl.set_seed(&b, false);
         pl.disconnected(&a, true, false, false, now);
-        assert_eq!(pl.connect_candidates(5, now, r), [b], "reconnects wait");
+        assert_eq!(pl.connect_candidates(5, now, r, false), [b], "reconnects wait");
         assert_eq!(pl.num_connect_candidates(false, r), 2, "but they count");
-        assert_eq!(pl.connect_candidates(5, now + Duration::from_secs(121), r), [b, a], "failed peers last");
+        assert_eq!(
+            pl.connect_candidates(5, now + Duration::from_secs(121), r, false),
+            [b, a],
+            "failed peers last"
+        );
 
         // Full list: the failed peer is evicted for a new one.
         let c: SocketAddr = "10.0.0.3:1".parse().unwrap();
         assert!(pl.add(c, PeerSource::TRACKER, ExternalIp::default(), 2));
         assert!(pl.get(&a).is_none() && pl.get(&b).is_some() && pl.get(&c).is_some());
         pl.ban(&b);
-        assert_eq!(pl.connect_candidates(5, now, r), [c]);
+        assert_eq!(pl.connect_candidates(5, now, r, false), [c]);
         pl.trim(1);
         assert_eq!(pl.len(), 1);
     }
@@ -763,7 +792,10 @@ mod tests {
                 );
             }
             for n in [0, 3, 9] {
-                assert_eq!(a.connect_candidates(n, now, policy), b.connect_candidates(n, now, policy));
+                assert_eq!(
+                    a.connect_candidates(n, now, policy, false),
+                    b.connect_candidates(n, now, policy, false)
+                );
             }
         }
         for n in [0, 2, 3, 100] {
@@ -819,18 +851,18 @@ mod tests {
         pl.connecting(a, 1, PeerSource::TRACKER, t0);
         let closed = t0 + Duration::from_secs(3600);
         pl.disconnected(&a, false, false, false, closed);
-        assert!(pl.connect_candidates(5, closed + Duration::from_secs(59), r).is_empty());
-        assert_eq!(pl.connect_candidates(5, closed + Duration::from_secs(60), r), [a]);
+        assert!(pl.connect_candidates(5, closed + Duration::from_secs(59), r, false).is_empty());
+        assert_eq!(pl.connect_candidates(5, closed + Duration::from_secs(60), r, false), [a]);
         // the plaintext retry after an encrypted attempt goes at once
         pl.connecting(a, 2, PeerSource::TRACKER, closed);
         pl.disconnected(&a, false, false, true, closed);
-        assert_eq!(pl.connect_candidates(5, closed, r), [a]);
+        assert_eq!(pl.connect_candidates(5, closed, r, false), [a]);
         // leaving upload mode forgets the delay (libtorrent `set_upload_mode`)
         pl.connecting(a, 3, PeerSource::TRACKER, closed);
         pl.disconnected(&a, false, false, false, closed);
-        assert!(pl.connect_candidates(5, closed, r).is_empty());
+        assert!(pl.connect_candidates(5, closed, r, false).is_empty());
         pl.forget_last_connected();
-        assert_eq!(pl.connect_candidates(5, closed, r), [a]);
+        assert_eq!(pl.connect_candidates(5, closed, r, false), [a]);
         // a file turned on again forgets it only for peers without failures
         let b: SocketAddr = "10.0.0.2:1".parse().unwrap();
         assert!(pl.add(b, PeerSource::TRACKER, ExternalIp::default(), 9));
@@ -838,9 +870,9 @@ mod tests {
             pl.connecting(addr, conn, PeerSource::TRACKER, closed);
             pl.disconnected(&addr, failed, false, false, closed);
         }
-        assert!(pl.connect_candidates(5, closed, r).is_empty());
+        assert!(pl.connect_candidates(5, closed, r, false).is_empty());
         pl.forget_last_connected_of_sound();
-        assert_eq!(pl.connect_candidates(5, closed, r), [a], "the failing peer waits its delay");
+        assert_eq!(pl.connect_candidates(5, closed, r, false), [a], "the failing peer waits its delay");
     }
 
     #[test]
@@ -857,13 +889,13 @@ mod tests {
         }
         let later = now + Duration::from_secs(10);
         assert_eq!(pl.get(&a).unwrap().failcount, 2);
-        assert!(pl.connect_candidates(5, later, r).is_empty(), "max_failcount reached");
+        assert!(pl.connect_candidates(5, later, r, false).is_empty(), "max_failcount reached");
         assert_eq!(pl.num_connect_candidates(false, r), 0);
         pl.add(a, PeerSource::PEX, ExternalIp::default(), 9);
         assert_eq!(pl.get(&a).unwrap().failcount, 2, "a peer's word is not enough");
         pl.add(a, PeerSource::TRACKER, ExternalIp::default(), 9);
         assert_eq!(pl.get(&a).unwrap().failcount, 1);
-        assert_eq!(pl.connect_candidates(5, later, r), [a]);
+        assert_eq!(pl.connect_candidates(5, later, r, false), [a]);
         // the settings' names and defaults are libtorrent's
         let d = Reconnect::from_settings(&crate::Settings::default());
         assert_eq!((d.max_failcount, d.min_reconnect_time), (3, Duration::from_secs(60)));

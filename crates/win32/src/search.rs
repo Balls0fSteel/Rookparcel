@@ -94,6 +94,9 @@ pub trait Host {
 #[path = "search_helper.rs"]
 mod helper_ui;
 
+#[cfg(test)]
+pub(crate) use helper_ui::test_lock as helper_test_lock;
+
 // ---- the toolbar search box's mode ------------------------------------------------------
 
 /// What Enter in the toolbar search box does: filter the list (as typing does), or search.
@@ -1441,7 +1444,7 @@ mod tests {
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::IsWindowEnabled;
 
     use super::*;
-    use crate::util::from_wide;
+    use crate::util::{TestWindow, from_wide};
 
     #[derive(Default)]
     struct Shared {
@@ -1490,6 +1493,7 @@ mod tests {
     #[test]
     fn the_helper_buttons_follow_the_install() {
         use rookparcel_frontend::search::helper::{self, Layout, State};
+        let _helper = helper_ui::test_lock();
         let mut f = Fixture::new(sources());
         // the dialog itself stays hidden: the buttons' own style bit says what would show
         let visible = |f: &Fixture, id: u16| unsafe {
@@ -1522,7 +1526,7 @@ mod tests {
         helper::configure(&std::env::temp_dir().join("rookparcel-win32-helper-none"), None);
         unsafe { helper_ui::show_buttons(f.dlg, f.st().host) };
         assert_eq!(shown(&f), [false, true, true, true, true]);
-        unsafe { DestroyWindow(f.dlg) };
+        drop(f);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1816,6 +1820,7 @@ mod tests {
         let shared = Rc::new(RefCell::new(Shared { sources: all, ..Shared::default() }));
         let gate = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let dlg = open_results_with(&shared, "ubuntu", Pick::All, Arc::new(Gated(gate.clone())));
+        let window = TestWindow(dlg);
         let lv = unsafe { item(dlg, ID_LIST) };
         assert!(
             pump_until(|| text(dlg, ID_STATUS).contains("Prowlarr: 3 results")),
@@ -1830,7 +1835,7 @@ mod tests {
         assert!(pump_until(|| !text(dlg, ID_STATUS).contains("searching")), "{}", text(dlg, ID_STATUS));
         assert_eq!(names(lv), ["ubuntu zulu", "ubuntu Bravo", "ubuntu alpha", "ubuntu charlie"]);
         assert_eq!(unsafe { controls::selected(lv) }, [2], "alpha is still the one picked");
-        unsafe { DestroyWindow(dlg) };
+        drop(window);
     }
 
     #[test]
@@ -1839,6 +1844,7 @@ mod tests {
         all.push(source("Broken", "http://127.0.0.1:1/fail/api", true));
         let shared = Rc::new(RefCell::new(Shared { sources: all, ..Shared::default() }));
         let dlg = open_results(&shared, "ubuntu", Pick::All);
+        let window = TestWindow(dlg);
         assert_eq!(shared.borrow().results_window, Some(dlg));
         let lv = unsafe { item(dlg, ID_LIST) };
         // three enabled sources answer (the broken one with an error), the same three torrents
@@ -1900,7 +1906,7 @@ mod tests {
         assert_eq!(unsafe { send(item(dlg, ID_SOURCE), CB_GETCURSEL, 0, 0) }, 2);
         assert!(pump_until(|| text(dlg, ID_STATUS) == "jackett.lan: 3 results"), "{}", text(dlg, ID_STATUS));
         assert_eq!(rows(lv)[0][0], "debian Bravo", "the Seeds sort stays");
-        unsafe { DestroyWindow(dlg) };
+        drop(window);
         assert_eq!(shared.borrow().results_window, None);
     }
 
@@ -1908,6 +1914,7 @@ mod tests {
     fn enter_searches_stop_stops_and_no_sources_says_so() {
         let shared = Rc::new(RefCell::new(Shared::default()));
         let dlg = open_results(&shared, "", Pick::All);
+        let _window = TestWindow(dlg);
         assert!(rows(unsafe { item(dlg, ID_LIST) }).is_empty());
         unsafe { set_text(item(dlg, ID_QUERY), "x") };
         click(dlg, ID_GO);
@@ -2135,6 +2142,7 @@ mod tests {
                 &mut st as *mut FormState as LPARAM,
             );
             assert!(!dlg.is_null());
+            let window = TestWindow(dlg);
             assert_eq!(window_text(item(dlg, ID_URL)), "http://p/api?apikey=***");
             assert_eq!(window_text(item(dlg, ID_KEY)), "", "the key box starts empty");
             let style = GetWindowLongW(item(dlg, ID_KEY), GWL_STYLE) as u32;
@@ -2147,7 +2155,7 @@ mod tests {
             set_text(item(dlg, ID_URL), "http://p/api?apikey=***");
             set_text(item(dlg, ID_KEY), " typed ");
             SendMessageW(dlg, WM_COMMAND, IDOK as usize, 0);
-            DestroyWindow(dlg);
+            drop(window);
         }
         let form = st.result.unwrap();
         let mut stored = s.clone();

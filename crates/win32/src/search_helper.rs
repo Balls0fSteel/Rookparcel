@@ -45,6 +45,15 @@ pub fn configure(host: &mut dyn Host) -> bool {
     }
 }
 
+/// The frontend's helper state is process-wide: a test that points it at a folder (directly, or
+/// through a host whose `helper()` names one, as the main window's does) holds this, so tests
+/// running in parallel do not move it under each other.
+#[cfg(test)]
+pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Shows the buttons that fit: Get while not installed, the other four once it is, none where
 /// the helper is not offered.
 pub unsafe fn show_buttons(dlg: HWND, host: &mut dyn Host) {
@@ -338,6 +347,7 @@ unsafe fn picker_init(dlg: HWND, st: &mut Picker<'_>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::TestWindow;
 
     fn site(id: &str, configured: bool, cf: bool) -> Indexer {
         Indexer {
@@ -367,6 +377,7 @@ mod tests {
                 &mut st as *mut Picker<'_> as LPARAM,
             );
             assert!(!dlg.is_null());
+            let window = TestWindow(dlg);
             let lv = item(dlg, ID_LIST);
             assert_eq!(send(lv, LVM_GETITEMCOUNT, 0, 0), 3);
             assert!(!lv_checked(lv, 0), "nothing ticked for the user");
@@ -376,7 +387,7 @@ mod tests {
             assert!(!lv_checked(lv, 2), "and cannot be");
             lv_set_checked(lv, 0, true);
             send(dlg, WM_COMMAND, IDOK as usize, 0);
-            DestroyWindow(dlg);
+            drop(window);
         }
         assert_eq!(st.ticked, Some(vec!["open".to_owned(), "before".to_owned()]));
     }
