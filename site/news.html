@@ -45,6 +45,18 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.67" data-date="2026-11-17" aria-labelledby="v1.2.67-h">
+      <h2 id="v1.2.67-h"><a href="#v1.2.67"><time datetime="2026-11-17">Tue 17 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.67</span></a></h2>
+      <p class="news-lede">The Files tab of the Linux and Mac programs sorts by its columns, as the Windows program's has since 1.2.65.</p>
+      <ul class="changes">
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Click a header of the Files tab to sort by it, again to reverse, a third time for the torrent's own order. In the folder view each folder sorts on its own, folders first.</span></li>
+        <li><span class="tag tag-plat">Linux</span><span class="vh">:</span> <span>The GTK program remembers the sort, and selected files stay selected as their rows move with progress or a priority change.</span></li>
+        <li><span class="tag tag-plat">macOS</span><span class="vh">:</span> <span>The same in the Mac program, in the folder tree and in the plain list.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>In all three programs, a file list sorted by Done or % no longer reloads every row at each progress update when no row moved. The engine, <code>rookparcel-nox</code> and the Web UI are as in 1.2.65.</span></li>
+      </ul>
+      <p class="news-note">The remote protocol is still 20, so a 1.2.67 window and a 1.2.63 or 1.2.65 <code>rookparcel-nox</code> drive each other.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.67">Download 1.2.67 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.67.md">Full release notes</a></p>
+    </article>
     <article class="news-entry" id="v1.2.65" data-date="2026-11-17" aria-labelledby="v1.2.65-h">
       <h2 id="v1.2.65-h"><a href="#v1.2.65"><time datetime="2026-11-17">Tue 17 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.65</span></a></h2>
       <p class="news-lede">A finished torrent in which you tick another file finds its peers again at once, and the Windows program's Files tab sorts by its columns.</p>
