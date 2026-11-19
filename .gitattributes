@@ -8,4 +8,4 @@
 contrib/** text eol=lf
 tools/closing-test/** text eol=lf
 tools/mac-vm/** text eol=lf
-tools/bench/cloud/** text eol=lf
+tools/bench/cloud/*.sh text eol=lf

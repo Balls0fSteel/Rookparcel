@@ -377,3 +377,11 @@ nohup setsid bash run.sh 1.2.69 > ~/bench/run.log 2>&1 < /dev/null &   # hours; 
 same compiler on the same machine; `main` reports itself as `<version>-dev.<commit>`. Use
 dedicated CPUs: shared ones add other tenants' load to the idle figures. Delete the server
 afterwards; a stopped one is still billed.
+
+On Hetzner Cloud, `launch-hetzner.ps1` does all of it from a Windows PC and needs no watching:
+it creates the server and a one-off SSH key, sends a project token and a Storage Box
+subaccount's login over SSH into a root-only file, arms a deadline timer, then sets up, builds
+and starts `run.sh`. At its end, or at the deadline, `finish-hetzner.sh` uploads the results,
+the logs and `machine.txt` (`lscpu`, versions) to the Storage Box over WebDAV and deletes the
+SSH key and the server. `-SelfTest -Type cx23` checks that path first for a cent. Numbers from
+different providers, or different days, do not compare: only the controls of the same run do.
