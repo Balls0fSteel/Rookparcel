@@ -1,6 +1,6 @@
 # Planning and changelog history
 
-Last updated: 2026-11-16_213625_1794861385
+Last updated: 2026-11-19_161259_1795101179
 
 Start with [PLAN.md](../../PLAN.md) and [CHANGELOG.md](../../CHANGELOG.md). Active decision rationale is in [DECISIONS.md](../DECISIONS.md); detailed unfinished work is in [BACKLOG.md](../BACKLOG.md).
 
@@ -98,3 +98,4 @@ Keep archives as plain Markdown so Git diffs, repository browsing and targeted s
 | [Changelog, 2026-11-16 (1.2.62, feature wave 4)](CHANGELOG-2026-11-16-v1.2.62-2026-11-17_143123_1794922283.md) | `2026-11-16_193121_1794853881` | 1 entry moved verbatim from the root changelog on 2026-11-17_143123_1794922283: Append .!ut to incomplete files with µTorrent and qBittorrent partials adopted (D77), feature wave 4 (1.2.62). |
 | [Changelog, 2026-11-16 and 2026-11-17 (release 1.2.63)](CHANGELOG-2026-11-16-release-1.2.63-2026-11-17_202441_1794943481.md) | `2026-11-16_213625_1794861385` through `2026-11-17_001800_1794871080` | 3 entries moved verbatim from the root changelog on 2026-11-17_202441_1794943481: the security review of 1.2.58-1.2.62 and its fixes (1.2.63), release 1.2.63 prepared with a macOS CI flake fixed, and release 1.2.63 published with the site's news and the wiki. |
 | [Changelog, 2026-11-17 (1.2.64 and release 1.2.65)](CHANGELOG-2026-11-17-v1.2.64-v1.2.65-2026-11-17_214949_1794948589.md) | `2026-11-17_092503_1794903903` through `2026-11-17_151824_1794925104` | 3 entries moved verbatim from the root changelog on 2026-11-17_214949_1794948589: peers again after a file is turned on, the Win32 Files tab sort and the unfocused selection (1.2.64, D78), the security review's fixes (1.2.65) and release 1.2.65 published with the site's news and the wiki. |
+| [Changelog, 2026-11-17 (1.2.66, 1.2.67, Flatpak runtimes)](CHANGELOG-2026-11-17-v1.2.66-v1.2.67-2026-11-19_161259_1795101179.md) | `2026-11-17_183218_1794936738` through `2026-11-17_194447_1794941087` | 3 entries moved verbatim from the root changelog on 2026-11-19_161259_1795101179: the GTK and macOS Files tabs sort by their headers (1.2.66, D78), the security review of 1.2.66 and its fix (1.2.67), and the Release workflow copying the Flatpak runtimes into the container's own layer. |

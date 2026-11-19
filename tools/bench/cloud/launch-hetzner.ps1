@@ -76,8 +76,10 @@ SSH_KEY_ID='$keyId'
     $armed = $true
     "deadline armed: the server deletes itself after $DeadlineHours h at the latest"
     if ($SelfTest) {
-        # no benchmark: the finish step's upload and self-delete, checked from here
-        ssh @ssh "root@$ip" '/usr/local/sbin/bench-finish done; echo finish exit $?'
+        # no benchmark: the finish step's upload and self-delete, checked from here, called the
+        # way a real run calls it (run.sh as the sudo user `bench`; root alone would not show a
+        # check that fails for `bench`, as the first CCX23 run's did)
+        ssh @ssh "root@$ip" 'bash /root/setup.sh --user-only > /root/setup.log 2>&1 && cp /root/run.sh /home/bench/ && chown bench:bench /home/bench/run.sh && su - bench -c "bash ~/run.sh --finish"; echo self-test exit $?'
         $gone = $false
         for ($i = 0; $i -lt 24 -and -not $gone; $i++) {
             Start-Sleep 5
@@ -91,6 +93,8 @@ SSH_KEY_ID='$keyId'
         return
     }
     ssh @ssh "root@$ip" 'bash /root/setup.sh > /root/setup.log 2>&1; echo setup exit $?; cp /root/build.sh /root/run.sh /home/bench/ && chown bench:bench /home/bench/*.sh'
+    ssh @ssh "bench@$ip" 'sudo -n test -x /usr/local/sbin/bench-finish'
+    if ($LASTEXITCODE) { 'WARNING: bench cannot run bench-finish; only the deadline will end this server' }
     $labels = ($Controls | ForEach-Object { $_ -replace '^v', '' }) -join ' '
     ssh @ssh "bench@$ip" "bash ~/build.sh $($Controls -join ' ') > ~/build.log 2>&1; echo build exit `$?; grep -E 'rookparcel-nox|rustc' ~/build.log | grep -v '^+'"
     ssh @ssh "bench@$ip" "mkdir -p ~/bench; nohup setsid bash ~/run.sh $labels > ~/bench/run.log 2>&1 < /dev/null & sleep 5; head -3 ~/bench/run.log"

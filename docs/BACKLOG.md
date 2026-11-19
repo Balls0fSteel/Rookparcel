@@ -634,10 +634,16 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   detection forced off) against OpenSSL's SHA-1 before choosing a faster portable path
   (SSSE3/AVX2 message schedule, as OpenSSL's) or a crate. Intel desktop CPUs before the 11th
   generation and server CPUs before Ice Lake take this path (AMD has SHA-NI since Zen).
+  2026-11-19, a Hetzner CCX23 (AMD EPYC Milan, SHA-NI): 1.89 s per GiB, the least of the five
+  (qBittorrent 2.56, rTorrent 2.11); against qBittorrent in the same run 0.74 times its CPU,
+  against 1.86 times on the Xeon. Stronger suspicion, but different CPUs: the direct measurement
+  is still open.
 - **10,000 torrents listed 0.04 s later after a restart in 1.2.70** than 1.2.69 (0.66-0.70 s
   against 0.63-0.65 s, three rounds each, under the harness's 0.1 s poll step; BENCHMARKS.md
-  2026-11-18). Candidate: the per-torrent `CheckStarted` message of the resume check. Watch the
-  next run before acting.
+  2026-11-18). Candidate: the per-torrent `CheckStarted` message of the resume check. Not
+  reproduced on 2026-11-19's Hetzner CCX23: 0.22-0.23 s for both builds in all rounds; the
+  listing is three times faster there, so the same share would be about 0.013 s, under what the
+  harness resolves. Low priority; look again on a slow machine.
 - Memory: `rookparcel-nox`'s update check (1.1.17) leaves about 5.5 MB resident after its one
   HTTPS request on Linux (empty session 15.5 MB, 10.4 MB with `--no-update-check`; BENCHMARKS.md
   "Release check, 1.1.40"). Find what stays (OpenSSL's state, allocator arenas of the fetch
@@ -1400,8 +1406,9 @@ Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/fr
 - Benchmarks against other clients (`tools/bench`, docs/BENCHMARKS.md): the 2026-11-09 run is
   on the Xubuntu VM, where host load inflates CPU time; rerun on bare metal when possible, and
   before releases, with the last release as `--control`. Since 2026-11-18 a rented server
-  (`tools/bench/cloud/`, 3.6 h on a DigitalOcean `c-4`) takes the run off the owner's PC; its
-  figures do not compare with the VM's. Not covered yet: 100,000 torrents (the corpus is ~3 GB of metadata, too big
+  (`tools/bench/cloud/`, 3.6 h on a DigitalOcean `c-4`; since 2026-11-19 `launch-hetzner.ps1`,
+  3.5 h on a Hetzner CCX23 that uploads and deletes itself) takes the run off the owner's PC;
+  its figures compare only within the same run. Not covered yet: 100,000 torrents (the corpus is ~3 GB of metadata, too big
   for the 8 GB VM's libtorrent clients), multi-peer swarms, uTP, seeding CPU, a current rTorrent
   (Ubuntu ships 0.9.8) and the GUIs (Win32 vs µTorrent 2.2.1 and qBittorrent on Windows). The
   VM keeps `~/bench` (harness, Rookparcel 1.0.1, 1.1.40, 1.2.29 and 1.2.46 under `pa/`, venv

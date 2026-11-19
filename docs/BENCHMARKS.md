@@ -6,6 +6,31 @@ Deluge and rTorrent, on the same machine with the same torrents. The website sho
 The harness is `tools/bench/bench.py` (Python 3, standard library; Deluge's RPC needs
 `pip install deluge-client`) and `tools/bench/summarize.py` turns its JSON lines into tables.
 
+## Release check again, 2026-11-19 (1.2.70, on a Hetzner CCX23)
+
+The same check on a rented Hetzner Cloud server (CCX23: 4 dedicated vCPUs of an AMD EPYC "Milan" under KVM, with SHA extensions, 16 GB, Hetzner's Ubuntu 26.04 image, Falkenstein), 2026-11-19 from 10:04 to 13:34 Budapest time, 3 h 30 min (transfer 21 min, 1,000 torrents 80 min, 10,000 torrents 109 min); all 66 runs finished. Started with `launch-hetzner.ps1` (see "Running it on a rented machine"). Rookparcel was built on the server from `main` at `d28b2220` (it reports `1.2.70-dev.d28b222`; the engine is that of `52f0eda3`, only benchmark files changed) and from the `v1.2.69` tag as the control, Rust 1.100.0. Raw results: `docs/benchmarks/2026-11-19-hetzner-ccx23-1.2.70.jsonl`. These figures compare with each other only, not with the DigitalOcean run below or the VM.
+
+| Measure | 1.2.69 | 1.2.70-dev.d28b222 |
+|---|---|---|
+| Download, MiB/s (median of 5, range) | 1,413 (1,235–1,491) | 1,371 (980–1,470) |
+| Download, CPU s per GiB | 1.87 (1.78–1.97) | 1.89 (1.79–1.98) |
+| 1,000 torrents: add (s) | 0.52 (0.47–0.57) | 0.52 (0.51–0.56) |
+| 1,000 torrents: start with all listed (s) | 0.08 (0.08–0.08) | 0.08 (0.08–0.08) |
+| 1,000 torrents: memory after a restart (MB) | 21.9 (21.7–22.0) | 22.0 (21.9–22.0) |
+| 1,000 torrents: idle CPU (%) | 0.02 (0.02–0.03) | 0.02 (0.02–0.03) |
+| 10,000 torrents: add (s) | 5.25 (5.12–5.30) | 5.29 (5.20–5.57) |
+| 10,000 torrents: start with all listed (s) | 0.22 (0.22–0.23) | 0.22 (0.22–0.23) |
+| 10,000 torrents: memory after a restart (MB) | 67.6 (67.6–67.7) | 67.6 (67.5–69.4) |
+| 10,000 torrents: memory right after adding (MB) | 322 (321–332) | 322 (310–337) |
+| 10,000 torrents: idle CPU (%) | 0.03 (0.03–0.03) | 0.05 (0.03–0.05) |
+| Empty session, memory (MB) | 16.3 (16.3–16.4) | 16.3 (16.2–16.4) |
+
+- **Idle CPU: no difference at this resolution.** At 10,000 torrents the after-restart median (the table's) is one 10 ms tick higher again, as on DigitalOcean (ticks 3, 2, 3 against 2, 2, 2), but the window right after adding leans the other way in both runs; over both windows 1.2.70 counted 15 ticks against 14 here and 22 against 23 there.
+- **The 10,000-listed delay did not reproduce:** 0.22-0.23 s for both builds in all three rounds. The listing is three times faster here, so the same share would be about 0.013 s, under what the harness resolves: not reproduced, not refuted (BACKLOG "Disk and storage").
+- **With SHA extensions Rookparcel's download costs the least CPU of the five** (1.89 s per GiB; rTorrent 2.11, qBittorrent 2.56, Deluge 2.62, Transmission 4.09) and is the fastest (1,371 MiB/s; qBittorrent 1,015, Deluge 996, rTorrent 689, Transmission 62.5). Against qBittorrent in the same run it used 0.74 times its CPU per GiB here and 1.86 times on the Xeon without SHA extensions, which points at the portable SHA-1 again; it is still not measured alone.
+- **The other clients with 10,000 torrents after a restart:** qBittorrent 612 MB and 0.05 % idle, Transmission 328 MB and 0.45 %, Deluge 701 MB and 0.20 %, rTorrent 2,143 MB, 1.93 % and 30 s to list them all; Rookparcel 67.6 MB, 0.05 % and 0.22 s.
+- The first download of the session was slow again (1.2.70, round 1: 980 MiB/s, the seed at 3.3 CPU s against 2.1-2.7 later): the position effect described under 2026-11-11.
+
 ## Release check, 2026-11-18 (1.2.70 before its release, on a rented server)
 
 The full run on a rented DigitalOcean server (`c-4`: 4 dedicated vCPUs of an Intel Xeon Platinum 8280 at 2.7 GHz under KVM, 8 GB, DigitalOcean's Ubuntu 26.04 image, Amsterdam), 2026-11-18 from 21:12 to 00:50 Budapest time, 3 h 38 min; all 66 runs finished. Set up with `tools/bench/cloud/` (see "Running it on a rented machine"). Rookparcel was built on the server with the release command from `main` at `52f0eda3` (it reports `1.2.70-dev.52f0eda`) and from the `v1.2.69` tag as the control, Rust 1.100.0: not the published tarballs, so these figures check 1.2.70 and stay off the website. Raw results: `docs/benchmarks/2026-11-18-digitalocean-c4-1.2.70.jsonl`. **Not comparable with the VM's tables below:** a slower CPU, half the vCPUs, and no SHA extensions.
@@ -316,7 +341,7 @@ different client first each round.
 ## Limits
 
 - One machine, a virtual one (VMware Workstation, 8 vCPUs and 8 GB on an Intel i9-13900K host,
-  Ubuntu 26.04.1; the 2026-11-18 release check ran on a rented server instead, described there). VMware gives the guest no steal time, so a busy host shows up as extra CPU
+  Ubuntu 26.04.1; the 2026-11-18 and 2026-11-19 release checks ran on rented servers instead, described there). VMware gives the guest no steal time, so a busy host shows up as extra CPU
   time in the guest; runs are repeated and interleaved for that reason, and a single run should
   not be read on its own.
 - Transfers between two processes on one machine show what a client's code costs, not how it
@@ -383,5 +408,7 @@ it creates the server and a one-off SSH key, sends a project token and a Storage
 subaccount's login over SSH into a root-only file, arms a deadline timer, then sets up, builds
 and starts `run.sh`. At its end, or at the deadline, `finish-hetzner.sh` uploads the results,
 the logs and `machine.txt` (`lscpu`, versions) to the Storage Box over WebDAV and deletes the
-SSH key and the server. `-SelfTest -Type cx23` checks that path first for a cent. Numbers from
-different providers, or different days, do not compare: only the controls of the same run do.
+SSH key and the server. `-SelfTest -Type cx23` checks that path first for a cent, calling it as
+the `bench` user through sudo as a real run does. A full run took 3 h 30 min on a CCX23 (4
+dedicated AMD vCPUs), about €0.62 at €0.175 an hour; the default 6 h deadline is the cap. Numbers
+from different providers, or different days, do not compare: only the controls of the same run do.

@@ -3,7 +3,20 @@
 # the other clients from Ubuntu's packages with their services off, a passwordless-sudo user
 # `bench` (bench.py runs Transmission through `sudo -n`), and the two tmpfs mounts, which do not
 # survive a reboot. See docs/BENCHMARKS.md, "Running it on a rented machine".
+#
+#     bash setup.sh               # everything
+#     bash setup.sh --user-only   # only the user (launch-hetzner.ps1 -SelfTest)
 set -eux
+make_user() {
+    id bench >/dev/null 2>&1 || useradd -m -s /bin/bash bench
+    echo 'bench ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/bench
+    chmod 440 /etc/sudoers.d/bench
+    mkdir -p /home/bench/.ssh
+    cp /root/.ssh/authorized_keys /home/bench/.ssh/
+    chown -R bench:bench /home/bench/.ssh
+    chmod 700 /home/bench/.ssh
+}
+if [ "${1:-}" = --user-only ]; then make_user; exit; fi
 cloud-init status --wait || true
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
@@ -11,13 +24,7 @@ apt-get install -y -q build-essential pkg-config libssl-dev git python3-venv cur
     qbittorrent-nox transmission-daemon deluged deluge-console rtorrent
 # bench.py starts every client itself
 for s in transmission-daemon deluged qbittorrent-nox; do systemctl disable --now "$s" 2>/dev/null || true; done
-id bench >/dev/null 2>&1 || useradd -m -s /bin/bash bench
-echo 'bench ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/bench
-chmod 440 /etc/sudoers.d/bench
-mkdir -p /home/bench/.ssh
-cp /root/.ssh/authorized_keys /home/bench/.ssh/
-chown -R bench:bench /home/bench/.ssh
-chmod 700 /home/bench/.ssh
+make_user
 mkdir -p /mnt/benchram /var/lib/transmission-daemon/downloads
 mountpoint -q /mnt/benchram || mount -t tmpfs -o size=6g,uid=$(id -u bench),gid=$(id -g bench) tmpfs /mnt/benchram
 mountpoint -q /var/lib/transmission-daemon/downloads || mount -t tmpfs \
