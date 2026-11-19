@@ -6,6 +6,31 @@ Deluge and rTorrent, on the same machine with the same torrents. The website sho
 The harness is `tools/bench/bench.py` (Python 3, standard library; Deluge's RPC needs
 `pip install deluge-client`) and `tools/bench/summarize.py` turns its JSON lines into tables.
 
+## Release check, 2026-11-18 (1.2.70 before its release, on a rented server)
+
+The full run on a rented DigitalOcean server (`c-4`: 4 dedicated vCPUs of an Intel Xeon Platinum 8280 at 2.7 GHz under KVM, 8 GB, DigitalOcean's Ubuntu 26.04 image, Amsterdam), 2026-11-18 from 21:12 to 00:50 Budapest time, 3 h 38 min; all 66 runs finished. Set up with `tools/bench/cloud/` (see "Running it on a rented machine"). Rookparcel was built on the server with the release command from `main` at `52f0eda3` (it reports `1.2.70-dev.52f0eda`) and from the `v1.2.69` tag as the control, Rust 1.100.0: not the published tarballs, so these figures check 1.2.70 and stay off the website. Raw results: `docs/benchmarks/2026-11-18-digitalocean-c4-1.2.70.jsonl`. **Not comparable with the VM's tables below:** a slower CPU, half the vCPUs, and no SHA extensions.
+
+| Measure | 1.2.69 | 1.2.70-dev.52f0eda |
+|---|---|---|
+| Download, MiB/s (median of 5, range) | 350 (344–354) | 354 (248–358) |
+| Download, CPU s per GiB | 8.56 (8.50–8.71) | 8.49 (8.41–10.57) |
+| 1,000 torrents: add (s) | 0.74 (0.73–0.80) | 0.74 (0.73–0.78) |
+| 1,000 torrents: start with all listed (s) | 0.59 (0.58–0.62) | 0.59 (0.58–0.59) |
+| 1,000 torrents: memory after a restart (MB) | 21.8 (21.8–22.0) | 21.9 (21.8–21.9) |
+| 1,000 torrents: idle CPU (%) | 0.03 (0.03–0.05) | 0.03 (0.03–0.03) |
+| 10,000 torrents: add (s) | 7.56 (7.46–8.98) | 7.79 (7.49–8.32) |
+| 10,000 torrents: start with all listed (s) | 0.64 (0.63–0.65) | 0.68 (0.66–0.70) |
+| 10,000 torrents: memory after a restart (MB) | 67.5 (64.9–67.5) | 67.5 (67.4–68.0) |
+| 10,000 torrents: memory right after adding (MB) | 312 (310–312) | 312 (310–312) |
+| 10,000 torrents: idle CPU (%) | 0.05 (0.05–0.07) | 0.07 (0.05–0.07) |
+| Empty session, memory (MB) | 16.2 (16.1–16.3) | 16.2 (16.1–16.2) |
+
+- **The round-robin connect loop costs no measurable idle CPU:** the same ranges at 1,000 and 10,000 torrents; the 10,000 medians are one 10 ms clock tick apart over the 60 s window (0.0167 % per tick).
+- **To watch:** with 10,000 torrents, 1.2.70 listed all of them 0.04 s later after a restart in all three rounds (the ranges do not touch). The harness polls every 0.1 s, so this is under one poll step; the per-torrent `CheckStarted` message of the resume check is a candidate.
+- **The other clients here** (same packages as on the VM): download 528 MiB/s for qBittorrent (4.56 CPU s per GiB), 533 for Deluge (4.63), 528 for rTorrent (3.45), 62.4 for Transmission (5.70). With 10,000 torrents after a restart: qBittorrent 592 MB and 0.08 % idle, Transmission 327 MB and 1.33 %, Deluge 701 MB and 0.30 %, rTorrent 2,143 MB, 3.87 % and 77 s to list them all.
+- **Rookparcel's download costs about twice the others' CPU on this CPU** (8.5 s per GiB against 3.5-4.6), the reverse of the VM (1.01 against 1.86-1.93). Most of it is user time in the ten disk threads, about 1.34 s each per 2 GiB. The Xeon 8280 has no SHA extensions, so Rookparcel's portable SHA-1 runs instead of its SHA-NI path; that is the suspect, not yet measured on its own (BACKLOG "Disk and storage").
+- The first download of the session was slow again (1.2.70, round 1: 248 MiB/s, the seed at 7.6 CPU s against about 3 later): the position effect described under 2026-11-11.
+
 ## Results, 2026-11-11 (Rookparcel 1.2.46)
 
 Run on the VMware VM described under Limits (8 GB), 2026-11-11 from 00:11 to 04:30 with the host left alone; raw results in `docs/benchmarks/2026-11-11-ubuntu-vm-1.2.46.jsonl`. Transfer: 2 GiB, 5 runs each, medians with the range; throughput and CPU between 10% and 80% of the payload. Many torrents: 3 runs per count, medians; memory and idle CPU after the restart. All 88 runs finished, Deluge's too. The other clients are the same packages as before and measure as on 2026-10-27 and 2026-11-09.
@@ -291,7 +316,7 @@ different client first each round.
 ## Limits
 
 - One machine, a virtual one (VMware Workstation, 8 vCPUs and 8 GB on an Intel i9-13900K host,
-  Ubuntu 26.04.1). VMware gives the guest no steal time, so a busy host shows up as extra CPU
+  Ubuntu 26.04.1; the 2026-11-18 release check ran on a rented server instead, described there). VMware gives the guest no steal time, so a busy host shows up as extra CPU
   time in the guest; runs are repeated and interleaved for that reason, and a single run should
   not be read on its own.
 - Transfers between two processes on one machine show what a client's code costs, not how it
@@ -335,3 +360,20 @@ shown by such a control: numbers from another day or another VM size do not comp
 `--clients rookparcel,qbittorrent` picks clients; `--keep` leaves the profiles in `~/bench/work`.
 Transmission needs root through `sudo -n` (the AppArmor note above). The raw results of each
 published run are in `docs/benchmarks/`.
+
+### Running it on a rented machine
+
+Since 2026-11-18 the full run can go to a rented virtual server instead of a VM on a desktop
+that has to be left alone for hours. `tools/bench/cloud/` has the three steps for a fresh
+Ubuntu 26.04 server, reached over SSH:
+
+```bash
+sudo bash setup.sh        # as root: the clients' packages, a sudo user `bench`, the two tmpfs
+bash build.sh v1.2.69     # as bench: rookparcel-nox from main and from each control tag
+nohup setsid bash run.sh 1.2.69 > ~/bench/run.log 2>&1 < /dev/null &   # hours; ends with ALL DONE
+```
+
+`build.sh` builds with the release workflow's command, so `main` and the controls come from the
+same compiler on the same machine; `main` reports itself as `<version>-dev.<commit>`. Use
+dedicated CPUs: shared ones add other tenants' load to the idle figures. Delete the server
+afterwards; a stopped one is still billed.

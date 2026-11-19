@@ -626,6 +626,18 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   (b) Fixed in 1.2.70: a check waiting for its drive reads "Queued for checking". (c) A file a virus scanner removes is downloaded again at every
   start (cheap since 1.2.46); a line that names the loop, or not fetching a file that vanished
   twice, would end it.
+- **Hashing without SHA extensions (BENCHMARKS.md, 2026-11-18):** on a Xeon Platinum 8280 (no
+  SHA-NI) a 2 GiB download cost Rookparcel 8.5 CPU s per GiB against 3.5-4.6 for qBittorrent,
+  Deluge and rTorrent, mostly user time in the disk threads (about 13.4 s per 2 GiB); on the
+  VM's i9 (SHA-NI) it is 1.01 against 1.86-1.93. Suspect: `crypto::sha1::compress_portable`
+  (Steve Reid's one-block transform). Measure it alone on a CPU without SHA-NI (or with the
+  detection forced off) against OpenSSL's SHA-1 before choosing a faster portable path
+  (SSSE3/AVX2 message schedule, as OpenSSL's) or a crate. Intel desktop CPUs before the 11th
+  generation and server CPUs before Ice Lake take this path (AMD has SHA-NI since Zen).
+- **10,000 torrents listed 0.04 s later after a restart in 1.2.70** than 1.2.69 (0.66-0.70 s
+  against 0.63-0.65 s, three rounds each, under the harness's 0.1 s poll step; BENCHMARKS.md
+  2026-11-18). Candidate: the per-torrent `CheckStarted` message of the resume check. Watch the
+  next run before acting.
 - Memory: `rookparcel-nox`'s update check (1.1.17) leaves about 5.5 MB resident after its one
   HTTPS request on Linux (empty session 15.5 MB, 10.4 MB with `--no-update-check`; BENCHMARKS.md
   "Release check, 1.1.40"). Find what stays (OpenSSL's state, allocator arenas of the fetch
@@ -1387,7 +1399,9 @@ Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/fr
   them (state updates excepted).
 - Benchmarks against other clients (`tools/bench`, docs/BENCHMARKS.md): the 2026-11-09 run is
   on the Xubuntu VM, where host load inflates CPU time; rerun on bare metal when possible, and
-  before releases, with the last release as `--control`. Not covered yet: 100,000 torrents (the corpus is ~3 GB of metadata, too big
+  before releases, with the last release as `--control`. Since 2026-11-18 a rented server
+  (`tools/bench/cloud/`, 3.6 h on a DigitalOcean `c-4`) takes the run off the owner's PC; its
+  figures do not compare with the VM's. Not covered yet: 100,000 torrents (the corpus is ~3 GB of metadata, too big
   for the 8 GB VM's libtorrent clients), multi-peer swarms, uTP, seeding CPU, a current rTorrent
   (Ubuntu ships 0.9.8) and the GUIs (Win32 vs µTorrent 2.2.1 and qBittorrent on Windows). The
   VM keeps `~/bench` (harness, Rookparcel 1.0.1, 1.1.40, 1.2.29 and 1.2.46 under `pa/`, venv

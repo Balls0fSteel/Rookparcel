@@ -4,6 +4,14 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-19_093640_1795077400: 1.2.70's benchmark on a rented server
+
+- **On the owner's word** (a DigitalOcean API token on their PC, "do a full run, just delete VM after"; the token stayed on the PC: API calls from a local script only).
+- **Run:** a `c-4` droplet (4 dedicated vCPUs, Xeon Platinum 8280, 8 GB, Ubuntu 26.04, `ams3`), the full `bench.py` set with 1.2.69 as `--control`, both built on the server with the release command; 3 h 38 min, all 66 runs finished. Results in BENCHMARKS.md "Release check, 2026-11-18" and `docs/benchmarks/2026-11-18-digitalocean-c4-1.2.70.jsonl`; the website is unchanged (not published builds, another machine).
+- **Outcome:** the round-robin connect loop costs no measurable idle CPU (1,000: 0.03 % both; 10,000: 0.07 against 0.05, one clock tick, same ranges). New in BACKLOG "Disk and storage": Rookparcel's download costs twice the other clients' CPU on a CPU without SHA-NI (portable SHA-1 suspected), and 10,000 torrents listed 0.04 s later after a restart.
+- **`tools/bench/cloud/`** (`setup.sh`, `build.sh`, `run.sh`) and BENCHMARKS.md "Running it on a rented machine" make the run repeatable on any fresh Ubuntu 26.04 server.
+- **Problem:** the local guard that was to delete the droplet at 04:06 most likely ended with the owner's Windows session (the wait loop's last error, at 23:53, was `0xC000026B`, a DLL init failed at logoff), so the droplet ran about 12.5 h instead of 4: about $1.60 instead of under $1. Deleted at 09:35 with its SSH key, both listings checked. A guard on the PC cannot outlive a logoff or shutdown; the next run's wait loop deletes the server itself as soon as the results are copied.
+
 ## 2026-11-18_000752_1794956872: Version 1.2.70: unreadable files stop a check, queued checks say so, round-robin connections; test flakes
 
 - **On the owner's word** ("Engine bugs + flakes", from the BACKLOG triage).
