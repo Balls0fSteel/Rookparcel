@@ -4,6 +4,10 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-21_002110_1795216870: bug hunt of 1.2.70
+
+- Read-only review of `13d405d0` by seventeen parallel reviewers, one per area; the high and medium findings and about half the low ones re-read at the cited lines, nothing built or fixed. 34 defects in [BUGHUNT-2026-11-21.md](docs/BUGHUNT-2026-11-21.md): 2 high, 9 medium, 23 low, plus inherited and minor notes. uTP, the DHT node, the disk write paths and Web UI escaping came out clean. BACKLOG's live DHT toggle check fails (item 3).
+
 ## 2026-11-19_161259_1795101179: 1.2.70's benchmark again, on a self-deleting Hetzner server
 
 - **On the owner's word** (Hetzner with dedicated AMD for the SHA extensions, a Storage Box for the results, self-delete "so we don't lose any money", "Yes, CCX23"): `tools/bench/cloud/launch-hetzner.ps1` and `finish-hetzner.sh` (`78df2990`). The project's main token stays on this PC; only the bench token goes to the server, over SSH into a root-only file. A Storage Box subaccount takes the results over WebDAV; a `systemd-run` timer is the deadline. The CX23 self-test (about €0.01) uploaded, then deleted its key and itself.

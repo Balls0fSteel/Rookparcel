@@ -1,6 +1,6 @@
 # Detailed backlog
 
-Last updated: 2026-11-05_102905_1793870945 (Europe/Budapest).
+Last updated: 2026-11-21_002110_1795216870 (Europe/Budapest).
 
 Start with [PLAN.md](../PLAN.md) for priorities and release gates. Load only the
 topic needed here. These are open checks, known limitations and conditional
@@ -8,6 +8,21 @@ improvements; their presence does not make every item a 1.0 blocker. Completed
 work and the original wording remain in the [dated plan](archive/PLAN-2026-10-23.md).
 Approved constraints are in [DECISIONS.md](DECISIONS.md); implementation differences
 belong in [PORTING.md](PORTING.md); document deliberate setting-default changes.
+
+## Bug hunt findings (2026-11-21)
+
+- 2026-11-21_002110_1795216870: a read-only review of `13d405d0` (1.2.70) by seventeen parallel
+  reviewers found 34 defects, none fixed yet; the list with file:line, triggers and fix directions
+  is [BUGHUNT-2026-11-21.md](BUGHUNT-2026-11-21.md). The two high ones: piece layers shipped in a
+  .torrent are never checked against the file roots (a forged layer is trusted for v2 piece
+  checks; libtorrent fails the torrent), and `/pa/remote` still bypasses `--webui-save-root`
+  through a Resume source's save path, `RenameFile` and `renamed_files`. Nine medium: the DHT
+  switch not applied live (answers the "Engine networking" check below: it fails both ways), a
+  late tracker reply after a stop blocking the next start's announce, banned peers accepted
+  inbound, `Reach::for_links_from` trusting its own DNS lookup, end-game duplicating too early,
+  RSS smart filters losing a failed episode, a stale DNS answer steering another tracker request,
+  a torn `resume.log` append retried, unbanned current-password guessing from bypass sessions.
+  23 low (12-34). All open.
 
 ## Bug hunt findings (2026-11-05)
 
@@ -734,8 +749,8 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   storage tests are later. BEP51 answering exists; querying and matching tests
   are not ported. BEP55 holepunch remains later. Consider more bootstrap hosts
   if the single libtorrent default becomes a problem, documenting a deliberate
-  default change in the porting notes. Check DHT disable/re-enable on a
-  live session.
+  default change in the porting notes. DHT disable/re-enable on a live
+  session does not work (bug hunt 2026-11-21, item 3).
 - LSD: same-host clients are found on many interfaces; duplicate IDs prevent
   multiple connections but retries continue. A shared-ID/address hint could
   reduce them. Test another machine
