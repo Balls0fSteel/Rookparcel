@@ -11,7 +11,7 @@ belong in [PORTING.md](PORTING.md); document deliberate setting-default changes.
 
 ## Bug hunt findings (2026-11-21)
 
-- 2026-11-21_002110_1795216870: a read-only review of `13d405d0` (1.2.70) by seventeen parallel
+- 2026-11-21_002110_1795216870: a read-only review of `13d405d0` (1.2.70) by eighteen parallel
   reviewers found 34 defects, none fixed yet; the list with file:line, triggers and fix directions
   is [BUGHUNT-2026-11-21.md](BUGHUNT-2026-11-21.md). The two high ones: piece layers shipped in a
   .torrent are never checked against the file roots (a forged layer is trusted for v2 piece
@@ -750,7 +750,7 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   are not ported. BEP55 holepunch remains later. Consider more bootstrap hosts
   if the single libtorrent default becomes a problem, documenting a deliberate
   default change in the porting notes. DHT disable/re-enable on a live
-  session does not work (bug hunt 2026-11-21, item 3).
+  session does not work, by reading the code, not run (bug hunt 2026-11-21, item 3).
 - LSD: same-host clients are found on many interfaces; duplicate IDs prevent
   multiple connections but retries continue. A shared-ID/address hint could
   reduce them. Test another machine

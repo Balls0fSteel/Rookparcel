@@ -6,7 +6,7 @@ Earlier history: [archive index](docs/archive/README.md), including all 148 orig
 
 ## 2026-11-21_002110_1795216870: bug hunt of 1.2.70
 
-- Read-only review of `13d405d0` by seventeen parallel reviewers, one per area; the high and medium findings and about half the low ones re-read at the cited lines, nothing built or fixed. 34 defects in [BUGHUNT-2026-11-21.md](docs/BUGHUNT-2026-11-21.md): 2 high, 9 medium, 23 low, plus inherited and minor notes. uTP, the DHT node, the disk write paths and Web UI escaping came out clean. BACKLOG's live DHT toggle check fails (item 3).
+- Read-only review of `13d405d0` by eighteen parallel reviewers, one per area; the high and medium findings and about half the low ones re-read at the cited lines, the high and medium ones searched for in SECURITY-REVIEW, SECURITY-AUDIT, PORTING and DECISIONS (none listed); nothing built, run or fixed. 34 defects in [BUGHUNT-2026-11-21.md](docs/BUGHUNT-2026-11-21.md): 2 high, 9 medium, 23 low, plus inherited and minor notes. uTP, the DHT node, the disk write paths and Web UI escaping came out clean. BACKLOG's live DHT toggle check fails (item 3).
 
 ## 2026-11-19_161259_1795101179: 1.2.70's benchmark again, on a self-deleting Hetzner server
 

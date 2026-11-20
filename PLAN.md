@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-19_161259_1795101179
+Last updated: 2026-11-21_002110_1795216870
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D78](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -26,7 +26,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 - **Artwork:** the Postal Rook won ([small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
 - **Releases:** 1.0.1 to 1.2.69 published ([notes](docs/releases/)). 1.2.0 shipped profiles (D42), D50-D55 and the bug-hunt fixes; 1.2.54 the UI lock (D69); 1.2.57 the settings guard (D70); all 2026-11-17: **1.2.63** D71-D77 (download order, magnets and export, excluded names, the block list's address, tags, `.!ut`) and its review's fixes; **1.2.65** peers at once for a finished torrent made a download again, Win32 Files tab sort (D78); **1.2.67** GTK and macOS Files tab sort, Flatpak runtimes copied into the Release container's layer (EXDEV); **1.2.69** Trackers and Peers tabs sort by their headers (`ui.trackers_sort` / `ui.peers_sort`, D78) and its review's two fixes. Drafts checked by checksum, the zip's contents and versions and `rookparcel-nox --version`; RELEASING.md step 5 by hand is open for these. Open in BACKLOG: those features' sections, "Security review 1.2.63", "Files tab sort and the unfocused selection" (the owner's retest), "Trackers and Peers tab sort", a macOS swarm-test flake ("Validation").
 - **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.69. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`. A small nox add race is in BACKLOG "Remote mode and Web UI".
-- **UI lock (D69, 1.2.47-1.2.50; released in 1.2.54):** a PIN of 4 to 6 digits hides all three GUIs' windows in the tray; Ctrl or Option at start, or `--reset-lock`, removes a forgotten one; wiki page `Locking-Rookparcel`. **1.2.58 (D71, released in 1.2.63):** Preferences > Advanced > UI Lock with an off switch that removes every Lock command, no Options > Lock PIN, a narrower Win32 PIN dialog; checked on all three. Open: BACKLOG "UI lock".
+- **UI lock (D69, released in 1.2.54; D71's off switch in 1.2.63):** a 4-6 digit PIN hides all three GUIs' windows in the tray; Ctrl or Option at start, or `--reset-lock`, removes a forgotten one; wiki page `Locking-Rookparcel`. Open: BACKLOG "UI lock".
 - **Benchmarks:** [2026-11-11 results](docs/BENCHMARKS.md) for 1.2.46: 10,000 torrents use 67 MB after restart (qBittorrent 612 MB) and idle at 0.07 % of a core; Win32 lists 100,000 in 1.37-1.49 s. **1.2.70's release checks** on rented servers (`tools/bench/cloud/`; DigitalOcean 2026-11-18, a self-deleting Hetzner CCX23 2026-11-19): idle CPU as 1.2.69's; BACKLOG "Disk and storage" has the SHA-1 suspect on CPUs without SHA-NI and an unreproduced 10,000-listing delay.
 - CI and FreeBSD green for `37f11338` (2026-11-19), Fuzz for `52f0eda3` (1.2.70).
 - Scale baselines on this PC: [plan snapshot](docs/archive/PLAN-2026-11-13.md), [BENCHMARKS.md](docs/BENCHMARKS.md); the low-end-machine gate remains open.
@@ -34,7 +34,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Next steps
 
-**Bug hunt 2026-11-21** ([BUGHUNT-2026-11-21.md](docs/BUGHUNT-2026-11-21.md), BACKLOG "Bug hunt findings (2026-11-21)"): 34 open, two high (unverified v2 piece layers; `/pa/remote` save-root bypass) and nine medium, the candidates to fix before 1.2.70 is released.
+**Bug hunt 2026-11-21** ([BUGHUNT-2026-11-21.md](docs/BUGHUNT-2026-11-21.md)): 34 open; the two high (unverified v2 piece layers, `/pa/remote` save-root bypass) and nine medium are the candidates to fix before releasing 1.2.70.
 
 **Open from releases 1.2.29-1.2.54** (notes in `docs/releases/`, full paragraphs in the [2026-11-13 snapshot](docs/archive/PLAN-2026-11-13.md)): RELEASING.md step 5 by hand (setup, zip, AppImages, Flatpaks, dmg and image on the VMs; updates from 1.2.30 and from an installed 1.2.46-1.2.54, the owner's copy starting with one "setup.exe is missing" line and no long check; the UI lock); the machine translations of 1.2.34-1.2.43 and D69; 1.2.44's GTK line and frontend change on the VMs; 1.2.33's fix with the installed client; a real Logger with private torrents; the owner's look at the GTK sizes; the dmg step and real Macs for the first-run guide; the Docker image's first push; then dropping the Mac's legacy notification centre. BACKLOG: "Themes", "Files tab folder tree", "Localisation", "GTK desktop checks", "macOS", "Statistics, trackers and Run Program", "Seeding goals", "Disk and storage", "UI lock".
 
@@ -44,7 +44,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 - **F.** Microsoft Store release (D46, approved 2026-11-04): build per [STORE.md](docs/STORE.md).
 - **G.** Smart disk I/O (D48) and Keep ping low (D49) shipped in 1.1.29-1.1.40. Open: real-disk busy-throttle measurements (BACKLOG "Disk and storage"), the owner's gaming line, a Mac run, 2.2.1's "Stop transfers on user interaction".
 - **H.** D56: the theme pass (D63) and Win32 dark mode (D64) shipped by 1.2.29, hand checks in [BACKLOG "Themes"](docs/BACKLOG.md#themes-researched-2026-11-02_110639_1793613999-theme-pass-2026-11-09_152030_1794234030). Icon skins and web search engines remain, each designed before code.
-- **I.** The owner's six points (D50-D55, [PROPOSALS.md](docs/PROPOSALS.md)) shipped; the 38 [bug-hunt](docs/BUGHUNT-2026-11-05.md) findings closed. **Open:** a real VPN run, a real first start through the guide, the GUI looks; the Win32 test binary's rare heap fault under parallel load (BACKLOG "Validation"; run its tests on one thread).
+- **I.** The owner's six points (D50-D55, [PROPOSALS.md](docs/PROPOSALS.md)) shipped; the 2026-11-05 hunt's 38 closed. **Open:** a real VPN run, a real first start through the guide, the GUI looks; the Win32 test binary's rare heap fault under parallel load (BACKLOG "Validation"; run its tests on one thread).
 
 0. **Owner hand-test findings (2026-10-27):** fixed in 1.0.2-1.0.8; re-test on a fresh Win32 build ([BACKLOG](docs/BACKLOG.md#owner-hand-test-findings-2026-10-27_225501_1793138101)).
 1. Run the installer's wizard and the all-users UAC path once on a real PC, and register `RP` with the client-ID lists (item 14).
