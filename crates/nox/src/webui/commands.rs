@@ -928,12 +928,12 @@ pub fn api_path(p: &str) -> String {
     p.replace('\\', "/").trim_matches('/').to_owned()
 }
 
-/// A new name: relative, no empty, `.` or `..` parts, no characters Windows forbids.
+/// A new name: inside the save folder as a remote session's must be
+/// (`util::path::is_relative_name`: relative, no empty, `.` or `..` parts), and on every
+/// platform without the characters Windows forbids.
 pub fn valid_new_path(p: &str) -> bool {
-    !p.is_empty()
-        && !p.contains(':')
-        && p.split('/').all(|c| !c.is_empty() && c != "." && c != "..")
-        && !p.chars().any(|c| matches!(c, '<' | '>' | '"' | '|' | '?' | '*') || c.is_control())
+    rookparcel_core::util::path::is_relative_name(p)
+        && !p.chars().any(|c| matches!(c, ':' | '<' | '>' | '"' | '|' | '?' | '*'))
 }
 
 /// Renames one file (`folder` false), every file under a folder (true), or whichever `old`
@@ -1658,13 +1658,14 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
     // the torrent search's (`search.rs`)
     if let Some(rest) = endpoint.strip_prefix("search").filter(|r| r.is_empty() || r.starts_with('/')) {
         let local = super::api::is_local(&req.head, req.peer);
+        let ip = super::api::client_ip(&req.head, req.peer);
         if read {
-            return super::search::serve(shared, rest, None, key, local);
+            return super::search::serve(shared, rest, None, key, ip, local);
         }
         if !csrf_header_ok(&req.head) {
             return Err(err(403, format!("missing X-Requested-With: {CSRF_VALUE} header")));
         }
-        return super::search::serve(shared, rest, Some(json_body(req)?), key, local);
+        return super::search::serve(shared, rest, Some(json_body(req)?), key, ip, local);
     }
     if read {
         return match endpoint {
@@ -1810,7 +1811,8 @@ fn serve_inner(shared: &Shared, endpoint: &str, req: &Request, key: &str) -> Res
             // Run Program (D67) changes only here, and only for a browser on this computer (or
             // with --webui-remote-run-program): the gate is this request's own
             let run = prefs::RunGate::of(shared, &req.head, req.peer);
-            prefs::commit_request(shared, &changes, key, run, |f| rookparcel_core::IpFilter::load(f))
+            let ip = super::api::client_ip(&req.head, req.peer);
+            prefs::commit_request(shared, &changes, key, ip, run, |f| rookparcel_core::IpFilter::load(f))
                 .map_err(|(field, why)| err(400, format!("{field}: {why}")))?;
             Ok(no_content())
         }

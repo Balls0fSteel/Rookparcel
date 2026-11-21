@@ -6,7 +6,9 @@
 // Changes: the DHT runs on the engine's UDP listen sockets (one per address family, shared with
 // uTP); the engine's UDP dispatch hands it the bencoded datagrams. The announce round-robin
 // covers running torrents only (libtorrent spreads the interval over every loaded torrent).
-// The DHT state is saved to `dht_state.dat` beside the session store. The DHT gets the
+// The DHT state is saved to `dht_state.dat` beside the session store, also when `enable_dht`
+// is switched off (`update_dht` / `stop_dht`), and a later start takes the stopped node's
+// state (libtorrent's new node starts from none). The DHT gets the
 // session's IP filter with each call (libtorrent `get_dht_ip_filter`); fixes from 2.1.1
 // (abc121b1e9).
 
@@ -32,6 +34,10 @@ pub(crate) const DHT_COOKIE: u64 = 1 << 63;
 /// With [`DHT_COOKIE`]: the lookup of a node's host name (a magnet's `dht=`, a `.torrent`'s
 /// `nodes`), not of a bootstrap router.
 const DHT_NODE_COOKIE: u64 = 1 << 60;
+/// A router lookup's cookie carries the start it belongs to ([`DhtSession::starts`]) in these
+/// bits, above the port (bits 32 to 47).
+const START_SHIFT: u32 = 48;
+const START_MASK: u64 = 0xfff;
 const STATE_FILE: &str = "dht_state.dat";
 const SAVE_INTERVAL: Duration = Duration::from_secs(30 * 60);
 
@@ -43,7 +49,10 @@ pub(super) struct DhtSession {
     /// Nodes from magnet links and `.torrent` files, added once the DHT runs (libtorrent
     /// `m_dht_nodes`).
     pending_nodes: Vec<SocketAddr>,
+    /// `dht_state.dat` in the session's state directory (none without one), kept for a start
+    /// after the session's.
     state_path: Option<PathBuf>,
+    /// The state the DHT starts from: the last stopped node's, else read from `state_path`.
     state: Option<DhtState>,
     next_poll: Instant,
     /// Torrents waiting for their first announce (libtorrent `m_dht_torrents`).
@@ -51,9 +60,11 @@ pub(super) struct DhtSession {
     next_torrent: usize,
     next_announce: Option<Instant>,
     last_save: Instant,
-    /// The DHT is on but had no UDP socket to run on: it starts (with this state directory)
-    /// when a listen socket brings one.
-    waiting_for_socket: Option<Option<PathBuf>>,
+    /// The DHT is on but had no UDP socket to run on: it starts when a listen socket brings
+    /// one.
+    waiting_for_socket: bool,
+    /// Counts the starts, so a router lookup of a start since stopped is ignored.
+    starts: u64,
 }
 
 impl DhtSession {
@@ -70,8 +81,14 @@ impl DhtSession {
             next_torrent: 0,
             next_announce: None,
             last_save: now,
-            waiting_for_socket: None,
+            waiting_for_socket: false,
+            starts: 0,
         }
+    }
+
+    /// The session's state directory, where `dht_state.dat` is read and saved.
+    pub fn set_state_dir(&mut self, dir: Option<&Path>) {
+        self.state_path = dir.map(|d| d.join(STATE_FILE));
     }
 
     /// When the reactor must wake for the DHT next.
@@ -133,22 +150,28 @@ fn load_state(path: &Path) -> DhtState {
 impl Engine {
     /// Resolves the bootstrap routers; the DHT starts once they are resolved (libtorrent
     /// `start_dht` waits for `m_outstanding_router_lookups`). It runs on the UDP listen
-    /// sockets the engine opened beside the TCP listeners.
-    pub(super) fn start_dht(&mut self, state_dir: Option<&Path>) {
-        if !self.settings.enable_dht {
+    /// sockets the engine opened beside the TCP listeners. At the session's start, and when
+    /// `enable_dht` is switched on (libtorrent `update_dht`); nothing while it runs or starts.
+    pub(super) fn start_dht(&mut self) {
+        if !self.settings.enable_dht || self.dht.tracker.is_some() || self.dht.pending_routers > 0 {
             return;
         }
         let now = Instant::now();
         if self.udp.is_empty() {
-            self.alert(Alert::Log { id: None, message: "DHT: no UDP listen socket, not started".into() });
-            self.dht.waiting_for_socket = Some(state_dir.map(Path::to_path_buf));
+            if !self.dht.waiting_for_socket {
+                self.alert(Alert::Log { id: None, message: "DHT: no UDP listen socket, not started".into() });
+            }
+            self.dht.waiting_for_socket = true;
             return;
         }
-        let path = state_dir.map(|d| d.join(STATE_FILE));
-        let state = path.as_deref().map(load_state).unwrap_or_default();
-        self.dht.state_path = path;
-        self.dht.state = Some(state);
+        self.dht.waiting_for_socket = false;
+        // the node stopped in this session comes back as it was; else the saved state
+        if self.dht.state.is_none() {
+            self.dht.state = Some(self.dht.state_path.as_deref().map(load_state).unwrap_or_default());
+        }
         self.dht.next_poll = now;
+        self.dht.starts += 1;
+        let start = (self.dht.starts & START_MASK) << START_SHIFT;
         let (routers, skipped) =
             bootstrap_lookups(&self.settings.dht_bootstrap_nodes, self.proxy.cfg.as_ref());
         if skipped > 0 {
@@ -156,7 +179,7 @@ impl Engine {
             self.alert(Alert::Log { id: None, message });
         }
         for (i, (host, port)) in routers.into_iter().enumerate() {
-            match self.resolver.resolve(&host, DHT_COOKIE | ((port as u64) << 32) | i as u64) {
+            match self.resolver.resolve(&host, DHT_COOKIE | start | ((port as u64) << 32) | i as u64) {
                 Some(ips) => self.dht.routers.extend(ips.into_iter().map(|ip| SocketAddr::new(ip, port))),
                 None => self.dht.pending_routers += 1,
             }
@@ -166,6 +189,23 @@ impl Engine {
         }
     }
 
+    /// libtorrent `stop_dht`, for `enable_dht` switched off: the node's state is saved (as at
+    /// the session's end) and kept for a later start, and nothing of this run is left: no
+    /// routers, lookups, announces or torrents waiting for one. No DHT peers come from then on.
+    pub(super) fn stop_dht(&mut self) {
+        self.save_dht_state();
+        if let Some(t) = self.dht.tracker.take() {
+            self.dht.state = Some(t.state());
+        }
+        self.dht.routers.clear();
+        // the answers of lookups still out are ignored (`on_dht_resolved`)
+        self.dht.pending_routers = 0;
+        self.dht.prioritized.clear();
+        self.dht.next_torrent = 0;
+        self.dht.next_announce = None;
+        self.dht.waiting_for_socket = false;
+    }
+
     /// A UDP listen socket of this family opened after startup (libtorrent `dht->new_socket`
     /// for a new listen socket): the DHT runs a node on it, or starts if it was waiting for a
     /// socket.
@@ -173,8 +213,8 @@ impl Engine {
         if !self.settings.enable_dht {
             return;
         }
-        if let Some(dir) = self.dht.waiting_for_socket.take() {
-            self.start_dht(dir.as_deref());
+        if self.dht.waiting_for_socket {
+            self.start_dht();
             return;
         }
         let external = self.ip_voter.external_address(v4);
@@ -203,6 +243,10 @@ impl Engine {
 
     /// A bootstrap router's or a node's name resolved (or failed).
     pub(super) fn on_dht_resolved(&mut self, r: Resolved) {
+        // the DHT was switched off since (and maybe on again: a router lookup of another start)
+        if !self.settings.enable_dht {
+            return;
+        }
         let port = ((r.cookie >> 32) & 0xffff) as u16;
         if r.cookie & DHT_NODE_COOKIE != 0 {
             // libtorrent `on_dht_name_lookup`
@@ -213,6 +257,9 @@ impl Engine {
                     message: format!("DHT: cannot resolve node {}: {e}", r.host),
                 }),
             }
+            return;
+        }
+        if (r.cookie >> START_SHIFT) & START_MASK != self.dht.starts & START_MASK {
             return;
         }
         match r.result {

@@ -88,10 +88,10 @@ Both take `t=caps` (capabilities and categories) and `t=search&q=&cat=&limit=&of
 
 ### Security
 
-- **Reach (SEC-26)**: the source URL is the user's, so the query goes to any address, Prowlarr on `localhost` included. A result's link may be followed with `Reach::User` only when it points at the source's own host (both servers proxy their downloads through themselves); any other link gets `Reach::Public` (`Reach::for_links_from` already does this for Jackett-style local feeds).
+- **Reach (SEC-26)**: the source URL is the user's, so the query goes to any address, Prowlarr on `localhost` included. A result's link may be followed with `Reach::User` only when it points at the source's own host (both servers proxy their downloads through themselves); any other link gets `Reach::Public` (RSS does the same for Jackett-style local feeds by the server that sent the feed, `FetchResponse::links_reach`).
 - **The API key** is stored like an RSS feed's cookies, never logged, and removed from any URL shown in an error or in the Web UI. The Web UI's native API returns sources without their keys.
 - Result titles and descriptions are untrusted text: shown as text, never as HTML.
-- **Proxy** (decided 2026-10-30): `http_get` uses the engine's proxy whenever one is set, which would break a Prowlarr on this machine or this network. A source on a non-public address (loopback, private, link-local, `localhost`; `Reach::for_links_from` decides) never goes through the proxy; a public one does. A result's link follows the same rule by its own host (`search::worker::proxy_for`).
+- **Proxy** (decided 2026-10-30): `http_get` uses the engine's proxy whenever one is set, which would break a Prowlarr on this machine or this network. A source on a non-public address (loopback, private, link-local, `localhost`, or a name all of whose addresses are; `fetch::is_local_destination` decides, and never looks up a name the proxy resolves, SEC-15) never goes through the proxy; a public one does. A result's link follows the same rule by its own host (`search::worker::proxy_for`).
 
 ### User interface
 

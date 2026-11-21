@@ -87,6 +87,23 @@ pub fn is_complete(f: &str) -> bool {
     }
 }
 
+/// Whether `name` is a file name inside the save folder: what a torrent's file may be renamed
+/// to by someone who may not name other folders (a remote session, the Web UI). Relative (no
+/// leading separator, no drive, no `\\server`), every part between `/` and `\` separators
+/// neither empty, `.` nor `..`, no control characters; on Windows also no `:` (a drive-relative
+/// path, an alternate data stream), none of the characters Windows refuses in names, and no
+/// part that Windows trims to nothing (trailing dots and spaces, as in `.. `). The engine itself
+/// also takes absolute names (libtorrent's `rename_file`), for its local owner.
+pub fn is_relative_name(name: &str) -> bool {
+    let windows_only_bad = |c: char| cfg!(windows) && matches!(c, ':' | '<' | '>' | '"' | '|' | '?' | '*');
+    !name.is_empty()
+        && !name.chars().any(|c| c.is_control() || windows_only_bad(c))
+        && name.split(['/', '\\']).all(|part| {
+            let kept = if cfg!(windows) { part.trim_end_matches(['.', ' ']) } else { part };
+            !part.is_empty() && part != "." && part != ".." && !kept.is_empty()
+        })
+}
+
 /// True if `f` has a directory part (`"a/b"` yes, `"b"` and `"b/"` no).
 pub fn has_parent_path(f: &str) -> bool {
     if f.is_empty() || f == "/" {
@@ -192,6 +209,39 @@ mod tests {
             assert!(!is_complete("x/y") && !is_complete("C:"));
         } else {
             assert!(is_complete("/x") && !is_complete("x/y"));
+        }
+    }
+
+    /// Bug hunt 2026-11-21, 2: a name a remote session or the Web UI renames a file to stays
+    /// inside the save folder.
+    #[test]
+    fn relative_names_stay_inside_the_save_folder() {
+        for good in ["a", "a/b.txt", "Show S01/e 1.mkv", "a\\b", ".hidden", "a..b", "\u{e9}t\u{e9}"] {
+            assert!(is_relative_name(good), "{good}");
+        }
+        for bad in [
+            "",
+            "/etc/x",
+            "\\x",
+            "//srv/share/x",
+            "\\\\srv\\share\\x",
+            "..",
+            "../x",
+            "a/../../x",
+            "a\\..\\x",
+            "a/./b",
+            "a//b",
+            "a/",
+            ".",
+            "a\nb",
+            "a\0b",
+        ] {
+            assert!(!is_relative_name(bad), "{bad:?}");
+        }
+        // drive paths, streams and the names Windows trims or refuses; ordinary names elsewhere
+        for windows_bad in ["C:\\x", "C:x", "c:/x", "a:stream", "a/.. ", "a/...", "a/ .", "a?", "a*b", "a|b"]
+        {
+            assert_eq!(is_relative_name(windows_bad), !cfg!(windows), "{windows_bad:?}");
         }
     }
 

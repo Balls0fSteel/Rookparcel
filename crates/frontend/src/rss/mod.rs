@@ -26,7 +26,7 @@ pub mod worker;
 
 use std::collections::{HashSet, VecDeque};
 
-use rookparcel_core::fetch::{FetchOptions, FetchProxy, http_get};
+use rookparcel_core::fetch::{FetchOptions, FetchProxy, Reach, http_get};
 use rookparcel_core::util::string::parse_url_components;
 
 pub use episode::{Episode, EpisodeSpec, Quality, is_repack, parse_episode};
@@ -146,6 +146,9 @@ pub struct RssFeed {
     pub read: RecentSet,
     /// The items of the last successful fetch (not persisted).
     pub items: Vec<FeedItem>,
+    /// Whether `items` came from a server on this machine or network ([`Feed::served_locally`]),
+    /// so that their links may reach any address (SEC-26); not persisted, as `items` are not.
+    pub items_local: bool,
 }
 
 impl RssFeed {
@@ -162,6 +165,12 @@ impl RssFeed {
     /// The alias, else the feed's title, else its URL.
     pub fn name(&self) -> &str {
         [&self.alias, &self.title].into_iter().find(|s| !s.trim().is_empty()).unwrap_or(&self.url)
+    }
+
+    /// Which addresses its items' links may reach (SEC-26): any when the items came from a
+    /// server on this machine or network ([`RssFeed::items_local`]), public ones otherwise.
+    pub fn links_reach(&self) -> Reach {
+        if self.items_local { Reach::User } else { Reach::Public }
     }
 
     /// The URL to fetch and the cookies to send with it.
@@ -234,9 +243,11 @@ pub struct AddRequest {
     pub url: String,
     /// The feed's cookies, to send when fetching `url` (private trackers need them).
     pub cookies: String,
-    /// The feed's URL (without cookies): `url` may reach this machine or network only when
-    /// the feed is there too (SEC-26).
-    pub feed_url: String,
+    /// Which addresses fetching `url` may reach: this machine or network only when the server
+    /// that sent the feed is there too ([`RssFeed::items_local`], SEC-26).
+    pub links_reach: Reach,
+    /// What taking the item recorded, for [`RssDownloader::forget`] to undo.
+    pub recorded: Recorded,
     /// Empty for the default download folder.
     pub save_path: String,
     /// Empty for none.
@@ -249,6 +260,18 @@ impl AddRequest {
     pub fn is_magnet(&self) -> bool {
         self.url.get(..7).is_some_and(|s| s.eq_ignore_ascii_case("magnet:"))
     }
+}
+
+/// What a filter or a subscription recorded when it took an item, so that a download that
+/// fails can be undone ([`RssDownloader::forget`]) and the item is taken again at the next
+/// refresh. Empty for the user's own download of an item.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Recorded {
+    /// The episode keys the smart episode filter added (those already there not included): to
+    /// the filter's `seen_episodes`, or to the feed's `episodes` for a subscription.
+    pub episodes: Vec<String>,
+    /// The filter's `last_match` this item set, and the value before it.
+    pub last_match: Option<(i64, Option<i64>)>,
 }
 
 /// One line of the History list.
@@ -306,6 +329,7 @@ impl RssDownloader {
         if f.url != url {
             f.url = url.to_owned();
             f.items.clear();
+            f.items_local = false;
             f.title.clear();
             f.last_error.clear();
             f.last_refresh = None;
@@ -391,11 +415,13 @@ impl RssDownloader {
                 feed.last_error.clear();
                 feed.title = doc.title;
                 feed.items = doc.items;
+                feed.items_local = doc.served_locally;
                 feed.etag = v.etag;
                 feed.last_modified = v.last_modified;
                 self.process(id, now)
             }
             Ok(Fetched::NotModified) => {
+                // the items, and `items_local`, are those of the fetch that sent them
                 feed.last_error.clear();
                 self.process(id, now)
             }
@@ -432,7 +458,8 @@ impl RssDownloader {
                 item_id: item_id.to_owned(),
                 title: item.title.clone(),
                 cookies: feed.cookies_for(&url),
-                feed_url: split_cookie(&feed.url).0.to_owned(),
+                links_reach: feed.links_reach(),
+                recorded: Recorded::default(),
                 url,
                 save_path: String::new(),
                 label: feed_label,
@@ -441,8 +468,11 @@ impl RssDownloader {
             };
             if feed.subscribe {
                 let feed = &mut self.feeds[fi];
-                if feed.subscribe_smart && !smart_take(&mut feed.episodes, episode, repack) {
-                    continue;
+                if feed.subscribe_smart {
+                    match smart_take(&mut feed.episodes, episode, repack) {
+                        Some(added) => req.recorded.episodes = added,
+                        None => continue,
+                    }
                 }
             } else {
                 let Some(filter) = self.filters.iter_mut().find(|f| {
@@ -455,10 +485,11 @@ impl RssDownloader {
                 };
                 if filter.smart {
                     let mut seen: RecentSet = filter.seen_episodes.iter().map(String::as_str).collect();
-                    smart_take(&mut seen, episode, repack);
+                    req.recorded.episodes = smart_take(&mut seen, episode, repack).unwrap_or_default();
                     seen.prune(MAX_EPISODES, &HashSet::new());
                     filter.seen_episodes = seen.iter().map(str::to_owned).collect();
                 }
+                req.recorded.last_match = Some((now, filter.last_match));
                 filter.last_match = Some(now);
                 req.filter = Some(filter.id);
                 req.save_path = filter.save_in.clone();
@@ -508,7 +539,8 @@ impl RssDownloader {
             item_id: item_id.to_owned(),
             title: item.title.clone(),
             cookies: f.cookies_for(&url),
-            feed_url: split_cookie(&f.url).0.to_owned(),
+            links_reach: f.links_reach(),
+            recorded: Recorded::default(),
             url,
             save_path: String::new(),
             label: if label_from_feed { f.name().to_owned() } else { String::new() },
@@ -537,11 +569,43 @@ impl RssDownloader {
         }
     }
 
-    /// Forgets that an item was added (its download could not be fetched), so the next
-    /// refresh tries it again. Episodes the smart filters recorded stay recorded.
-    pub fn forget(&mut self, feed: FeedId, item_id: &str) {
-        if let Some(f) = self.feed_mut(feed) {
-            f.downloaded.remove(item_id);
+    /// Forgets that `req`'s item was added (its download could not be fetched), so the next
+    /// refresh tries it again: the item is no longer marked added, and what taking it
+    /// recorded ([`AddRequest::recorded`]) is undone. The episode keys it added go from the
+    /// smart episode filter (a key stays while its REPACK one is there: a repack of that
+    /// episode was added since); the filter's `last_match` goes back to what it was, unless
+    /// another item set it since.
+    pub fn forget(&mut self, req: &AddRequest) {
+        if let Some(f) = self.feed_mut(req.feed) {
+            f.downloaded.remove(&req.item_id);
+        }
+        let rec = &req.recorded;
+        // the keys to take out of `seen`, which holds a key when `has` says so
+        let undo = |has: &dyn Fn(&str) -> bool| -> HashSet<String> {
+            let ours = |k: &str| rec.episodes.iter().any(|e| e == k);
+            let repack_kept = |k: &str| {
+                let r = format!("r{k}");
+                has(&r) && !ours(&r)
+            };
+            rec.episodes.iter().filter(|k| !repack_kept(k)).cloned().collect()
+        };
+        match req.filter {
+            None => {
+                if let Some(f) = self.feed_mut(req.feed) {
+                    for k in undo(&|k| f.episodes.contains(k)) {
+                        f.episodes.remove(&k);
+                    }
+                }
+            }
+            Some(id) => {
+                let Some(filter) = self.filter_mut(id) else { return };
+                let gone = undo(&|k| filter.seen_episodes.iter().any(|e| e == k));
+                filter.seen_episodes.retain(|e| !gone.contains(e));
+                match rec.last_match {
+                    Some((set, before)) if filter.last_match == Some(set) => filter.last_match = before,
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -576,22 +640,30 @@ fn smart_allows(seen: &[String], episode: Option<Episode>, repack: bool) -> bool
         || (repack && keys.iter().any(|k| !seen.contains(&format!("r{k}"))))
 }
 
-/// [`smart_allows`] on a set, recording the item's episodes when it passes.
-fn smart_take(seen: &mut RecentSet, episode: Option<Episode>, repack: bool) -> bool {
-    let Some(ep) = episode else { return true };
+/// [`smart_allows`] on a set, recording the item's episodes when it passes: `None` when it
+/// does not, else the keys it added (for [`Recorded::episodes`]).
+fn smart_take(seen: &mut RecentSet, episode: Option<Episode>, repack: bool) -> Option<Vec<String>> {
+    let Some(ep) = episode else { return Some(Vec::new()) };
     let keys = ep.keys();
     let new = keys.iter().any(|k| !seen.contains(k));
     let new_repack = repack && keys.iter().any(|k| !seen.contains(&format!("r{k}")));
     if !new && !new_repack {
-        return false;
+        return None;
     }
+    let mut added = Vec::new();
+    let mut add = |k: String| {
+        if !seen.contains(&k) {
+            seen.insert(&k);
+            added.push(k);
+        }
+    };
     for k in &keys {
-        seen.insert(k);
+        add(k.clone());
         if repack {
-            seen.insert(&format!("r{k}"));
+            add(format!("r{k}"));
         }
     }
-    true
+    Some(added)
 }
 
 /// A feed document's cache validators (`ETag`, `Last-Modified`); empty when it had none.
@@ -639,7 +711,9 @@ pub fn fetch_feed(url: &str, since: &Validators, proxy: Option<FetchProxy>) -> R
     if resp.redirect().is_some() {
         return Err(crate::tr!(RssErrFeedRedirect, url));
     }
-    let doc = parse_feed(&resp.body).ok_or_else(|| crate::tr!(RssErrNotFeed, url))?;
+    let mut doc = parse_feed(&resp.body).ok_or_else(|| crate::tr!(RssErrNotFeed, url))?;
+    // judged by the server that answered, not by a second lookup of the feed's host (SEC-26)
+    doc.served_locally = resp.links_reach() == Reach::User;
     let header = |name| validator(resp.header(name));
     Ok(Fetched::Changed(doc, Validators { etag: header("etag"), last_modified: header("last-modified") }))
 }

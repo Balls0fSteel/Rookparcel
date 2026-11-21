@@ -6,7 +6,9 @@
 //! `m_requested`); and a choke keeps and serves the requests accepted under BEP 6 allowed-fast
 //! (libtorrent `send_choke` keeps `m_accept_fast`). Finding 18: a block of the wrong length
 //! disconnects the peer (libtorrent `verify_piece`). Entering upload mode cancels every
-//! outstanding request (libtorrent `torrent::set_upload_mode` → `cancel_all_requests`).
+//! outstanding request (libtorrent `torrent::set_upload_mode` → `cancel_all_requests`). Bug hunt
+//! of 2026-11-21, item 5: a peer banned for bad data cannot come back from another source port
+//! (libtorrent `peer_list::new_connection`).
 
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Read, Write};
@@ -202,19 +204,43 @@ fn local(port: u16) -> SocketAddr {
 /// Connects a scripted peer with the extension protocol and fast extension bits, and completes
 /// the handshake.
 fn connect(f: &Fixture, port: u16) -> TcpStream {
-    let mut c = TcpStream::connect(local(port)).unwrap();
-    let mut hs = vec![19u8];
-    hs.extend_from_slice(b"BitTorrent protocol");
-    hs.extend_from_slice(&[0, 0, 0, 0, 0, 0x10, 0, 0x04]);
-    hs.extend_from_slice(&f.info_hash);
-    hs.extend_from_slice(b"-XX0002-wire-rules-t");
-    c.write_all(&hs).unwrap();
-    c.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+    let mut c = send_handshake(f, port, b"-XX0002-wire-rules-t");
     let mut reply = [0u8; 68];
     c.read_exact(&mut reply).unwrap();
     assert_eq!(&reply[28..48], &f.info_hash);
     assert!(reply[27] & 0x04 != 0, "the engine supports the fast extension");
     c
+}
+
+/// Connects and sends our handshake, without waiting for the engine's.
+fn send_handshake(f: &Fixture, port: u16, peer_id: &[u8; 20]) -> TcpStream {
+    let mut c = TcpStream::connect(local(port)).unwrap();
+    let mut hs = vec![19u8];
+    hs.extend_from_slice(b"BitTorrent protocol");
+    hs.extend_from_slice(&[0, 0, 0, 0, 0, 0x10, 0, 0x04]);
+    hs.extend_from_slice(&f.info_hash);
+    hs.extend_from_slice(peer_id);
+    c.write_all(&hs).unwrap();
+    c.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+    c
+}
+
+/// Whether the engine closes the connection within 5 s (reads end in EOF or a reset, not a
+/// timeout), and how many bytes it sent before that.
+fn closes(c: &mut TcpStream) -> (bool, usize) {
+    c.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let mut buf = [0u8; 4096];
+    let mut read = 0;
+    loop {
+        match c.read(&mut buf) {
+            Ok(0) => return (true, read),
+            Ok(n) => read += n,
+            Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {
+                return (false, read);
+            }
+            Err(_) => return (true, read),
+        }
+    }
 }
 
 /// The next message other than a keep-alive, or `None` once `deadline` has passed.
@@ -507,18 +533,7 @@ fn a_block_of_the_wrong_length_disconnects_the_peer() {
     payload.extend_from_slice(&start.to_be_bytes());
     payload.extend_from_slice(block(&f, piece, start, len - 1));
     send_raw(&mut c, PIECE_MSG, &payload);
-    // The engine closes the connection: reads end in EOF or a reset, not a timeout.
-    c.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-    let mut buf = [0u8; 4096];
-    let closed = loop {
-        match c.read(&mut buf) {
-            Ok(0) => break true,
-            Ok(_) => continue,
-            Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => break false,
-            Err(_) => break true,
-        }
-    };
-    assert!(closed, "a block of the wrong length disconnects the peer");
+    assert!(closes(&mut c).0, "a block of the wrong length disconnects the peer");
     drop(c);
     session.shutdown();
     let _ = std::fs::remove_dir_all(dir);
@@ -583,6 +598,187 @@ fn upload_mode_cancels_the_outstanding_requests() {
     }
     assert!(again > 0, "requests resume out of upload mode");
     drop(c);
+    session.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Bug hunt of 2026-11-21, item 5: a peer banned for bad data came back from another source
+/// port as a new, unbanned peer. libtorrent's `peer_list::new_connection` finds peers by IP and
+/// refuses a banned one: the ban covers the IP for incoming connections, and the other
+/// connections that came in from it go with it.
+#[test]
+fn a_peer_banned_for_bad_data_cannot_connect_in_again() {
+    let f = fixture();
+    let dir = temp_dir("banned-reconnect");
+    let session = start();
+    let mut w = watch(&session);
+    let port = listen_port(&mut w);
+    let id = add_file(&mut w, &f, &dir);
+    status(&mut w, id, "downloading", |s| s.state == TorrentState::Downloading);
+
+    // a bystander from the same IP with nothing to offer
+    let mut other = send_handshake(&f, port, b"-XX0002-bystander-01");
+    let mut reply = [0u8; 68];
+    other.read_exact(&mut reply).unwrap();
+    send(&mut other, HAVE_NONE, &[]);
+    // the bad peer has piece 0 only and sends both of its blocks corrupted: as the piece's only
+    // sender it is banned at the hash failure (libtorrent `penalize_peers`)
+    let mut c = connect(&f, port);
+    let bad_addr = c.local_addr().unwrap();
+    let mut bits = vec![0u8; (f.num_pieces as usize).div_ceil(8)];
+    bits[0] = 0x80;
+    send_raw(&mut c, BITFIELD, &bits);
+    while next(&mut c)[0] != INTERESTED {}
+    send(&mut c, UNCHOKE, &[]);
+    let mut served = 0;
+    while served < 2 {
+        let msg = next(&mut c);
+        if msg[0] == REQUEST {
+            let (piece, start, len) = (field(&msg, 0), field(&msg, 1), field(&msg, 2));
+            let mut payload = piece.to_be_bytes().to_vec();
+            payload.extend_from_slice(&start.to_be_bytes());
+            payload.extend(block(&f, piece, start, len).iter().map(|b| !b));
+            send_raw(&mut c, PIECE_MSG, &payload);
+            served += 1;
+        }
+    }
+    let banned = wait(&mut w, 10, "the ban", |a| match a {
+        Alert::PeerBanned { id: i, addr, .. } if *i == id => Some(*addr),
+        _ => None,
+    });
+    assert_eq!(banned, bad_addr);
+    assert!(closes(&mut c).0, "the banned peer is disconnected");
+    assert!(closes(&mut other).0, "and so is the other connection that came from its IP");
+    // back from a new source port: refused before our handshake goes out
+    let mut again = send_handshake(&f, port, b"-XX0002-wire-rules-t");
+    assert_eq!(closes(&mut again), (true, 0), "an IP banned for bad data is refused");
+    let peers = peer_info(&mut w, id);
+    assert!(peers.is_empty(), "{peers:?}");
+    session.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Serves a REQUEST from the fixture's data.
+fn serve(c: &mut TcpStream, f: &Fixture, msg: &[u8]) {
+    let (piece, start, len) = (field(msg, 0), field(msg, 1), field(msg, 2));
+    let mut payload = piece.to_be_bytes().to_vec();
+    payload.extend_from_slice(&start.to_be_bytes());
+    payload.extend_from_slice(block(f, piece, start, len));
+    send_raw(c, PIECE_MSG, &payload);
+}
+
+/// Bug hunt of 2026-11-21, item 7: a peer that only has pieces others are fetching was asked
+/// for their blocks again while pieces were still unstarted, and for several at once.
+/// libtorrent's `request_a_block` under `strict_end_game_mode` (its default) asks for a busy
+/// block only once every wanted piece is started, only of a peer with no requests out, and
+/// one at a time.
+#[test]
+fn end_game_waits_for_every_piece_and_asks_an_idle_peer_for_one_block() {
+    let f = fixture();
+    let dir = temp_dir("strict-endgame");
+    let session = start();
+    let mut w = watch(&session);
+    let port = listen_port(&mut w);
+    let mut p = AddTorrentParams::new(TorrentSource::TorrentFile(f.torrent.clone()), dir.to_string_lossy());
+    p.flags = TorrentFlags::SEQUENTIAL_DOWNLOAD;
+    w.h.add_torrent(p);
+    let id = added(&mut w);
+    status(&mut w, id, "downloading", |s| s.state == TorrentState::Downloading);
+
+    // a seed that sits on its first requests, piece 0 among them (in order)
+    let mut seed = send_handshake(&f, port, b"-XX0002-endgame-seed");
+    let mut reply = [0u8; 68];
+    seed.read_exact(&mut reply).unwrap();
+    send(&mut seed, HAVE_ALL, &[]);
+    while next(&mut seed)[0] != INTERESTED {}
+    send(&mut seed, UNCHOKE, &[]);
+    let mut pending: Vec<Vec<u8>> = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !pending.iter().any(|m| field(m, 0) == 0) {
+        let msg = next_until(&mut seed, deadline).expect("piece 0 is asked of the seed");
+        if msg[0] == REQUEST {
+            pending.push(msg);
+        }
+    }
+    // a partial peer with piece 0 only: nothing for it while other pieces wait to be started
+    let mut partial = send_handshake(&f, port, b"-XX0002-endgame-part");
+    partial.read_exact(&mut reply).unwrap();
+    let mut bits = vec![0u8; (f.num_pieces as usize).div_ceil(8)];
+    bits[0] = 0x80;
+    send_raw(&mut partial, BITFIELD, &bits);
+    while next(&mut partial)[0] != INTERESTED {}
+    send(&mut partial, UNCHOKE, &[]);
+    let deadline = Instant::now() + Duration::from_millis(1500);
+    while let Some(msg) = next_until(&mut partial, deadline) {
+        assert_ne!(msg[0], REQUEST, "a busy block asked for before the end-game");
+    }
+    // the seed sends everything but piece 0; then the partial peer, idle, gets one of its
+    // blocks at a time
+    let mut asked = None;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while asked.is_none() {
+        assert!(Instant::now() < deadline, "the end-game never asked the partial peer");
+        for msg in pending.drain(..) {
+            if field(&msg, 0) != 0 {
+                serve(&mut seed, &f, &msg);
+            }
+        }
+        if let Some(msg) = next_until(&mut seed, Instant::now() + Duration::from_millis(50)) {
+            if msg[0] == REQUEST {
+                pending.push(msg);
+            }
+        }
+        if let Some(msg) = next_until(&mut partial, Instant::now() + Duration::from_millis(10)) {
+            if msg[0] == REQUEST {
+                asked = Some(msg);
+            }
+        }
+    }
+    let first = asked.expect("asked");
+    assert_eq!(field(&first, 0), 0);
+    let more = Instant::now() + Duration::from_millis(500);
+    while let Some(m) = next_until(&mut partial, more) {
+        assert_ne!(m[0], REQUEST, "a second busy block while the first is out");
+    }
+    serve(&mut partial, &f, &first);
+    let second = loop {
+        let msg = next(&mut partial);
+        if msg[0] == REQUEST {
+            break msg;
+        }
+    };
+    assert_eq!(field(&second, 0), 0);
+    assert_ne!(field(&second, 1), field(&first, 1), "the other block");
+    serve(&mut partial, &f, &second);
+    // the seed answers the rest until the download is done
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            for msg in pending.drain(..) {
+                serve(&mut seed, &f, &msg);
+            }
+            while !stop.load(std::sync::atomic::Ordering::SeqCst) {
+                let mut len = [0u8; 4];
+                seed.set_read_timeout(Some(Duration::from_millis(100))).unwrap();
+                match seed.read_exact(&mut len) {
+                    Ok(()) => {}
+                    Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => continue,
+                    Err(_) => return,
+                }
+                let mut msg = vec![0u8; u32::from_be_bytes(len) as usize];
+                seed.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+                if seed.read_exact(&mut msg).is_err() {
+                    return;
+                }
+                if msg.first() == Some(&REQUEST) {
+                    serve(&mut seed, &f, &msg);
+                }
+            }
+        });
+        status(&mut w, id, "seeding", |s| s.state == TorrentState::Seeding);
+        stop.store(true, std::sync::atomic::Ordering::SeqCst);
+    });
+    drop((seed, partial));
     session.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }

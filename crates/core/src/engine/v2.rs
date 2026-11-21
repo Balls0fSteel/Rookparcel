@@ -33,10 +33,10 @@ pub(crate) struct LayerFetch {
 }
 
 impl LayerFetch {
-    pub fn new(ti: &TorrentInfo) -> LayerFetch {
-        let trees = build_trees(ti);
+    pub fn new(ti: &TorrentInfo) -> Result<LayerFetch, MetainfoError> {
+        let trees = build_trees(ti)?;
         let picker = HashPicker::new(ti.orig_files(), &trees);
-        LayerFetch { trees, picker }
+        Ok(LayerFetch { trees, picker })
     }
 
     /// Every file of more than one piece has its whole piece layer.
@@ -67,22 +67,24 @@ impl LayerFetch {
 }
 
 /// One merkle tree per file holding what the metadata knows: the root and the piece layer
-/// (libtorrent `initialize_merkle_trees`). Pad and empty files get an empty tree.
-pub(super) fn build_trees(ti: &TorrentInfo) -> Vec<MerkleTree> {
+/// (libtorrent `initialize_merkle_trees`). Pad and empty files get an empty tree. A layer that
+/// does not hash up to its file's root fails it with `TorrentInvalidPieceLayer`, as libtorrent
+/// fails the torrent; `TorrentInfo` checks its layers against the roots when it takes them, so
+/// that would be a bug.
+pub(super) fn build_trees(ti: &TorrentInfo) -> Result<Vec<MerkleTree>, MetainfoError> {
     let fs = ti.orig_files();
     let blocks_per_piece = fs.blocks_per_piece() as usize;
     (0..fs.num_files())
         .map(|f| {
             if fs.pad_file_at(f) || fs.file_size(f) == 0 {
-                return MerkleTree::default();
+                return Ok(MerkleTree::default());
             }
             let mut tree = MerkleTree::new(fs.file_num_blocks(f) as usize, blocks_per_piece, fs.root(f));
             let layer = ti.piece_layer(f);
-            if !layer.is_empty() {
-                // the root alone is still known when the layer does not hash to it
-                let _ = tree.load_piece_layer(layer);
+            if !layer.is_empty() && !tree.load_piece_layer(layer) {
+                return Err(MetainfoError::TorrentInvalidPieceLayer);
             }
-            tree
+            Ok(tree)
         })
         .collect()
 }
@@ -212,12 +214,22 @@ impl Engine {
             return;
         }
         let queued = p.send_buffer_len();
+        let mut invalid_layer = None;
         let hashes = match t {
             // not even looked up while the peer leaves its earlier answers unread
             _ if queued >= HASH_REPLY_SEND_BUFFER_LIMIT => Vec::new(),
             Some(t) => match &t.ti {
-                Some(ti) => {
-                    let trees = t.merkle_trees.get_or_insert_with(|| build_trees(ti));
+                Some(ti) => 'answer: {
+                    if t.merkle_trees.is_none() {
+                        match build_trees(ti) {
+                            Ok(trees) => t.merkle_trees = Some(trees),
+                            Err(_) => {
+                                invalid_layer = Some(t.id);
+                                break 'answer Vec::new();
+                            }
+                        }
+                    }
+                    let trees = t.merkle_trees.as_mut().expect("just built");
                     let fs = ti.orig_files();
                     let valid = fs.file_index_for_root(&m.root).is_some_and(|file| {
                         validate_hash_request(
@@ -239,6 +251,23 @@ impl Engine {
         };
         write_hash_answer(p.out(), queued, &m, &hashes);
         self.to_flush.push(slot);
+        if let Some(id) = invalid_layer {
+            self.invalid_piece_layer(id);
+        }
+    }
+
+    /// The trees cannot take a piece layer the metadata holds (libtorrent
+    /// `initialize_merkle_trees` returning `torrent_invalid_piece_layer`): the torrent stops
+    /// with that error (`update_running` stops it, the layer fetch included).
+    fn invalid_piece_layer(&mut self, id: TorrentId) {
+        let Some(t) = self.torrent(id) else { return };
+        let error = Error::Metainfo(MetainfoError::TorrentInvalidPieceLayer);
+        t.merkle_trees = None;
+        t.error = Some(error.to_string());
+        t.status_dirty = true;
+        self.alert(Alert::TorrentError { id, error });
+        self.update_running(id);
+        self.needs_auto_manage = true;
     }
 
     /// libtorrent `on_hashes`: the reply to one of our requests goes into the trees while the
@@ -336,7 +365,12 @@ impl Engine {
     pub(super) fn start_layer_fetch(&mut self, id: TorrentId) {
         let Some(t) = self.torrent(id) else { return };
         let Some(ti) = t.ti.clone() else { return };
-        t.layer_fetch = Some(Box::new(LayerFetch::new(&ti)));
+        let Ok(fetch) = LayerFetch::new(&ti) else {
+            self.invalid_piece_layer(id);
+            return;
+        };
+        let Some(t) = self.torrent(id) else { return };
+        t.layer_fetch = Some(Box::new(fetch));
         t.started_at = Some(Instant::now());
         t.status_dirty = true;
         let peers = t.peers.clone();
@@ -359,7 +393,8 @@ impl Engine {
         let layers = lf.bencoded(&ti);
         let mut full = (*ti).clone();
         if let Err(e) = full.set_piece_layers(&layers) {
-            // the trees validated every hash, so this would be a bug
+            // the trees validated every hash against the roots (and `set_piece_layers` checks
+            // them again), so this would be a bug
             self.alert(Alert::Log { id: Some(id), message: format!("piece layers: {e}") });
             return;
         }

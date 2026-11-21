@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
-use rookparcel_core::fetch::{FetchOptions, FetchProxy, Reach, http_get};
+use rookparcel_core::fetch::{FetchOptions, FetchProxy, Reach, http_get, is_local_destination};
 
 use super::source::{Source, url_origin};
 use super::torznab::{Category, SearchError, SearchResult, caps_url, parse_caps, parse_results, search_url};
@@ -34,11 +34,13 @@ pub struct Query {
 }
 
 /// The engine's proxy for a request to `url`: none when the host is on this machine or network
-/// (loopback, private, link-local, `localhost`), the proxy otherwise. Resolves the host
-/// (blocking); a name that does not resolve counts as public.
+/// (loopback, private, link-local, `localhost`, or a name all of whose addresses are), the
+/// proxy otherwise ([`is_local_destination`]). Resolves the host (blocking), except a name the
+/// proxy resolves itself, which goes to the proxy unlooked-up (SEC-15); a name that does not
+/// resolve counts as public.
 pub fn proxy_for(url: &str, proxy: Option<&FetchProxy>) -> Option<FetchProxy> {
     let proxy = proxy?;
-    (Reach::for_links_from(url) == Reach::Public).then(|| proxy.clone())
+    (!is_local_destination(url, Some(proxy))).then(|| proxy.clone())
 }
 
 /// Which addresses a result's link may reach: any (`Reach::User`) when it is on the source's

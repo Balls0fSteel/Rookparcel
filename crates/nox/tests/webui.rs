@@ -1176,6 +1176,74 @@ fn security_settings_need_the_current_password() {
     assert_eq!(csrf(&t, &sid), Some(Json::Bool(true)));
 }
 
+/// Bug hunt 2026-11-21, 11: a wrong current password counts towards the client's ban like a
+/// failed login, so a bypass session (here the local-auth bypass), which comes back with every
+/// request, cannot guess it without limit. Counted once per request (the shim tries its
+/// changes one by one), and only when the change needed it: not for a change that needs none,
+/// nor for one the Run Program gate refuses first (whose session stays).
+#[test]
+fn a_wrong_current_password_counts_towards_the_ban() {
+    let t = Harness::start("current-password-ban");
+    let sid = t.login();
+    let r = t.pa(
+        &sid,
+        "/pa/prefs",
+        &format!(
+            r#"{{"webui.bypass_local_auth":true,"webui.max_auth_fail_count":3,"webui.current_password":"{PASS}"}}"#
+        ),
+    );
+    assert_eq!(r.status, 204, "{}", r.text());
+    let version = |headers: &[(&str, &str)]| t.req("GET", "/api/v2/app/version", headers, Body::None).status;
+    assert_eq!(version(&[]), 200, "the bypass is on");
+
+    // a client behind a proxy, logged in: the Run Program gate refuses before the password is
+    // looked at, as often as it likes; its session stays and nothing counts
+    let xff = ("X-Forwarded-For", "203.0.113.40");
+    let r =
+        t.req("POST", "/api/v2/auth/login", &[xff], Body::Form(&format!("username=admin&password={PASS}")));
+    let remote_sid = r.header("set-cookie").unwrap().split(';').next().unwrap().to_owned();
+    let origin = format!("http://{}", t.host());
+    let proxied =
+        [("Cookie", remote_sid.as_str()), ("Origin", &origin), ("X-Requested-With", "Rookparcel"), xff];
+    for _ in 0..5 {
+        let body = r#"{"run.finished_enabled":true,"run.finished":"x","webui.current_password":"guess"}"#;
+        let r = t.req("POST", "/pa/prefs", &proxied, Body::Json(body));
+        assert_eq!(r.status, 400, "{}", r.text());
+        assert!(r.text().contains("run."), "{}", r.text());
+    }
+    assert_eq!(version(&[("Cookie", &remote_sid), xff]), 200, "still logged in, not banned");
+
+    // a change that needs no password does not look at it
+    for _ in 0..5 {
+        let r = t.pa("", "/pa/prefs", r#"{"ui.add_stopped":true,"webui.current_password":"guess"}"#);
+        assert_eq!(r.status, 204, "{}", r.text());
+    }
+    assert_eq!(version(&[]), 200);
+    // the shim: three security keys and a wrong password are one failure
+    let set = format!(
+        "json={}",
+        enc(
+            r#"{"web_ui_csrf_protection_enabled":false,"bypass_local_auth":false,"web_ui_domain_list":"*","web_ui_current_password":"guess"}"#
+        )
+    );
+    assert_eq!(t.post("", "/api/v2/app/setPreferences", &set).status, 200);
+    assert_eq!(version(&[]), 200, "one failure of three");
+    let p = t.get("", "/api/v2/app/preferences").json();
+    assert_eq!(p.get("web_ui_csrf_protection_enabled"), Some(&Json::Bool(true)), "nothing changed");
+    assert_ne!(s(p.get("web_ui_domain_list")), "*");
+    // a search source's password: the second
+    let r = t.pa("", "/pa/search/source-add", r#"{"name":"x","url":"http://192.0.2.1/","password":"guess"}"#);
+    assert_eq!(r.status, 400, "{}", r.text());
+    assert_eq!(version(&[]), 200, "two of three");
+    // Preferences: the third bans this computer, and then even the right password is refused
+    let r = t.pa("", "/pa/prefs", r#"{"webui.csrf":false,"webui.current_password":"guess"}"#);
+    assert_eq!(r.status, 400, "{}", r.text());
+    assert_eq!(version(&[]), 403, "banned");
+    let r = t.pa("", "/pa/prefs", &format!(r#"{{"webui.csrf":false,"webui.current_password":"{PASS}"}}"#));
+    assert_eq!(r.status, 403, "{}", r.text());
+    assert!(r.text().contains("banned"), "{}", r.text());
+}
+
 /// A reverse proxy on this machine makes every client a loopback one: such requests never get
 /// the local-auth bypass, and failed logins count per forwarded client (SEC-03).
 #[test]
@@ -5513,7 +5581,8 @@ fn the_kept_block_list_is_in_force_at_start() {
         lines.iter().any(|l| l.starts_with("IP filter: 2 rules from ") && l.contains("ipfilter-url.dat")),
         "{lines:?}"
     );
-    assert!(!lines.iter().any(|l| l.contains("127.0.0.1:9")), "nothing fetched: {lines:?}");
+    // the block list's port and a path, not a listen port that starts with 9 (127.0.0.1:9862)
+    assert!(!lines.iter().any(|l| l.contains("127.0.0.1:9/")), "nothing fetched: {lines:?}");
     // another address (nothing answers there): the copy of the old one stays, naming its own
     // address, until a list of the new one is saved; it is not the new address's list
     let body =

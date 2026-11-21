@@ -3,12 +3,14 @@
 // Copyright (c) 2003-2020, Arvid Norberg and contributors. BSD-3-Clause, see THIRD-PARTY-NOTICES.md.
 // Changes: a Vec plus an address index instead of a sorted vector of pooled `torrent_peer`
 // pointers. Connect candidates are chosen by a scan with libtorrent's ordering (fewest failures,
-// then BEP 40 rank); the list is capped at `max_peerlist_size` by evicting failed peers first.
+// then BEP 40 rank); the list is capped at `max_peerlist_size` by libtorrent's erase-candidate
+// rule, except that banned peers are kept. Entries are per address (ip:port); the IPs of peers
+// banned for bad data are kept in a set of their own, which refuses their connections.
 // Peers restored from resume data stay in their compact saved bytes until the torrent starts.
 
 //! Every peer a torrent knows about, connected or not.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
 
@@ -182,7 +184,8 @@ impl PeerList {
     }
 
     /// libtorrent `peer_list::add_peer`. Returns false if the peer was rejected (full list,
-    /// invalid address).
+    /// invalid address). A full list makes room as [`add_capped`](Self::add_capped) does for
+    /// a torrent that is not finished, under the default reconnect policy.
     pub fn add(
         &mut self,
         addr: SocketAddr,
@@ -190,13 +193,29 @@ impl PeerList {
         external_ip: ExternalIp,
         max_size: usize,
     ) -> bool {
+        self.add_capped(addr, source, external_ip, max_size, false, Reconnect::default())
+    }
+
+    /// libtorrent `peer_list::add_peer` into a list of at most `max_size` peers. A full list
+    /// gives up a peer that is no connect candidate (`finished` and `policy` say which ones
+    /// are) and has failed or only came from resume data (libtorrent `erase_peers` and
+    /// `is_erase_candidate`); without one the new peer is rejected. Banned peers are kept.
+    pub fn add_capped(
+        &mut self,
+        addr: SocketAddr,
+        source: PeerSource,
+        external_ip: ExternalIp,
+        max_size: usize,
+        finished: bool,
+        policy: Reconnect,
+    ) -> bool {
         if !SavedPeers::usable(&addr) {
             return false;
         }
         if matches!(self, PeerList::Saved(_)) {
             self.expand(&external_ip);
         }
-        let added = self.live_mut().add(addr, source, external_ip, max_size);
+        let added = self.live_mut().add(addr, source, external_ip, max_size, finished, policy);
         self.drop_if_empty();
         added
     }
@@ -263,8 +282,9 @@ impl PeerList {
         }
     }
 
-    /// Drops unconnected peers beyond `max` (libtorrent `max_paused_peerlist_size`). Saved
-    /// peers all rank the same, and the eviction takes the last of equals: the list is cut.
+    /// Drops unconnected peers beyond `max` (libtorrent `max_paused_peerlist_size`), the least
+    /// useful first and banned ones last. Saved peers all rank the same, and the eviction
+    /// takes the last of equals: the list is cut.
     pub fn trim(&mut self, max: usize) {
         match self {
             PeerList::Saved(s) => {
@@ -303,19 +323,13 @@ impl PeerList {
         }
     }
 
-    /// Frees the list once it holds no peers (a stopped torrent trimmed to none).
+    /// Frees the list once it holds no peers (a stopped torrent trimmed to none) and no bans.
     fn drop_if_empty(&mut self) {
-        if self.len() == 0 {
+        if self.len() == 0 && self.live().is_none_or(|l| l.banned_ips.is_empty()) {
             *self = PeerList::default();
         }
     }
 
-    /// The connection closed at `now` (libtorrent `connection_closed`), which starts the peer's
-    /// reconnect delay. `failed` counts against the peer (could not connect, protocol error); a
-    /// clean disconnect resets its fail count. With `fast_reconnect` (an encrypted attempt the
-    /// peer closed on us) a clean close instead forgets the connect time, so the peer is a
-    /// candidate again at once for the plaintext retry (libtorrent rewinds it by
-    /// `min_reconnect_time * max_failcount`).
     /// The connection closed at `now` (libtorrent `connection_closed`), which starts the peer's
     /// reconnect delay. `failed` counts against the peer (could not connect, protocol error); a
     /// clean disconnect resets its fail count. With `fast_reconnect` (an encrypted attempt the
@@ -386,11 +400,28 @@ impl PeerList {
         }
     }
 
-    /// Never connect to this peer again (bad hashes, or it turned out to be ourselves).
+    /// Never connect to this peer again (it turned out to be ourselves). Only this address:
+    /// other clients on our host are other peers.
     pub fn ban(&mut self, addr: &SocketAddr) {
         if let Some(p) = self.get_mut(addr) {
             p.banned = true;
         }
+    }
+
+    /// Bans a peer that sent bad data: never connect to its IP again, and refuse incoming
+    /// connections from it, whatever their port (libtorrent bans the `torrent_peer`, which
+    /// stands for the whole IP while `allow_multiple_connections_per_ip` is off, its default;
+    /// `new_connection` refuses a banned one). A peer that reconnects comes from a new source
+    /// port, which is a new entry here. The IP stays banned when the entry leaves the list.
+    pub fn ban_ip(&mut self, addr: &SocketAddr) {
+        let Some(p) = self.get_mut(addr) else { return };
+        p.banned = true;
+        self.live_mut().banned_ips.insert(addr.ip());
+    }
+
+    /// An incoming connection from `ip` is refused: a peer there sent bad data.
+    pub fn ip_banned(&self, ip: IpAddr) -> bool {
+        self.live().is_some_and(|l| l.banned_ips.contains(&ip))
     }
 
     pub fn set_seed(&mut self, addr: &SocketAddr, seed: bool) {
@@ -418,6 +449,35 @@ impl KnownPeer {
             rank,
         }
     }
+
+    /// libtorrent `peer_list::is_connect_candidate`.
+    fn connect_candidate(&self, finished: bool, policy: Reconnect) -> bool {
+        self.connection.is_none()
+            && !self.banned
+            && self.failcount < policy.max_failcount
+            && !(self.seed && finished)
+    }
+
+    /// libtorrent `peer_list::is_erase_candidate`: an unconnected peer that is no connect
+    /// candidate and failed or is known from resume data only. A banned peer is not, unlike in
+    /// libtorrent, which drops a banned peer that ever failed and so forgets the ban.
+    fn erase_candidate(&self, finished: bool, policy: Reconnect) -> bool {
+        self.connection.is_none()
+            && !self.banned
+            && !self.connect_candidate(finished, policy)
+            && (self.failcount > 0 || self.source == PeerSource::RESUME_DATA)
+    }
+
+    /// libtorrent `compare_peer_erase`, greater goes first: more failures, then known from
+    /// resume data only, then fewer trust points; then the lower BEP 40 rank.
+    fn erase_order(&self) -> (u8, bool, std::cmp::Reverse<i8>, std::cmp::Reverse<u32>) {
+        (
+            self.failcount,
+            self.source == PeerSource::RESUME_DATA,
+            std::cmp::Reverse(self.trust.trust_points),
+            std::cmp::Reverse(self.rank),
+        )
+    }
 }
 
 /// The full list.
@@ -425,6 +485,10 @@ impl KnownPeer {
 pub(crate) struct Peers {
     peers: Vec<KnownPeer>,
     index: HashMap<SocketAddr, usize>,
+    /// IPs of peers banned for bad data ([`PeerList::ban_ip`]): incoming connections from
+    /// them are refused and no peer there is connected to. Kept apart from the entries, so
+    /// no eviction lifts a ban.
+    banned_ips: HashSet<IpAddr>,
 }
 
 impl Peers {
@@ -448,6 +512,8 @@ impl Peers {
         source: PeerSource,
         external_ip: ExternalIp,
         max_size: usize,
+        finished: bool,
+        policy: Reconnect,
     ) -> bool {
         if let Some(p) = self.get_mut(&addr) {
             p.source |= source;
@@ -458,7 +524,7 @@ impl Peers {
             }
             return true;
         }
-        if self.peers.len() >= max_size && !self.evict_one() {
+        if self.peers.len() >= max_size && !self.evict(|p| p.erase_candidate(finished, policy)) {
             return false;
         }
         let rank = rank(&external_ip, addr);
@@ -467,14 +533,15 @@ impl Peers {
         true
     }
 
-    /// Drops the least useful unconnected peer (libtorrent `erase_peers`).
-    fn evict_one(&mut self) -> bool {
+    /// Drops the least useful peer `eligible` allows (libtorrent `erase_peers`, the last of
+    /// equals). Returns false if there is none.
+    fn evict(&mut self, eligible: impl Fn(&KnownPeer) -> bool) -> bool {
         let victim = self
             .peers
             .iter()
             .enumerate()
-            .filter(|(_, p)| p.connection.is_none())
-            .max_by_key(|(_, p)| (p.banned, p.failcount, std::cmp::Reverse(p.rank)))
+            .filter(|(_, p)| eligible(p))
+            .max_by_key(|(_, p)| p.erase_order())
             .map(|(i, _)| i);
         match victim {
             Some(i) => {
@@ -508,15 +575,14 @@ impl Peers {
     /// be connected to, now or once their reconnect delay is over. A finished torrent does not
     /// connect to seeds.
     pub fn num_connect_candidates(&self, finished: bool, policy: Reconnect) -> usize {
-        self.peers
-            .iter()
-            .filter(|p| {
-                p.connection.is_none()
-                    && !p.banned
-                    && p.failcount < policy.max_failcount
-                    && !(p.seed && finished)
-            })
-            .count()
+        self.peers.iter().filter(|p| self.connect_candidate(p, finished, policy)).count()
+    }
+
+    /// [`KnownPeer::connect_candidate`], and not at an IP banned for bad data: libtorrent's one
+    /// `torrent_peer` per IP is banned there, whichever port a tracker or PEX lists next.
+    fn connect_candidate(&self, p: &KnownPeer, finished: bool, policy: Reconnect) -> bool {
+        p.connect_candidate(finished, policy)
+            && (self.banned_ips.is_empty() || !self.banned_ips.contains(&p.addr.ip()))
     }
 
     /// libtorrent `find_connect_candidates`: up to `n` peers to connect to now. A peer waits
@@ -531,8 +597,7 @@ impl Peers {
         let mut c: Vec<&KnownPeer> = self
             .peers
             .iter()
-            .filter(|p| p.connection.is_none() && !p.banned && p.failcount < policy.max_failcount)
-            .filter(|p| !(finished && p.seed))
+            .filter(|p| self.connect_candidate(p, finished, policy))
             .filter(|p| {
                 p.last_connected.is_none_or(|t| {
                     now.duration_since(t) >= policy.min_reconnect_time * (u32::from(p.failcount) + 1)
@@ -565,9 +630,12 @@ impl Peers {
             .collect()
     }
 
-    /// Drops unconnected peers beyond `max` (libtorrent `max_paused_peerlist_size`).
+    /// Drops unconnected peers beyond `max` (libtorrent `max_paused_peerlist_size`, where a
+    /// paused torrent's `erase_peers` takes erase candidates only): the least useful first, in
+    /// libtorrent's erase order, banned ones last.
     pub fn trim(&mut self, max: usize) {
-        while self.peers.len() > max && self.evict_one() {}
+        while self.peers.len() > max && self.evict(|p| p.connection.is_none() && !p.banned) {}
+        while self.peers.len() > max && self.evict(|p| p.connection.is_none()) {}
     }
 
     /// Our external address changed: rank every peer again (libtorrent `clear_peer_prio`,
@@ -745,14 +813,115 @@ mod tests {
             "failed peers last"
         );
 
-        // Full list: the failed peer is evicted for a new one.
+        // Full list: a peer that failed once is still a connect candidate, which libtorrent's
+        // `is_erase_candidate` keeps; the new peer is turned away instead.
         let c: SocketAddr = "10.0.0.3:1".parse().unwrap();
+        assert!(!pl.add(c, PeerSource::TRACKER, ExternalIp::default(), 2));
+        assert_eq!(pl.len(), 2);
+        // Once it failed `max_failcount` times it makes room.
+        for conn in [2, 3] {
+            pl.connecting(a, conn, PeerSource::TRACKER, now);
+            pl.disconnected(&a, true, false, false, now);
+        }
         assert!(pl.add(c, PeerSource::TRACKER, ExternalIp::default(), 2));
         assert!(pl.get(&a).is_none() && pl.get(&b).is_some() && pl.get(&c).is_some());
         pl.ban(&b);
         assert_eq!(pl.connect_candidates(5, now, r, false), [c]);
         pl.trim(1);
         assert_eq!(pl.len(), 1);
+        assert!(pl.get(&b).is_some_and(|p| p.banned), "trimming drops banned peers last");
+    }
+
+    /// Bug-hunt 2026-11-21 items 5 and 13: a ban for bad data covers the peer's IP for incoming
+    /// connections, and no eviction lifts it.
+    #[test]
+    fn bans_cover_the_ip_and_survive_a_full_list() {
+        let mut pl = PeerList::default();
+        let r = Reconnect::default();
+        let now = Instant::now();
+        let (bad, x, y) = (ep("10.0.0.9", 50000), ep("10.0.0.1", 1), ep("10.0.0.2", 1));
+        // a peer that came in from a source port sent bad data
+        pl.connecting(bad, 1, PeerSource::INCOMING, now);
+        pl.ban_ip(&bad);
+        pl.disconnected(&bad, true, false, false, now);
+        assert!(pl.ip_banned(bad.ip()), "whatever port it comes from next");
+        assert!(!pl.ip_banned(x.ip()));
+        // libtorrent would erase the banned peer (it failed and is no connect candidate);
+        // here it stays, and so does x, a connect candidate: the new peer is rejected
+        assert!(pl.add(x, PeerSource::TRACKER, ExternalIp::default(), 2));
+        assert!(!pl.add(y, PeerSource::PEX, ExternalIp::default(), 2));
+        assert!(pl.get(&bad).is_some_and(|p| p.banned));
+        // x failing for good makes room; the banned peer still stays
+        for conn in 2..5 {
+            pl.connecting(x, conn, PeerSource::TRACKER, now);
+            pl.disconnected(&x, true, false, false, now);
+        }
+        assert!(pl.add(y, PeerSource::PEX, ExternalIp::default(), 2));
+        assert!(pl.get(&x).is_none() && pl.get(&bad).is_some_and(|p| p.banned));
+        assert_eq!(pl.connect_candidates(5, now, r, false), [y]);
+        // its listen port, listed by a tracker, is not connected to either
+        let listen = ep("10.0.0.9", 6881);
+        assert!(pl.add(listen, PeerSource::TRACKER, ExternalIp::default(), 3));
+        assert_eq!(pl.connect_candidates(5, now, r, false), [y]);
+        assert_eq!(pl.num_connect_candidates(false, r), 1);
+        // trimmed to nothing, the IP ban remains and the list with it
+        pl.trim(0);
+        assert_eq!(pl.len(), 0);
+        assert!(pl.ip_banned(bad.ip()));
+        assert!(matches!(pl, PeerList::Live(_)));
+        // a ban for connecting to ourselves is for that address only (other clients on this
+        // host are other peers), and an unknown address bans nothing
+        let me = ep("10.0.0.5", 6881);
+        assert!(pl.add(me, PeerSource::LSD, ExternalIp::default(), 9));
+        pl.ban(&me);
+        assert!(pl.get(&me).is_some_and(|p| p.banned) && !pl.ip_banned(me.ip()));
+        pl.ban_ip(&ep("10.0.0.6", 1));
+        assert!(!pl.ip_banned(ep("10.0.0.6", 1).ip()));
+        let mut fresh = PeerList::default();
+        fresh.ban_ip(&x);
+        assert!(matches!(&fresh, PeerList::Saved(s) if s.is_empty()), "nothing to ban");
+    }
+
+    /// libtorrent `is_erase_candidate` and `compare_peer_erase`: a finished torrent gives up a
+    /// seed known from resume data only, never a fresh peer, a connected one or a banned one;
+    /// among candidates the one that failed most goes first.
+    #[test]
+    fn a_full_list_gives_up_erase_candidates_only() {
+        let r = Reconnect::default();
+        let now = Instant::now();
+        let (s, t, n) = (ep("10.0.1.1", 1), ep("10.0.1.2", 1), ep("10.0.1.3", 1));
+        let mut pl = PeerList::default();
+        pl.restore(SavedPeers::from_addrs([s]));
+        assert!(pl.add(t, PeerSource::TRACKER, ExternalIp::default(), 9));
+        pl.set_seed(&s, true);
+        pl.set_seed(&t, true);
+        assert!(!pl.add_capped(n, PeerSource::DHT, ExternalIp::default(), 2, false, r), "still wanted");
+        assert!(pl.add_capped(n, PeerSource::DHT, ExternalIp::default(), 2, true, r));
+        assert!(pl.get(&s).is_none() && pl.get(&t).is_some(), "the resume-data seed went");
+        // connected and banned peers never go, however often they failed
+        let mut pl = PeerList::default();
+        for (i, a) in [s, t].into_iter().enumerate() {
+            for conn in 0..4 {
+                pl.connecting(a, conn, PeerSource::TRACKER, now);
+                pl.disconnected(&a, true, false, false, now);
+            }
+            pl.connecting(a, 9, PeerSource::TRACKER, now);
+            if i == 1 {
+                pl.disconnected(&a, true, false, false, now);
+                pl.ban(&a);
+            }
+        }
+        assert!(!pl.add(n, PeerSource::DHT, ExternalIp::default(), 2));
+        // among candidates: more failures first
+        let mut pl = PeerList::default();
+        for (a, fails) in [(s, 5), (t, 3)] {
+            for conn in 0..fails {
+                pl.connecting(a, conn, PeerSource::TRACKER, now);
+                pl.disconnected(&a, true, false, false, now);
+            }
+        }
+        assert!(pl.add(n, PeerSource::DHT, ExternalIp::default(), 2));
+        assert!(pl.get(&s).is_none() && pl.get(&t).is_some());
     }
 
     /// Peers restored from resume data stay compact until the torrent starts, and read as the

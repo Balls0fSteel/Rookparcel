@@ -18,7 +18,7 @@ use rookparcel_frontend::detail::peer_flags;
 use rookparcel_frontend::seeding::SeedGoal;
 use rookparcel_frontend::{icons, lang, pref_pages};
 
-use super::auth::{self, constant_time_eq, random_hex};
+use super::auth::{self, PasswordHash, constant_time_eq, random_hex};
 use super::commands::{self, AddOptions, Source};
 use super::http::{
     Head, Part, Response, cookie, multipart_boundary, parse_header_params, parse_multipart, parse_urlencoded,
@@ -591,7 +591,7 @@ fn serve_inner(shared: &Shared, req: &Request) -> Response {
             let Some(text) = p.get("json") else { return Response::text(400, "missing json") };
             let Ok(v @ Json::Obj(_)) = json::parse(text) else { return Response::text(400, "invalid json") };
             let mut st = shared.lock();
-            apply_preferences(shared, &mut st, &v, Some(&key));
+            apply_preferences(shared, &mut st, &v, Some((&key, ip)));
             shared.save(&mut st);
             Response::ok()
         }
@@ -970,6 +970,43 @@ pub(super) fn check_login(shared: &Shared, user: &str, pass: &str, ip: IpAddr, n
     }
 }
 
+/// The current password's check begins (what guards Preferences' security fields, the search
+/// sources and the search helper): `None` while the client is banned, else the failure counted
+/// towards its ban before the slow hash, as [`check_login`] does, and the hash to verify. The
+/// bypass sessions (`local`, `subnet`, `apikey`) come back with every request, so ending the
+/// session alone would not stop a guesser (bug hunt 2026-11-21, 11).
+fn current_password_hash(st: &mut State, ip: IpAddr, now: Instant) -> Option<PasswordHash> {
+    if st.bans.is_banned(ip, now) {
+        return None;
+    }
+    let (max, ban) = (st.prefs.max_auth_fail_count, Duration::from_secs(st.prefs.ban_duration));
+    st.bans.failed(ip, max, ban, now);
+    Some(st.password.clone())
+}
+
+/// Checks a current password (`given`, not empty) from client `ip`: the hash outside the State
+/// lock, a wrong one counted towards the client's ban, a banned client refused unchecked, a
+/// right one clearing the count. The hash it matched, or `None`.
+pub(super) fn check_current_password(shared: &Shared, given: &str, ip: IpAddr) -> Option<PasswordHash> {
+    let hash = current_password_hash(&mut shared.lock(), ip, Instant::now())?;
+    if !hash.verify(given) {
+        return None;
+    }
+    shared.lock().bans.succeeded(ip);
+    Some(hash)
+}
+
+/// [`check_current_password`] under the State lock the caller holds (the qBittorrent shim's
+/// `setPreferences`, which commits under it).
+pub(super) fn check_current_password_locked(st: &mut State, given: &str, ip: IpAddr) -> Option<PasswordHash> {
+    let hash = current_password_hash(st, ip, Instant::now())?;
+    if !hash.verify(given) {
+        return None;
+    }
+    st.bans.succeeded(ip);
+    Some(hash)
+}
+
 fn login(shared: &Shared, p: &Params, ip: IpAddr, now: Instant) -> Response {
     let user = p.get("username").unwrap_or("");
     let pass = p.get("password").unwrap_or("");
@@ -1195,8 +1232,10 @@ fn preferences(st: &State, shared: &Shared, local: bool) -> Json {
 /// the native Preferences ids (`prefs.rs`) and committing them together; a key that does not
 /// parse is skipped, and when the set fails the Win32 dialog's cross-field checks (a proxy type
 /// without a host), each change is tried on its own. Stored like every other preference.
-/// `keep` is the session that sent them, kept when the password changes.
-pub(crate) fn apply_preferences(shared: &Shared, st: &mut State, v: &Json, keep: Option<&str>) {
+/// `from` is the session that sent them (kept when the password changes) and its client (whose
+/// ban a wrong `web_ui_current_password` counts towards, once per request); `None` for nox's
+/// own.
+pub(crate) fn apply_preferences(shared: &Shared, st: &mut State, v: &Json, from: Option<(&str, IpAddr)>) {
     let kib = |j: &Json| {
         j.as_i64().map(|k| Json::from(if k <= 0 { 0 } else { k.min(u32::MAX as i64 / 1024) * 1024 }))
     };
@@ -1286,14 +1325,16 @@ pub(crate) fn apply_preferences(shared: &Shared, st: &mut State, v: &Json, keep:
     if changes.is_empty() {
         return;
     }
-    if prefs::commit(shared, st, &changes, keep).is_err() {
+    // one asker for every commit below: its password is checked (and a wrong one counted) once
+    let mut asker = from.map(|(session, ip)| prefs::Asker::new(session, ip, &changes));
+    if prefs::commit(shared, st, &changes, asker.as_mut()).is_err() {
         // one by one, each with the current password if one came
         let (auth, rest): (Vec<_>, Vec<_>) =
             changes.into_iter().partition(|(d, _)| d.id() == "webui.current_password");
         for c in rest {
             let mut one = auth.clone();
             one.push(c);
-            let _ = prefs::commit(shared, st, &one, keep);
+            let _ = prefs::commit(shared, st, &one, asker.as_mut());
         }
     }
 }

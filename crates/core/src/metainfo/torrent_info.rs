@@ -549,11 +549,17 @@ impl TorrentInfo {
         Ok(())
     }
 
-    /// libtorrent `parse_piece_layers`: structural checks only; hashes are verified against the
-    /// merkle roots when the torrent is loaded (Phase 8).
+    /// libtorrent `parse_piece_layers` plus the root check of `load_torrent_file`
+    /// (load_torrent.cpp, `merkle_root_scratch`): every key must be the root of a file of more
+    /// than one piece, every value that file's whole layer, and the layer, padded to a power of
+    /// two with `merkle_pad(blocks_per_piece, 1)`, must hash up to that root. `piece layers`
+    /// lies outside the info dictionary, so the info-hash does not cover it and this check is
+    /// what ties it to the torrent. All or nothing: on any error no layer is kept.
     fn parse_piece_layers(&mut self, e: Node<'_>) -> Result<(), MetainfoError> {
         let fs = self.orig_files();
         let pl = fs.piece_length() as u64;
+        let pad = super::merkle::merkle_pad(fs.blocks_per_piece() as usize, 1);
+        let (mut leaves, mut scratch) = (Vec::new(), Vec::new());
         let all_roots: HashSet<Sha256Hash> =
             (0..fs.num_files()).filter(|&i| fs.file_size(i) > pl).map(|i| fs.root(i)).collect();
 
@@ -577,6 +583,13 @@ impl TorrentInfo {
             }
             let Some(hashes) = layers.get(&fs.root(i)) else { continue };
             if hashes.len() as u64 != fs.file_num_pieces(i) as u64 * 32 {
+                return Err(MetainfoError::TorrentInvalidPieceLayer);
+            }
+            // a file of more than one piece has at least two, so the root is a real tree
+            leaves.clear();
+            leaves.extend(hashes.chunks_exact(32).map(|c| Sha256Hash::from_slice(c).expect("32 bytes")));
+            let num_leafs = super::merkle::merkle_num_leafs(leaves.len());
+            if super::merkle::merkle_root_scratch(&leaves, num_leafs, pad, &mut scratch) != fs.root(i) {
                 return Err(MetainfoError::TorrentInvalidPieceLayer);
             }
             *slot = hashes.to_vec();
@@ -966,7 +979,8 @@ impl TorrentInfo {
     }
 
     /// Adds the piece layers of a bencoded "piece layers" dictionary (as the session store keeps
-    /// them beside the info dictionary), with the same checks as a `.torrent`'s.
+    /// them beside the info dictionary), with the same checks as a `.torrent`'s, the check
+    /// against the file roots included: on an error none of them is added.
     pub fn set_piece_layers(&mut self, bencoded: &[u8]) -> Result<(), MetainfoError> {
         let doc = bdecode(bencoded).map_err(|_| MetainfoError::TorrentInvalidPieceLayer)?;
         let root = doc.root().filter(Node::is_dict).ok_or(MetainfoError::TorrentInvalidPieceLayer)?;
@@ -1588,14 +1602,76 @@ mod tests {
         for &(name, expected) in cases {
             match TorrentInfo::from_bytes(&fixture(name)) {
                 Err(e) if e == expected => {}
-                // like libtorrent: some piece-layer problems only surface when hashes are checked
-                Ok(_) if expected == TorrentInvalidPieceLayer => {}
                 other => {
                     failures.push(format!("{name}: expected {expected:?}, got {:?}", other.map(|_| "Ok")))
                 }
             }
         }
         assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    /// Flips one bit in the last hash of the first layer of a `.torrent`'s "piece layers",
+    /// keeping the bencoding and every length valid, so only the check against the root can
+    /// catch it. The info dictionary, and so the info-hashes, stay the same.
+    fn forge_first_layer(buf: &[u8]) -> Vec<u8> {
+        let tag = b"12:piece layersd32:";
+        let at = buf.windows(tag.len()).position(|w| w == tag).expect("piece layers") + tag.len() + 32;
+        let colon = at + buf[at..].iter().position(|&b| b == b':').expect("layer length");
+        let len: usize = std::str::from_utf8(&buf[at..colon]).unwrap().parse().unwrap();
+        assert!(len >= 64 && len % 32 == 0, "a layer of at least two pieces");
+        let mut out = buf.to_vec();
+        out[colon + len] ^= 1;
+        out
+    }
+
+    /// 2026-11-21 bug hunt item 1: a piece layer that does not hash up to its file's root is
+    /// refused, for v2-only torrents and hybrids alike, as libtorrent's `load_torrent_file`
+    /// refuses it; the same torrents with their genuine layers still load.
+    #[test]
+    fn forged_piece_layers_are_refused() {
+        for name in [
+            "v2_only.torrent",
+            "v2_multipiece_file.torrent",
+            "v2_hybrid.torrent",
+            "v2_multiple_files.torrent",
+        ] {
+            let buf = fixture(name);
+            let genuine = TorrentInfo::from_bytes(&buf).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert!(genuine.v2_piece_layers_complete(), "{name}");
+            let forged = forge_first_layer(&buf);
+            assert_ne!(forged, buf);
+            assert_eq!(
+                TorrentInfo::from_bytes(&forged).err(),
+                Some(MetainfoError::TorrentInvalidPieceLayer),
+                "{name} (v1: {})",
+                genuine.v1()
+            );
+        }
+    }
+
+    /// Layers from the session store go through the same check: a forged record is refused
+    /// whole and leaves the torrent without layers (so a v2-only torrent fetches them from its
+    /// peers), and the genuine one is taken.
+    #[test]
+    fn set_piece_layers_checks_the_roots() {
+        for name in ["v2_only.torrent", "v2_multipiece_file.torrent"] {
+            let full = load(name);
+            let layers = full.piece_layers_bencoded().expect("layers");
+            let mut ti = TorrentInfo::from_info_section(full.info_section(), LoadLimits::default()).unwrap();
+            assert!(!ti.v2_piece_layers_complete(), "{name}");
+
+            let mut forged = layers.clone();
+            let last = forged.len() - 2; // inside the last layer, before the dictionary's `e`
+            forged[last] ^= 1;
+            assert_eq!(ti.set_piece_layers(&forged), Err(MetainfoError::TorrentInvalidPieceLayer), "{name}");
+            assert!(!ti.v2_piece_layers_complete(), "{name}");
+            assert!(!ti.v2_piece_hashes_verified(), "{name}");
+            assert_eq!(ti.v2_piece_hash(0), None, "{name}");
+
+            assert_eq!(ti.set_piece_layers(&layers), Ok(()), "{name}");
+            assert!(ti.v2_piece_layers_complete(), "{name}");
+            assert_eq!(ti.v2_piece_hash(0), full.v2_piece_hash(0), "{name}");
+        }
     }
 
     /// The whole fixture directory loads without panicking, valid or not.

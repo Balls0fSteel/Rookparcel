@@ -94,20 +94,34 @@ pub enum Reach {
     Public,
 }
 
-impl Reach {
-    /// For the links in a page fetched from `page_url`: [`Reach::User`] when the page itself
-    /// is on this machine or network (an indexer such as Jackett on `localhost` links to
-    /// itself), else [`Reach::Public`]. Resolves the host (blocking); a name that does not
-    /// resolve counts as public.
-    pub fn for_links_from(page_url: &str) -> Reach {
-        let Some(url) = Url::parse(&clean_url(page_url)) else { return Reach::Public };
-        let local = match host_ip(&url.host) {
-            Some(ip) => !is_public(ip),
-            None if is_localhost_name(&url.host) => true,
-            None => resolve(&url.host, url.port).is_ok_and(|a| a.iter().any(|a| !is_public(a.ip()))),
-        };
-        if local { Reach::User } else { Reach::Public }
+/// Whether a request to `url` would go to this machine or network, judged before it is sent
+/// (a search source on a local address skips the proxy): an IP literal or `localhost` by
+/// itself, another name when every address it resolves to is non-public. A name that `proxy`
+/// would be handed unresolved is not looked up (the local resolver would learn the host the
+/// proxy hides, SEC-15) and counts as public, as does one that does not resolve or a URL that
+/// does not parse. Blocking.
+///
+/// The links in a fetched page are judged by the server that answered instead
+/// ([`FetchResponse::links_reach`]), not by a second lookup that may answer differently.
+pub fn is_local_destination(url: &str, proxy: Option<&FetchProxy>) -> bool {
+    local_destination(url, proxy, resolve)
+}
+
+/// [`is_local_destination`] with its name lookup.
+fn local_destination(
+    url: &str,
+    proxy: Option<&FetchProxy>,
+    resolve: impl FnOnce(&str, u16) -> Result<Vec<SocketAddr>, FetchError>,
+) -> bool {
+    let Some(url) = Url::parse(&clean_url(url)) else { return false };
+    if let Some(ip) = host_ip(&url.host) {
+        return !is_public(ip);
     }
+    if is_localhost_name(&url.host) {
+        return true;
+    }
+    let unresolved = proxy.is_some_and(|p| p.0.resolves_names() || p.0.plain_http(url.scheme == "https"));
+    !unresolved && resolve(&url.host, url.port).is_ok_and(|a| a.iter().all(|a| !is_public(a.ip())))
 }
 
 /// A public unicast address: not loopback, private, link-local, CGNAT, unique-local,
@@ -225,9 +239,22 @@ pub struct FetchResponse {
     pub status: u16,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
+    /// The address of the server that answered (the last request's): the one connected to,
+    /// or the one a proxy was asked to connect to (a loopback address for `localhost`); `None`
+    /// when the proxy resolved the name itself.
+    pub server: Option<IpAddr>,
 }
 
 impl FetchResponse {
+    /// Which addresses the links in this answer may reach (SEC-26): any ([`Reach::User`]) when
+    /// the server that answered is on this machine or network (an indexer such as Jackett on
+    /// `localhost` links to itself), public ones only otherwise, and when a proxy resolved the
+    /// server's name. After a request to a public address the redirects may reach public ones
+    /// only, so a local server here means that every request of the exchange stayed local.
+    pub fn links_reach(&self) -> Reach {
+        if self.server.is_some_and(|ip| !is_public(ip)) { Reach::User } else { Reach::Public }
+    }
+
     /// The first header named `name` (any case).
     pub fn header(&self, name: &str) -> Option<&str> {
         self.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str())
@@ -349,16 +376,18 @@ fn http_get_inner(
         let parsed = Url::parse(&url).ok_or_else(|| FetchError::InvalidUrl(url.clone()))?;
         let origin = origin.get_or_insert_with(|| Origin::of(&parsed));
         let cookies = has_cookies && *origin == Origin::of(&parsed);
-        let (resp, reached_public) = get_once(&parsed, opts, cookies, deadline, public_only, &mut sink)?;
+        let (resp, reached_public, server) =
+            get_once(&parsed, opts, cookies, deadline, public_only, &mut sink)?;
         // a public server may not send the client into its own network (SEC-26)
         public_only |= reached_public;
         if (200..300).contains(&resp.status) {
-            let mut done = FetchResponse { url, status: resp.status, headers: resp.headers, body: resp.body };
+            let mut done =
+                FetchResponse { url, status: resp.status, headers: resp.headers, body: resp.body, server };
             decode(&mut done, opts)?;
             return Ok(done);
         }
         if resp.status == 304 && opts.conditional() {
-            return Ok(FetchResponse { url, status: 304, headers: resp.headers, body: Vec::new() });
+            return Ok(FetchResponse { url, status: 304, headers: resp.headers, body: Vec::new(), server });
         }
         if !resp.is_redirect() {
             // (kept short and clean: up to 16 KiB of anything may come in a status line)
@@ -366,7 +395,13 @@ fn http_get_inner(
         }
         let location = resp.header("location").ok_or(FetchError::Http("redirect without a Location"))?;
         if other_scheme(location) {
-            return Ok(FetchResponse { url, status: resp.status, headers: resp.headers, body: resp.body });
+            return Ok(FetchResponse {
+                url,
+                status: resp.status,
+                headers: resp.headers,
+                body: resp.body,
+                server,
+            });
         }
         redirects += 1;
         if redirects > opts.max_redirects {
@@ -533,8 +568,9 @@ fn named_target(host: &str) -> Vec<IpAddr> {
 }
 
 /// One request and its response, without following redirects; with whether the server's
-/// address is public. `public_only` refuses any other (SEC-26). A 2xx body goes to `sink`
-/// when there is one ([`http_get_to`]).
+/// addresses are all public, and the server's address ([`FetchResponse::server`]).
+/// `public_only` refuses any other (SEC-26). A 2xx body goes to `sink` when there is one
+/// ([`http_get_to`]).
 fn get_once(
     url: &Url,
     opts: &FetchOptions,
@@ -542,18 +578,22 @@ fn get_once(
     deadline: Instant,
     public_only: bool,
     sink: &mut Option<Sink<'_>>,
-) -> Result<(http::Response, bool), FetchError> {
+) -> Result<(http::Response, bool, Option<IpAddr>), FetchError> {
     let https = url.scheme == "https";
     let proxy = opts.proxy.as_ref().map(|p| &p.0);
     let plain_http_proxy = proxy.filter(|p| p.plain_http(https));
     let req = request(url, opts, cookies, plain_http_proxy);
     let public;
+    let server;
     let sock = match proxy {
         None => {
             let addrs = resolve(&url.host, url.port)?;
             let ips: Vec<IpAddr> = addrs.iter().map(SocketAddr::ip).collect();
             public = check_reach(&url.host, &ips, public_only)?;
-            connect(&addrs, deadline)?
+            let sock = connect(&addrs, deadline)?;
+            // the one that answered, not any of the others the name resolved to
+            server = sock.peer_addr().ok().map(|a| a.ip());
+            sock
         }
         Some(p) => {
             // the proxy is told a name when it resolves names, an address otherwise
@@ -568,6 +608,7 @@ fn get_once(
                 Target::Host(..) => named_target(&url.host),
             };
             public = check_reach(&url.host, &ips, public_only)?;
+            server = ips.first().copied();
             let mut sock = connect(&resolve(&p.host, p.port)?, deadline)?;
             if plain_http_proxy.is_none() {
                 let hs = p.tunnel(&target).map_err(|e| FetchError::Proxy(format!("proxy: {e}")))?;
@@ -599,7 +640,7 @@ fn get_once(
     } else {
         exchange(sock, plain_socket, |_| true, &req, opts.max_size, deadline, sink, opts.timeout)
     }?;
-    Ok((resp, public))
+    Ok((resp, public, server))
 }
 
 // The socket under a stream, for its timeouts (a `try_clone` would not do: on Windows the clone
@@ -1311,18 +1352,83 @@ mod tests {
         for public in ["8.8.8.8", "203.0.113.5", "2001:db8::1", "::ffff:8.8.8.8", "64:ff9b::808:808"] {
             assert!(is_public(ip(public)), "{public}");
         }
-        for (page, reach) in [
-            ("http://localhost:9117/api", Reach::User),
-            ("http://Indexer.LOCALHOST./api", Reach::User),
-            ("http://127.0.0.1/rss", Reach::User),
-            ("http://[::1]:8080/rss", Reach::User),
-            ("http://192.168.1.10/rss:COOKIE:x=1", Reach::User),
-            ("https://8.8.8.8/rss", Reach::Public),
-            ("http://feeds.example.invalid/rss", Reach::Public),
-            ("not a url", Reach::Public),
+        for (url, local) in [
+            ("http://localhost:9117/api", true),
+            ("http://Indexer.LOCALHOST./api", true),
+            ("http://127.0.0.1/rss", true),
+            ("http://[::1]:8080/rss", true),
+            ("http://192.168.1.10/rss", true),
+            ("https://8.8.8.8/rss", false),
+            ("http://feeds.example.invalid/rss", false),
+            ("not a url", false),
         ] {
-            assert_eq!(Reach::for_links_from(page), reach, "{page}");
+            assert_eq!(is_local_destination(url, None), local, "{url}");
         }
+    }
+
+    /// Bug hunt 2026-11-21 #6: a name is local only when every address it resolves to is (a
+    /// public and a private answer, as from a rebinding server, is public), and it is not
+    /// looked up at all when the proxy is handed names (SEC-15).
+    #[test]
+    fn local_destinations_by_name() {
+        let answer = |ips: &'static [&'static str]| {
+            move |_: &str, port: u16| -> Result<Vec<SocketAddr>, FetchError> {
+                Ok(ips.iter().map(|ip| SocketAddr::new(ip.parse().unwrap(), port)).collect())
+            }
+        };
+        let url = "http://indexer.example/api";
+        assert!(local_destination(url, None, answer(&["192.168.1.20"])));
+        assert!(local_destination(url, None, answer(&["192.168.1.20", "fd00::5"])));
+        assert!(!local_destination(url, None, answer(&["192.168.1.20", "8.8.8.8"])));
+        assert!(!local_destination(url, None, answer(&["8.8.8.8", "127.0.0.1"])));
+        assert!(!local_destination(url, None, |h: &str, _| Err(FetchError::Resolve(h.into()))));
+        let not_looked_up = |_: &str, _: u16| -> Result<Vec<SocketAddr>, FetchError> {
+            panic!("looked up a name the proxy resolves")
+        };
+        let mut s = proxy_settings(ProxyType::Socks5, 1080);
+        s.proxy_hostnames = true;
+        let socks = FetchProxy::from_settings(&s).unwrap();
+        s.proxy_hostnames = false;
+        let socks_by_address = FetchProxy::from_settings(&s).unwrap();
+        let mut s = proxy_settings(ProxyType::Http, 8080);
+        s.proxy_hostnames = false;
+        let http = FetchProxy::from_settings(&s).unwrap();
+        assert!(!local_destination(url, Some(&socks), not_looked_up));
+        // a proxy handed addresses gets one resolved here anyway: the lookup leaks nothing more
+        assert!(local_destination(url, Some(&socks_by_address), answer(&["10.0.0.5"])));
+        // an HTTP proxy is handed plain http:// URLs by name, https ones tunnelled by address
+        assert!(!local_destination(url, Some(&http), not_looked_up));
+        assert!(local_destination("https://indexer.example/api", Some(&http), answer(&["10.0.0.5"])));
+        // literals and localhost need no lookup, proxy or not
+        for local in ["http://localhost:9696/api", "http://10.0.0.5/api", "https://[fe80::1]/x"] {
+            assert!(local_destination(local, Some(&socks), not_looked_up), "{local}");
+        }
+    }
+
+    /// Bug hunt 2026-11-21 #6: the reach of a page's links comes from the server that answered:
+    /// a local one directly; a name only a proxy resolved is public, a literal or `localhost`
+    /// handed to the proxy is judged as it is.
+    #[test]
+    fn links_reach_follows_the_server_that_answered() {
+        let ok = || b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok".to_vec();
+        let (base, _rx) = serve(vec![ok()]);
+        let r = http_get(&format!("{base}/rss"), &opts()).unwrap();
+        assert_eq!(r.server, Some(IpAddr::from([127, 0, 0, 1])));
+        assert_eq!(r.links_reach(), Reach::User);
+        let (proxy, _rx) = serve(vec![ok(), ok(), ok()]);
+        let port: u16 = proxy.rsplit(':').next().unwrap().parse().unwrap();
+        let o = FetchOptions {
+            proxy: FetchProxy::from_settings(&proxy_settings(ProxyType::Http, port)),
+            ..opts()
+        };
+        let r = http_get("http://feeds.example.invalid/rss", &o).unwrap();
+        assert_eq!((r.server, r.links_reach()), (None, Reach::Public));
+        let r = http_get("http://localhost:9117/api", &o).unwrap();
+        assert_eq!(r.links_reach(), Reach::User);
+        let r = http_get("http://192.168.1.10/rss", &o).unwrap();
+        assert_eq!((r.server, r.links_reach()), (Some(IpAddr::from([192, 168, 1, 10])), Reach::User));
+        let public = FetchResponse { server: Some(IpAddr::from([8, 8, 8, 8])), ..r };
+        assert_eq!(public.links_reach(), Reach::Public);
     }
 
     /// A URL from content reaches public addresses only, and nothing is sent to the refused

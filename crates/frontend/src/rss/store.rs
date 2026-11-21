@@ -199,6 +199,7 @@ impl RssDownloader {
                 episodes: set(&f, "episodes", MAX_EPISODES),
                 read: set(&f, "read", MAX_FEED_HISTORY * 4),
                 items: Vec::new(),
+                items_local: false,
             });
         }
         for f in list(&root, "filters") {

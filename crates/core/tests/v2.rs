@@ -465,6 +465,61 @@ fn a_v2_torrent_keeps_its_piece_layers_across_a_restart() {
     let _ = std::fs::remove_dir_all(state);
 }
 
+/// 2026-11-21 bug hunt item 1: piece layers in the store that do not hash up to their file
+/// roots (as a store written before the check may hold) are dropped when the metadata is
+/// loaded: the restored v2-only torrent fetches its layers from a seed again instead of
+/// verifying against the forged ones, then downloads and passes a recheck. (It has nothing
+/// yet: a restored seed would close the connection to the seed as redundant.)
+#[test]
+fn forged_piece_layers_in_the_store_are_fetched_again() {
+    let files = files(3);
+    let src = temp_dir("forged-store-src");
+    let dir = temp_dir("forged-store");
+    let state = temp_dir("forged-store-state");
+    write_files(&files, &src);
+    let torrent = make_torrent(&src, CreateFlags::V2_ONLY);
+    let ti = TorrentInfo::from_bytes(&torrent).unwrap();
+    let layers = ti.piece_layers_bencoded().expect("piece layers");
+    {
+        let s = start(Some(state.clone()));
+        let mut w = Watch::new(s.handle());
+        let id = add(&mut w, &torrent, &dir).unwrap();
+        wait_state(&mut w, id, TorrentState::Downloading, 20);
+        s.shutdown();
+    }
+
+    // one bit of the stored layers flipped (the pack keeps them as they are, unchecksummed)
+    let pack = state.join("metadata.pack");
+    let mut bytes = std::fs::read(&pack).unwrap();
+    let at = bytes.windows(layers.len()).position(|w| w == layers.as_slice()).expect("stored layers");
+    bytes[at + layers.len() - 2] ^= 1;
+    std::fs::write(&pack, &bytes).unwrap();
+
+    let (seeder, seed_dir, port) = seed("forged-store-seed", &torrent, &files);
+    let s = start(Some(state.clone()));
+    let mut w = Watch::new(s.handle());
+    let restored = first_restored(&mut w).id;
+    s.handle().torrent(restored).connect_peer(SocketAddr::from(([127, 0, 0, 1], port)));
+    wait_state(&mut w, restored, TorrentState::DownloadingMetadata, 20);
+    let st = wait_state(&mut w, restored, TorrentState::Seeding, 60);
+    assert_eq!(st.total_failed_bytes, 0, "no piece failed its check");
+    assert_files(&files, &dir);
+    s.handle().torrent(restored).force_recheck();
+    let st = wait(&mut w, 30, "recheck", |a| {
+        status_of(a, restored)
+            .filter(|s| s.state == TorrentState::Seeding && s.error.is_empty() && s.num_pieces > 0)
+    });
+    assert_eq!(st.num_pieces, ti.num_pieces());
+    s.shutdown();
+    seeder.shutdown();
+    // the fetched layers replaced the forged record
+    let bytes = std::fs::read(&pack).unwrap();
+    assert!(bytes.windows(layers.len()).any(|w| w == layers.as_slice()), "the genuine layers are stored");
+    for d in [src, dir, seed_dir, state] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
 /// A hybrid whose v1 piece hashes describe the files but whose v2 hashes describe other data:
 /// the check stops with libtorrent's "inconsistent hashes" error.
 #[test]

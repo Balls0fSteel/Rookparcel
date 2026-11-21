@@ -1082,7 +1082,6 @@ impl Engine {
             let min_size = (if w.supports_keepalive { 1u64 } else { 4 } << 20).max(piece_len);
             (min_size.max(max_request) / piece_len).max(1) as u32
         };
-        let proto = &c.proto;
         let mut picks = picker.pick_contiguous(
             &c.have,
             c.all,
@@ -1090,7 +1089,7 @@ impl Engine {
             contiguous,
             c.addr,
             w.trust.on_parole,
-            |p, b| proto.requests().any(|r| r.piece == p && r.start == b * BLOCK_SIZE),
+            outstanding,
         );
         if picks.is_empty() {
             return;

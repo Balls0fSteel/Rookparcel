@@ -40,6 +40,13 @@ pub struct Feed {
     pub link: String,
     /// In document order (feeds usually list the newest first).
     pub items: Vec<FeedItem>,
+    /// The server that sent it is on this machine or network ([`FetchResponse::links_reach`]):
+    /// its items' links may reach any address, as an indexer such as Jackett on `localhost`
+    /// links to itself (SEC-26). Set by [`super::fetch_feed`]; false (public addresses only)
+    /// for a document from anywhere else.
+    ///
+    /// [`FetchResponse::links_reach`]: rookparcel_core::fetch::FetchResponse::links_reach
+    pub served_locally: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

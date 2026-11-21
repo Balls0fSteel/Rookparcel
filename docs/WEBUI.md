@@ -401,7 +401,7 @@ finishing).
 |---|---|---|
 | `GET /pa/search/helper` | | `available`, `local` (the request is from this computer: a loopback peer, no `X-Forwarded-For` / `Forwarded` / `X-Real-IP`), `installed`, `version`, `folder`, `running`, `task` (null or `id`, `kind` `check` / `install` / `sites` / `apply` / `page`, `running`, `cancelled`, `got`, `total` (null until known), `progress_text`, `error` and `text` (translated), `version`, `first` (no helper was installed: the page opens the site picker after the install); a check's `question` and `up_to_date`; a finished listing's `sites` (`id`, `name`, `language`, `type`, `configured`, `needs_flaresolverr`; public ones, by name); a page task's `url` and `password`, to a `local` request only) |
 | `/pa/search/helper/check` | `{"update":bool}` | the newest release from GitHub; the task's `question` is the GUIs' confirm text (or `up_to_date`) |
-| `/pa/search/helper/install` | `{"version","password"}` | downloads the release the last check found (409 for another `version`) behind the current password (400 without it; a wrong one ends the session), unpacks it and adds or re-points the "Search helper (all)" source; `got`/`total` move |
+| `/pa/search/helper/install` | `{"version","password"}` | downloads the release the last check found (409 for another `version`) behind the current password (400 without it; a wrong one ends the session and counts towards the ban), unpacks it and adds or re-points the "Search helper (all)" source; `got`/`total` move |
 | `/pa/search/helper/sites` | `{}` | starts the helper and lists its public sites |
 | `/pa/search/helper/apply` | `{"ticked":[id]}` | configures the ticked sites of the last listing, removes the unticked configured ones; FlareSolverr sites are never configured |
 | `/pa/search/helper/page` | `{}` | starts the helper for its own page; 403 unless `local` |
@@ -551,8 +551,14 @@ The login, the password, the local-auth bypass, Host validation, the domain list
 protection, the ban settings and the session timeout change only with the current password:
 `webui.current_password` in `/pa/prefs`, or `web_ui_current_password` in the shim's
 `setPreferences` (our key: qBittorrent's API has none, so its clients cannot change these). A
-wrong current password ends the session that sent it. A failed login is counted before the
-password is hashed, so parallel guesses stop at the ban limit.
+wrong current password ends the session that sent it and counts as a failed login towards its
+client's ban (`webui.max_auth_fail_count`), so the bypass sessions (local-auth bypass, subnet
+whitelist, API key), which come back with the next request, cannot guess it without limit; a
+banned client is refused before anything is checked. It counts once per request, and only when
+the change needs it: not for a change of other fields, nor for one the Run Program gate refuses
+first. A failed login, and a current password, is counted before the password is hashed, so
+parallel guesses stop at the ban limit; a right one clears the count. The hash runs outside the
+State lock, except for the shim's `setPreferences`, which commits under it.
 
 Trackers for new downloads (D66, Preferences > Advanced > Trackers): `trackers.append`,
 `trackers.list` (a `lines` field, a text area), `trackers.from_url` and `trackers.url` are
@@ -731,7 +737,16 @@ unchanged on top.
 - **Client to server**: the engine commands (add with the `.torrent` bytes or the magnet, remove,
   pause, flags, queue, limits, trackers, priorities, move storage, rename, the `post_*` detail
   requests, settings, session pause). A session's IP and port filter tables stay on the client
-  (the server's own filter applies; the client logs that it was not sent).
+  (the server's own filter applies; the client logs that it was not sent). The server checks
+  what a command names as the Web UI's own requests are checked (`remote::dispatch`, the
+  closure from `webui/remote.rs`): an add's save path and a move's target pass the path policy
+  (`--webui-save-root`); a rename's new name and an add's `renamed_files` must be relative
+  names inside the save folder (`util::path::is_relative_name`, which `valid_new_path` uses
+  too: no absolute, drive or `\\server` path, no `..`); an add from resume data
+  (`TorrentSource::Resume`, which names its own save path and may map files anywhere) is
+  refused, since no GUI sends one (File > Import is greyed in a remote window). A refused
+  command never reaches the engine and is answered with the failure alert the engine would
+  send (`AddTorrentFailed`, `StorageMovedFailed`, `FileRenameFailed`).
 - **Server to client**: every alert of the nox's engine, queued per client (a client more than
   100,000 alerts behind is disconnected and resynchronises on reconnect), except the replies to
   the nox's own status requests. A client's `post_torrent_updates` is answered from the cache:

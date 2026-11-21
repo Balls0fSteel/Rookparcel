@@ -107,6 +107,7 @@ impl Engine {
     pub(super) fn add_peer(&mut self, id: TorrentId, addr: SocketAddr, source: PeerSource) -> bool {
         let max = self.settings.max_peerlist_size.max(1) as usize;
         let ext = self.external_ip;
+        let policy = super::peer_list::Reconnect::from_settings(&self.settings);
         let Some(t) = self.torrent(id) else { return false };
         let flags = t.flags;
         if let Some(reason) = self.filters.check(flags, &addr, true) {
@@ -114,7 +115,8 @@ impl Engine {
             return false;
         }
         let t = self.torrent(id).expect("exists");
-        t.peer_list.add(addr, source, ext, max)
+        let finished = t.is_finished();
+        t.peer_list.add_capped(addr, source, ext, max, finished, policy)
     }
 
     /// The last check before connecting to `addr` (peers loaded from resume data were never

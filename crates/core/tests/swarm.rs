@@ -1,8 +1,10 @@
 //! Loopback swarm tests for the real engine: a seeding session and a downloading session on
-//! 127.0.0.1, connected directly, through an HTTP tracker and through a UDP tracker; plus a
+//! 127.0.0.1, connected directly, through an HTTP tracker and through a UDP tracker; tracker
+//! answers that come after a stop, which are not applied to the next run; plus a
 //! restart that resumes without rechecking, and one that keeps partly downloaded pieces; magnet
 //! links that fetch their metadata from the seed (BEP 9), also when stopped and started later; a
-//! trackerless magnet that finds its seed through a third session's DHT, a leech that learns
+//! trackerless magnet that finds its seed through a third session's DHT, the DHT switched on and
+//! off in a running session, a leech that learns
 //! about another through the seed's peer exchange (BEP 11), and two sessions that find each
 //! other through local service discovery (BEP 14); the MSE/PE policy matrix: forced, enabled
 //! and disabled encryption on either side; uTP (BEP 29): the default preference for it,
@@ -387,6 +389,135 @@ fn download_through_an_http_tracker() {
     assert_files(&plain, &dir);
     let _ = std::fs::remove_dir_all(dir);
     let _ = std::fs::remove_dir_all(seed_dir);
+}
+
+/// An HTTP tracker that reports each announce's `event` ("none" without one, "other" for
+/// another request) and answers with no peers and a 30-minute interval; the first request's
+/// answer waits for `release`.
+fn held_tracker() -> (String, std::sync::mpsc::Receiver<String>, std::sync::mpsc::Sender<()>) {
+    use std::sync::mpsc;
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/announce", l.local_addr().unwrap());
+    let (events, events_rx) = mpsc::channel();
+    let (release, release_rx) = mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        let mut held = Some(release_rx);
+        for conn in l.incoming() {
+            let Ok(mut c) = conn else { continue };
+            let (events, held) = (events.clone(), held.take());
+            std::thread::spawn(move || {
+                use std::io::{Read, Write};
+                let mut buf = vec![0u8; 4096];
+                let mut n = 0;
+                while !buf[..n].windows(4).any(|w| w == b"\r\n\r\n") {
+                    match c.read(&mut buf[n..]) {
+                        Ok(0) | Err(_) => return,
+                        Ok(k) => n += k,
+                    }
+                }
+                let req = String::from_utf8_lossy(&buf[..n]).into_owned();
+                let line = req.lines().next().unwrap_or_default();
+                let event = line.split("event=").nth(1).and_then(|r| r.split(['&', ' ']).next());
+                let event = if line.contains("/announce") { event.unwrap_or("none") } else { "other" };
+                let _ = events.send(event.to_owned());
+                if let Some(release) = held {
+                    let _ = release.recv_timeout(Duration::from_secs(20));
+                }
+                // with the counts, so no scrape follows
+                let body = b"d8:completei0e10:incompletei1e8:intervali1800e5:peers0:e";
+                let head =
+                    format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                let _ = c.write_all(head.as_bytes());
+                let _ = c.write_all(body);
+            });
+        }
+    });
+    (url, events_rx, release)
+}
+
+/// Adds a torrent (with no files on disk) that announces to `url`; waits for its `started`.
+fn add_announcing(
+    w: &mut Watch,
+    url: &str,
+    dir: &Path,
+    events: &std::sync::mpsc::Receiver<String>,
+) -> TorrentId {
+    let f = fixture(None);
+    let mut p = AddTorrentParams::new(TorrentSource::TorrentFile(f.torrent), dir.to_string_lossy());
+    p.flags = TorrentFlags::empty();
+    p.trackers = vec![url.to_owned()];
+    w.h.add_torrent(p);
+    let id = wait(w, 5, "add", |a| match a {
+        Alert::TorrentAdded { id, .. } => Some(*id),
+        _ => None,
+    });
+    assert_eq!(events.recv_timeout(Duration::from_secs(20)).as_deref(), Ok("started"));
+    id
+}
+
+/// The engine took every command sent so far (they run in order); whether a `TrackerReply`
+/// came meanwhile.
+fn synced_replies(w: &mut Watch) -> u32 {
+    w.h.post_session_stats();
+    let mut replies = 0;
+    wait(w, 5, "stats", |a| match a {
+        Alert::TrackerReply { .. } => {
+            replies += 1;
+            None
+        }
+        Alert::SessionStats(_) => Some(()),
+        _ => None,
+    });
+    replies
+}
+
+/// Bug hunt 2026-11-21 #4: the answer to a `started` announce that comes after the torrent
+/// stopped is not applied: the tracker gets a `stopped` (the stop had nothing to send it, the
+/// `started` not answered yet), and the next start announces `started` at once, not 30 minutes
+/// later.
+#[test]
+fn a_started_answered_after_the_stop_does_not_hold_up_the_next_start() {
+    let (url, events, release) = held_tracker();
+    let dir = temp_dir("late-started");
+    let s = start(None);
+    let mut w = Watch::new(s.handle());
+    let id = add_announcing(&mut w, &url, &dir, &events);
+    s.handle().torrent(id).pause();
+    assert_eq!(synced_replies(&mut w), 0);
+    release.send(()).unwrap();
+    assert_eq!(
+        events.recv_timeout(Duration::from_secs(10)).as_deref(),
+        Ok("stopped"),
+        "the tracker counted us: it is told we left"
+    );
+    assert_eq!(synced_replies(&mut w), 0, "the late answer is not applied");
+    s.handle().torrent(id).resume();
+    assert_eq!(events.recv_timeout(Duration::from_secs(10)).as_deref(), Ok("started"));
+    wait(&mut w, 10, "the new run's reply", |a| matches!(a, Alert::TrackerReply { .. }).then_some(()));
+    s.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Bug hunt 2026-11-21 #4: a torrent paused and resumed while its `started` is out announces
+/// again; the old announce's answer, coming later, belongs to no run: not applied to the new
+/// one (one reply), and no `stopped` follows it, the torrent running.
+#[test]
+fn an_answer_from_before_a_pause_and_resume_is_not_applied_to_the_new_run() {
+    let (url, events, release) = held_tracker();
+    let dir = temp_dir("late-resumed");
+    let s = start(None);
+    let mut w = Watch::new(s.handle());
+    let id = add_announcing(&mut w, &url, &dir, &events);
+    s.handle().torrent(id).pause();
+    s.handle().torrent(id).resume();
+    assert_eq!(events.recv_timeout(Duration::from_secs(10)).as_deref(), Ok("started"), "the new run");
+    wait(&mut w, 10, "the new run's reply", |a| matches!(a, Alert::TrackerReply { .. }).then_some(()));
+    release.send(()).unwrap();
+    std::thread::sleep(Duration::from_millis(1500));
+    assert_eq!(synced_replies(&mut w), 0, "the old answer is not applied");
+    assert!(events.recv_timeout(Duration::from_millis(500)).is_err(), "no announce follows it");
+    s.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
 }
 
 /// A BEP 15 tracker answering connect and announce with the seed's address.
@@ -1155,6 +1286,133 @@ fn the_ip_filter_applies_to_the_dht() {
         }
     }
     s.shutdown();
+}
+
+/// Whether a DHT node answers a ping at `port` within `secs`.
+fn dht_answers(port: u16, secs: u64) -> bool {
+    let u = UdpSocket::bind("127.0.0.1:0").unwrap();
+    u.set_read_timeout(Some(Duration::from_millis(200))).unwrap();
+    let ping = b"d1:ad2:id20:aaaaaaaaaaaaaaaaaaaae1:q4:ping1:t2:aa1:y1:qe";
+    let to = SocketAddr::from(([127, 0, 0, 1], port));
+    let mut buf = [0u8; 1500];
+    let deadline = Instant::now() + Duration::from_secs(secs);
+    while Instant::now() < deadline {
+        let _ = u.send_to(ping, to);
+        match u.recv_from(&mut buf) {
+            Ok((n, _)) if buf[..n].starts_with(b"d") => return true,
+            // Windows reports a closed port at once
+            _ => std::thread::sleep(Duration::from_millis(50)),
+        }
+    }
+    false
+}
+
+/// The port of the next UDP listen socket opened.
+fn udp_listen_port(w: &mut Watch) -> u16 {
+    wait(w, 10, "UDP socket", |a| match a {
+        Alert::ListenSucceeded { address, protocol } if format!("{protocol:?}") == "Udp" => {
+            Some(address.port())
+        }
+        _ => None,
+    })
+}
+
+/// Bug hunt 2026-11-21 #3: `enable_dht` switched in a running session starts and stops the
+/// node (libtorrent `update_dht`). With uTP on, the UDP socket stays open throughout; without
+/// it, the socket opens and closes with the DHT. A stop saves the node's state.
+#[test]
+fn the_dht_is_switched_on_and_off_in_a_running_session() {
+    for utp in [true, false] {
+        let state = temp_dir("dht-switch");
+        let off = Settings {
+            enable_dht: false,
+            dht_bootstrap_nodes: String::new(),
+            enable_incoming_utp: utp,
+            enable_outgoing_utp: utp,
+            ..settings()
+        };
+        let on = Settings { enable_dht: true, ..off.clone() };
+        let s = Session::start(SessionParams {
+            settings: off.clone(),
+            state_dir: Some(state.clone()),
+            ..Default::default()
+        })
+        .expect("session starts");
+        let mut w = Watch::new(s.handle());
+        let mut port = listen_port(&mut w);
+        // commands run in order: the stats come back once the settings are applied
+        let applied = |w: &mut Watch| {
+            w.h.post_session_stats();
+            wait(w, 5, "stats", |a| matches!(a, Alert::SessionStats(_)).then_some(()));
+        };
+        if utp {
+            assert!(!dht_answers(port, 1), "uTP: the DHT is off at the start");
+        }
+        for round in 0..2 {
+            s.handle().apply_settings(on.clone());
+            if !utp {
+                port = udp_listen_port(&mut w);
+            }
+            assert!(dht_answers(port, 10), "uTP {utp}, round {round}: switched on, the DHT answers");
+            let _ = std::fs::remove_file(state.join("dht_state.dat"));
+            s.handle().apply_settings(off.clone());
+            applied(&mut w);
+            assert!(
+                state.join("dht_state.dat").exists(),
+                "uTP {utp}, round {round}: the stop saved the state"
+            );
+            assert!(!dht_answers(port, 1), "uTP {utp}, round {round}: switched off, the DHT is quiet");
+        }
+        s.shutdown();
+        let _ = std::fs::remove_dir_all(state);
+    }
+}
+
+/// Bug hunt 2026-11-21 #3: switched on, a DHT whose bootstrap router is a host name starts
+/// once the name resolves, and bootstraps from the router; switched off it is quiet, and on
+/// again it starts with the routers resolved again (not twice over).
+#[test]
+fn a_dht_switched_on_bootstraps_from_a_named_router() {
+    let (router, _rw, router_port) = start_dht(None);
+    let off = Settings {
+        enable_dht: false,
+        dht_bootstrap_nodes: format!("localhost:{router_port}"),
+        dht_announce_interval: 2,
+        ..settings()
+    };
+    let s = Session::start(SessionParams { settings: off.clone(), state_dir: None, ..Default::default() })
+        .expect("session starts");
+    let mut w = Watch::new(s.handle());
+    // uTP keeps the UDP socket on the listen port
+    let port = listen_port(&mut w);
+    let mut routers = Vec::new();
+    for round in 0..2 {
+        s.handle().apply_settings(Settings { enable_dht: true, ..off.clone() });
+        let mut started = None;
+        wait(&mut w, 20, "the DHT's bootstrap", |a| match a {
+            Alert::Log { id: None, message } if message.starts_with("DHT started") => {
+                started = Some(message.clone());
+                None
+            }
+            Alert::DhtBootstrap => Some(()),
+            _ => None,
+        });
+        let started = started.expect("the start is logged before the bootstrap");
+        assert!(!started.contains("(0 bootstrap routers)"), "round {round}: {started}");
+        routers.push(started);
+        assert!(dht_answers(port, 5), "round {round}: switched on, the DHT answers");
+        s.handle().apply_settings(off.clone());
+        s.handle().post_session_stats();
+        let n = wait(&mut w, 5, "stats", |a| match a {
+            Alert::SessionStats(s) => Some(s.dht_nodes),
+            _ => None,
+        });
+        assert_eq!(n, 0, "round {round}: switched off");
+        assert!(!dht_answers(port, 1), "round {round}: switched off, the DHT is quiet");
+    }
+    assert_eq!(routers[0], routers[1], "the second start has the same routers");
+    s.shutdown();
+    router.shutdown();
 }
 
 /// SEC-18: before the metadata arrives, `dn=` is the torrent's name, and Open Folder joins it to

@@ -731,7 +731,8 @@ impl Engine {
         self.start_ip_notifier(now);
         self.update_external_ip();
         self.start_lsd(Instant::now());
-        self.start_dht(state_dir.as_deref());
+        self.dht.set_state_dir(state_dir.as_deref());
+        self.start_dht();
         // after the DHT, whose UDP port the mappers forward too
         self.start_portmap();
         if let Some(dir) = state_dir {
@@ -1851,6 +1852,7 @@ impl Engine {
             || s.active_limit != self.settings.active_limit;
         let count_slow_changed = s.dont_count_slow_torrents != self.settings.dont_count_slow_torrents;
         let lsd_changed = s.enable_lsd != self.settings.enable_lsd;
+        let dht_changed = s.enable_dht != self.settings.enable_dht;
         let natpmp_changed = s.enable_natpmp != self.settings.enable_natpmp;
         let upnp_changed = s.enable_upnp != self.settings.enable_upnp;
         let listen_changed = listen::listen_settings_changed(&self.settings, &s);
@@ -1901,6 +1903,15 @@ impl Engine {
                 self.start_lsd(Instant::now());
             } else {
                 self.stop_lsd();
+            }
+        }
+        // libtorrent `update_dht`, after the listen sockets: switched on with uTP off, the UDP
+        // sockets it runs on have just opened (if none could, it starts with the first)
+        if dht_changed {
+            if self.settings.enable_dht {
+                self.start_dht();
+            } else {
+                self.stop_dht();
             }
         }
         // libtorrent `update_natpmp` / `update_upnp`
@@ -2236,7 +2247,10 @@ impl Engine {
         let mut ti = TorrentInfo::from_info_section(&bytes, LoadLimits::default()).ok()?;
         if ti.v2() {
             if let Some(layers) = store.load_piece_layers(key).ok().flatten() {
-                // a damaged record leaves the layers out; v2 pieces then cannot be verified
+                // checked against the file roots like a `.torrent`'s: a store written by an
+                // earlier version may hold a layer that was never checked. A damaged or forged
+                // record leaves every layer out, so a v2-only torrent fetches them from its
+                // peers (which overwrites the record) and a hybrid is verified by its v1 hashes.
                 let _ = ti.set_piece_layers(&layers);
             }
         }
@@ -2750,8 +2764,11 @@ impl Engine {
         let v2_hash = t.info_hashes.wire_hash(true);
         let totals = (t.stat().upload_payload.total, t.stat().download_payload.total);
         let lists = [(t.info_hashes.best_v1_compatible(), &mut t.trackers), (v2_hash, &mut t.trackers_v2)];
+        // an announce out (or answered, not applied yet) leaves its tracker updating
+        let mut announcing = false;
         for (ih, list) in lists {
             for tr in list.iter_mut() {
+                announcing |= tr.updating();
                 if tr.start_sent() {
                     let req = tracker::make_announce(
                         ih,
@@ -2772,6 +2789,7 @@ impl Engine {
                         url: tr.url.to_string(),
                         kind: JobKind::Announce(req),
                         filter: filter.clone(),
+                        stale: false,
                     });
                 }
                 tr.reset();
@@ -2813,6 +2831,11 @@ impl Engine {
         }
         let state = t.settled_state();
         let now = Instant::now();
+        // the answers of announces still out are not applied to the next run
+        // (`apply_tracker_results`)
+        if announcing {
+            self.trackers.torrent_stopped(id);
+        }
         for job in jobs {
             self.trackers.start(job, &self.resolver, self.poll.registry(), now);
         }
@@ -3549,6 +3572,13 @@ impl Engine {
         for (job, outcome) in self.trackers.take_results() {
             let Some(index) = job.tracker else { continue };
             let id = job.torrent;
+            // An announce answered after the torrent stopped belongs to no run: applied, it
+            // would mark `started` as sent and put the next announce (or a back-off) an
+            // interval away, so the next start would not announce. Scrapes are kept.
+            if job.stale {
+                self.late_announce(job, &outcome);
+                continue;
+            }
             let Some(t) = self.torrent(id) else { continue };
             // a hybrid's announce under its v2 hash has its own state
             if matches!(&job.kind, JobKind::Announce(req) if t.info_hashes.has_v1()
@@ -3609,6 +3639,7 @@ impl Engine {
                             url,
                             kind: JobKind::Scrape(ih),
                             filter: self.tracker_filter(id),
+                            stale: false,
                         };
                         self.trackers.start(job, &self.resolver, self.poll.registry(), now);
                     }
@@ -3652,6 +3683,35 @@ impl Engine {
                 }
             }
         }
+    }
+
+    /// An announce of an earlier run (or of a removed torrent) was answered. If the tracker
+    /// took a `started`, it counts us, and the stop sent it no `stopped` (none had been
+    /// answered then): it gets one now, unless the torrent runs and announces again, its new
+    /// `started` on the way. libtorrent leaves the tracker to time us out.
+    fn late_announce(&mut self, job: TrackerJob, outcome: &TrackerOutcome) {
+        let (TrackerOutcome::Announce(r, _), JobKind::Announce(req)) = (outcome, &job.kind) else { return };
+        if req.event != Event::Started {
+            return;
+        }
+        let mut req = req.clone();
+        if let Some(t) = self.torrent_ref(job.torrent) {
+            if t.is_active() && t.announces().trackers {
+                return;
+            }
+            req.uploaded = t.stat().upload_payload.total;
+            req.downloaded = t.stat().download_payload.total;
+            req.corrupt = t.failed_bytes;
+        }
+        // as `stop_torrent` sends it
+        req.event = Event::Stopped;
+        req.left = 0;
+        req.num_want = 0;
+        if let Some(tid) = &r.tracker_id {
+            req.tracker_id.clone_from(tid);
+        }
+        let job = TrackerJob { tracker: None, kind: JobKind::Announce(req), ..job };
+        self.trackers.start(job, &self.resolver, self.poll.registry(), Instant::now());
     }
 
     // --- The tick -----------------------------------------------------------------------------
@@ -3805,6 +3865,7 @@ impl Engine {
             url: t.trackers[index].url.to_string(),
             kind: JobKind::Scrape(t.info_hashes.best_v1_compatible()),
             filter,
+            stale: false,
         };
         self.trackers.start(job, &self.resolver, self.poll.registry(), Instant::now());
     }
@@ -3854,6 +3915,7 @@ impl Engine {
             url: tr.url.to_string(),
             kind: JobKind::Announce(req),
             filter,
+            stale: false,
         };
         t.status_dirty = true;
         self.trackers.start(job, &self.resolver, self.poll.registry(), now);

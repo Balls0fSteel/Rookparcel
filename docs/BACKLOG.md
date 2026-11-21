@@ -22,7 +22,10 @@ belong in [PORTING.md](PORTING.md); document deliberate setting-default changes.
   inbound, `Reach::for_links_from` trusting its own DNS lookup, end-game duplicating too early,
   RSS smart filters losing a failed episode, a stale DNS answer steering another tracker request,
   a torn `resume.log` append retried, unbanned current-password guessing from bypass sessions.
-  23 low (12-34). All open.
+  23 low (12-34). **2026-11-21_093211_1795249931:** 1-11 and 13 fixed in 1.2.71 with tests;
+  12 and 14-34 open. The fixes' own follow-ups (forged-layer pieces kept as "have", a complete
+  v2-only torrent unable to refetch layers from seeds, the shim hashing under the lock, and
+  more) are listed at the end of that file's "Fixes in 1.2.71".
 
 ## Bug hunt findings (2026-11-05)
 
@@ -750,7 +753,7 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   are not ported. BEP55 holepunch remains later. Consider more bootstrap hosts
   if the single libtorrent default becomes a problem, documenting a deliberate
   default change in the porting notes. DHT disable/re-enable on a live
-  session does not work, by reading the code, not run (bug hunt 2026-11-21, item 3).
+  session: fixed in 1.2.71 (bug hunt 2026-11-21, item 3; swarm tests).
 - LSD: same-host clients are found on many interfaces; duplicate IDs prevent
   multiple connections but retries continue. A shared-ID/address hint could
   reduce them. Test another machine

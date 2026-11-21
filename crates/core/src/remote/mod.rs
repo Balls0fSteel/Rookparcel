@@ -188,18 +188,30 @@ pub enum Request {
     Refused(Box<Alert>),
 }
 
+/// Why [`dispatch`] refuses an add from a resume record: it names its own save path and may
+/// map files anywhere (absolute `mapped_files`), which only the engine's local owner may do.
+pub const RESUME_REFUSED: &str = "resume data is not accepted from a remote session";
+/// Why [`dispatch`] refuses a file name that would leave the save folder
+/// ([`crate::util::path::is_relative_name`]).
+pub const NAME_REFUSED: &str = "a file name must stay inside the save folder";
+
 /// Decodes a client's frame and passes the command to `handle`, or returns what the server
 /// must do itself. `None` for a frame that is not a command of this protocol version. A path a
 /// command names (an add's save path, a move's target) goes through `path` first, the server's
 /// policy for the folders its logins may use: `Ok(None)` keeps the path, `Ok(Some(p))` replaces
 /// it (an empty save path takes the server's default, as the Web UI's add does), and a refused
 /// command never reaches the engine and is answered with the failure alert the engine would have
-/// sent.
+/// sent. File names (a rename, an add's `renamed_files`) must be relative names inside the save
+/// folder ([`NAME_REFUSED`]), and an add from a resume record is refused ([`RESUME_REFUSED`]):
+/// no GUI sends one (File > Import is a local window's), and its save path and mapped files
+/// would pass by the policy (bug hunt 2026-11-21, 2).
 pub fn dispatch(
     handle: &SessionHandle,
     frame: &[u8],
     path: &dyn Fn(&str) -> Result<Option<String>, &'static str>,
 ) -> Option<Request> {
+    use crate::params::TorrentSource;
+    use crate::util::path::is_relative_name;
     let refused = |why: &'static str| crate::Error::Io {
         kind: io::ErrorKind::PermissionDenied,
         message: why.to_owned(),
@@ -208,32 +220,47 @@ pub fn dispatch(
         Command::PostTorrentUpdates => Request::PostTorrentUpdates,
         Command::PostSessionStats => Request::PostSessionStats,
         Command::ApplySettings(s) => Request::ApplySettings(s),
-        Command::AddTorrent(mut p) => match path(&p.save_path) {
-            Ok(replaced) => {
-                if let Some(save_path) = replaced {
-                    p.save_path = save_path;
+        Command::AddTorrent(mut p) => {
+            let checked = if matches!(p.source, TorrentSource::Resume(_)) {
+                Err(RESUME_REFUSED)
+            } else if !p.renamed_files.values().all(|name| is_relative_name(name)) {
+                Err(NAME_REFUSED)
+            } else {
+                path(&p.save_path)
+            };
+            match checked {
+                Ok(replaced) => {
+                    if let Some(save_path) = replaced {
+                        p.save_path = save_path;
+                    }
+                    handle.send(Command::AddTorrent(p));
+                    Request::Forwarded
                 }
-                handle.send(Command::AddTorrent(p));
-                Request::Forwarded
+                Err(why) => {
+                    // named as the engine names a failed add: the info's name for a file, the
+                    // record's for resume data, the display name for a magnet; with the hashes
+                    // where the source parses, so a watcher drops the right pending
+                    let (parsed_name, info_hashes) = match &p.source {
+                        TorrentSource::TorrentFile(bytes) => crate::metainfo::TorrentInfo::from_bytes(bytes)
+                            .map(|t| (t.name().to_owned(), Some(t.info_hashes())))
+                            .unwrap_or_default(),
+                        TorrentSource::Resume(bytes) => crate::resume::ResumeData::decode(bytes)
+                            .map(|r| (r.name, Some(r.info_hashes)))
+                            .unwrap_or_default(),
+                        TorrentSource::Magnet(uri) => crate::metainfo::parse_magnet_uri(uri)
+                            .map(|m| (m.name, Some(m.info_hashes)))
+                            .unwrap_or_default(),
+                        TorrentSource::InfoHash(h) => (String::new(), Some(*h)),
+                    };
+                    let name = p.name.clone().unwrap_or(parsed_name);
+                    let error = refused(why);
+                    Request::Refused(Box::new(Alert::AddTorrentFailed { name, info_hashes, error }))
+                }
             }
-            Err(why) => {
-                // named as the engine names a failed add: the info's name for a file, the
-                // display name for a magnet; with the hashes where the source parses, so a
-                // watcher drops the right pending
-                use crate::params::TorrentSource;
-                let (parsed_name, info_hashes) = match &p.source {
-                    TorrentSource::TorrentFile(bytes) => crate::metainfo::TorrentInfo::from_bytes(bytes)
-                        .map(|t| (t.name().to_owned(), Some(t.info_hashes())))
-                        .unwrap_or_default(),
-                    TorrentSource::Magnet(uri) => crate::metainfo::parse_magnet_uri(uri)
-                        .map(|m| (m.name, Some(m.info_hashes)))
-                        .unwrap_or_default(),
-                    _ => (String::new(), None),
-                };
-                let name = p.name.clone().unwrap_or(parsed_name);
-                Request::Refused(Box::new(Alert::AddTorrentFailed { name, info_hashes, error: refused(why) }))
-            }
-        },
+        }
+        Command::RenameFile(id, index, name) if !is_relative_name(&name) => {
+            Request::Refused(Box::new(Alert::FileRenameFailed { id, index, error: refused(NAME_REFUSED) }))
+        }
         Command::MoveStorage(id, target, flags) => match path(&target) {
             Ok(replaced) => {
                 handle.send(Command::MoveStorage(id, replaced.unwrap_or(target), flags));

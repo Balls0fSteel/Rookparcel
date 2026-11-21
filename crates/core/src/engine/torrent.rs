@@ -1348,8 +1348,7 @@ mod tests {
         }
         picker.set_sequential(true);
         let seed = std::net::SocketAddr::from(([10, 0, 0, 1], 6881));
-        let picked =
-            picker.pick(&Bitfield::new(n as usize, false), true, n as usize, seed, false, |_, _| false);
+        let picked = picker.pick(&Bitfield::new(n as usize, false), true, n as usize, seed, false, 0);
         let order: Vec<u32> = picked.iter().map(|&(piece, _)| piece).collect();
         let mut want = vec![0, 7, 8, 9, 10, 11, 208, 209, 210];
         want.extend((1..7).chain(12..208));

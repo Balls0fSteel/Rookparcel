@@ -134,6 +134,9 @@ pub(crate) struct Store {
     /// The portable folder (D42): records keep the paths inside it relative to it
     /// (`crate::util::portable`), resolved again at load.
     root: Option<PathBuf>,
+    /// Tests: the next journal write stops after this many bytes and fails.
+    #[cfg(test)]
+    tear_next_write: Option<usize>,
 }
 
 impl Store {
@@ -158,6 +161,8 @@ impl Store {
             db_len: 0,
             pack: None,
             pack_len: 0,
+            #[cfg(test)]
+            tear_next_write: None,
         };
         let (db, log) = store.read_files()?;
         let records = store.read_records(db.as_deref(), &log)?;
@@ -436,11 +441,7 @@ impl Store {
         if self.pending.is_empty() {
             return Ok(());
         }
-        {
-            let mut f = OpenOptions::new().create(true).append(true).open(self.dir.join(RESUME_LOG))?;
-            f.write_all(&self.pending)?;
-            f.sync_data()?;
-        }
+        self.write_log()?;
         self.log_len += self.pending.len() as u64;
         // a save of every torrent (100,000 records are 87 MB) must not stay allocated
         if self.pending.capacity() > PENDING_KEEP {
@@ -457,6 +458,51 @@ impl Store {
             self.write_db(&records)?;
         }
         Ok(())
+    }
+
+    /// Writes `pending` at the end of the journal's intact part (`log_len`) and syncs it. A
+    /// failed write or sync (a full disk, a short write) cuts the journal back to `log_len`:
+    /// `pending` is kept and written again by the next save, and after torn bytes the replay at
+    /// the next start would stop at them (cutting the retried records away) or read a corrupt
+    /// record over the retried copy. Writing at `log_len` instead of appending also overwrites
+    /// torn bytes that could not be cut.
+    fn write_log(&mut self) -> Result<(), Error> {
+        let mut f =
+            OpenOptions::new().write(true).create(true).truncate(false).open(self.dir.join(RESUME_LOG))?;
+        let end = self.log_len + self.pending.len() as u64;
+        let written = (|| {
+            f.seek(SeekFrom::Start(self.log_len))?;
+            self.write_pending(&mut f)?;
+            if f.metadata()?.len() > end {
+                f.set_len(end)?;
+            }
+            f.sync_data()
+        })();
+        if let Err(e) = written {
+            // best effort: the write at `log_len` covers what this leaves behind
+            if f.set_len(self.log_len).is_ok() {
+                let _ = f.sync_data();
+            }
+            return Err(e.into());
+        }
+        Ok(())
+    }
+
+    #[cfg(not(test))]
+    fn write_pending(&mut self, f: &mut File) -> io::Result<()> {
+        f.write_all(&self.pending)
+    }
+
+    /// Writes only `tear_next_write` bytes, then fails, once it is set.
+    #[cfg(test)]
+    fn write_pending(&mut self, f: &mut File) -> io::Result<()> {
+        match self.tear_next_write.take() {
+            Some(n) => {
+                f.write_all(&self.pending[..n.min(self.pending.len())])?;
+                Err(io::Error::other("torn write (test)"))
+            }
+            None => f.write_all(&self.pending),
+        }
     }
 }
 
@@ -703,6 +749,46 @@ mod tests {
         let (_, list, _) = Store::open(&dir).unwrap();
         assert_eq!(names(&list), ["big79", "renamed", "t1"]);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Bug hunt 2026-11-21 #10: a journal write that fails part-way (a full disk) is cut back,
+    /// so the next save's retry is not written after torn bytes, and every record loads at the
+    /// next start; torn bytes that could not be cut are overwritten.
+    #[test]
+    fn a_failed_journal_write_is_retried_cleanly() {
+        let dir = crate::disk::tests::temp_dir("store-torn-retry");
+        let named = |i: u8, name: &str| {
+            let mut r = rec(i);
+            r.name = name.into();
+            r
+        };
+        {
+            let (mut s, _, _) = Store::open(&dir).unwrap();
+            s.put("k1", &rec(1), None).unwrap();
+            s.flush().unwrap();
+            let intact = std::fs::metadata(dir.join(RESUME_LOG)).unwrap().len();
+            // the header and part of the length of k2's entry, then the disk is full
+            s.put("k2", &rec(2), None).unwrap();
+            s.put("k1", &named(1, "t1 changed"), None).unwrap();
+            s.tear_next_write = Some(13);
+            assert!(s.flush().is_err());
+            assert!(s.is_dirty(), "kept for the next save");
+            assert_eq!(std::fs::metadata(dir.join(RESUME_LOG)).unwrap().len(), intact, "cut back");
+            // a whole header whose length runs into the retried copy, left behind (the cut failed)
+            let mut torn = Vec::new();
+            push_log_entry(&mut torn, "k3", Some(&rec(3).encode()));
+            torn.truncate(torn.len() - 5);
+            OpenOptions::new().append(true).open(dir.join(RESUME_LOG)).unwrap().write_all(&torn).unwrap();
+            s.put("k3", &rec(3), None).unwrap();
+            s.flush().unwrap();
+            assert!(!s.is_dirty());
+        }
+        let (_, mut list, errors) = Store::open(&dir).unwrap();
+        assert!(errors.is_empty(), "{errors:?}");
+        list.sort_by(|a, b| a.name.cmp(&b.name));
+        let names: Vec<&str> = list.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, ["t1 changed", "t2", "t3"]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A database with more tokens than bdecode's default limit (about 22,000 torrents) still

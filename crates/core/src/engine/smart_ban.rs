@@ -294,19 +294,23 @@ impl Engine {
     }
 
     /// libtorrent `torrent::ban_peer` plus the disconnect that follows it: the peer is never
-    /// connected again, and any connection to it is closed. A peer that is unknown or already
-    /// banned is left alone.
+    /// connected again, and any connection to it is closed. Its IP is banned
+    /// ([`PeerList::ban_ip`](super::peer_list::PeerList::ban_ip)), so the connections that came
+    /// in from it are closed too; ones we made to other ports of that IP stay, as they are
+    /// known to be other peers (several clients on one host). A peer that is unknown or
+    /// already banned is left alone.
     pub(super) fn ban_peer(&mut self, id: TorrentId, addr: SocketAddr, reason: &str) {
         let Some(t) = self.torrent(id) else { return };
         if t.peer_list.get(&addr).is_none_or(|p| p.banned) {
             return;
         }
-        t.peer_list.ban(&addr);
+        t.peer_list.ban_ip(&addr);
         let mut peer_id = [0u8; 20];
         for slot in t.peers.clone() {
             let Some(p) = self.peers.get_mut(slot) else { continue };
-            if p.addr == addr && p.closing.is_none() {
-                if p.state == PeerState::Active {
+            let same_ip_in = !p.outgoing && p.addr.ip() == addr.ip();
+            if (p.addr == addr || same_ip_in) && p.closing.is_none() {
+                if p.addr == addr && p.state == PeerState::Active {
                     peer_id = p.peer_id;
                 }
                 p.close(format!("banned: {reason}"), true);

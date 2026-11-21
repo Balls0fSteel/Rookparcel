@@ -61,19 +61,18 @@ impl AddRequest {
 
 /// Fetches what an item names (blocking: call it from a worker thread): a magnet link as it
 /// is, else the `.torrent` behind the URL, sent with the feed's cookies. The feed operator
-/// chose the URL: it reaches this machine or network only when `feed_url` is there too
-/// (SEC-26).
+/// chose the URL: it reaches the addresses `reach` allows ([`AddRequest::links_reach`]: this
+/// machine or network only when the server that sent the feed is there too, SEC-26).
 pub fn fetch_download(
     url: &str,
     cookies: &str,
-    feed_url: &str,
+    reach: Reach,
     proxy: Option<FetchProxy>,
 ) -> Result<Download, String> {
     let url = url.trim();
     if url.get(..7).is_some_and(|s| s.eq_ignore_ascii_case("magnet:")) {
         return Ok(Download::Magnet(url.to_owned()));
     }
-    let reach = Reach::for_links_from(feed_url);
     let opts = FetchOptions { cookies: cookies.to_owned(), proxy, reach, ..FetchOptions::default() };
     let resp = http_get(url, &opts).map_err(|e| e.to_string())?;
     match resp.redirect() {
@@ -103,7 +102,7 @@ impl Fetcher for Net {
     }
 
     fn download(&self, req: &AddRequest, proxy: Option<FetchProxy>) -> Result<Download, String> {
-        fetch_download(&req.url, &req.cookies, &req.feed_url, proxy)
+        fetch_download(&req.url, &req.cookies, req.links_reach, proxy)
     }
 }
 
@@ -247,7 +246,7 @@ impl Worker {
                 Done::Download(req, Ok(d)) => out.adds.push((req, d)),
                 Done::Download(req, Err(e)) => {
                     out.log.push(tr!(RssLogDownloadFailed, title = req.title, error = e));
-                    rss.forget(req.feed, &req.item_id);
+                    rss.forget(&req);
                     out.changed = true;
                 }
             }
@@ -375,6 +374,30 @@ mod tests {
         assert_eq!(titles, ["Show.S01E02.720p"]);
     }
 
+    /// Bug hunt 2026-11-21 #8: a smart filter's episode whose `.torrent` could not be fetched
+    /// is fetched again at the next refresh, as the module promises.
+    #[test]
+    fn a_smart_filters_failed_episode_is_tried_again() {
+        let fake = Arc::new(Fake::default());
+        let items = vec![
+            FeedItem { published: Some(NOW - 10), ..item("Show.S01E05.1080p", "https://f/5-1080.torrent") },
+            FeedItem { published: Some(NOW - 20), ..item("Show.S01E05.720p", "https://f/5.torrent") },
+        ];
+        fake.feeds.lock().unwrap().push(("https://f/rss".into(), Feed { items, ..Feed::default() }));
+        let mut w = Worker::with_fetcher(fake.clone(), || {});
+        let mut d = RssDownloader::default();
+        let id = d.add_feed("https://f/rss", "");
+        d.add_filter(RssFilter { pattern: "show".into(), smart: true, ..RssFilter::default() });
+        w.refresh(&d, id, None);
+        let c = collect_until(&mut w, &mut d, 0);
+        assert!(c.adds.is_empty() && c.log.iter().any(|l| l.contains("Show.S01E05.720p")), "{:?}", c.log);
+        fake.files.lock().unwrap().push(("https://f/5.torrent".into(), b"d4:infod4:name1:aee".to_vec()));
+        w.refresh(&d, id, None);
+        let c = collect_until(&mut w, &mut d, 1);
+        let titles: Vec<&str> = c.adds.iter().map(|(r, _)| r.title.as_str()).collect();
+        assert_eq!(titles, ["Show.S01E05.720p"]);
+    }
+
     #[test]
     fn a_failed_feed_is_logged_and_kept() {
         let fake = Arc::new(Fake::default());
@@ -419,7 +442,8 @@ mod tests {
             title: "x".into(),
             url: "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567".into(),
             cookies: String::new(),
-            feed_url: "https://feeds.example.org/tv".into(),
+            links_reach: Reach::Public,
+            recorded: Default::default(),
             save_path: " D:\\tv ".into(),
             label: "tv".into(),
             top_priority: true,
@@ -439,7 +463,7 @@ mod tests {
         assert_eq!(m.info_hashes().unwrap().key_hex(), "0123456789abcdef0123456789abcdef01234567");
         assert_eq!(Download::Torrent(b"junk".to_vec()).info_hashes(), None);
         assert_eq!(
-            fetch_download(" MAGNET:?xt=x ", "", "", None),
+            fetch_download(" MAGNET:?xt=x ", "", Reach::Public, None),
             Ok(Download::Magnet("MAGNET:?xt=x".into()))
         );
     }

@@ -400,6 +400,91 @@ fn malformed_frames_are_refused() {
     assert!(r.next_frame().is_err());
 }
 
+// --- the server's dispatch -------------------------------------------------------------------
+
+/// A session whose "engine" passes every command it gets on to the returned channel.
+fn recording_session() -> (Session, std::sync::mpsc::Receiver<Command>) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let session = Session::spawn(Default::default(), Box::new(|| {}), move |commands, _, _| {
+        for c in commands {
+            if matches!(c, Command::Shutdown) {
+                return;
+            }
+            let _ = tx.send(c);
+        }
+    });
+    (session, rx)
+}
+
+fn frame_of(c: &Command) -> Vec<u8> {
+    wire::to_bytes(|e| assert!(wire::encode_command(c, e)))
+}
+
+/// The error of a refused add or rename, and which it was.
+fn refusal(r: Option<Request>) -> (&'static str, String) {
+    match r {
+        Some(Request::Refused(a)) => match *a {
+            Alert::AddTorrentFailed { name, error, .. } => ("add", format!("{name}: {error}")),
+            Alert::FileRenameFailed { index, error, .. } => ("rename", format!("{index}: {error}")),
+            other => panic!("{other:?}"),
+        },
+        other => panic!("not refused: {other:?}"),
+    }
+}
+
+/// Bug hunt 2026-11-21, 2: past the save path and the move target, the names a remote session
+/// sends are checked too. An add from a resume record (whose own save path and mapped files the
+/// engine would take) is refused, and so is a file name that leaves the save folder, in a
+/// rename or in an add's `renamed_files`; none reaches the engine. Relative names do.
+#[test]
+fn dispatch_keeps_file_names_inside_the_save_folder() {
+    let (session, engine) = recording_session();
+    let h = session.handle();
+    let allow = |_: &str| Ok(None);
+    let id = TorrentId::from_raw(3);
+
+    let mut resume = AddTorrentParams::new(TorrentSource::Resume(vec![1, 2, 3]), "/srv/dl");
+    resume.name = Some("imported".into());
+    let (kind, error) = refusal(dispatch(&h, &frame_of(&Command::AddTorrent(Box::new(resume))), &allow));
+    assert_eq!((kind, error.as_str()), ("add", format!("imported: {RESUME_REFUSED}").as_str()));
+
+    let magnet = |renamed: &str| {
+        let mut p = AddTorrentParams::new(
+            TorrentSource::Magnet(format!("magnet:?xt=urn:btih:{}&dn=film", "ab".repeat(20))),
+            "/srv/dl",
+        );
+        p.renamed_files = BTreeMap::from([(0, "film/a.mkv".into()), (1, renamed.into())]);
+        Command::AddTorrent(Box::new(p))
+    };
+    let absolute = if cfg!(windows) { r"C:\Users\x\evil.exe" } else { "/home/x/.bashrc" };
+    for bad in ["../../evil", "film/../../evil", absolute, "\\\\host\\share\\x", ""] {
+        let (kind, error) = refusal(dispatch(&h, &frame_of(&magnet(bad)), &allow));
+        assert_eq!(kind, "add", "{bad}");
+        assert!(error.starts_with("film: ") && error.ends_with(NAME_REFUSED), "{bad}: {error}");
+        let (kind, error) = refusal(dispatch(&h, &frame_of(&Command::RenameFile(id, 4, bad.into())), &allow));
+        assert_eq!((kind, error), ("rename", format!("4: {NAME_REFUSED}")), "{bad}");
+    }
+
+    // relative names pass, and are the first commands the engine sees
+    let good = dispatch(&h, &frame_of(&magnet("film/sub/b.srt")), &allow);
+    assert!(matches!(good, Some(Request::Forwarded)), "{good:?}");
+    let good = dispatch(&h, &frame_of(&Command::RenameFile(id, 4, "film/new name.mkv".into())), &allow);
+    assert!(matches!(good, Some(Request::Forwarded)), "{good:?}");
+    let next = || engine.recv_timeout(Duration::from_secs(5)).expect("a command");
+    match next() {
+        Command::AddTorrent(p) => {
+            assert_eq!(p.renamed_files.get(&1).map(String::as_str), Some("film/sub/b.srt"))
+        }
+        other => panic!("{other:?}"),
+    }
+    match next() {
+        Command::RenameFile(x, 4, name) => assert_eq!((x, name.as_str()), (id, "film/new name.mkv")),
+        other => panic!("{other:?}"),
+    }
+    assert!(engine.try_recv().is_err());
+    drop(session);
+}
+
 // --- over loopback ---------------------------------------------------------------------------
 
 const USER: &str = "admin";

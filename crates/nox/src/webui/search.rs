@@ -26,6 +26,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
+use std::net::IpAddr;
 
 use rookparcel_core::crypto::Sha1;
 use rookparcel_core::fetch::FetchProxy;
@@ -202,16 +203,21 @@ fn valid_url(url: &str) -> Result<String, CmdError> {
 /// The current password, needed to add a source or change its URL or key: the source makes
 /// the server fetch its URL (any address: it is the user's) with the stored key, so a stolen
 /// session must not be able to point a source, and its key, somewhere else. A wrong one ends
-/// the session that sent it, as Preferences' security fields do (SEC-03).
-pub(super) fn check_password(shared: &Shared, body: &Json, session: &str) -> Result<(), CmdError> {
-    let mut st = shared.lock();
-    let given = text(body, "password");
-    if given.is_some_and(|p| st.password.verify(p)) {
+/// the session that sent it and counts towards the ban of its client `ip`, as Preferences'
+/// security fields do (SEC-03); the hash runs outside the State lock.
+pub(super) fn check_password(
+    shared: &Shared,
+    body: &Json,
+    session: &str,
+    ip: IpAddr,
+) -> Result<(), CmdError> {
+    let Some(given) = text(body, "password").filter(|p| !p.is_empty()) else {
+        return Err(err(400, tr!(WebSearchNeedPassword)));
+    };
+    if super::api::check_current_password(shared, given, ip).is_some() {
         return Ok(());
     }
-    if given.is_some_and(|p| !p.is_empty()) {
-        st.sessions.remove(session);
-    }
+    shared.lock().sessions.remove(session);
     Err(err(400, tr!(WebSearchNeedPassword)))
 }
 
@@ -325,17 +331,18 @@ fn test(shared: &Shared, body: &Json) -> Result<Json, CmdError> {
 }
 
 /// `/pa/search` and `/pa/search/...` (`endpoint` is the part after `search`, with its slash);
-/// `session` is the requester's, `local` whether it is on this computer (the search helper's
-/// page, `helper.rs`).
+/// `session` is the requester's, `ip` its client (`api::client_ip`, for the current password's
+/// ban), `local` whether it is on this computer (the search helper's page, `helper.rs`).
 pub(crate) fn serve(
     shared: &Shared,
     endpoint: &str,
     body: Option<Json>,
     session: &str,
+    ip: IpAddr,
     local: bool,
 ) -> Result<Response, CmdError> {
     if let Some(rest) = endpoint.strip_prefix("/helper").filter(|r| r.is_empty() || r.starts_with('/')) {
-        return super::helper::serve(shared, rest, body, session, local);
+        return super::helper::serve(shared, rest, body, session, ip, local);
     }
     let Some(body) = body else {
         return match endpoint {
@@ -360,7 +367,7 @@ pub(crate) fn serve(
         "/add" => add(shared, &body),
         "/source-add" => {
             let url = valid_url(text(&body, "url").unwrap_or(""))?;
-            check_password(shared, &body, session)?;
+            check_password(shared, &body, session, ip)?;
             let mut sources = load_sources(&shared.lock().options);
             if sources.len() >= search::source::MAX_SOURCES {
                 return Err(err(409, "too many sources"));
@@ -383,7 +390,7 @@ pub(crate) fn serve(
             };
             let key = text(&body, "key").map(str::trim).filter(|k| !k.is_empty());
             if url != sources[i].url || key.is_some_and(|k| k != sources[i].api_key) {
-                check_password(shared, &body, session)?;
+                check_password(shared, &body, session, ip)?;
             }
             let s = &mut sources[i];
             s.url = url;

@@ -25,6 +25,7 @@
 //! alternative speed limits do not exist there ([`HOSTED_NO_ALT`]).
 
 use std::io;
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 
 use rookparcel_core::{IpFilter, IpFilterLoad, ProxyType, Settings, TorrentFlags};
@@ -102,9 +103,6 @@ pub(crate) struct Working {
     pub new_password: Option<String>,
     /// A new API key (`webui.api_key`, write-only like the password).
     pub new_api_key: Option<String>,
-    /// The password the request says is the current one (`webui.current_password`, never
-    /// stored), needed to change the login and the Web UI's security settings (SEC-03).
-    pub current_password: Option<String>,
     pub listen: String,
 }
 
@@ -119,7 +117,6 @@ impl Working {
             username: st.username.clone(),
             new_password: None,
             new_api_key: None,
-            current_password: None,
             listen: st.listen_addr.to_string(),
         }
     }
@@ -132,7 +129,6 @@ impl Working {
             username: "admin".to_owned(),
             new_password: None,
             new_api_key: None,
-            current_password: None,
             listen: st.listen_addr.to_string(),
         }
     }
@@ -629,12 +625,9 @@ pub(crate) static FIELDS: &[Field] = &[
         Some(S::PrefCurrentPassword),
         Kind::Password,
         |_w| Value::Str(String::new()),
-        |w, v| {
-            let p = string(v);
-            if !p.is_empty() {
-                w.current_password = Some(p);
-            }
-        }
+        // never stored: needed to change the login and the Web UI's security settings (SEC-03),
+        // [`Asker::new`] takes it from the request's changes
+        |_w, _v| {}
     ),
     field!(
         "webui.bypass_local_auth",
@@ -1843,36 +1836,113 @@ fn ip_filter_to_read(shared: &Shared, st: &State, changes: &[Change]) -> Option<
     (ip_source(shared, &w) != ip_source(shared, &old)).then_some(file)
 }
 
+/// The request that sent changes to [`commit`]: its session (kept when the password changes,
+/// ended by a wrong current password) and its client, whose ban a wrong current password
+/// counts towards, as a failed login does (bug hunt 2026-11-21, 11: the bypass sessions come
+/// back with the next request, so ending the session alone stops nobody).
+pub(crate) struct Asker<'a> {
+    session: &'a str,
+    ip: IpAddr,
+    current: Current,
+}
+
+/// The current password a request gave (`webui.current_password`).
+enum Current {
+    Absent,
+    /// Not checked yet: it is checked once the change is found to need it, and only then
+    /// counts (a change that needs none, or one the Run Program gate refuses, leaves it).
+    Unchecked(String),
+    /// Right, against this hash (a password changed since does not count).
+    Right(PasswordHash),
+    /// Wrong, or the client was banned meanwhile.
+    Wrong,
+}
+
+impl<'a> Asker<'a> {
+    pub(crate) fn new(session: &'a str, ip: IpAddr, changes: &[Change]) -> Asker<'a> {
+        let given = changes
+            .iter()
+            .find(|(d, _)| d.id() == "webui.current_password")
+            .map(|(_, v)| string(v.clone()))
+            .filter(|p| !p.is_empty());
+        Asker { session, ip, current: given.map_or(Current::Absent, Current::Unchecked) }
+    }
+
+    /// Checks the password, outside the State lock.
+    fn check(&mut self, shared: &Shared) {
+        if let Current::Unchecked(p) = &self.current {
+            let found = super::api::check_current_password(shared, p, self.ip);
+            self.current = found.map_or(Current::Wrong, Current::Right);
+        }
+    }
+
+    /// [`Asker::check`] under the lock the caller holds.
+    fn check_locked(&mut self, st: &mut State) {
+        if let Current::Unchecked(p) = &self.current {
+            let found = super::api::check_current_password_locked(st, p, self.ip);
+            self.current = found.map_or(Current::Wrong, Current::Right);
+        }
+    }
+}
+
+/// Why [`commit_read`] stopped.
+enum Stop {
+    Refused(Refusal),
+    /// The change needs the current password, which is not checked yet: nothing was changed.
+    Check,
+}
+
+impl From<Refusal> for Stop {
+    fn from(r: Refusal) -> Stop {
+        Stop::Refused(r)
+    }
+}
+
 /// [`commit`] for a request: a block list the changes turn on is read without the State lock,
 /// which every request and the alert loop wait for (SEC-05: a big list takes a while), with
-/// `read`; then the changes are committed under the lock. When the preferences changed in the
-/// meantime so that another file is wanted, that one is read the same way.
+/// `read`; so is the current password checked when the change needs it (PBKDF2 is slow on
+/// purpose); then the changes are committed under the lock. When the preferences changed in
+/// the meantime so that another file is wanted, that one is read the same way.
 ///
-/// `run` is the request's [`RunGate`]: the only way the Run Program lines (D67) change.
+/// `run` is the request's [`RunGate`]: the only way the Run Program lines (D67) change. `ip` is
+/// the request's client ([`super::api::client_ip`]).
 pub(crate) fn commit_request(
     shared: &Shared,
     changes: &[Change],
     from: &str,
+    ip: IpAddr,
     run: RunGate,
     read: impl Fn(&Path) -> io::Result<IpFilterLoad>,
 ) -> Result<(), Refusal> {
+    let mut asker = Asker::new(from, ip, changes);
     let mut done: Read = None;
-    for _ in 0..3 {
+    let mut reads = 0;
+    loop {
         let mut st = shared.lock();
         let wanted = ip_filter_to_read(shared, &st, changes);
-        if wanted.as_ref() == done.as_ref().map(|(f, _)| f) {
-            return commit_read(shared, &mut st, changes, Some(from), run, done)
-                .map(|()| confirm(shared, &mut st));
+        // after three reads that the preferences outran, the file is read under the lock
+        if reads < 3 && wanted.as_ref() != done.as_ref().map(|(f, _)| f) {
+            drop(st);
+            reads += 1;
+            done = wanted.map(|f| {
+                let r = read(&f);
+                (f, r)
+            });
+            continue;
         }
-        drop(st);
-        done = wanted.map(|f| {
-            let r = read(&f);
-            (f, r)
-        });
+        match commit_read(shared, &mut st, changes, Some(&asker), run, &mut done) {
+            Ok(()) => {
+                confirm(shared, &mut st);
+                return Ok(());
+            }
+            Err(Stop::Refused(r)) => return Err(r),
+            // checked once: the next round finds it right or wrong
+            Err(Stop::Check) => {
+                drop(st);
+                asker.check(shared);
+            }
+        }
     }
-    // still changing: the file is read under the lock
-    let mut st = shared.lock();
-    commit_read(shared, &mut st, changes, Some(from), run, done).map(|()| confirm(shared, &mut st))
 }
 
 /// The Web UI's Preferences page saved, or a remote window's Preferences sent OK or Apply: the
@@ -1896,11 +1966,13 @@ pub(crate) fn confirm(shared: &Shared, st: &mut State) {
 /// handed to the owner's `MoveCompleted`, and everything stored in the state file. A block list
 /// is read here, under the State lock; requests go through [`commit_request`].
 ///
-/// `from` is the session of the request that sent them; `None` for nox's own changes (the
-/// state file at start, a remote GUI's engine settings). A request changes the login and the
-/// Web UI's security settings only with the current password, and a wrong one ends its session
-/// (SEC-03). A new password ends every other login: the other sessions, their WebSockets and
-/// the remote connections (SEC-24).
+/// `from` is the request that sent them; `None` for nox's own changes (the state file at start,
+/// a remote GUI's engine settings). A request changes the login and the Web UI's security
+/// settings only with the current password; a wrong one ends its session and counts towards
+/// its client's ban (SEC-03). Here, under the lock the caller holds, the password is checked
+/// under it; [`commit_request`] checks it outside. One [`Asker`] checks it once, however many
+/// commits it is given to. A new password ends every other login: the other sessions, their
+/// WebSockets and the remote connections (SEC-24).
 ///
 /// The Run Program lines (D67) never change here: the gate is closed for everything that is
 /// not a page's request ([`commit_request`]), whoever calls and with whatever password.
@@ -1908,21 +1980,29 @@ pub(crate) fn commit(
     shared: &Shared,
     st: &mut State,
     changes: &[Change],
-    from: Option<&str>,
+    mut from: Option<&mut Asker<'_>>,
 ) -> Result<(), Refusal> {
-    commit_read(shared, st, changes, from, RunGate::Closed(None), None)
+    loop {
+        match commit_read(shared, st, changes, from.as_deref(), RunGate::Closed(None), &mut None) {
+            Ok(()) => return Ok(()),
+            Err(Stop::Refused(r)) => return Err(r),
+            Err(Stop::Check) => from.as_deref_mut().expect("only an asker is asked").check_locked(st),
+        }
+    }
 }
 
-/// [`commit`], with the block list `read` already when it is the file wanted.
+/// [`commit`], with the block list `read` already when it is the file wanted (taken from
+/// `read` when used). Changes nothing in `st` before the current password is known to be needed
+/// and right; [`Stop::Check`] when it is needed and not checked yet.
 fn commit_read(
     shared: &Shared,
     st: &mut State,
     changes: &[Change],
-    from: Option<&str>,
+    from: Option<&Asker<'_>>,
     run: RunGate,
-    read: Read,
-) -> Result<(), Refusal> {
-    let keep = from;
+    read: &mut Read,
+) -> Result<(), Stop> {
+    let keep = from.map(|a| a.session);
     let mut w = Working::from_state(st);
     for (def, v) in changes {
         def.set(&mut w, v.clone());
@@ -1934,7 +2014,7 @@ fn commit_read(
     if let Some(id) = RUN_FIELDS.iter().find(|id| find(id).is_some_and(|d| d.get(&w) != d.get(&now))) {
         if st.hosted {
             // the host's own programs: never changed from a browser
-            return Err(((*id).to_owned(), HOSTED_NO_RUN.to_owned()));
+            return Err(((*id).to_owned(), HOSTED_NO_RUN.to_owned()).into());
         }
         if let RunGate::Closed(client) = run {
             let line = match client {
@@ -1952,12 +2032,12 @@ fn commit_read(
             };
             println!("* {line}");
             st.push_log(None, line, unix_now());
-            return Err(((*id).to_owned(), tr!(RunErrRemote).to_owned()));
+            return Err(((*id).to_owned(), tr!(RunErrRemote).to_owned()).into());
         }
     }
     validate(&w)?;
     if st.hosted && w.prefs.alt_enabled {
-        return Err(("alt_enabled".to_owned(), HOSTED_NO_ALT.to_owned()));
+        return Err(("alt_enabled".to_owned(), HOSTED_NO_ALT.to_owned()).into());
     }
     // the typed tracker list in its own form (as the preferences file gives it back), so the
     // same list sent again is no change
@@ -1969,20 +2049,26 @@ fn commit_read(
             ids.iter().copied().find(|id| find(id).is_some_and(|d| d.get(&w) != d.get(&old)))
         };
         if let Some(id) = changed(&TRACKER_FIELDS) {
-            return Err((id.to_owned(), HOSTED_NO_TRACKERS.to_owned()));
+            return Err((id.to_owned(), HOSTED_NO_TRACKERS.to_owned()).into());
         }
         if let Some(id) = changed(&IPFILTER_URL_FIELDS) {
-            return Err((id.to_owned(), HOSTED_NO_IPFILTER_URL.to_owned()));
+            return Err((id.to_owned(), HOSTED_NO_IPFILTER_URL.to_owned()).into());
         }
     }
-    if let Some(session) = from.filter(|_| security_changed(&w, &old)) {
-        let given = w.current_password.as_deref();
-        if !given.is_some_and(|p| st.password.verify(p)) {
-            // a stolen session cannot guess the password here: one wrong try ends it
-            if given.is_some() {
-                st.sessions.remove(session);
+    if let Some(asker) = from.filter(|_| security_changed(&w, &old)) {
+        let need =
+            || Stop::Refused(("webui.current_password".to_owned(), tr!(PrefNeedCurrentPassword).to_owned()));
+        match &asker.current {
+            Current::Right(hash) if *hash == st.password => {}
+            Current::Unchecked(_) => return Err(Stop::Check),
+            Current::Absent => return Err(need()),
+            // a stolen session cannot guess the password here: one wrong try ends it, and its
+            // check ([`Asker::check`]) counted it towards the client's ban, which stops the
+            // bypass sessions too
+            Current::Right(_) | Current::Wrong => {
+                st.sessions.remove(asker.session);
+                return Err(need());
             }
-            return Err(("webui.current_password".to_owned(), tr!(PrefNeedCurrentPassword).to_owned()));
         }
     }
     check_paths(&w, &old, &shared.path_policy)?;
@@ -1993,14 +2079,14 @@ fn commit_read(
         let (on, file) = ip_filter(shared, &w);
         let from_url = w.prefs.ip_filter_from_url;
         let list = file.filter(|_| on).map(|file| {
-            let r = match read {
+            let r = match read.take() {
                 Some((f, r)) if f == file => r,
                 _ => IpFilter::load(&file),
             };
             (file, r)
         });
         if let (Some((file, Err(e))), false) = (&list, from_url) {
-            return Err((pref_pages::IPFILTER_PATH.to_owned(), format!("{}: {e}", file.display())));
+            return Err((pref_pages::IPFILTER_PATH.to_owned(), format!("{}: {e}", file.display())).into());
         }
         // the list from an address follows: a new address is fetched at the next tick (D75);
         // the copy kept of another stays on disk, unused, until a list of this one is saved
@@ -2337,6 +2423,13 @@ pub(crate) fn restore(shared: &Shared, st: &mut State, loaded_ip_filter: Option<
 mod tests {
     use super::*;
 
+    const TEST_IP: IpAddr = IpAddr::V4(std::net::Ipv4Addr::LOCALHOST);
+
+    /// [`commit`] for the changes of session `s` from [`TEST_IP`].
+    fn commit_as(shared: &Shared, st: &mut State, changes: &[Change]) -> Result<(), Refusal> {
+        commit(shared, st, changes, Some(&mut Asker::new("s", TEST_IP, changes)))
+    }
+
     #[test]
     fn stored_engine_settings_come_before_the_engine() {
         let stored = super::super::json::parse(
@@ -2405,7 +2498,7 @@ mod tests {
             "s".to_owned(),
             super::super::ClientSession { last_used: std::time::Instant::now(), maindata: None, peers: None },
         );
-        commit_request(&shared, &parse(&Json::obj()).unwrap(), "s", RunGate::Open, read).unwrap();
+        commit_request(&shared, &parse(&Json::obj()).unwrap(), "s", TEST_IP, RunGate::Open, read).unwrap();
         let st = shared.lock();
         assert_eq!(st.options.get("lt.proxy_type"), None, "the page's save confirms");
         assert!(
@@ -2828,23 +2921,23 @@ mod tests {
             super::super::ClientSession { last_used: std::time::Instant::now(), maindata: None, peers: None },
         );
         // a request: only with the current password (the test state's is "x")
-        let refused = commit(&shared, &mut st, &body(None), Some("s")).unwrap_err();
+        let refused = commit_as(&shared, &mut st, &body(None)).unwrap_err();
         assert_eq!(refused.0, "webui.current_password");
         assert!(!st.prefs.trackers_append && st.sessions.contains_key("s"));
-        let refused = commit(&shared, &mut st, &body(Some("guess")), Some("s")).unwrap_err();
+        let refused = commit_as(&shared, &mut st, &body(Some("guess"))).unwrap_err();
         assert_eq!(refused.0, "webui.current_password");
         assert!(
             !st.prefs.trackers_append && !st.sessions.contains_key("s"),
             "a wrong guess ends the session"
         );
-        commit(&shared, &mut st, &body(Some("x")), Some("s")).unwrap();
+        commit_as(&shared, &mut st, &body(Some("x"))).unwrap();
         assert!(st.prefs.trackers_append);
         assert_eq!(st.prefs.trackers_list, format!("{A}\n\n{B}"), "the list's own form");
         assert_eq!(st.options.get("trackers.list"), Some(format!("{A} - {B}").as_str()));
         assert_eq!(st.options.get("trackers.append"), Some("1"));
         // the same list again, typed differently, is no change: no password is asked
         let same = parse(&Json::obj().with("trackers.list", format!("{A}\n\n{B}\n"))).unwrap();
-        commit(&shared, &mut st, &same, Some("s")).unwrap();
+        commit_as(&shared, &mut st, &same).unwrap();
         // the daemon's list follows the commit
         assert_eq!(
             shared.trackers().unwrap().tiers(),
@@ -2864,7 +2957,7 @@ mod tests {
         st.hosted = true;
         let off =
             parse(&Json::obj().with("trackers.append", false).with("webui.current_password", "x")).unwrap();
-        let refused = commit(&shared, &mut st, &off, Some("s")).unwrap_err();
+        let refused = commit_as(&shared, &mut st, &off).unwrap_err();
         assert_eq!(refused, ("trackers.append".to_owned(), HOSTED_NO_TRACKERS.to_owned()));
         assert!(st.prefs.trackers_append);
         let mut g = GuiOptions::load(&rookparcel_frontend::prefs::Prefs::default(), "/dl");
@@ -2976,7 +3069,7 @@ mod tests {
         // and none get the same answer, the session stays, and each try leaves a Logger line
         let there = RunGate::Closed(Some(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 7))));
         for (n, password) in [Some("x"), Some("guess"), None].into_iter().enumerate() {
-            let refused = commit_request(&shared, &body(password), "s", there, read).unwrap_err();
+            let refused = commit_request(&shared, &body(password), "s", TEST_IP, there, read).unwrap_err();
             assert_eq!(refused, ("run.finished_enabled".to_owned(), tr!(RunErrRemote).to_owned()));
             assert!(unchanged(&shared));
             assert!(shared.lock().sessions.contains_key("s"), "the password was not looked at");
@@ -2987,22 +3080,25 @@ mod tests {
         // the same request with something else in it changes nothing of that either
         let mut mixed = body(Some("x"));
         mixed.extend(parse(&Json::obj().with("ui.add_stopped", true)).unwrap());
-        assert!(commit_request(&shared, &mixed, "s", there, read).is_err());
+        assert!(commit_request(&shared, &mixed, "s", TEST_IP, there, read).is_err());
         assert!(!shared.lock().prefs.start_paused);
 
         // D, E, H: `commit` (the shim's setPreferences, a remote GUI's settings, nox's own
         // changes) never changes them: with the password, from a session or from nox itself
         for from in [Some("s"), None] {
-            let refused = commit(&shared, &mut shared.lock(), &body(Some("x")), from).unwrap_err();
+            let changes = body(Some("x"));
+            let mut asker = from.map(|s| Asker::new(s, TEST_IP, &changes));
+            let refused = commit(&shared, &mut shared.lock(), &changes, asker.as_mut()).unwrap_err();
             assert_eq!(refused.1, tr!(RunErrRemote));
             assert!(unchanged(&shared));
         }
 
         // A: this computer, and only with the current password (the test state's is "x")
-        let refused = commit_request(&shared, &body(None), "s", RunGate::Open, read).unwrap_err();
+        let refused = commit_request(&shared, &body(None), "s", TEST_IP, RunGate::Open, read).unwrap_err();
         assert_eq!(refused.0, "webui.current_password");
         assert!(unchanged(&shared) && shared.lock().sessions.contains_key("s"));
-        let refused = commit_request(&shared, &body(Some("guess")), "s", RunGate::Open, read).unwrap_err();
+        let refused =
+            commit_request(&shared, &body(Some("guess")), "s", TEST_IP, RunGate::Open, read).unwrap_err();
         assert_eq!(refused.0, "webui.current_password");
         assert!(unchanged(&shared));
         assert!(!shared.lock().sessions.contains_key("s"), "a wrong guess ends the session");
@@ -3012,9 +3108,10 @@ mod tests {
             .with("run.added_enabled", true)
             .with("run.added", "\"unclosed")
             .with("webui.current_password", "x");
-        let refused = commit_request(&shared, &parse(&quote).unwrap(), "s", RunGate::Open, read).unwrap_err();
+        let refused =
+            commit_request(&shared, &parse(&quote).unwrap(), "s", TEST_IP, RunGate::Open, read).unwrap_err();
         assert_eq!(refused, ("run.added".to_owned(), tr!(RunErrQuote).to_owned()));
-        commit_request(&shared, &body(Some("x")), "s", RunGate::Open, read).unwrap();
+        commit_request(&shared, &body(Some("x")), "s", TEST_IP, RunGate::Open, read).unwrap();
         {
             let mut st = shared.lock();
             assert!(st.prefs.run_finished_on && !st.prefs.run_added_on);
@@ -3024,7 +3121,7 @@ mod tests {
             assert_eq!(st.options.get("run.finished_enabled"), Some("1"));
             // the same values again are no change: no password is asked, from anywhere
             let same = parse(&Json::obj().with("run.finished", format!("  {LINE} "))).unwrap();
-            commit(&shared, &mut st, &same, Some("s")).unwrap();
+            commit_as(&shared, &mut st, &same).unwrap();
             // H: read back at the next start
             st.prefs = Prefs::defaults("/dl", &Settings::default());
             read_back(&mut st);
@@ -3034,7 +3131,7 @@ mod tests {
         // switching it off is a change like any other: not from elsewhere
         let off = parse(&Json::obj().with("run.finished_enabled", false).with("webui.current_password", "x"))
             .unwrap();
-        assert!(commit_request(&shared, &off, "s", there, read).is_err());
+        assert!(commit_request(&shared, &off, "s", TEST_IP, there, read).is_err());
         assert!(shared.lock().prefs.run_finished_on);
 
         // C: the model says who may change them
@@ -3083,7 +3180,7 @@ mod tests {
         // a proxy that names no address the Logger can show is logged as a proxy, not as a
         // loopback client that is "not this computer"
         let proxied = RunGate::of(&shared, &head("X-Real-IP: 198.51.100.9\r\n"), loopback);
-        assert!(commit_request(&shared, &off, "s", proxied, read).is_err());
+        assert!(commit_request(&shared, &off, "s", TEST_IP, proxied, read).is_err());
         let logged = shared.lock().log.back().unwrap().text.clone();
         assert_eq!(logged, "Run Program: a change from 127.0.0.1 was refused (passed on by a proxy)");
         shared.remote_run_program = true;
@@ -3094,7 +3191,9 @@ mod tests {
         // F: hosted, refused whatever the gate and the password, and the host's lines stay
         let mut st = shared.lock();
         st.hosted = true;
-        let refused = commit_read(&shared, &mut st, &off, Some("s"), RunGate::Open, None).unwrap_err();
+        let asker = Asker::new("s", TEST_IP, &off);
+        let refused = commit_read(&shared, &mut st, &off, Some(&asker), RunGate::Open, &mut None);
+        let Err(Stop::Refused(refused)) = refused else { panic!("not refused") };
         assert_eq!(refused, ("run.finished_enabled".to_owned(), HOSTED_NO_RUN.to_owned()));
         assert!(st.prefs.run_finished_on);
         // nor read: the host's line goes to no browser, this computer's included
@@ -3184,21 +3283,22 @@ mod tests {
         let body =
             Json::obj().with("ipfilter.enable", true).with("ipfilter.path", list.to_string_lossy().as_ref());
         let changes = parse(&body).unwrap();
-        commit_request(&shared, &changes, "s", RunGate::Open, read).unwrap();
+        commit_request(&shared, &changes, "s", TEST_IP, RunGate::Open, read).unwrap();
         assert_eq!(reads.get(), 1);
         assert!(shared.lock().prefs.ip_filter);
         assert!(shared.lock().log.iter().any(|l| l.text.contains("list.dat")));
         // the same again: nothing to read
-        commit_request(&shared, &changes, "s", RunGate::Open, read).unwrap();
+        commit_request(&shared, &changes, "s", TEST_IP, RunGate::Open, read).unwrap();
         assert_eq!(reads.get(), 1);
         // a path the policy refuses is not read, and is refused
         let changes = parse(&Json::obj().with("ipfilter.path", "relative.dat")).unwrap();
-        assert!(commit_request(&shared, &changes, "s", RunGate::Open, read).is_err());
+        assert!(commit_request(&shared, &changes, "s", TEST_IP, RunGate::Open, read).is_err());
         assert_eq!(reads.get(), 1);
         // a list that does not load refuses the change
         let missing = dir.join("missing.dat");
         let body = Json::obj().with("ipfilter.path", missing.to_string_lossy().as_ref());
-        let refused = commit_request(&shared, &parse(&body).unwrap(), "s", RunGate::Open, read).unwrap_err();
+        let refused =
+            commit_request(&shared, &parse(&body).unwrap(), "s", TEST_IP, RunGate::Open, read).unwrap_err();
         assert_eq!(refused.0, "ipfilter.path");
         assert_eq!(reads.get(), 2);
         assert_eq!(shared.lock().prefs.ip_filter_path, list.to_string_lossy());
@@ -3219,12 +3319,12 @@ mod tests {
             .with("dir.completed", done.to_string_lossy().as_ref())
             .with("dir.move_add_label", true);
         let read = |f: &Path| IpFilter::load(f);
-        commit_request(&shared, &parse(&body).unwrap(), "s", RunGate::Open, read).unwrap();
+        commit_request(&shared, &parse(&body).unwrap(), "s", TEST_IP, RunGate::Open, read).unwrap();
         let seen = shared.lock().gui_version;
         let m = shared.lock().prefs.gui().move_completed().expect("a mover");
         assert!(m.append_label);
         let body = Json::obj().with("dir.move_add_label", false);
-        commit_request(&shared, &parse(&body).unwrap(), "s", RunGate::Open, read).unwrap();
+        commit_request(&shared, &parse(&body).unwrap(), "s", TEST_IP, RunGate::Open, read).unwrap();
         assert!(shared.lock().gui_version > seen, "the mover is told");
         assert!(!shared.lock().prefs.move_add_label);
     }

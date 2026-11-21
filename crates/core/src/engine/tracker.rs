@@ -303,6 +303,9 @@ pub(crate) struct TrackerJob {
     /// Tracker addresses this filter blocks are not contacted (libtorrent
     /// `tracker_request::filter`).
     pub filter: Option<Arc<IpFilter>>,
+    /// An announce that was out when its torrent stopped ([`TrackerManager::torrent_stopped`]):
+    /// its answer belongs to no run, and is not applied to the next one.
+    pub stale: bool,
 }
 
 impl TrackerJob {
@@ -417,6 +420,9 @@ struct HttpConn {
     parser: http::ResponseParser,
     deadline: Instant,
     redirects: u32,
+    /// The resolver cookie of the host lookup this connection waits for: an answer is taken
+    /// only by the connection that asked for it, not by a later one in the same slab slot.
+    lookup: Option<u64>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -593,6 +599,22 @@ impl TrackerManager {
         std::mem::take(&mut self.proxied_out)
     }
 
+    /// Torrent `id` stopped: the announces it has out, and their answers not taken yet, are
+    /// marked [`TrackerJob::stale`] (libtorrent resets the trackers when the torrent next
+    /// starts announcing; bug hunt 2026-11-21 #4). Its scrapes stay as they are.
+    pub fn torrent_stopped(&mut self, id: TorrentId) {
+        let mark = |j: &mut TrackerJob| {
+            if j.torrent == id && matches!(j.kind, JobKind::Announce(_)) {
+                j.stale = true;
+            }
+        };
+        self.http.iter_mut().for_each(|(_, c)| mark(&mut c.job));
+        // a UDP batch holds scrapes only
+        self.txns.values_mut().for_each(|t| mark(&mut t.job));
+        self.parked.iter_mut().for_each(mark);
+        self.results.iter_mut().for_each(|(j, _)| mark(j));
+    }
+
     pub fn take_results(&mut self) -> Vec<(TrackerJob, TrackerOutcome)> {
         let mut results = std::mem::take(&mut self.results);
         if self.ssrf_mitigation {
@@ -753,6 +775,7 @@ impl TrackerManager {
             parser: http::ResponseParser::default(),
             deadline: now + self.completion_timeout,
             redirects,
+            lookup: None,
         });
         if named {
             return self.http_connect_next(slot, registry);
@@ -761,6 +784,8 @@ impl TrackerManager {
         if let Some(ips) = resolver.resolve(&host, cookie) {
             self.waiting.remove(&cookie);
             self.http_resolved(slot, ips, registry);
+        } else if let Some(c) = self.http.get_mut(slot) {
+            c.lookup = Some(cookie);
         }
     }
 
@@ -1178,6 +1203,14 @@ impl TrackerManager {
 
     pub fn on_resolved(&mut self, r: Resolved, registry: &Registry, now: Instant) {
         let Some(w) = self.waiting.remove(&r.cookie) else { return };
+        // the answer of a lookup whose connection is gone (it timed out) must not steer the
+        // request that took its slab slot since
+        if let Waiting::Http(slot) = w {
+            match self.http.get_mut(slot) {
+                Some(c) if c.lookup == Some(r.cookie) => c.lookup = None,
+                _ => return,
+            }
+        }
         match (w, r.result) {
             (Waiting::Http(slot), Ok(ips)) => self.http_resolved(slot, ips, registry),
             (Waiting::Http(slot), Err(e)) => {
@@ -1203,6 +1236,9 @@ impl TrackerManager {
                 if let Some(mut s) = c.stream.take() {
                     let _ = registry.deregister(s.tcp());
                 }
+                if let Some(cookie) = c.lookup {
+                    self.waiting.remove(&cookie);
+                }
                 self.fail(c.job, "timed out");
             }
         }
@@ -1210,6 +1246,7 @@ impl TrackerManager {
         for id in due {
             if self.txns.get(&id).is_some_and(|t| t.stage == UdpStage::Resolving) {
                 let t = self.txns.remove(&id).expect("present");
+                self.waiting.retain(|_, w| !matches!(w, Waiting::Udp(i) if *i == id));
                 self.fail_txn(t, "timed out resolving the tracker");
             } else {
                 self.udp_send(id, now);
@@ -1356,6 +1393,7 @@ mod tests {
                 url,
                 kind: JobKind::Scrape(Sha1Hash([i as u8; 20])),
                 filter: None,
+                stale: false,
             };
             m.start(job, &resolver, poll.registry(), now);
         }
@@ -1415,6 +1453,7 @@ mod tests {
                 tracker_id: String::new(),
             }),
             filter: None,
+            stale: false,
         };
         let now = Instant::now();
         for (path, ssrf, allowed) in [
@@ -1462,6 +1501,7 @@ mod tests {
                 tracker_id: String::new(),
             }),
             filter: None,
+            stale: false,
         }
     }
 
@@ -1523,6 +1563,62 @@ mod tests {
             } else {
                 refused(&mut m, url);
             }
+        }
+    }
+
+    /// Bug hunt 2026-11-21 #9: an HTTP request that timed out while its tracker's name was
+    /// being looked up leaves its slab slot to the next request; the late answer must not
+    /// connect that request (another tracker, perhaps with a passkey) to the old host's
+    /// addresses.
+    #[test]
+    fn a_late_lookup_of_a_timed_out_request_does_not_steer_the_next() {
+        let poll = mio::Poll::new().unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let resolver = Resolver::new(tx, Arc::new(|| {}));
+        let b = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        b.set_nonblocking(true).unwrap();
+        let port = b.local_addr().unwrap().port();
+        let mut m = TrackerManager::new(poll.registry(), "test".into());
+        let now = Instant::now();
+        // names that never resolve: both lookups stay with the resolver
+        m.start(announce_job("http://a.invalid:1/announce"), &resolver, poll.registry(), now);
+        assert_eq!((m.pending(), m.waiting.len()), (1, 1));
+        let first = *m.waiting.keys().next().unwrap();
+        let later = now + Duration::from_secs(31);
+        m.tick(poll.registry(), later);
+        let results = m.take_results();
+        assert!(matches!(&results[..], [(_, TrackerOutcome::Failed(e))] if e == "timed out"), "{results:?}");
+        assert!(m.waiting.is_empty(), "the timed-out lookup is forgotten");
+        let url = format!("http://b.invalid:{port}/announce");
+        m.start(announce_job(&url), &resolver, poll.registry(), later);
+        let second = *m.waiting.keys().next().unwrap();
+        assert_ne!(first, second);
+        let slots: Vec<usize> = m.http.iter().map(|(i, _)| i).collect();
+        assert_eq!(slots.len(), 1);
+        // the first lookup answers late, with an address that would reach `b`'s port
+        let loopback = vec![IpAddr::from(Ipv4Addr::LOCALHOST)];
+        let answer =
+            |cookie, host: &str| Resolved { cookie, host: host.into(), result: Ok(loopback.clone()) };
+        m.on_resolved(answer(first, "a.invalid"), poll.registry(), later);
+        let c = m.http.get(slots[0]).unwrap();
+        assert!(c.stream.is_none() && c.ip.is_none(), "the second request still waits for its own lookup");
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(b.accept().is_err(), "connected on the first lookup's answer");
+        // a failed late lookup does not fail it either
+        m.on_resolved(
+            Resolved { cookie: first, host: "a.invalid".into(), result: Err("host not found".into()) },
+            poll.registry(),
+            later,
+        );
+        assert!(m.take_results().is_empty());
+        assert_eq!(m.pending(), 1);
+        // its own answer connects it
+        m.on_resolved(answer(second, "b.invalid"), poll.registry(), later);
+        assert!(m.http.get(slots[0]).unwrap().stream.is_some());
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while b.accept().is_err() {
+            assert!(Instant::now() < deadline, "no connection on its own lookup's answer");
+            std::thread::sleep(Duration::from_millis(20));
         }
     }
 

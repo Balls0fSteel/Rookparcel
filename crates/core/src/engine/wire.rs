@@ -676,10 +676,9 @@ impl Engine {
         let want = desired - p.requests.len();
         let on_parole = t.peer_list.get(&p.addr).is_some_and(|k| k.trust.on_parole);
         let Some(picker) = t.picker.as_mut() else { return };
-        let requests = &p.requests;
-        let picks = picker.pick(&p.peer_has, p.peer_seed, want, p.addr, on_parole, |piece, block| {
-            requests.iter().any(|r| r.piece == piece && r.block == block)
-        });
+        // end-game busy blocks only for a peer with nothing in its queue (libtorrent
+        // `dont_pick_busy_blocks`)
+        let picks = picker.pick(&p.peer_has, p.peer_seed, want, p.addr, on_parole, p.requests.len());
         if picks.is_empty() {
             return;
         }

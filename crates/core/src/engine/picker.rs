@@ -271,12 +271,15 @@ impl PiecePicker {
     }
 
     /// libtorrent `piece_picker::pick_pieces` + `request_a_block`. Picks up to `num_blocks`
-    /// blocks from pieces the peer has and marks them requested from `peer`.
-    /// `already_requested(piece, block)` tells whether this peer already has the block in its
-    /// queue (only consulted in end-game, where blocks are requested from several peers). A
-    /// peer `on_parole` (it sent part of a piece that failed) only gets pieces no other peer
-    /// has touched, so a second failure pins the blame on it (libtorrent's `on_parole` picker
-    /// option), and never joins the end-game.
+    /// blocks from pieces the peer has and marks them requested from `peer`, which has
+    /// `outstanding` requests out already. A peer `on_parole` (it sent part of a piece that
+    /// failed) only gets pieces no other peer has touched, so a second failure pins the blame
+    /// on it (libtorrent's `on_parole` picker option), and never joins the end-game.
+    ///
+    /// End-game (libtorrent `request_a_block` with `strict_end_game_mode`, its default): when
+    /// this peer finds nothing free, it gets one block already requested from someone else,
+    /// and only once every wanted piece is started and its own queue is empty
+    /// (`dont_pick_busy_blocks`).
     pub fn pick(
         &mut self,
         peer_has: &Bitfield,
@@ -284,7 +287,7 @@ impl PiecePicker {
         num_blocks: usize,
         peer: SocketAddr,
         on_parole: bool,
-        already_requested: impl Fn(u32, u32) -> bool,
+        outstanding: usize,
     ) -> Vec<(u32, u32)> {
         let mut out = Vec::new();
         if num_blocks == 0 {
@@ -323,36 +326,39 @@ impl PiecePicker {
             self.downloading.insert(piece, d);
             self.take_free_blocks(piece, num_blocks, peer, &mut out);
         }
-        if !out.is_empty() || on_parole {
+        if !out.is_empty() || on_parole || outstanding > 0 || !self.all_wanted_started() {
             return out;
         }
 
-        // 3. End-game: nothing free is left that this peer has, so ask it for blocks that are
-        //    already requested from others (libtorrent requests busy blocks the same way).
-        let mut busy: Vec<(u32, u32)> = Vec::new();
-        for (&piece, d) in &self.downloading {
-            if self.priority[piece as usize] == 0 || !has(piece) {
-                continue;
-            }
-            for (b, &s) in d.blocks.iter().enumerate() {
-                if let BlockState::Requested(n) = s {
-                    if n < MAX_ENDGAME_REQUESTS && !already_requested(piece, b as u32) {
-                        busy.push((piece, b as u32));
-                    }
-                }
-            }
-        }
-        busy.sort_unstable();
-        for (piece, b) in busy.into_iter().take(num_blocks) {
-            if let Some(d) = self.downloading.get_mut(&piece) {
-                if let BlockState::Requested(n) = d.blocks[b as usize] {
-                    d.blocks[b as usize] = BlockState::Requested(n + 1);
-                    d.peers[b as usize] = Some(peer);
-                    out.push((piece, b));
-                }
-            }
+        // 3. End-game: nothing free is left that this peer has, so ask it for one block that
+        //    is already requested from others, preferring one that only one peer is fetching
+        //    (libtorrent takes a random one). With its queue empty, none of them is this
+        //    peer's own request.
+        let busy = self
+            .downloading
+            .iter()
+            .filter(|&(&piece, _)| self.priority[piece as usize] > 0 && has(piece))
+            .flat_map(|(&piece, d)| {
+                d.blocks.iter().enumerate().filter_map(move |(b, &s)| match s {
+                    BlockState::Requested(n) if n < MAX_ENDGAME_REQUESTS => Some((n, piece, b as u32)),
+                    _ => None,
+                })
+            })
+            .min();
+        if let Some((n, piece, b)) = busy {
+            let d = self.downloading.get_mut(&piece).expect("listed");
+            d.blocks[b as usize] = BlockState::Requested(n + 1);
+            d.peers[b as usize] = Some(peer);
+            out.push((piece, b));
         }
         out
+    }
+
+    /// Every piece we still want has been started (libtorrent's strict end-game test,
+    /// `get_download_queue_size() < num_want_left()` being false): no piece is left that a
+    /// peer could start instead of duplicating someone else's blocks.
+    fn all_wanted_started(&self) -> bool {
+        (0..self.num_pieces()).all(|p| !self.wants(p) || self.downloading.contains_key(&p))
     }
 
     /// `pick` for web seeds (libtorrent `pick_pieces` with `prefer_contiguous_blocks`): new
@@ -370,7 +376,7 @@ impl PiecePicker {
         contiguous: u32,
         peer: SocketAddr,
         on_parole: bool,
-        already_requested: impl Fn(u32, u32) -> bool,
+        outstanding: usize,
     ) -> Vec<(u32, u32)> {
         let mut out = Vec::new();
         if num_blocks == 0 {
@@ -424,7 +430,7 @@ impl PiecePicker {
             return out;
         }
         // nothing new: the end-game of `pick` (its first two steps find nothing either)
-        self.pick(peer_has, peer_is_seed, num_blocks, peer, on_parole, already_requested)
+        self.pick(peer_has, peer_is_seed, num_blocks, peer, on_parole, outstanding)
     }
 
     fn take_new_piece(&mut self, piece: u32, peer: SocketAddr, out: &mut Vec<(u32, u32)>) {
@@ -465,8 +471,8 @@ impl PiecePicker {
 
     /// True when the picker has no free block left in any wanted piece (libtorrent end-game).
     pub fn in_endgame(&self) -> bool {
-        let all_started = (0..self.num_pieces()).all(|p| !self.wants(p) || self.downloading.contains_key(&p));
-        all_started && self.downloading.values().all(|d| d.count(|b| b == BlockState::Free) == 0)
+        self.all_wanted_started()
+            && self.downloading.values().all(|d| d.count(|b| b == BlockState::Free) == 0)
     }
 
     #[cfg(test)]
@@ -680,16 +686,16 @@ mod tests {
         p.set_sequential(true);
         let none = Bitfield::new(16, false);
         // 5 blocks: pieces 0, 1 and 2 whole (runs grow a piece at a time)
-        let picked = p.pick_contiguous(&none, true, 5, 4, A, false, |_, _| false);
+        let picked = p.pick_contiguous(&none, true, 5, 4, A, false, 0);
         assert_eq!(picked, [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]);
         // piece 3 is the last of the window 0..4; the next run starts in the window 4..8
-        let picked = p.pick_contiguous(&none, true, 6, 4, A, false, |_, _| false);
+        let picked = p.pick_contiguous(&none, true, 6, 4, A, false, 0);
         assert_eq!(picked, [(3, 0), (3, 1), (4, 0), (4, 1), (5, 0), (5, 1)]);
         // another peer touched piece 9: a run around it grows backwards to the window start
         p.set_sequential(false);
         p.inc_refcount_bitfield(&bits("1111111110111111"));
         assert!(p.mark_as_writing(9, 0, C));
-        let picked = p.pick_contiguous(&none, true, 3, 4, A, false, |_, _| false);
+        let picked = p.pick_contiguous(&none, true, 3, 4, A, false, 0);
         assert_eq!(picked[0], (9, 1), "the partial piece first");
         let mut pieces: Vec<u32> = picked[1..].iter().map(|b| b.0).collect();
         pieces.dedup();
@@ -697,13 +703,17 @@ mod tests {
         // a peer that has only some pieces
         let mut p = PiecePicker::new(8, 2 * B, 2 * B, B);
         p.set_sequential(true);
-        let picked = p.pick_contiguous(&bits("00110110"), false, 100, 8, A, false, |_, _| false);
+        let picked = p.pick_contiguous(&bits("00110110"), false, 100, 8, A, false, 0);
         let pieces: Vec<u32> = picked.iter().map(|b| b.0).collect();
         assert_eq!(pieces, [2, 2, 3, 3, 5, 5, 6, 6]);
-        // nothing free: end-game asks for busy blocks
-        let picked = p.pick_contiguous(&bits("00110110"), false, 2, 8, C, false, |_, _| false);
-        assert_eq!(picked.len(), 2);
-        assert!(matches!(p.block_state(picked[0].0, picked[0].1), BlockState::Requested(2)));
+        // nothing free for C, but pieces 0, 1, 4 and 7 are not started: no end-game yet
+        assert!(p.pick_contiguous(&bits("00110110"), false, 2, 8, C, false, 0).is_empty());
+        assert_eq!(p.pick_contiguous(&none, true, 100, 8, A, false, 0).len(), 8);
+        // every piece started: C with an empty queue gets one busy block, with requests out none
+        assert!(p.pick_contiguous(&bits("00110110"), false, 2, 8, C, false, 1).is_empty());
+        let picked = p.pick_contiguous(&bits("00110110"), false, 2, 8, C, false, 0);
+        assert_eq!(picked, [(2, 0)]);
+        assert_eq!(p.block_state(2, 0), BlockState::Requested(2));
     }
 
     /// libtorrent's pad blocks: the blocks wholly in pad bytes are finished when the piece
@@ -714,7 +724,7 @@ mod tests {
         // the last 1.5 blocks of piece 0 are padding: one block is skipped
         p.set_pad_bytes(0, B + B / 2);
         p.set_pad_bytes(1, 100);
-        let mut picked = p.pick(&bits("11"), false, 16, A, false, |_, _| false);
+        let mut picked = p.pick(&bits("11"), false, 16, A, false, 0);
         // equally rare pieces come in random order
         picked.sort_unstable();
         assert_eq!(picked, [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (1, 3)]);
@@ -739,10 +749,10 @@ mod tests {
         p.inc_refcount_bitfield(&bits("0100"));
         // Availability: 2 3 1 2. Piece 2 is rarest.
         let all = bits("1111");
-        let picked = p.pick(&all, false, 2, A, false, |_, _| false);
+        let picked = p.pick(&all, false, 2, A, false, 0);
         assert_eq!(picked, [(2, 0), (2, 1)]);
         // Next: pieces 0 and 3 (availability 2), then 1.
-        let picked = p.pick(&all, false, 4, A, false, |_, _| false);
+        let picked = p.pick(&all, false, 4, A, false, 0);
         let pieces: Vec<u32> = picked.iter().map(|b| b.0).collect();
         assert!(pieces[..3].iter().all(|&x| x == 0 || x == 3), "{picked:?}");
         assert_eq!(picked.len(), 4);
@@ -755,33 +765,33 @@ mod tests {
         let all = bits("111111");
         p.set_piece_priority(0, 0);
         p.set_piece_priority(4, 7);
-        assert_eq!(p.pick(&all, false, 1, A, false, |_, _| false), [(4, 0)], "highest priority first");
+        assert_eq!(p.pick(&all, false, 1, A, false, 0), [(4, 0)], "highest priority first");
         // The partial piece is finished before anything new starts.
-        assert_eq!(p.pick(&all, false, 1, A, false, |_, _| false), [(4, 1)]);
+        assert_eq!(p.pick(&all, false, 1, A, false, 0), [(4, 1)]);
 
         let mut p = picker(6);
         p.set_sequential(true);
         p.set_piece_priority(0, 0);
-        let picked = p.pick(&all, true, 5, A, false, |_, _| false);
+        let picked = p.pick(&all, true, 5, A, false, 0);
         assert_eq!(picked, [(1, 0), (1, 1), (2, 0), (2, 1), (3, 0)]);
         // Only pieces the peer has.
         let mut p = picker(6);
-        assert_eq!(p.pick(&bits("000010"), false, 9, A, false, |_, _| false), [(4, 0), (4, 1)]);
-        assert!(p.pick(&bits("000000"), false, 9, A, false, |_, _| false).is_empty());
+        assert_eq!(p.pick(&bits("000010"), false, 9, A, false, 0), [(4, 0), (4, 1)]);
+        assert!(p.pick(&bits("000000"), false, 9, A, false, 0).is_empty());
     }
 
     #[test]
     fn block_lifecycle_and_hash_failure() {
         let mut p = picker(2);
         let all = bits("11");
-        let picked = p.pick(&all, true, 3, A, false, |_, _| false);
+        let picked = p.pick(&all, true, 3, A, false, 0);
         assert_eq!(picked.len(), 3);
         assert!(p.in_endgame());
         // A rejected block becomes free again.
         p.abort_download(1, 0);
         assert_eq!(p.block_state(1, 0), BlockState::Free);
         assert!(!p.in_endgame());
-        assert_eq!(p.pick(&all, true, 3, A, false, |_, _| false), [(1, 0)]);
+        assert_eq!(p.pick(&all, true, 3, A, false, 0), [(1, 0)]);
 
         for (piece, block) in [(0, 0), (0, 1), (1, 0)] {
             assert!(p.mark_as_writing(piece, block, A));
@@ -793,7 +803,7 @@ mod tests {
         p.piece_passed(1);
         assert!(p.have_piece(1) && !p.is_finished());
         assert_eq!(p.wanted_progress(), (1, 2));
-        assert_eq!(p.pick(&all, true, 9, A, false, |_, _| false), [(0, 0), (0, 1)]);
+        assert_eq!(p.pick(&all, true, 9, A, false, 0), [(0, 0), (0, 1)]);
         p.piece_passed(0);
         assert!(p.is_finished() && p.have().all_set());
         assert!(!p.is_interesting(&all, true));
@@ -806,12 +816,12 @@ mod tests {
         let all = bits("111");
         let size = |i: u32| if i == 2 { B } else { 2 * B };
         assert!(p.partial_pieces(size).is_empty());
-        assert_eq!(p.pick(&all, true, 5, A, false, |_, _| false).len(), 5);
+        assert_eq!(p.pick(&all, true, 5, A, false, 0).len(), 5);
         assert!(p.mark_as_writing(2, 0, A));
         p.mark_as_finished(2, 0);
         assert!(p.mark_as_writing(0, 1, A));
         // end-game: a second peer asks for a block already requested
-        assert_eq!(p.pick(&all, true, 1, C, false, |_, _| false), [(0, 0)]);
+        assert_eq!(p.pick(&all, true, 1, C, false, 0), [(0, 0)]);
         let q = p.partial_pieces(size);
         let rows: Vec<(u32, u32, &[BlockState])> =
             q.iter().map(|x| (x.piece, x.size, &x.blocks[..])).collect();
@@ -835,20 +845,64 @@ mod tests {
         let mut p = picker(1);
         let all = bits("1");
         // One block total; peer A has it requested.
-        assert_eq!(p.pick(&all, true, 5, A, false, |_, _| false), [(0, 0)]);
-        // Peer B gets the same block in end-game, peer A does not get it twice.
-        assert_eq!(p.pick(&all, true, 5, A, false, |_, _| false), [(0, 0)]);
+        assert_eq!(p.pick(&all, true, 5, A, false, 0), [(0, 0)]);
+        // Peer C, its queue empty, gets the same block in end-game; while it waits for it, C
+        // gets nothing more, and a third peer finds the block capped at two.
+        assert_eq!(p.pick(&all, true, 5, C, false, 0), [(0, 0)]);
         assert_eq!(p.block_state(0, 0), BlockState::Requested(2));
-        assert!(p.pick(&all, true, 5, A, false, |_, _| false).is_empty(), "capped at two peers");
+        assert!(p.pick(&all, true, 5, C, false, 1).is_empty());
+        let d = SocketAddr::from(([10, 0, 0, 3], 6881));
+        assert!(p.pick(&all, true, 5, d, false, 0).is_empty(), "capped at two peers");
         p.abort_download(0, 0);
-        assert!(p.pick(&all, true, 5, A, false, |piece, block| (piece, block) == (0, 0)).is_empty());
+        assert_eq!(p.pick(&all, true, 5, d, false, 0), [(0, 0)]);
+    }
+
+    /// libtorrent `request_a_block` under `strict_end_game_mode` (its default): busy blocks
+    /// only once every wanted piece is started and only for a peer with no requests out, one
+    /// at a time. A partial peer that has only pieces others are fetching waits meanwhile.
+    #[test]
+    fn strict_endgame_waits_for_every_piece_and_an_empty_queue() {
+        // pieces 0 and 1 have two blocks, piece 2 one
+        let mut p = picker(3);
+        p.set_sequential(true);
+        let all = bits("111");
+        assert_eq!(p.pick(&all, true, 4, C, false, 0), [(0, 0), (0, 1), (1, 0), (1, 1)]);
+        // A has only the pieces C is fetching: piece 2 is not started, so no duplicates
+        let partial = bits("110");
+        assert!(p.pick(&partial, false, 4, A, false, 0).is_empty());
+        assert!(!p.in_endgame());
+        assert_eq!(p.pick(&all, true, 4, C, false, 4), [(2, 0)]);
+        assert!(p.in_endgame());
+        // now in end-game, but not while A has requests out
+        assert!(p.pick(&partial, false, 4, A, false, 2).is_empty());
+        // one block per call, the ones fetched by a single peer first
+        assert_eq!(p.pick(&partial, false, 4, A, false, 0), [(0, 0)]);
+        assert_eq!(p.pick(&partial, false, 4, A, false, 0), [(0, 1)]);
+        assert_eq!(p.pick(&partial, false, 4, A, false, 0), [(1, 0)]);
+        assert_eq!(p.pick(&partial, false, 4, A, false, 0), [(1, 1)]);
+        assert!(p.pick(&partial, false, 4, A, false, 0).is_empty(), "all at two requesters");
+        // a block handed back is free again, and free blocks go before busy ones
+        p.abort_download(1, 1);
+        assert_eq!(p.block_state(1, 1), BlockState::Requested(1));
+        let d = SocketAddr::from(([10, 0, 0, 3], 6881));
+        assert_eq!(p.pick(&all, true, 4, d, false, 0), [(1, 1)]);
+        p.abort_download(2, 0);
+        assert_eq!(p.pick(&all, true, 4, d, false, 3), [(2, 0)], "a free block, queue or not");
+        // an unwanted piece left unstarted does not hold the end-game back
+        let mut q = picker(3);
+        q.set_sequential(true);
+        q.set_piece_priority(2, 0);
+        assert_eq!(q.pick(&all, true, 4, C, false, 0).len(), 4);
+        assert_eq!(q.pick(&partial, false, 4, A, false, 0), [(0, 0)]);
+        p.check_invariant();
+        q.check_invariant();
     }
 
     #[test]
     fn unfinished_pieces_round_trip() {
         let mut p = picker(3);
         let all = bits("111");
-        assert_eq!(p.pick(&all, true, 3, A, false, |_, _| false).len(), 3);
+        assert_eq!(p.pick(&all, true, 3, A, false, 0).len(), 3);
         for (piece, block) in [(0, 1), (1, 0)] {
             assert!(p.mark_as_writing(piece, block, A));
         }
@@ -870,7 +924,7 @@ mod tests {
         assert_eq!(q.restore_partial(2, &bits("01")), None);
         assert_eq!(q.restore_partial(2, &bits("11")), Some(vec![true]));
         assert_eq!(q.partial_finished_blocks(), 2);
-        assert_eq!(q.pick(&all, true, 9, A, false, |_, _| false), [(0, 0)], "only the missing block");
+        assert_eq!(q.pick(&all, true, 9, A, false, 0), [(0, 0)], "only the missing block");
         q.check_invariant();
     }
 
@@ -886,7 +940,7 @@ mod tests {
         p.we_dont_have(1);
         p.we_dont_have(2);
         assert!(!p.have_piece(1) && !p.have_piece(2) && p.have_piece(0));
-        let picked = p.pick(&all, true, 9, A, false, |_, _| false);
+        let picked = p.pick(&all, true, 9, A, false, 0);
         assert_eq!(picked.len(), 4, "{picked:?}");
         assert!(picked.iter().all(|&(piece, _)| piece == 1 || piece == 2), "{picked:?}");
         p.check_invariant();
@@ -899,25 +953,25 @@ mod tests {
         let mut p = picker(3);
         // The two-block pieces only (the last piece has one block).
         let all = bits("110");
-        assert_eq!(p.pick(&all, false, 1, A, false, |_, _| false).len(), 1);
+        assert_eq!(p.pick(&all, false, 1, A, false, 0).len(), 1);
         let piece = p.downloading.keys().next().copied().unwrap();
         assert_eq!(p.get_downloaders(piece), [Some(A), None]);
         // C fills the partial piece; its block is attributed to it once written.
-        assert_eq!(p.pick(&all, false, 1, C, false, |_, _| false), [(piece, 1)]);
+        assert_eq!(p.pick(&all, false, 1, C, false, 0), [(piece, 1)]);
         assert!(p.mark_as_writing(piece, 1, C));
         assert_eq!(p.get_downloaders(piece), [Some(A), Some(C)]);
         assert_eq!(p.get_downloaders(if piece == 0 { 1 } else { 0 }), [None, None], "open piece");
         // On parole, A may not join C's piece, only start a fresh one; and no end-game.
         p.piece_failed(piece);
-        assert_eq!(p.pick(&all, false, 1, C, false, |_, _| false).len(), 1);
+        assert_eq!(p.pick(&all, false, 1, C, false, 0).len(), 1);
         let cs = p.downloading.keys().next().copied().unwrap();
-        let picked = p.pick(&all, false, 1, A, true, |_, _| false);
+        let picked = p.pick(&all, false, 1, A, true, 0);
         assert_eq!(picked.len(), 1);
         assert_ne!(picked[0].0, cs);
         let mut q = picker(1);
-        assert_eq!(q.pick(&bits("1"), true, 1, C, false, |_, _| false), [(0, 0)]);
-        assert!(q.pick(&bits("1"), true, 1, A, true, |_, _| false).is_empty(), "parole: no end-game");
-        assert_eq!(q.pick(&bits("1"), true, 1, A, false, |_, _| false), [(0, 0)]);
+        assert_eq!(q.pick(&bits("1"), true, 1, C, false, 0), [(0, 0)]);
+        assert!(q.pick(&bits("1"), true, 1, A, true, 0).is_empty(), "parole: no end-game");
+        assert_eq!(q.pick(&bits("1"), true, 1, A, false, 0), [(0, 0)]);
         p.check_invariant();
     }
 

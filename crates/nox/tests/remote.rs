@@ -294,6 +294,69 @@ fn the_save_roots_bind_remote_sessions() {
     client.shutdown();
 }
 
+/// Bug hunt 2026-11-21, 2: a remote session cannot leave the save roots by the names it sends
+/// either. An add from resume data (its own save path and mapped files) and an add whose
+/// `renamed_files` leave the save folder are refused with `AddTorrentFailed`, a rename out of it
+/// with `FileRenameFailed`; the engine never sees them.
+#[test]
+fn file_names_from_remote_sessions_stay_in_the_save_roots() {
+    let n = nox_with("names", false, true);
+    let addr = n.web.local_addr();
+    let (client, hello) = remote::connect(&target(addr, None, PASS), TIMEOUT).unwrap();
+    let h = Client::new(client.handle());
+    let failed = |name: &'static str| {
+        h.wait_for(move |a| match a {
+            Alert::AddTorrentFailed { name: x, error, .. } if x == name => Some(error.to_string()),
+            _ => None,
+        })
+    };
+
+    // resume data names its own save path: refused whatever the add's says
+    let mut p = AddTorrentParams::new(TorrentSource::Resume(b"d9:save_path5:/tmp/e".to_vec()), "");
+    p.save_path = hello.save_path.clone();
+    p.name = Some("resumed".into());
+    h.add_torrent(p);
+    let error = failed("resumed");
+    assert!(error.contains("resume data is not accepted"), "{error}");
+
+    let escape = n.dir.join("elsewhere").join("x").to_string_lossy().into_owned();
+    for (name, renamed) in
+        [("dotdot", "dotdot/../../../elsewhere/x".to_owned()), ("absolute", escape.clone())]
+    {
+        let mut p = magnet(0xc1, name);
+        p.save_path = hello.save_path.clone();
+        p.renamed_files.insert(0, renamed);
+        h.add_torrent(p);
+        let error = failed(name);
+        assert!(error.contains("inside the save folder"), "{name}: {error}");
+    }
+
+    // an added torrent's file cannot be renamed out of the folder either
+    let mut p = magnet(0xc2, "inside");
+    p.save_path = hello.save_path.clone();
+    h.add_torrent(p);
+    let id = h.wait_for(|a| match a {
+        Alert::TorrentAdded { id, name, .. } if name == "inside" => Some(*id),
+        _ => None,
+    });
+    for bad in ["../../elsewhere/x".to_owned(), escape] {
+        h.torrent(id).rename_file(0, bad.clone());
+        let error = h.wait_for(|a| match a {
+            Alert::FileRenameFailed { id: x, index: 0, error } if *x == id => Some(error.to_string()),
+            _ => None,
+        });
+        assert!(error.contains("inside the save folder"), "{bad}: {error}");
+    }
+    // none of the refused adds reached the engine
+    let info = shim_get(addr, "/api/v2/torrents/info");
+    assert!(info.contains("\"name\":\"inside\""), "{info}");
+    for name in ["resumed", "dotdot", "absolute"] {
+        assert!(!info.contains(&format!("\"name\":\"{name}\"")), "{name}: {info}");
+    }
+    assert!(!n.dir.join("elsewhere").exists());
+    client.shutdown();
+}
+
 #[test]
 fn the_login_is_checked_and_failures_count() {
     let n = nox("login", false);

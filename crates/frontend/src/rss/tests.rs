@@ -207,10 +207,11 @@ fn new_filters_apply_to_items_already_in_the_feed() {
     let f = d.add_feed("https://a/rss", "");
     assert!(d.feed_fetched(f, NOW, Ok(doc(vec![item("Show.S01E01", None)]))).is_empty());
     d.add_filter(RssFilter { pattern: "show".into(), ..RssFilter::default() });
-    assert_eq!(titles(&d.process(f, NOW + 1)), ["Show.S01E01"]);
+    let reqs = d.process(f, NOW + 1);
+    assert_eq!(titles(&reqs), ["Show.S01E01"]);
     assert!(d.process(f, NOW + 2).is_empty());
     // the add failed: forget it, and it comes again
-    d.forget(f, "guid:Show.S01E01");
+    d.forget(&reqs[0]);
     assert_eq!(titles(&d.process(f, NOW + 3)), ["Show.S01E01"]);
     assert!(d.feed(f).unwrap().seen.contains("guid:Show.S01E01"));
 }
@@ -256,6 +257,94 @@ fn smart_episode_filter_and_repacks() {
     d2.filter_mut(id).unwrap().seen_episodes.retain(|k| !k.starts_with('r'));
     d2.feed_mut(f).unwrap().downloaded = RecentSet::default();
     assert!(d2.process(f, NOW + 1000).is_empty());
+}
+
+/// Bug hunt 2026-11-21 #8: a smart filter's item whose download fails is taken again at the
+/// next refresh. Forgetting it undoes the episode it recorded and the minimum interval it
+/// started, so another release of that episode, skipped meanwhile, stays skipped while the
+/// failed one is in the feed and is taken once it is not; and an episode added stays added.
+#[test]
+fn a_smart_filter_takes_a_failed_episode_again() {
+    let mut d = RssDownloader::default();
+    let f = d.add_feed("https://a/rss", "");
+    let id = d.add_filter(RssFilter {
+        pattern: "*show*".into(),
+        smart: true,
+        min_interval: 3600,
+        ..RssFilter::default()
+    });
+    d.filter_mut(id).unwrap().seen_episodes = vec!["s1e4".into()];
+    d.filter_mut(id).unwrap().last_match = Some(NOW - 7200);
+    let both = || vec![item("Show.S01E05.1080p", Some(NOW - 10)), item("Show.S01E05.720p", Some(NOW - 20))];
+    let reqs = d.feed_fetched(f, NOW, Ok(doc(both())));
+    assert_eq!(titles(&reqs), ["Show.S01E05.720p"], "one release of the episode");
+    assert_eq!(
+        reqs[0].recorded,
+        Recorded { episodes: vec!["s1e5".into()], last_match: Some((NOW, Some(NOW - 7200))) }
+    );
+    // its download fails
+    d.forget(&reqs[0]);
+    let filter = d.filter(id).unwrap();
+    assert_eq!(
+        (filter.seen_episodes.as_slice(), filter.last_match),
+        (&["s1e4".to_owned()][..], Some(NOW - 7200))
+    );
+    let reqs = d.feed_fetched(f, NOW + 900, Ok(doc(both())));
+    assert_eq!(titles(&reqs), ["Show.S01E05.720p"], "the same one again, and only it");
+    // it fails again, and leaves the feed: the other release comes
+    d.forget(&reqs[0]);
+    let later = vec![item("Show.S01E05.1080p", Some(NOW - 10))];
+    let reqs = d.feed_fetched(f, NOW + 1800, Ok(doc(later)));
+    assert_eq!(titles(&reqs), ["Show.S01E05.1080p"]);
+    // added: no other release of the episode, even past the interval
+    assert!(d.feed_fetched(f, NOW + 3 * 3600, Ok(doc(both()))).is_empty());
+    assert_eq!(d.filter(id).unwrap().seen_episodes, ["s1e4", "s1e5"]);
+    // a failure forgotten after another item set the interval leaves that item's time
+    let next = d.feed_fetched(f, NOW + 5 * 3600, Ok(doc(vec![item("Show.S01E06", Some(NOW))])));
+    let last = d.feed_fetched(f, NOW + 7 * 3600, Ok(doc(vec![item("Show.S01E07", Some(NOW + 1))])));
+    assert_eq!(titles(&last), ["Show.S01E07"]);
+    d.forget(&next[0]);
+    let filter = d.filter(id).unwrap();
+    assert_eq!(filter.last_match, Some(NOW + 7 * 3600));
+    assert_eq!(filter.seen_episodes, ["s1e4", "s1e5", "s1e7"]);
+    // and a filter removed meanwhile is no matter
+    d.remove_filter(id);
+    d.forget(&last[0]);
+}
+
+/// Bug hunt 2026-11-21 #8, for a subscription's smart episode filter; a REPACK added since keeps
+/// its episode when the first release fails, and a REPACK that fails is taken again.
+#[test]
+fn a_smart_subscription_takes_a_failed_episode_again() {
+    let mut d = RssDownloader::default();
+    let f = d.add_feed("https://a/rss", "");
+    let feed = d.feed_mut(f).unwrap();
+    feed.subscribe = true;
+    feed.subscribe_smart = true;
+    let both = || vec![item("Show.S01E05.1080p", Some(NOW - 10)), item("Show.S01E05.720p", Some(NOW - 20))];
+    let reqs = d.feed_fetched(f, NOW, Ok(doc(both())));
+    assert_eq!(titles(&reqs), ["Show.S01E05.720p"]);
+    d.forget(&reqs[0]);
+    assert!(!d.feed(f).unwrap().episodes.contains("s1e5"));
+    let reqs = d.feed_fetched(f, NOW + 900, Ok(doc(both())));
+    assert_eq!(titles(&reqs), ["Show.S01E05.720p"], "the same one again, and only it");
+    assert!(d.feed_fetched(f, NOW + 1800, Ok(doc(both()))).is_empty(), "added: nothing more");
+
+    let mut d = RssDownloader::default();
+    let f = d.add_feed("https://a/rss", "");
+    let feed = d.feed_mut(f).unwrap();
+    feed.subscribe = true;
+    feed.subscribe_smart = true;
+    let items =
+        vec![item("Show.S01E05.REPACK.720p", Some(NOW - 5)), item("Show.S01E05.720p", Some(NOW - 20))];
+    let reqs = d.feed_fetched(f, NOW, Ok(doc(items.clone())));
+    assert_eq!(titles(&reqs), ["Show.S01E05.720p", "Show.S01E05.REPACK.720p"]);
+    // the first release fails: the repack has the episode, so it does not come again
+    d.forget(&reqs[0]);
+    assert!(d.feed_fetched(f, NOW + 900, Ok(doc(items.clone()))).is_empty());
+    // the repack fails too: it comes again
+    d.forget(&reqs[1]);
+    assert_eq!(titles(&d.feed_fetched(f, NOW + 1800, Ok(doc(items)))), ["Show.S01E05.REPACK.720p"]);
 }
 
 #[test]
@@ -353,7 +442,7 @@ fn not_modified_keeps_the_items() {
     let reqs = d.feed_fetched(f, NOW, Ok(Fetched::Changed(doc(vec![item("a", None)]), validators())));
     assert_eq!(titles(&reqs), ["a"]);
     assert_eq!(d.feed(f).unwrap().validators(), validators());
-    d.forget(f, &reqs[0].item_id);
+    d.forget(&reqs[0]);
     d.feed_fetched(f, NOW + 1, Err::<Feed, _>("timed out".into()));
     assert_eq!(titles(&d.feed_fetched(f, NOW + 900, Ok(Fetched::NotModified))), ["a"], "retried");
     let feed = d.feed(f).unwrap();
@@ -625,6 +714,7 @@ fn fetch_feed_over_http() {
         panic!("a document")
     };
     assert_eq!((f.title.as_str(), f.items.len()), ("T & U", 2));
+    assert!(f.served_locally, "a loopback server sent it: its links may stay local");
     assert_eq!(v, validators());
     assert_eq!(fetch_feed(&url, &v, None), Ok(Fetched::NotModified));
     let e = fetch_feed(&format!("http://{addr}/page"), &Validators::default(), None).unwrap_err();
@@ -638,8 +728,36 @@ fn fetch_feed_over_http() {
     assert!(heads[1].contains("\r\nIf-Modified-Since: Thu, 29 Oct 2026 10:00:00 GMT\r\n"), "{}", heads[1]);
 }
 
-/// An item's `.torrent` URL reaches this machine only when its feed is here too (SEC-26): a
-/// feed on the internet cannot make the client fetch from the local network.
+/// An item's `.torrent` URL reaches this machine only when its feed came from here too
+/// (SEC-26), judged by the server that sent the feed (bug hunt 2026-11-21 #6: not by a second
+/// lookup of the feed's host, which a host answering with public and private addresses, or
+/// rebinding, would pass). The reach goes with the items: kept by "not modified", reset with
+/// a new document or URL.
+#[test]
+fn feed_items_reach_what_their_feed_server_allows() {
+    let mut d = RssDownloader::default();
+    let f = d.add_feed("http://192.168.1.10/rss", "");
+    d.feed_mut(f).unwrap().subscribe = true;
+    let reach = |reqs: &[AddRequest]| reqs.iter().map(|r| r.links_reach).collect::<Vec<_>>();
+    // a feed URL on the LAN gives nothing by itself: what counts is who answered
+    let public = d.feed_fetched(f, NOW, Ok(doc(vec![item("a", None)])));
+    assert_eq!(reach(&public), [Reach::Public]);
+    let local = Feed { served_locally: true, ..doc(vec![item("b", None), item("a", None)]) };
+    assert_eq!(reach(&d.feed_fetched(f, NOW + 900, Ok(local))), [Reach::User]);
+    d.feed_mut(f).unwrap().downloaded.remove("guid:b");
+    assert_eq!(reach(&d.feed_fetched(f, NOW + 1800, Ok(Fetched::NotModified))), [Reach::User]);
+    d.feed_mut(f).unwrap().downloaded.remove("guid:b");
+    assert_eq!(reach(&[d.request_item(f, "guid:b", NOW + 1900).unwrap()]), [Reach::User]);
+    d.feed_mut(f).unwrap().downloaded.remove("guid:b");
+    let again = d.feed_fetched(f, NOW + 2700, Ok(doc(vec![item("b", None)])));
+    assert_eq!(reach(&again), [Reach::Public], "a new document from a public server");
+    d.feed_fetched(f, NOW + 3600, Ok(Feed { served_locally: true, ..doc(vec![]) }));
+    d.edit_feed(f, "https://feeds.example.org/rss", "");
+    assert!(!d.feed(f).unwrap().items_local, "a new URL is a new feed");
+}
+
+/// What the reach allows when the item is fetched: a public-only item URL on this machine is
+/// refused before anything is sent.
 #[test]
 fn feed_items_stay_off_the_local_network() {
     use std::io::{Read, Write};
@@ -664,19 +782,13 @@ fn feed_items_stay_off_the_local_network() {
         served
     });
     let item = format!("http://{addr}/item.torrent");
-    for feed in ["https://8.8.8.8/rss", "http://feeds.example.invalid/rss", "not a url"] {
-        let e = fetch_download(&item, "", feed, None).unwrap_err();
-        assert!(e.contains("refused"), "{feed}: {e}");
-    }
-    for feed in [
-        format!("http://{addr}/rss"),
-        "http://localhost:9117/api".to_owned(),
-        "http://192.168.1.10/rss".into(),
-    ] {
-        assert_eq!(fetch_download(&item, "", &feed, None), Ok(Download::Torrent(b"d1:e".to_vec())), "{feed}");
+    let e = fetch_download(&item, "", Reach::Public, None).unwrap_err();
+    assert!(e.contains("refused"), "{e}");
+    for item in [item.clone(), format!("http://localhost:{}/item.torrent", addr.port())] {
+        assert_eq!(fetch_download(&item, "", Reach::User, None), Ok(Download::Torrent(b"d1:e".to_vec())));
     }
     let _ = std::net::TcpStream::connect(addr).and_then(|mut s| s.write_all(b"GET /stop HTTP/1.1\r\n\r\n"));
-    assert_eq!(server.join().unwrap(), 3, "only the local feeds' items were fetched");
+    assert_eq!(server.join().unwrap(), 2, "only the local feeds' items were fetched");
 }
 
 /// Manual check of a real feed: `LT_RSS_FILE=feed.xml cargo test -p rookparcel-frontend

@@ -98,7 +98,8 @@ impl Engine {
     }
 
     /// An incoming connection named one of our torrents (libtorrent `attach_to_torrent`):
-    /// joins it if the torrent takes peers and this address is not connected already.
+    /// joins it if the torrent takes peers, this address is not connected already and its IP
+    /// is not banned for bad data.
     pub(super) fn attach_incoming(&mut self, slot: usize, id: TorrentId) -> bool {
         let accept = self.torrent_ref(id).is_some_and(|t| t.is_active() && !t.checking && self.is_running(t));
         let Some(p) = self.peers.get(slot) else { return false };
@@ -108,6 +109,12 @@ impl Engine {
             .is_some_and(|t| t.peers.iter().any(|&s| self.peers.get(s).is_some_and(|o| o.addr == addr)));
         if !accept || duplicate {
             self.peers.get_mut(slot).expect("exists").close("torrent not accepting peers", false);
+            return false;
+        }
+        // libtorrent `peer_list::new_connection` finds the peer by IP and refuses a banned one
+        // (`errors::peer_banned`); the ban came from another source port
+        if self.torrent_ref(id).is_some_and(|t| t.peer_list.ip_banned(addr.ip())) {
+            self.peers.get_mut(slot).expect("exists").close("banned", false);
             return false;
         }
         // libtorrent `torrent::attach_peer`: `too_many_connections` at the torrent's own limit,

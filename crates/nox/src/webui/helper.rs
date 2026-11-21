@@ -20,6 +20,7 @@
 //! request from this machine (loopback, not through a reverse proxy); elsewhere the page says
 //! where it works instead.
 
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -302,12 +303,14 @@ fn flag(body: &Json, key: &str) -> bool {
 }
 
 /// `/pa/search/helper` and `/pa/search/helper/...` (`endpoint` is the part after `helper`);
-/// `local`: the request comes from this computer (not through a reverse proxy).
+/// `ip`: the client (`api::client_ip`, for the current password's ban); `local`: the request
+/// comes from this computer (not through a reverse proxy).
 pub(crate) fn serve(
     shared: &Shared,
     endpoint: &str,
     body: Option<Json>,
     session: &str,
+    ip: IpAddr,
     local: bool,
 ) -> Result<Response, CmdError> {
     let Some(body) = body else {
@@ -353,7 +356,7 @@ pub(crate) fn serve(
             let version = body.get("version").and_then(Json::as_str).unwrap_or("");
             let release = shared.helper().release.clone().filter(|r| r.version == version);
             let release = release.ok_or_else(|| err(409, "check for the newest release first"))?;
-            super::search::check_password(shared, &body, session)
+            super::search::check_password(shared, &body, session, ip)
                 .map_err(|_| err(400, tr!(WebHelperNeedPassword)))?;
             let proxy = proxy(shared);
             let id = start(shared, Kind::Install, !installed, move |p| {
