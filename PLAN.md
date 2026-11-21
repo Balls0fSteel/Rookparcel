@@ -28,7 +28,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 - **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.69. At each release: update the version lines in `docs/wiki/Home.md` and `Installing-Rookparcel.md`. A small nox add race is in BACKLOG "Remote mode and Web UI".
 - **UI lock (D69, released in 1.2.54; D71's off switch in 1.2.63):** a 4-6 digit PIN hides all three GUIs' windows in the tray; Ctrl or Option at start, or `--reset-lock`, removes a forgotten one; wiki page `Locking-Rookparcel`. Open: BACKLOG "UI lock".
 - **Benchmarks:** [2026-11-11 results](docs/BENCHMARKS.md) for 1.2.46: 10,000 torrents use 67 MB after restart (qBittorrent 612 MB) and idle at 0.07 % of a core; Win32 lists 100,000 in 1.37-1.49 s. **1.2.70's release checks** on rented servers (`tools/bench/cloud/`; DigitalOcean 2026-11-18, a self-deleting Hetzner CCX23 2026-11-19): idle CPU as 1.2.69's; BACKLOG "Disk and storage" has the SHA-1 suspect on CPUs without SHA-NI and an unreproduced 10,000-listing delay.
-- CI and FreeBSD green for `37f11338` (2026-11-19), Fuzz for `52f0eda3` (1.2.70).
+- CI, FreeBSD and Fuzz green for `4f53b919` (1.2.72, 2026-11-21).
 - Scale baselines on this PC: [plan snapshot](docs/archive/PLAN-2026-11-13.md), [BENCHMARKS.md](docs/BENCHMARKS.md); the low-end-machine gate remains open.
 - The app icon is the Postal Rook (D60): drawn marks below 48 px, the generated stamp from 48 px (`assets/rookparcel-icons`).
 
