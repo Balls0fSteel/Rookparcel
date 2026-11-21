@@ -4,6 +4,14 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-21_235809_1795301889: 1.2.73, the bug hunt's follow-ups
+
+- **The owner decided the follow-ups** (BUGHUNT-2026-11-21.md "Follow-ups decided"): A-H fixed here by four parallel agents, I-N accepted as known behaviour.
+- **Engine:** refused stored v2 layers make a v2-only torrent check in full once refetched (A); a finished torrent fetching layers keeps and dials seeds and announces as a non-seed (B); `announcing_to_dht` follows the DHT switch (E); incoming peers respect the peer-list cap (F). Hybrids are not rechecked: their pieces always needed the v1 hash.
+- **nox:** no request runs PBKDF2 under the State lock (C); the subnet and API-key sessions' ban tests (D).
+- **GUIs:** the Mac app's 21 Auto Layout warnings at start are gone (sidebar cells give way while the outline is 0 wide; checked on the VM) (G); GTK's Ctrl+L locks from every dialog (checked on the Xubuntu desktop) (H).
+- **Problem:** VMware powered the Mac VM off at about 21:59; the agent started it again headless (it is left running).
+
 ## 2026-11-21_114756_1795258076: 1.2.72's GTK and macOS fixes on the VMs
 
 - **Xubuntu and the macOS VM**, by two parallel agents, all passed (details: BUGHUNT-2026-11-21.md "VM run"): the GTK and Mac crates' tests on their platforms; a vanished tray brings up the PIN prompt or the window (27); Create's failure box waits for the PIN (25); the Search window keeps its source (26); Manage Sources' last-row removal on macOS. A control build showed macOS 15.8 ignores an out-of-range row, so 28 is defensive there; 34 has no trigger.

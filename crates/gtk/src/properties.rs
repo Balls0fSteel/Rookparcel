@@ -98,6 +98,7 @@ pub fn show(
         .default_width(520)
         .resizable(true)
         .build();
+    crate::app::lock_key(&window);
     let multi = props.count > 1;
     let number = || {
         let e = gtk::Entry::new();

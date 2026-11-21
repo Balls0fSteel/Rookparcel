@@ -414,6 +414,7 @@ impl Results {
             .default_width(900)
             .default_height(560)
             .build();
+        crate::app::lock_key(&window);
         let button = |t: &str| gtk::Button::with_mnemonic(&gtk_mnemonic(t));
         let rows: Rc<RefCell<Vec<[String; 7]>>> = Rc::default();
         let text_rows = rows.clone();
@@ -752,6 +753,7 @@ pub fn show_sources(parent: &gtk::Window, host: Rc<dyn Host>) {
         .default_width(560)
         .default_height(380)
         .build();
+    crate::app::lock_key(&window);
     let button = |t: &str| gtk::Button::with_mnemonic(&gtk_mnemonic(t));
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::Single);
@@ -996,6 +998,7 @@ fn source_dialog(
     let title = if current.is_some() { tr!(SearchEditSource) } else { tr!(SearchAddSource) };
     let window =
         gtk::Window::builder().title(title).transient_for(parent).modal(true).resizable(false).build();
+    crate::app::lock_key(&window);
     let entry = |t: &str| {
         let e = gtk::Entry::new();
         e.set_text(t);

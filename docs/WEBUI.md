@@ -565,8 +565,14 @@ whitelist, API key), which come back with the next request, cannot guess it with
 banned client is refused before anything is checked. It counts once per request, and only when
 the change needs it: not for a change of other fields, nor for one the Run Program gate refuses
 first. A failed login, and a current password, is counted before the password is hashed, so
-parallel guesses stop at the ban limit; a right one clears the count. The hash runs outside the
-State lock, except for the shim's `setPreferences`, which commits under it.
+parallel guesses stop at the ban limit; a right one clears the count. No request runs PBKDF2
+under the State lock, which every Web UI, API and WebSocket client waits for: the current
+password is checked, and a new password or API key hashed, without it, and the change is then
+committed under it (`prefs::commit_request` for the page, `prefs::commit_asked` for the shim's
+`setPreferences`, which takes the lock for each of its one-by-one commits). One request checks
+its current password once and makes each hash once; a password changed between the check and
+the commit counts as wrong. Only nox's own changes hash under the lock: an old state file's
+`preferences` at start, before the server accepts anyone.
 
 Trackers for new downloads (D66, Preferences > Advanced > Trackers): `trackers.append`,
 `trackers.list` (a `lines` field, a text area), `trackers.from_url` and `trackers.url` are

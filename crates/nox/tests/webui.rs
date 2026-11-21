@@ -1244,6 +1244,96 @@ fn a_wrong_current_password_counts_towards_the_ban() {
     assert!(r.text().contains("banned"), "{}", r.text());
 }
 
+/// [`a_wrong_current_password_counts_towards_the_ban`] for another bypass session, the one
+/// whose requests carry `who` (from this computer, `webui.max_auth_fail_count` 3): each wrong
+/// current password, in Preferences and in the shim's `setPreferences`, ends the session (its
+/// next request starts a new one, which a stale `rid` shows with a full update) and counts once
+/// towards the client's ban; the third bans it, and then even the right password is refused.
+fn bypass_session_guesses_the_current_password(t: &Harness, who: &[(&str, &str)]) {
+    let origin = format!("http://{}", t.host());
+    let mut native = vec![("Origin", origin.as_str()), ("X-Requested-With", "Rookparcel")];
+    native.extend_from_slice(who);
+    let prefs = |body: &str| t.req("POST", "/pa/prefs", &native, Body::Json(body));
+    let version = || t.req("GET", "/api/v2/app/version", who, Body::None).status;
+    let maindata = |rid: i64| {
+        let r = t.req("GET", &format!("/api/v2/sync/maindata?rid={rid}"), who, Body::None);
+        assert_eq!(r.status, 200, "{}", r.text());
+        let d = r.json();
+        let rid = d.get("rid").and_then(Json::as_i64).unwrap();
+        (d.get("full_update") == Some(&Json::Bool(true)), rid)
+    };
+    assert_eq!(version(), 200, "the bypass session");
+    let (_, rid) = maindata(0);
+    let (full, rid) = maindata(rid);
+    assert!(!full, "the same session answers with a diff");
+
+    // Preferences: the first failure, and the session ends
+    let wrong = r#"{"webui.csrf":false,"webui.current_password":"guess"}"#;
+    let r = prefs(wrong);
+    assert_eq!(r.status, 400, "{}", r.text());
+    assert!(r.text().contains("webui.current_password"), "{}", r.text());
+    let (full, rid) = maindata(rid);
+    assert!(full, "the session was ended");
+    assert_eq!(version(), 200, "one failure of three");
+    // the shim: two security keys and a wrong password are the second
+    let set = format!(
+        "json={}",
+        enc(
+            r#"{"web_ui_csrf_protection_enabled":false,"web_ui_domain_list":"*","web_ui_current_password":"guess"}"#
+        )
+    );
+    assert_eq!(t.req("POST", "/api/v2/app/setPreferences", who, Body::Form(&set)).status, 200);
+    let (full, _) = maindata(rid);
+    assert!(full, "the session was ended again");
+    assert_eq!(version(), 200, "two failures of three");
+    let p = t.req("GET", "/api/v2/app/preferences", who, Body::None).json();
+    assert_eq!(p.get("web_ui_csrf_protection_enabled"), Some(&Json::Bool(true)), "nothing changed");
+    assert_ne!(s(p.get("web_ui_domain_list")), "*");
+    // the third bans the client, and then even the right password is refused
+    assert_eq!(prefs(wrong).status, 400);
+    assert_eq!(version(), 403, "banned");
+    let r = prefs(&format!(r#"{{"webui.csrf":false,"webui.current_password":"{PASS}"}}"#));
+    assert_eq!(r.status, 403, "{}", r.text());
+    assert!(r.text().contains("banned"), "{}", r.text());
+}
+
+/// Bug hunt 2026-11-21, 11, for the subnet whitelist's session (this computer whitelisted, the
+/// local-auth bypass off).
+#[test]
+fn a_wrong_current_password_from_a_whitelisted_subnet_counts_towards_the_ban() {
+    let t = Harness::start("current-password-ban-subnet");
+    let sid = t.login();
+    let r = t.pa(
+        &sid,
+        "/pa/prefs",
+        &format!(
+            r#"{{"webui.bypass_auth_subnets":"127.0.0.0/8","webui.max_auth_fail_count":3,"webui.current_password":"{PASS}"}}"#
+        ),
+    );
+    assert_eq!(r.status, 204, "{}", r.text());
+    let p = t.get(&sid, "/api/v2/app/preferences").json();
+    assert_eq!(p.get("bypass_local_auth"), Some(&Json::Bool(false)), "not the local-auth bypass");
+    bypass_session_guesses_the_current_password(&t, &[]);
+}
+
+/// Bug hunt 2026-11-21, 11, for the API key's session (the local-auth bypass off).
+#[test]
+fn a_wrong_current_password_with_the_api_key_counts_towards_the_ban() {
+    let t = Harness::start("current-password-ban-apikey");
+    let sid = t.login();
+    let r = t.pa(
+        &sid,
+        "/pa/prefs",
+        &format!(
+            r#"{{"webui.api_key":"{API_KEY}","webui.api_key_enabled":true,"webui.max_auth_fail_count":3,"webui.current_password":"{PASS}"}}"#
+        ),
+    );
+    assert_eq!(r.status, 204, "{}", r.text());
+    assert_eq!(t.req("GET", "/api/v2/app/version", &[], Body::None).status, 403, "no bypass without the key");
+    let auth = format!("Bearer {API_KEY}");
+    bypass_session_guesses_the_current_password(&t, &[("Authorization", &auth)]);
+}
+
 /// A reverse proxy on this machine makes every client a loopback one: such requests never get
 /// the local-auth bypass, and failed logins count per forwarded client (SEC-03).
 #[test]

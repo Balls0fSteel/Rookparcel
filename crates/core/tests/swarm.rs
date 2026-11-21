@@ -2016,12 +2016,17 @@ fn the_announce_limits_leave_the_last_running_torrents_out() {
     // three torrents of the same files (the padding gives each its own info-hash)
     let fixtures: Vec<Fixture> = (1..=3).map(|n| fixture_padded(None, n)).collect();
     write_files(&fixtures[0], &dir);
-    let (s, mut w, _) = start_with(|s| {
-        s.active_tracker_limit = 1;
-        s.active_lsd_limit = 2;
-        s.active_dht_limit = -1;
-        s.auto_manage_interval = 1;
-    });
+    let limits = Settings {
+        // a DHT without routers: loopback only
+        enable_dht: true,
+        dht_bootstrap_nodes: String::new(),
+        active_tracker_limit: 1,
+        active_lsd_limit: 2,
+        active_dht_limit: -1,
+        auto_manage_interval: 1,
+        ..settings()
+    };
+    let (s, mut w, _) = start_with(|s| *s = limits.clone());
     let ids: Vec<TorrentId> =
         fixtures.iter().map(|f| add_with_flags(&mut w, f, &dir, TorrentFlags::AUTO_MANAGED)).collect();
     // the latest status of each, until the counts are as expected
@@ -2052,6 +2057,12 @@ fn the_announce_limits_leave_the_last_running_torrents_out() {
     s.handle().torrent(left_out).unset_flags(TorrentFlags::AUTO_MANAGED);
     let st = counts(&mut w, (2, 3, 3), "the forced torrent announcing too");
     assert!(st[&left_out].announcing_to_trackers && st[&left_out].announcing_to_lsd);
+    // follow-up of bug hunt 2026-11-21 #3: none announces on a DHT switched off (libtorrent
+    // `should_announce_dht`), and all do again once it is back on
+    s.handle().apply_settings(Settings { enable_dht: false, ..limits.clone() });
+    counts(&mut w, (2, 3, 0), "no DHT announcer with the DHT off");
+    s.handle().apply_settings(limits);
+    counts(&mut w, (2, 3, 3), "three DHT announcers again");
     s.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }

@@ -40,6 +40,7 @@ pub fn show(parent: &impl IsA<gtk::Window>, stats: &SessionStats) {
         .modal(false)
         .resizable(false)
         .build();
+    crate::app::lock_key(&window);
     let grid = gtk::Grid::builder().row_spacing(4).column_spacing(24).build();
     let mut values = Vec::new();
     for (i, row) in statistics::rows(stats).into_iter().enumerate() {

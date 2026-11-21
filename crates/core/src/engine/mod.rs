@@ -1913,6 +1913,12 @@ impl Engine {
             } else {
                 self.stop_dht();
             }
+            // their `announcing_to_dht` follows the switch
+            for id in self.active_ids() {
+                if let Some(t) = self.torrent(id) {
+                    t.status_dirty = true;
+                }
+            }
         }
         // libtorrent `update_natpmp` / `update_upnp`
         if natpmp_changed && !self.settings.enable_natpmp {
@@ -2250,7 +2256,8 @@ impl Engine {
                 // checked against the file roots like a `.torrent`'s: a store written by an
                 // earlier version may hold a layer that was never checked. A damaged or forged
                 // record leaves every layer out, so a v2-only torrent fetches them from its
-                // peers (which overwrites the record) and a hybrid is verified by its v1 hashes.
+                // peers (which overwrites the record, and checks its files in full once they
+                // are in: `finish_layer_fetch`) and a hybrid is verified by its v1 hashes.
                 let _ = ti.set_piece_layers(&layers);
             }
         }
@@ -3883,7 +3890,7 @@ impl Engine {
             (self.peer_id, self.tracker_key, self.tracker_port(), self.settings.num_want);
         let filter = self.tracker_filter(id);
         let Some(t) = self.torrent(id) else { return };
-        let finished = t.is_finished();
+        let finished = t.done_with_seeds();
         let left = t.bytes_left();
         let (uploaded, downloaded, corrupt) =
             (t.stat().upload_payload.total, t.stat().download_payload.total, t.failed_bytes);
@@ -4012,7 +4019,7 @@ impl Engine {
             room,
             now,
             Reconnect::from_settings(&self.settings),
-            t.is_finished(),
+            t.done_with_seeds(),
         );
         let mut made = 0;
         for addr in candidates {
@@ -4122,7 +4129,7 @@ impl Engine {
     /// libtorrent `torrent::num_connect_candidates`.
     fn num_connect_candidates(&self, id: TorrentId) -> usize {
         let policy = Reconnect::from_settings(&self.settings);
-        self.torrent_ref(id).map_or(0, |t| t.peer_list.num_connect_candidates(t.is_finished(), policy))
+        self.torrent_ref(id).map_or(0, |t| t.peer_list.num_connect_candidates(t.done_with_seeds(), policy))
     }
 
     /// libtorrent `session_impl::update_socket_buffer_size`: the new sizes apply to the listen
@@ -4462,6 +4469,8 @@ impl Engine {
             rates.3 = t.stat().upload_payload.rate();
             let mut st = t.status(peers, seeds, rates, now);
             st.waiting_for_network = self.rules.hold && !t.is_paused() && t.error.is_none();
+            // libtorrent `should_announce_dht`: not with the session's DHT off
+            st.announcing_to_dht &= self.settings.enable_dht;
             // the bit was taken already: clear the flag without setting it again
             self.slots.slots[i].torrent.as_mut().expect("present").status_dirty = false;
             Some(st)

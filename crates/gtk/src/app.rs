@@ -551,7 +551,7 @@ fn startup(app: &gtk::Application) {
         ("win.stop", &["<Control>t"]),
         ("win.pause", &["<Control><Shift>p"]),
         // File > Lock Rookparcel (D69)
-        ("win.lock", &["<Control>l"]),
+        ("win.lock", &[LOCK_KEY]),
         ("app.quit", &["<Control>q"]),
     ] {
         app.set_accels_for_action(action, keys);
@@ -2068,6 +2068,30 @@ fn lock_windows() {
     if !tray_shown() {
         ask_unlock(false);
     }
+}
+
+/// File > Lock Rookparcel's shortcut (D69).
+const LOCK_KEY: &str = "<Control>l";
+
+/// [`LOCK_KEY`] in one of the program's own windows besides the main one (Create New Torrent,
+/// Preferences, Properties, RSS, Search, Add...): the menu's `win.lock` and the application's
+/// shortcut for it reach only the main window, and a modal dialog keeps the key from it. As
+/// the window's last handler, after the focused control's own keys (an entry has none for
+/// Ctrl+L); the key goes on when the lock is off (D71) or the windows are locked already. Not
+/// in the PIN dialogs: a second Set PIN would open over the first.
+pub(crate) fn lock_key(window: &gtk::Window) {
+    let keys = gtk::ShortcutController::new();
+    keys.add_shortcut(gtk::Shortcut::new(
+        gtk::ShortcutTrigger::parse_string(LOCK_KEY),
+        Some(gtk::CallbackAction::new(|_, _| {
+            if locked() || !with_app(|a| ui_lock::enabled(&a.prefs)).unwrap_or(false) {
+                return glib::Propagation::Proceed;
+            }
+            lock_windows();
+            glib::Propagation::Stop
+        })),
+    ));
+    window.add_controller(keys);
 }
 
 /// Asks for the PIN to show the windows; a prompt already up comes to the front. `minimized`:
@@ -4009,6 +4033,7 @@ fn input(title: &str, prompt: &str, initial: &str, done: impl Fn(String) + 'stat
         .default_width(360)
         .resizable(false)
         .build();
+    lock_key(&dialog);
     let entry = gtk::Entry::new();
     entry.set_text(initial);
     entry.set_activates_default(true);
@@ -4057,6 +4082,7 @@ fn add_url() {
         .default_width(460)
         .resizable(false)
         .build();
+    lock_key(&dialog);
     let entry = gtk::Entry::new();
     entry.set_placeholder_text(Some(tr!(UrlPlaceholder)));
     entry.set_activates_default(true);

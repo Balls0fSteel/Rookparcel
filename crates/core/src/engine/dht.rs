@@ -503,7 +503,8 @@ impl Engine {
         let Some(t) = self.torrent_ref(id) else { return };
         // a hybrid is announced under both of its hashes (libtorrent announces each version)
         let hashes: Vec<_> = t.info_hashes.wire_hashes().collect();
-        let seed = t.is_seed();
+        // not while fetching piece layers: a seed's lookup leaves out the seeds (BEP 33 noseed)
+        let seed = t.is_seed() && t.done_with_seeds();
         let Some(tracker) = self.dht.tracker.as_mut() else { return };
         for ih in hashes {
             if port == 0 {

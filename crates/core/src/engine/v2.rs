@@ -30,13 +30,17 @@ use crate::util::bitfield::Bitfield;
 pub(crate) struct LayerFetch {
     pub trees: Vec<MerkleTree>,
     pub picker: HashPicker,
+    /// The store holds layers that the metadata refused (they do not hash up to the file
+    /// roots): the stored pieces may have passed against them (a store from before 1.2.71), so
+    /// they are dropped and the files checked in full once the layers are in.
+    pub distrust_pieces: bool,
 }
 
 impl LayerFetch {
     pub fn new(ti: &TorrentInfo) -> Result<LayerFetch, MetainfoError> {
         let trees = build_trees(ti)?;
         let picker = HashPicker::new(ti.orig_files(), &trees);
-        Ok(LayerFetch { trees, picker })
+        Ok(LayerFetch { trees, picker, distrust_pieces: false })
     }
 
     /// Every file of more than one piece has its whole piece layer.
@@ -365,10 +369,14 @@ impl Engine {
     pub(super) fn start_layer_fetch(&mut self, id: TorrentId) {
         let Some(t) = self.torrent(id) else { return };
         let Some(ti) = t.ti.clone() else { return };
-        let Ok(fetch) = LayerFetch::new(&ti) else {
+        let key = t.key();
+        let Ok(mut fetch) = LayerFetch::new(&ti) else {
             self.invalid_piece_layer(id);
             return;
         };
+        // layers in the store, yet none in the metadata: `load_info` refused them (a hybrid
+        // never fetches them: its pieces pass only when their v1 hashes agree as well)
+        fetch.distrust_pieces = self.store.as_ref().is_some_and(|s| s.has_piece_layers(&key));
         let Some(t) = self.torrent(id) else { return };
         t.layer_fetch = Some(Box::new(fetch));
         t.started_at = Some(Instant::now());
@@ -400,14 +408,27 @@ impl Engine {
         }
         t.set_metadata(Arc::new(full));
         t.resume_dirty = true;
+        if lf.distrust_pieces {
+            // checked in full: `start_torrent` finds no stored pieces
+            t.set_have(None);
+            t.unfinished.clear();
+        }
         for slot in t.peers.clone() {
             if let Some(p) = self.peers.get_mut(slot) {
                 p.hash_requests.clear();
             }
         }
-        let key = self.torrent_ref(id).map(|t| t.key()).unwrap_or_default();
+        let Some(t) = self.torrent_ref(id) else { return };
+        let key = t.key();
+        // the record without the distrusted pieces goes first: the genuine layers must not
+        // meet them at the next start, should the program end before the next save
+        let record = lf.distrust_pieces.then(|| t.resume_data());
         if let Some(store) = self.store.as_mut() {
-            if let Err(e) = store.put_piece_layers(&key, &layers) {
+            let saved = match &record {
+                Some(r) => store.put(&key, r, None).and_then(|()| store.flush()),
+                None => Ok(()),
+            };
+            if let Err(e) = saved.and_then(|()| store.put_piece_layers(&key, &layers)) {
                 self.out
                     .push(Alert::Log { id: Some(id), message: format!("cannot save the piece layers: {e}") });
             }

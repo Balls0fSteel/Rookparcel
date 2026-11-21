@@ -28,10 +28,10 @@ use objc2::runtime::{AnyObject, NSObject, NSObjectProtocol, ProtocolObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSButton, NSControl, NSControlStateValueOff, NSControlStateValueOn, NSControlTextEditingDelegate,
-    NSEvent, NSImage, NSImageView, NSLineBreakMode, NSMenu, NSMenuItem, NSMenuItemValidation, NSOutlineView,
-    NSOutlineViewDataSource, NSOutlineViewDelegate, NSResponder, NSTableCellView, NSTableColumn, NSTableView,
-    NSTableViewDataSource, NSTableViewDelegate, NSTableViewStyle, NSTextAlignment, NSTextField,
-    NSUserInterfaceItemIdentification, NSView,
+    NSEvent, NSImage, NSImageView, NSLayoutPriority, NSLineBreakMode, NSMenu, NSMenuItem,
+    NSMenuItemValidation, NSOutlineView, NSOutlineViewDataSource, NSOutlineViewDelegate, NSResponder,
+    NSTableCellView, NSTableColumn, NSTableView, NSTableViewDataSource, NSTableViewDelegate,
+    NSTableViewStyle, NSTextAlignment, NSTextField, NSUserInterfaceItemIdentification, NSView,
 };
 use objc2_foundation::{
     NSArray, NSIndexSet, NSMutableIndexSet, NSNotFound, NSNotification, NSNumber, NSPoint, NSRange, NSRect,
@@ -730,6 +730,13 @@ fn text_cell(spec: &ColumnSpec, mtm: MainThreadMarker) -> Retained<NSTextField> 
     t
 }
 
+/// The priority of a cell's trailing edge: just below required. The table sizes a cell by its
+/// frame (a required width), and a cell can be narrower than its margins and icon (a column at
+/// its minimum, less an outline's indentation); then the text gives way instead of Auto Layout
+/// breaking a constraint of its own choice and logging "Unable to simultaneously satisfy
+/// constraints".
+const GIVE_WAY: NSLayoutPriority = 999.0;
+
 /// A new cell view for `spec`'s column.
 fn make_cell(spec: &ColumnSpec, mtm: MainThreadMarker) -> Retained<NSView> {
     use crate::ui::layout::activate;
@@ -751,9 +758,12 @@ fn make_cell(spec: &ColumnSpec, mtm: MainThreadMarker) -> Retained<NSView> {
         b.setLineBreakMode(NSLineBreakMode::ByTruncatingTail);
         auto(&b);
         cell.addSubview(&b);
+        let trailing =
+            b.trailingAnchor().constraintLessThanOrEqualToAnchor_constant(&cell.trailingAnchor(), -2.0);
+        trailing.setPriority(GIVE_WAY);
         crate::ui::layout::activate(&[
             b.leadingAnchor().constraintEqualToAnchor_constant(&cell.leadingAnchor(), 2.0),
-            b.trailingAnchor().constraintLessThanOrEqualToAnchor_constant(&cell.trailingAnchor(), -2.0),
+            trailing,
             b.centerYAnchor().constraintEqualToAnchor(&cell.centerYAnchor()),
         ]);
         return Retained::into_super(cell);
@@ -776,11 +786,9 @@ fn make_cell(spec: &ColumnSpec, mtm: MainThreadMarker) -> Retained<NSView> {
     } else {
         cell.leadingAnchor().constraintEqualToAnchor_constant(&text.leadingAnchor(), -2.0)
     };
-    activate(&[
-        leading,
-        text.trailingAnchor().constraintEqualToAnchor_constant(&cell.trailingAnchor(), -2.0),
-        text.centerYAnchor().constraintEqualToAnchor(&cell.centerYAnchor()),
-    ]);
+    let trailing = text.trailingAnchor().constraintEqualToAnchor_constant(&cell.trailingAnchor(), -2.0);
+    trailing.setPriority(GIVE_WAY);
+    activate(&[leading, trailing, text.centerYAnchor().constraintEqualToAnchor(&cell.centerYAnchor())]);
     // SAFETY: the text field is the cell's subview and lives with it.
     unsafe { cell.setTextField(Some(&text)) };
     Retained::into_super(cell)
@@ -889,6 +897,9 @@ pub fn outline(
     ov.setColumnAutoresizingStyle(
         objc2_app_kit::NSTableViewColumnAutoresizingStyle::FirstColumnOnlyAutoresizingStyle,
     );
+    // the outline is still 0 points wide: the column drops to its minimum and then grows with
+    // the outline's width (the cells give way meanwhile, `GIVE_WAY`); started at its full
+    // width, it would never shrink to a narrower sidebar
     ov.sizeLastColumnToFit();
     (scroll, ov, source)
 }

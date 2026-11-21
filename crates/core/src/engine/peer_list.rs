@@ -274,6 +274,24 @@ impl PeerList {
         self.live_mut().connecting(addr, conn, source, now);
     }
 
+    /// An incoming connection from `addr` joins the torrent (libtorrent
+    /// `peer_list::new_connection`). A peer not in the list yet goes into it within
+    /// `max_size`: a full list gives up an erase candidate as [`add_capped`](Self::add_capped)
+    /// does, else (libtorrent's `force_erase`) the least useful unconnected peer, never a
+    /// banned one. Returns false, adding nothing, when every peer is connected or banned: the
+    /// connection is refused (`too_many_connections`).
+    pub fn incoming(
+        &mut self,
+        addr: SocketAddr,
+        conn: u64,
+        now: Instant,
+        max_size: usize,
+        finished: bool,
+        policy: Reconnect,
+    ) -> bool {
+        self.live_mut().incoming(addr, conn, now, max_size, finished, policy)
+    }
+
     /// Up to `n` peers worth persisting in resume data (connectable, not failing).
     pub fn resume_peers(&self, n: usize) -> SavedPeers {
         match self {
@@ -608,10 +626,32 @@ impl Peers {
         c.into_iter().take(n).map(|p| p.addr).collect()
     }
 
-    /// A connection to or from `addr` started. Incoming peers are added on the fly.
+    /// See [`PeerList::incoming`].
+    pub fn incoming(
+        &mut self,
+        addr: SocketAddr,
+        conn: u64,
+        now: Instant,
+        max_size: usize,
+        finished: bool,
+        policy: Reconnect,
+    ) -> bool {
+        if self.get(&addr).is_none()
+            && self.peers.len() >= max_size
+            && !self.evict(|p| p.erase_candidate(finished, policy))
+            && !self.evict(|p| p.connection.is_none() && !p.banned)
+        {
+            return false;
+        }
+        self.connecting(addr, conn, PeerSource::INCOMING, now);
+        true
+    }
+
+    /// A connection to or from `addr` started. A peer not in the list is added without the
+    /// size cap: outgoing connections go to listed peers, and incoming ones come through
+    /// [`incoming`](Self::incoming), which makes room first.
     pub fn connecting(&mut self, addr: SocketAddr, conn: u64, source: PeerSource, now: Instant) {
         if self.get(&addr).is_none() {
-            // Bypass the size cap for connected peers, as libtorrent does for incoming ones.
             self.index.insert(addr, self.peers.len());
             self.peers.push(KnownPeer::new(addr, source, 0));
         }
@@ -922,6 +962,44 @@ mod tests {
         }
         assert!(pl.add(n, PeerSource::DHT, ExternalIp::default(), 2));
         assert!(pl.get(&s).is_none() && pl.get(&t).is_some());
+    }
+
+    /// libtorrent `peer_list::new_connection`: an incoming peer goes into a full list in place
+    /// of an erase candidate first, else of the least useful unconnected peer
+    /// (`force_erase`), never of a connected or banned one; with none, it is refused.
+    #[test]
+    fn incoming_peers_keep_to_the_cap() {
+        let r = Reconnect::default();
+        let now = Instant::now();
+        let (fresh, failed, banned) = (ep("10.0.2.1", 1), ep("10.0.2.2", 1), ep("10.0.2.3", 1));
+        let (i1, i2, i3) = (ep("10.0.3.1", 40001), ep("10.0.3.2", 40002), ep("10.0.3.3", 40003));
+        let mut pl = PeerList::default();
+        for a in [fresh, failed, banned] {
+            assert!(pl.add(a, PeerSource::TRACKER, ExternalIp::default(), 3));
+        }
+        for conn in 0..3 {
+            pl.connecting(failed, conn, PeerSource::TRACKER, now);
+            pl.disconnected(&failed, true, false, false, now);
+        }
+        pl.connecting(banned, 7, PeerSource::TRACKER, now);
+        pl.ban_ip(&banned);
+        pl.disconnected(&banned, true, false, false, now);
+        // the erase candidate goes first, though it failed: the fresh peer is a connect candidate
+        assert!(pl.incoming(i1, 10, now, 3, false, r));
+        assert!(pl.get(&failed).is_none() && pl.get(&fresh).is_some());
+        assert!(pl.get(&i1).is_some_and(|p| p.connection == Some(10) && p.source == PeerSource::INCOMING));
+        // then, forced, the fresh one; never the banned one
+        assert!(pl.incoming(i2, 11, now, 3, false, r));
+        assert!(pl.get(&fresh).is_none() && pl.get(&banned).is_some_and(|p| p.banned));
+        // every other peer connected: refused, nothing added
+        assert!(!pl.incoming(i3, 12, now, 3, false, r));
+        assert!(pl.get(&i3).is_none());
+        assert_eq!(pl.len(), 3);
+        // a listed peer connecting in needs no room
+        pl.disconnected(&i1, false, false, false, now);
+        assert!(pl.incoming(i1, 13, now, 3, false, r));
+        assert_eq!(pl.get(&i1).and_then(|p| p.connection), Some(13));
+        assert_eq!(pl.len(), 3);
     }
 
     /// Peers restored from resume data stay compact until the torrent starts, and read as the

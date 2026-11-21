@@ -86,6 +86,7 @@ pub fn show(
         .default_width(780)
         .default_height(500)
         .build();
+    crate::app::lock_key(&window);
 
     // Save In: the folder, the remembered ones and a folder picker
     let (save_row, save) = entry_with_choices(&setup.save_dirs);

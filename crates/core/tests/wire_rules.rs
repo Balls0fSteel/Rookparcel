@@ -8,7 +8,7 @@
 //! disconnects the peer (libtorrent `verify_piece`). Entering upload mode cancels every
 //! outstanding request (libtorrent `torrent::set_upload_mode` → `cancel_all_requests`). Bug hunt
 //! of 2026-11-21, item 5: a peer banned for bad data cannot come back from another source port
-//! (libtorrent `peer_list::new_connection`).
+//! (libtorrent `peer_list::new_connection`), and an incoming peer needs room in the peer list.
 
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Read, Write};
@@ -109,7 +109,11 @@ fn write_files(f: &Fixture, dir: &Path) {
 }
 
 fn start() -> Session {
-    let settings = Settings {
+    start_with(|_| {})
+}
+
+fn start_with(f: impl FnOnce(&mut Settings)) -> Session {
+    let mut settings = Settings {
         listen_interfaces: "127.0.0.1:0".into(),
         tick_interval: 100,
         aio_threads: 2,
@@ -121,6 +125,7 @@ fn start() -> Session {
         enable_outgoing_utp: false,
         ..Settings::default()
     };
+    f(&mut settings);
     Session::start(SessionParams { settings, state_dir: None, ..Default::default() }).expect("session starts")
 }
 
@@ -654,6 +659,42 @@ fn a_peer_banned_for_bad_data_cannot_connect_in_again() {
     assert_eq!(closes(&mut again), (true, 0), "an IP banned for bad data is refused");
     let peers = peer_info(&mut w, id);
     assert!(peers.is_empty(), "{peers:?}");
+    session.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Follow-up of bug hunt 2026-11-21 item 5: an incoming peer needs room in the peer list
+/// (libtorrent `peer_list::new_connection`). A list full of connected peers refuses it before
+/// our handshake; once one of them has gone, its unconnected entry makes room (`force_erase`).
+#[test]
+fn a_full_peer_list_refuses_incoming_peers_until_one_can_go() {
+    let f = fixture();
+    let dir = temp_dir("incoming-cap");
+    let session = start_with(|s| s.max_peerlist_size = 2);
+    let mut w = watch(&session);
+    let port = listen_port(&mut w);
+    let id = add_file(&mut w, &f, &dir);
+    status(&mut w, id, "downloading", |s| s.state == TorrentState::Downloading);
+    let mut first = connect(&f, port);
+    send(&mut first, HAVE_NONE, &[]);
+    let mut second = send_handshake(&f, port, b"-XX0002-second-peer1");
+    let mut reply = [0u8; 68];
+    second.read_exact(&mut reply).unwrap();
+    send(&mut second, HAVE_NONE, &[]);
+    let mut third = send_handshake(&f, port, b"-XX0002-third-peer-1");
+    assert_eq!(closes(&mut third), (true, 0), "a list of two connected peers is full");
+    assert_eq!(peer_info(&mut w, id).len(), 2);
+    // the first one leaves: its entry is no connect candidate's to keep
+    drop(first);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while peer_info(&mut w, id).len() > 1 {
+        assert!(Instant::now() < deadline, "the first peer's close is seen");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let mut fourth = connect(&f, port);
+    send(&mut fourth, HAVE_NONE, &[]);
+    let addrs: Vec<SocketAddr> = peer_info(&mut w, id).iter().map(|p| p.ip).collect();
+    assert!(addrs.contains(&fourth.local_addr().unwrap()) && addrs.len() == 2, "{addrs:?}");
     session.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }

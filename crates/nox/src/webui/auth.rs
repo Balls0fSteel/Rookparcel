@@ -12,6 +12,22 @@ pub use rookparcel_core::crypto::password::{
     DEFAULT_ITERATIONS, PasswordHash, constant_time_eq, hmac_sha256, pbkdf2_sha256, random_hex,
 };
 
+/// A new hash of `plain` (a new Web UI password or API key). PBKDF2 is slow on purpose, so a
+/// request makes it without the State lock, which every client waits for (bug hunt 2026-11-21,
+/// follow-up of 11).
+pub(crate) fn new_hash(plain: &str, iterations: u32) -> PasswordHash {
+    #[cfg(test)]
+    tests::hashing();
+    PasswordHash::new(plain, iterations)
+}
+
+/// `hash.verify(plain)` for a current password, without the State lock as [`new_hash`].
+pub(crate) fn verify(hash: &PasswordHash, plain: &str) -> bool {
+    #[cfg(test)]
+    tests::hashing();
+    hash.verify(plain)
+}
+
 /// Failed logins per client (qBittorrent `web_ui_max_auth_fail_count` /
 /// `web_ui_ban_duration`). An IPv4 client is its address; an IPv6 client is its /64, since a
 /// host given a /64 can pick any address in it (privacy addresses, or on purpose) and would
@@ -168,8 +184,29 @@ pub fn subnets_contain(list: &str, ip: IpAddr) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    use std::cell::RefCell;
+
+    thread_local! {
+        /// Called on this thread before each [`new_hash`] and [`verify`] (a test's look at the
+        /// State lock while a hash is made).
+        static ON_HASH: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
+    }
+
+    pub(crate) fn hashing() {
+        ON_HASH.with(|h| {
+            if let Some(f) = h.borrow().as_ref() {
+                f()
+            }
+        });
+    }
+
+    /// Runs `f` before each hash this thread makes or verifies, until `None`.
+    pub(crate) fn on_hash(f: Option<Box<dyn Fn()>>) {
+        ON_HASH.with(|h| *h.borrow_mut() = f);
+    }
 
     #[test]
     fn subnets_parse_and_match() {

@@ -230,6 +230,7 @@ pub fn show(parent: &gtk::ApplicationWindow, options: Options, hooks: Hooks, pag
         .default_width(760)
         .default_height(560)
         .build();
+    crate::app::lock_key(&window);
     let mut pages = pref_pages::pages(Features {
         desktop: crate::integration::AVAILABLE,
         packaged: crate::integration::packaged(),

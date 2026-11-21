@@ -20,6 +20,7 @@ pub fn show(parent: &impl IsA<gtk::Window>) {
         .default_height(480)
         .resizable(true)
         .build();
+    crate::app::lock_key(&window);
     let view = gtk::TextView::builder()
         .editable(false)
         .cursor_visible(false)

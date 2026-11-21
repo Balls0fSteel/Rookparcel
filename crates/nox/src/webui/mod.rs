@@ -1360,7 +1360,7 @@ impl WebUi {
                     st.push_log(None, line, unix_now());
                 }
                 if let Some(legacy @ Json::Obj(_)) = stored.get("preferences") {
-                    api::apply_preferences(&shared, &mut st, legacy, None);
+                    api::restore_preferences(&shared, &mut st, legacy);
                 }
                 // keeps the stored file current (a new password hash, a first start)
                 shared.save(&mut st);

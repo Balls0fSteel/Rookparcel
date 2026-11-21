@@ -14,7 +14,6 @@ use super::Engine;
 use crate::proto::pe_handshake::{PeHandshake, PeStep};
 use crate::proto::peer_wire;
 use crate::settings::EncPolicy;
-use crate::status::PeerSource;
 use crate::types::{Sha1Hash, TorrentId};
 
 impl Engine {
@@ -130,10 +129,17 @@ impl Engine {
             self.peers.get_mut(slot).expect("exists").close("blocked by the IP filter", false);
             return false;
         }
-        self.peers.get_mut(slot).expect("exists").torrent = Some(id);
+        // libtorrent `peer_list::new_connection`: a new peer needs room in the peer list
+        let max = self.settings.max_peerlist_size.max(1) as usize;
+        let policy = super::peer_list::Reconnect::from_settings(&self.settings);
         let t = self.torrent(id).expect("exists");
+        let finished = t.done_with_seeds();
+        if !t.peer_list.incoming(addr, pid, Instant::now(), max, finished, policy) {
+            self.peers.get_mut(slot).expect("exists").close("too many connections", false);
+            return false;
+        }
         t.peers.push(slot);
-        t.peer_list.connecting(addr, pid, PeerSource::INCOMING, Instant::now());
+        self.peers.get_mut(slot).expect("exists").torrent = Some(id);
         true
     }
 }

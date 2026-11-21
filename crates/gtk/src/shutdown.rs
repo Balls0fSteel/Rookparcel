@@ -138,6 +138,7 @@ pub fn open(parent: Option<&gtk::ApplicationWindow>, mode: Mode, secs: u32, canc
         .resizable(false)
         .default_width(340)
         .build();
+    crate::app::lock_key(&window);
     window.set_transient_for(parent);
     let label = gtk::Label::new(Some(&auto_shutdown::countdown_text(mode, secs)));
     label.set_xalign(0.0);

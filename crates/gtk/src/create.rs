@@ -66,6 +66,7 @@ pub fn show(
         .modal(true)
         .default_width(560)
         .build();
+    crate::app::lock_key(&window);
     let text_box = |lines: i32| {
         let v = gtk::TextView::new();
         v.set_wrap_mode(gtk::WrapMode::None);

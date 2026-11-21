@@ -236,6 +236,7 @@ pub fn show(
         .default_width(600)
         .default_height(500)
         .build();
+    crate::app::lock_key(&window);
     window.set_transient_for(parent);
     let mut guide = Guide::new(features());
     let count = guide.pages.len();

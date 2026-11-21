@@ -115,7 +115,7 @@ impl Engine {
             return false;
         }
         let t = self.torrent(id).expect("exists");
-        let finished = t.is_finished();
+        let finished = t.done_with_seeds();
         t.peer_list.add_capped(addr, source, ext, max, finished, policy)
     }
 

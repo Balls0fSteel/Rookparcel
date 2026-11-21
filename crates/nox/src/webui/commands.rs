@@ -1574,7 +1574,7 @@ pub fn set_normal_limits(
     if changes.is_empty() {
         return Ok(());
     }
-    prefs::commit(shared, st, &changes, None).map_err(|(field, why)| err(400, format!("{field}: {why}")))
+    prefs::commit(shared, st, &changes).map_err(|(field, why)| err(400, format!("{field}: {why}")))
 }
 
 // ---- the native endpoints -------------------------------------------------------------------

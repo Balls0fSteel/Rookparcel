@@ -129,6 +129,7 @@ pub async fn run_job<T: Send + 'static>(
         .deletable(false)
         .default_width(420)
         .build();
+    crate::app::lock_key(&window);
     let label = gtk::Label::new(Some(name));
     label.set_xalign(0.0);
     label.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
@@ -347,6 +348,7 @@ async fn picker(parent: &gtk::Window, list: Vec<Indexer>) -> Option<Vec<String>>
         .default_width(620)
         .default_height(480)
         .build();
+    crate::app::lock_key(&window);
     let hint = gtk::Label::new(Some(tr!(SearchHelperSitesHint)));
     hint.set_xalign(0.0);
     hint.set_wrap(true);

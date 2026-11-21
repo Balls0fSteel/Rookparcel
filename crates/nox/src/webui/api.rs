@@ -610,9 +610,8 @@ fn serve_inner(shared: &Shared, req: &Request) -> Response {
         "app/setPreferences" => {
             let Some(text) = p.get("json") else { return Response::text(400, "missing json") };
             let Ok(v @ Json::Obj(_)) = json::parse(text) else { return Response::text(400, "invalid json") };
-            let mut st = shared.lock();
-            apply_preferences(shared, &mut st, &v, Some((&key, ip)));
-            shared.save(&mut st);
+            apply_preferences(shared, &v, &key, ip);
+            shared.save(&mut shared.lock());
             Response::ok()
         }
         "app/defaultSavePath" => Response::text(200, shared.lock().prefs.save_path.clone()),
@@ -1009,21 +1008,10 @@ fn current_password_hash(st: &mut State, ip: IpAddr, now: Instant) -> Option<Pas
 /// right one clearing the count. The hash it matched, or `None`.
 pub(super) fn check_current_password(shared: &Shared, given: &str, ip: IpAddr) -> Option<PasswordHash> {
     let hash = current_password_hash(&mut shared.lock(), ip, Instant::now())?;
-    if !hash.verify(given) {
+    if !auth::verify(&hash, given) {
         return None;
     }
     shared.lock().bans.succeeded(ip);
-    Some(hash)
-}
-
-/// [`check_current_password`] under the State lock the caller holds (the qBittorrent shim's
-/// `setPreferences`, which commits under it).
-pub(super) fn check_current_password_locked(st: &mut State, given: &str, ip: IpAddr) -> Option<PasswordHash> {
-    let hash = current_password_hash(st, ip, Instant::now())?;
-    if !hash.verify(given) {
-        return None;
-    }
-    st.bans.succeeded(ip);
     Some(hash)
 }
 
@@ -1252,10 +1240,45 @@ fn preferences(st: &State, shared: &Shared, local: bool) -> Json {
 /// the native Preferences ids (`prefs.rs`) and committing them together; a key that does not
 /// parse is skipped, and when the set fails the Win32 dialog's cross-field checks (a proxy type
 /// without a host), each change is tried on its own. Stored like every other preference.
-/// `from` is the session that sent them (kept when the password changes) and its client (whose
-/// ban a wrong `web_ui_current_password` counts towards, once per request); `None` for nox's
-/// own.
-pub(crate) fn apply_preferences(shared: &Shared, st: &mut State, v: &Json, from: Option<(&str, IpAddr)>) {
+/// `session` sent them (kept when the password changes) from client `ip` (whose ban a wrong
+/// `web_ui_current_password` counts towards, once per request). The State lock is taken for
+/// each commit, never while the current password is checked or a new password or API key is
+/// hashed ([`prefs::commit_asked`]).
+pub(crate) fn apply_preferences(shared: &Shared, v: &Json, session: &str, ip: IpAddr) {
+    let changes = shim_changes(v);
+    // one asker for every commit below: its password is checked (and a wrong one counted) once,
+    // and a new password or API key hashed once
+    let mut asker = prefs::Asker::new(session, ip, &changes);
+    let mut hashes = prefs::NewHashes::default();
+    one_by_one(changes, |c| prefs::commit_asked(shared, c, &mut asker, &mut hashes));
+}
+
+/// [`apply_preferences`] for nox's own: the `preferences` object of an old state file, at
+/// start, before the server accepts anyone (under the State lock the caller holds).
+pub(crate) fn restore_preferences(shared: &Shared, st: &mut State, v: &Json) {
+    one_by_one(shim_changes(v), |c| prefs::commit(shared, st, c));
+}
+
+/// Commits `changes` together, or when that fails, each on its own with the current password
+/// if one came.
+fn one_by_one(
+    changes: Vec<prefs::Change>,
+    mut commit: impl FnMut(&[prefs::Change]) -> Result<(), prefs::Refusal>,
+) {
+    if changes.is_empty() || commit(&changes).is_ok() {
+        return;
+    }
+    let (auth, rest): (Vec<_>, Vec<_>) =
+        changes.into_iter().partition(|(d, _)| d.id() == "webui.current_password");
+    for c in rest {
+        let mut one = auth.clone();
+        one.push(c);
+        let _ = commit(&one);
+    }
+}
+
+/// The `setPreferences` keys we support as the native Preferences' changes.
+fn shim_changes(v: &Json) -> Vec<prefs::Change> {
     let kib = |j: &Json| {
         j.as_i64().map(|k| Json::from(if k <= 0 { 0 } else { k.min(u32::MAX as i64 / 1024) * 1024 }))
     };
@@ -1333,7 +1356,7 @@ pub(crate) fn apply_preferences(shared: &Shared, st: &mut State, v: &Json, from:
             // `autorun_on_torrent_added_enabled`, `autorun_on_torrent_added_program` (Run
             // Program, D67). qBittorrent takes them from anyone who is logged in, which was
             // CVE-2023-30801; here they fall through to the keys that are ignored, and
-            // `prefs::commit` below could not change the lines even if they were mapped
+            // `prefs::commit_asked` could not change the lines even if they were mapped
             _ => Vec::new(),
         };
         for (id, j) in mapped {
@@ -1342,21 +1365,7 @@ pub(crate) fn apply_preferences(shared: &Shared, st: &mut State, v: &Json, from:
             }
         }
     }
-    if changes.is_empty() {
-        return;
-    }
-    // one asker for every commit below: its password is checked (and a wrong one counted) once
-    let mut asker = from.map(|(session, ip)| prefs::Asker::new(session, ip, &changes));
-    if prefs::commit(shared, st, &changes, asker.as_mut()).is_err() {
-        // one by one, each with the current password if one came
-        let (auth, rest): (Vec<_>, Vec<_>) =
-            changes.into_iter().partition(|(d, _)| d.id() == "webui.current_password");
-        for c in rest {
-            let mut one = auth.clone();
-            one.push(c);
-            let _ = prefs::commit(shared, st, &one, asker.as_mut());
-        }
-    }
+    changes
 }
 
 fn transfer_fields(st: &State, sync: bool) -> Vec<(String, Json)> {

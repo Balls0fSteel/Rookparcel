@@ -376,6 +376,11 @@ impl Store {
         Ok(())
     }
 
+    /// Whether a torrent's v2 piece layers were saved (as they are or not: unread).
+    pub fn has_piece_layers(&self, key: &str) -> bool {
+        self.layers.contains_key(&StoreKey::new(key))
+    }
+
     /// A torrent's v2 piece layers, if they were saved.
     pub fn load_piece_layers(&mut self, key: &str) -> Result<Option<Vec<u8>>, Error> {
         match self.layers.get(&StoreKey::new(key)).copied() {
@@ -930,9 +935,11 @@ mod tests {
             assert_eq!(s.load_metadata(&v2).unwrap().unwrap(), b"d4:name1:be");
             assert_eq!(s.load_piece_layers(&v2).unwrap().unwrap(), b"de");
             assert_eq!(s.load_piece_layers(v1).unwrap(), None);
+            assert!(s.has_piece_layers(&v2) && !s.has_piece_layers(v1));
             s.remove(&v2);
             s.flush().unwrap();
             assert!(!s.has_metadata(&v2) && s.load_piece_layers(&v2).unwrap().is_none());
+            assert!(!s.has_piece_layers(&v2));
         }
         let (mut s, list, _) = Store::open(&dir).unwrap();
         assert_eq!(list.len(), 2);

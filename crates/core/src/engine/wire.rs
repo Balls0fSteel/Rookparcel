@@ -374,7 +374,7 @@ impl Engine {
                         pk.inc_refcount(i);
                         interesting = pk.wants(i);
                     }
-                    if p.peer_has.all_set() && t.is_seed() && close_redundant {
+                    if p.peer_has.all_set() && t.is_seed() && t.done_with_seeds() && close_redundant {
                         p.close("both sides are seeds", false);
                         return;
                     }
@@ -623,7 +623,8 @@ impl Engine {
         p.peer_seed = seed;
         p.peer_has = bf;
         t.peer_list.set_seed(&p.addr, seed);
-        if seed && t.is_seed() && close_redundant {
+        // a torrent fetching its piece layers keeps its seeds: they have the hashes
+        if seed && t.is_seed() && t.done_with_seeds() && close_redundant {
             p.close("both sides are seeds", false);
             return;
         }

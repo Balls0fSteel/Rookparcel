@@ -16,6 +16,7 @@ pub fn show(parent: &impl IsA<gtk::Window>) {
         .modal(true)
         .resizable(false)
         .build();
+    crate::app::lock_key(&window);
     let text = gtk::Label::builder()
         .label(tr!(DonateText))
         .wrap(true)

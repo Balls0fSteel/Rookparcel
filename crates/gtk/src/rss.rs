@@ -87,6 +87,7 @@ pub fn feed_dialog(parent: &gtk::Window, title: &str, form: FeedForm, done: impl
         .default_width(440)
         .resizable(false)
         .build();
+    crate::app::lock_key(&window);
     let caption = |t: &str, w: &gtk::Entry| {
         let l = gtk::Label::with_mnemonic(&gtk_mnemonic(t));
         l.set_xalign(0.0);
@@ -268,6 +269,7 @@ pub fn show(
         .default_width(920)
         .default_height(620)
         .build();
+    crate::app::lock_key(&window);
     let button = |t: &str| gtk::Button::with_mnemonic(&gtk_mnemonic(t));
     let entry = || {
         let e = gtk::Entry::new();

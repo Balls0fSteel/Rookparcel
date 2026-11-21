@@ -550,6 +550,14 @@ impl Torrent {
         self.num_pieces > 0 && self.num_have() == self.num_pieces
     }
 
+    /// Finished as far as its peers go: seeds are redundant and not connected to. Not while a
+    /// v2-only torrent fetches its piece layers, whose hashes it can only get from peers, the
+    /// seeds above all: its stored pieces may say it is complete (a restored seed whose stored
+    /// layers failed their check), but it cannot verify a piece until the layers are in.
+    pub fn done_with_seeds(&self) -> bool {
+        self.layer_fetch.is_none() && self.is_finished()
+    }
+
     /// Adds `dt` seconds of running time to the active, finished and seeding times. Returns
     /// whether the active or seeding time completed a whole minute.
     ///
@@ -728,12 +736,15 @@ impl Torrent {
     }
 
     /// The bytes we still need, for tracker `left`. Without metadata the size is unknown;
-    /// libtorrent then reports 16 KiB, so trackers don't take us for a seed.
+    /// libtorrent then reports 16 KiB, so trackers don't take us for a seed. So do we while
+    /// the piece layers are fetched ([`done_with_seeds`](Self::done_with_seeds)): a tracker
+    /// leaves seeds out of a seed's peer list, and they have the hashes.
     pub fn bytes_left(&self) -> u64 {
         if !self.has_metadata() {
             return 16 * 1024;
         }
-        self.total_size.saturating_sub(self.total_done())
+        let left = self.total_size.saturating_sub(self.total_done());
+        if self.layer_fetch.is_some() { left.max(16 * 1024) } else { left }
     }
 
     pub fn settled_state(&self) -> TorrentState {

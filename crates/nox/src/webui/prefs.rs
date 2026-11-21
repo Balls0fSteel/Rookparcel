@@ -1875,13 +1875,33 @@ impl<'a> Asker<'a> {
             self.current = found.map_or(Current::Wrong, Current::Right);
         }
     }
+}
 
-    /// [`Asker::check`] under the lock the caller holds.
-    fn check_locked(&mut self, st: &mut State) {
-        if let Current::Unchecked(p) = &self.current {
-            let found = super::api::check_current_password_locked(st, p, self.ip);
-            self.current = found.map_or(Current::Wrong, Current::Right);
+/// The hashes of a new Web UI password and API key, each with the plain text it was made of,
+/// made outside the State lock ([`Stop::Hash`]): PBKDF2 is slow on purpose, and every client
+/// waits for the lock. One request's commits share them, so each is made once.
+#[derive(Default)]
+pub(crate) struct NewHashes {
+    password: Option<(String, PasswordHash)>,
+    api_key: Option<(String, PasswordHash)>,
+}
+
+impl NewHashes {
+    /// Makes the hashes of `password` and `api_key` not made yet.
+    fn make(&mut self, password: Option<String>, api_key: Option<String>, iterations: u32) {
+        for (made, plain) in [(&mut self.password, password), (&mut self.api_key, api_key)] {
+            if let Some(p) = plain.filter(|p| made.as_ref().is_none_or(|(q, _)| q != p)) {
+                let hash = auth::new_hash(&p, iterations);
+                *made = Some((p, hash));
+            }
         }
+    }
+
+    /// The hash made of `plain` in `made`: `Ok(None)` without a plain text, `Err` when it is not
+    /// made yet.
+    fn of(made: &Option<(String, PasswordHash)>, plain: Option<&str>) -> Result<Option<PasswordHash>, ()> {
+        let Some(plain) = plain else { return Ok(None) };
+        made.as_ref().filter(|(p, _)| p == plain).map(|(_, h)| Some(h.clone())).ok_or(())
     }
 }
 
@@ -1890,6 +1910,9 @@ enum Stop {
     Refused(Refusal),
     /// The change needs the current password, which is not checked yet: nothing was changed.
     Check,
+    /// A new password and/or API key (these plain texts) are not hashed yet
+    /// ([`NewHashes::make`]): nothing was changed.
+    Hash(Option<String>, Option<String>),
 }
 
 impl From<Refusal> for Stop {
@@ -1900,9 +1923,10 @@ impl From<Refusal> for Stop {
 
 /// [`commit`] for a request: a block list the changes turn on is read without the State lock,
 /// which every request and the alert loop wait for (SEC-05: a big list takes a while), with
-/// `read`; so is the current password checked when the change needs it (PBKDF2 is slow on
-/// purpose); then the changes are committed under the lock. When the preferences changed in
-/// the meantime so that another file is wanted, that one is read the same way.
+/// `read`; so is the current password checked when the change needs it, and a new password or
+/// API key hashed (PBKDF2 is slow on purpose); then the changes are committed under the lock.
+/// When the preferences changed in the meantime so that another file is wanted, that one is
+/// read the same way.
 ///
 /// `run` is the request's [`RunGate`]: the only way the Run Program lines (D67) change. `ip` is
 /// the request's client ([`super::api::client_ip`]).
@@ -1915,6 +1939,7 @@ pub(crate) fn commit_request(
     read: impl Fn(&Path) -> io::Result<IpFilterLoad>,
 ) -> Result<(), Refusal> {
     let mut asker = Asker::new(from, ip, changes);
+    let mut hashes = NewHashes::default();
     let mut done: Read = None;
     let mut reads = 0;
     loop {
@@ -1930,7 +1955,7 @@ pub(crate) fn commit_request(
             });
             continue;
         }
-        match commit_read(shared, &mut st, changes, Some(&asker), run, &mut done) {
+        match commit_read(shared, &mut st, changes, Some(&asker), run, &mut done, &hashes) {
             Ok(()) => {
                 confirm(shared, &mut st);
                 return Ok(());
@@ -1940,6 +1965,39 @@ pub(crate) fn commit_request(
             Err(Stop::Check) => {
                 drop(st);
                 asker.check(shared);
+            }
+            // hashed once: the next round finds them
+            Err(Stop::Hash(password, api_key)) => {
+                drop(st);
+                hashes.make(password, api_key, shared.iterations);
+            }
+        }
+    }
+}
+
+/// [`commit`] for a request that holds no lock (the qBittorrent shim's `setPreferences`): the
+/// State lock is taken for the commit and let go while the current password is checked and a
+/// new password or API key is hashed, which then commit in a later round. `asker` and `hashes`
+/// serve every commit of one request, so the password is checked (and a wrong one counted)
+/// once and each hash made once; a password that changed in between counts as wrong.
+pub(crate) fn commit_asked(
+    shared: &Shared,
+    changes: &[Change],
+    asker: &mut Asker<'_>,
+    hashes: &mut NewHashes,
+) -> Result<(), Refusal> {
+    loop {
+        let mut st = shared.lock();
+        match commit_read(shared, &mut st, changes, Some(asker), RunGate::Closed(None), &mut None, hashes) {
+            Ok(()) => return Ok(()),
+            Err(Stop::Refused(r)) => return Err(r),
+            Err(Stop::Check) => {
+                drop(st);
+                asker.check(shared);
+            }
+            Err(Stop::Hash(password, api_key)) => {
+                drop(st);
+                hashes.make(password, api_key, shared.iterations);
             }
         }
     }
@@ -1964,36 +2022,35 @@ pub(crate) fn confirm(shared: &Shared, st: &mut State) {
 /// through `apply_settings` (with the global limits of the mode in force), the IP filter loaded
 /// or cleared, peer exchange toggled on every torrent, a new password hashed, the folders
 /// handed to the owner's `MoveCompleted`, and everything stored in the state file. A block list
-/// is read here, under the State lock; requests go through [`commit_request`].
+/// is read here, and a new password hashed, under the State lock the caller holds: this is for
+/// nox's own changes (the state file at start, before the server accepts anyone; a remote GUI's
+/// engine settings; the limits), and requests go through [`commit_request`] or
+/// [`commit_asked`], which do the slow parts without the lock.
 ///
-/// `from` is the request that sent them; `None` for nox's own changes (the state file at start,
-/// a remote GUI's engine settings). A request changes the login and the Web UI's security
-/// settings only with the current password; a wrong one ends its session and counts towards
-/// its client's ban (SEC-03). Here, under the lock the caller holds, the password is checked
-/// under it; [`commit_request`] checks it outside. One [`Asker`] checks it once, however many
-/// commits it is given to. A new password ends every other login: the other sessions, their
-/// WebSockets and the remote connections (SEC-24).
+/// A request changes the login and the Web UI's security settings only with the current
+/// password; a wrong one ends its session and counts towards its client's ban (SEC-03), and
+/// one [`Asker`] checks it once, however many commits it is given to. A new password ends every
+/// other login: the other sessions, their WebSockets and the remote connections (SEC-24).
 ///
 /// The Run Program lines (D67) never change here: the gate is closed for everything that is
 /// not a page's request ([`commit_request`]), whoever calls and with whatever password.
-pub(crate) fn commit(
-    shared: &Shared,
-    st: &mut State,
-    changes: &[Change],
-    mut from: Option<&mut Asker<'_>>,
-) -> Result<(), Refusal> {
+pub(crate) fn commit(shared: &Shared, st: &mut State, changes: &[Change]) -> Result<(), Refusal> {
+    let mut hashes = NewHashes::default();
     loop {
-        match commit_read(shared, st, changes, from.as_deref(), RunGate::Closed(None), &mut None) {
+        match commit_read(shared, st, changes, None, RunGate::Closed(None), &mut None, &hashes) {
             Ok(()) => return Ok(()),
             Err(Stop::Refused(r)) => return Err(r),
-            Err(Stop::Check) => from.as_deref_mut().expect("only an asker is asked").check_locked(st),
+            Err(Stop::Check) => unreachable!("only a request's changes need the current password"),
+            Err(Stop::Hash(password, api_key)) => hashes.make(password, api_key, shared.iterations),
         }
     }
 }
 
 /// [`commit`], with the block list `read` already when it is the file wanted (taken from
-/// `read` when used). Changes nothing in `st` before the current password is known to be needed
-/// and right; [`Stop::Check`] when it is needed and not checked yet.
+/// `read` when used) and the new password's and API key's `hashes` when made. Changes nothing
+/// in `st` before the current password is known to be needed and right and the hashes are
+/// made; [`Stop::Check`] when the password is needed and not checked yet, [`Stop::Hash`] when a
+/// hash is not made yet.
 fn commit_read(
     shared: &Shared,
     st: &mut State,
@@ -2001,6 +2058,7 @@ fn commit_read(
     from: Option<&Asker<'_>>,
     run: RunGate,
     read: &mut Read,
+    hashes: &NewHashes,
 ) -> Result<(), Stop> {
     let keep = from.map(|a| a.session);
     let mut w = Working::from_state(st);
@@ -2072,6 +2130,12 @@ fn commit_read(
         }
     }
     check_paths(&w, &old, &shared.path_policy)?;
+    // the new password and API key are hashed without the lock, once the change may be made
+    let new_password = NewHashes::of(&hashes.password, w.new_password.as_deref());
+    let new_api_key = NewHashes::of(&hashes.api_key, w.new_api_key.as_deref());
+    let (Ok(new_password), Ok(new_api_key)) = (new_password, new_api_key) else {
+        return Err(Stop::Hash(w.new_password.clone(), w.new_api_key.clone()));
+    };
 
     // the IP filter first: a block list file that does not load refuses the whole change
     // (hosted: the host loads its own; nothing here goes to the engine)
@@ -2149,14 +2213,14 @@ fn commit_read(
         shared.apply_limits(st);
     }
     st.username = w.username.clone();
-    if let Some(p) = &w.new_password {
-        st.password = PasswordHash::new(p, shared.iterations);
+    if let Some(hash) = new_password {
+        st.password = hash;
         // a WebSocket ends when its session is gone, at the next status tick
         st.sessions.retain(|k, _| Some(k.as_str()) == keep);
         shared.end_remotes();
     }
-    if let Some(k) = &w.new_api_key {
-        st.set_api_key(Some(PasswordHash::new(k, shared.iterations)));
+    if let Some(hash) = new_api_key {
+        st.set_api_key(Some(hash));
     }
     if !w.prefs.api_key_enabled {
         st.sessions.remove(super::api::APIKEY_SESSION);
@@ -2203,7 +2267,7 @@ pub(crate) fn commit_settings(shared: &Shared, st: &mut State, new: &Settings) -
     if changes.is_empty() {
         return Ok(());
     }
-    commit(shared, st, &changes, None)
+    commit(shared, st, &changes)
 }
 
 /// Writes the preferences into `State::options` (the frontend's keys): the engine settings
@@ -2425,9 +2489,9 @@ mod tests {
 
     const TEST_IP: IpAddr = IpAddr::V4(std::net::Ipv4Addr::LOCALHOST);
 
-    /// [`commit`] for the changes of session `s` from [`TEST_IP`].
-    fn commit_as(shared: &Shared, st: &mut State, changes: &[Change]) -> Result<(), Refusal> {
-        commit(shared, st, changes, Some(&mut Asker::new("s", TEST_IP, changes)))
+    /// [`commit_asked`] for the changes of session `s` from [`TEST_IP`].
+    fn commit_as(shared: &Shared, changes: &[Change]) -> Result<(), Refusal> {
+        commit_asked(shared, changes, &mut Asker::new("s", TEST_IP, changes), &mut NewHashes::default())
     }
 
     #[test]
@@ -2489,7 +2553,7 @@ mod tests {
             let check = rookparcel_frontend::guard::on_start_for(&mut st.options, None);
             assert!(check.hold, "{check:?}");
             let changes = parse(&Json::obj().with("listen_port", 51413)).unwrap();
-            commit(&shared, &mut st, &changes, None).unwrap();
+            commit(&shared, &mut st, &changes).unwrap();
             assert_eq!(st.options.get("lt.proxy_type"), Some("6"), "kept: nobody confirmed");
             assert_eq!(st.settings.listen_interfaces, "0.0.0.0:51413,[::]:51413");
         }
@@ -2915,29 +2979,33 @@ mod tests {
             }
             parse(&j).unwrap()
         };
-        let mut st = shared.lock();
-        st.sessions.insert(
+        shared.lock().sessions.insert(
             "s".to_owned(),
             super::super::ClientSession { last_used: std::time::Instant::now(), maindata: None, peers: None },
         );
         // a request: only with the current password (the test state's is "x")
-        let refused = commit_as(&shared, &mut st, &body(None)).unwrap_err();
+        let refused = commit_as(&shared, &body(None)).unwrap_err();
         assert_eq!(refused.0, "webui.current_password");
+        let st = shared.lock();
         assert!(!st.prefs.trackers_append && st.sessions.contains_key("s"));
-        let refused = commit_as(&shared, &mut st, &body(Some("guess"))).unwrap_err();
+        drop(st);
+        let refused = commit_as(&shared, &body(Some("guess"))).unwrap_err();
         assert_eq!(refused.0, "webui.current_password");
+        let st = shared.lock();
         assert!(
             !st.prefs.trackers_append && !st.sessions.contains_key("s"),
             "a wrong guess ends the session"
         );
-        commit_as(&shared, &mut st, &body(Some("x"))).unwrap();
+        drop(st);
+        commit_as(&shared, &body(Some("x"))).unwrap();
+        // the same list again, typed differently, is no change: no password is asked
+        let same = parse(&Json::obj().with("trackers.list", format!("{A}\n\n{B}\n"))).unwrap();
+        commit_as(&shared, &same).unwrap();
+        let mut st = shared.lock();
         assert!(st.prefs.trackers_append);
         assert_eq!(st.prefs.trackers_list, format!("{A}\n\n{B}"), "the list's own form");
         assert_eq!(st.options.get("trackers.list"), Some(format!("{A} - {B}").as_str()));
         assert_eq!(st.options.get("trackers.append"), Some("1"));
-        // the same list again, typed differently, is no change: no password is asked
-        let same = parse(&Json::obj().with("trackers.list", format!("{A}\n\n{B}\n"))).unwrap();
-        commit_as(&shared, &mut st, &same).unwrap();
         // the daemon's list follows the commit
         assert_eq!(
             shared.trackers().unwrap().tiers(),
@@ -2953,12 +3021,12 @@ mod tests {
         assert_eq!(update_trackers(&shared), Ok(String::new()), "nothing to fetch: no status");
 
         // hosted: refused whatever the password, and the host's values stay in its options
-        let mut st = shared.lock();
-        st.hosted = true;
+        shared.lock().hosted = true;
         let off =
             parse(&Json::obj().with("trackers.append", false).with("webui.current_password", "x")).unwrap();
-        let refused = commit_as(&shared, &mut st, &off).unwrap_err();
+        let refused = commit_as(&shared, &off).unwrap_err();
         assert_eq!(refused, ("trackers.append".to_owned(), HOSTED_NO_TRACKERS.to_owned()));
+        let st = shared.lock();
         assert!(st.prefs.trackers_append);
         let mut g = GuiOptions::load(&rookparcel_frontend::prefs::Prefs::default(), "/dl");
         g.trackers_url = "https://host.example/list".to_owned();
@@ -3083,15 +3151,15 @@ mod tests {
         assert!(commit_request(&shared, &mixed, "s", TEST_IP, there, read).is_err());
         assert!(!shared.lock().prefs.start_paused);
 
-        // D, E, H: `commit` (the shim's setPreferences, a remote GUI's settings, nox's own
-        // changes) never changes them: with the password, from a session or from nox itself
-        for from in [Some("s"), None] {
-            let changes = body(Some("x"));
-            let mut asker = from.map(|s| Asker::new(s, TEST_IP, &changes));
-            let refused = commit(&shared, &mut shared.lock(), &changes, asker.as_mut()).unwrap_err();
-            assert_eq!(refused.1, tr!(RunErrRemote));
-            assert!(unchanged(&shared));
-        }
+        // D, E, H: `commit_asked` (the shim's setPreferences) and `commit` (a remote GUI's
+        // settings, nox's own changes) never change them: with the password, from a session or
+        // from nox itself
+        let refused = commit_as(&shared, &body(Some("x"))).unwrap_err();
+        assert_eq!(refused.1, tr!(RunErrRemote));
+        assert!(unchanged(&shared));
+        let refused = commit(&shared, &mut shared.lock(), &body(Some("x"))).unwrap_err();
+        assert_eq!(refused.1, tr!(RunErrRemote));
+        assert!(unchanged(&shared));
 
         // A: this computer, and only with the current password (the test state's is "x")
         let refused = commit_request(&shared, &body(None), "s", TEST_IP, RunGate::Open, read).unwrap_err();
@@ -3113,15 +3181,15 @@ mod tests {
         assert_eq!(refused, ("run.added".to_owned(), tr!(RunErrQuote).to_owned()));
         commit_request(&shared, &body(Some("x")), "s", TEST_IP, RunGate::Open, read).unwrap();
         {
+            // the same values again are no change: no password is asked, from anywhere
+            let same = parse(&Json::obj().with("run.finished", format!("  {LINE} "))).unwrap();
+            commit_as(&shared, &same).unwrap();
             let mut st = shared.lock();
             assert!(st.prefs.run_finished_on && !st.prefs.run_added_on);
             assert_eq!(st.prefs.run_finished, LINE);
             assert_eq!(st.prefs.run_commands(), ("", LINE));
             assert_eq!(st.options.get("run.finished"), Some(LINE));
             assert_eq!(st.options.get("run.finished_enabled"), Some("1"));
-            // the same values again are no change: no password is asked, from anywhere
-            let same = parse(&Json::obj().with("run.finished", format!("  {LINE} "))).unwrap();
-            commit_as(&shared, &mut st, &same).unwrap();
             // H: read back at the next start
             st.prefs = Prefs::defaults("/dl", &Settings::default());
             read_back(&mut st);
@@ -3192,7 +3260,8 @@ mod tests {
         let mut st = shared.lock();
         st.hosted = true;
         let asker = Asker::new("s", TEST_IP, &off);
-        let refused = commit_read(&shared, &mut st, &off, Some(&asker), RunGate::Open, &mut None);
+        let hashes = NewHashes::default();
+        let refused = commit_read(&shared, &mut st, &off, Some(&asker), RunGate::Open, &mut None, &hashes);
         let Err(Stop::Refused(refused)) = refused else { panic!("not refused") };
         assert_eq!(refused, ("run.finished_enabled".to_owned(), HOSTED_NO_RUN.to_owned()));
         assert!(st.prefs.run_finished_on);
@@ -3327,5 +3396,46 @@ mod tests {
         commit_request(&shared, &parse(&body).unwrap(), "s", TEST_IP, RunGate::Open, read).unwrap();
         assert!(shared.lock().gui_version > seen, "the mover is told");
         assert!(!shared.lock().prefs.move_add_label);
+    }
+
+    /// Bug hunt 2026-11-21, follow-up of 11: a request's PBKDF2 runs without the State lock,
+    /// which every Web UI, API and WebSocket client waits for: the current password's check and
+    /// a new password's or API key's hash, in the shim's `setPreferences` (its one-by-one
+    /// fallback included, each made once) and in the Preferences page's commit. Each hash looks
+    /// at the lock from the thread that makes it: `try_lock` fails if that thread holds it.
+    #[test]
+    fn requests_hash_without_the_state_lock() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        use std::sync::{Arc, TryLockError};
+
+        let dir = std::env::temp_dir().join(format!("nox-prefs-hash-lock-{}", std::process::id()));
+        let session = rookparcel_core::Session::start_mock(Settings::default(), Default::default());
+        let shared = Arc::new(State::shared_for_tests(session.handle(), dir));
+        *shared.lock() = state();
+        let locked = Rc::new(RefCell::new(Vec::new()));
+        let (s, seen) = (shared.clone(), locked.clone());
+        auth::tests::on_hash(Some(Box::new(move || {
+            seen.borrow_mut().push(matches!(s.state.try_lock(), Err(TryLockError::WouldBlock)))
+        })));
+
+        // the shim: a proxy type without a host fails the set, so each change goes on its own
+        let set = super::super::json::parse(
+            r#"{"web_ui_password":"new-pass","proxy_type":2,"web_ui_current_password":"x"}"#,
+        )
+        .unwrap();
+        super::super::api::apply_preferences(&shared, &set, "s", TEST_IP);
+        assert_eq!(*locked.borrow(), [false, false], "the check and the new hash, once each, unlocked");
+        assert!(shared.lock().password.verify("new-pass"), "the new password is in force");
+
+        // the Preferences page: a new API key
+        const KEY: &str = "0123456789abcdef0123";
+        let changes =
+            parse(&Json::obj().with("webui.api_key", KEY).with("webui.current_password", "new-pass"))
+                .unwrap();
+        commit_request(&shared, &changes, "s", TEST_IP, RunGate::Open, |f: &Path| IpFilter::load(f)).unwrap();
+        assert_eq!(*locked.borrow(), [false; 4]);
+        assert!(shared.lock().api_key.as_ref().is_some_and(|k| k.verify(KEY)), "the new key is in force");
+        auth::tests::on_hash(None);
     }
 }
