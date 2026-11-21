@@ -4,6 +4,11 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-22_005433_1795305273: 1.2.74, the macOS swarm flake's cause
+
+- **1.2.73's CI** failed once on macOS in `a_download_stopped_midway_resumes_with_its_names_and_pieces` (passed on a rerun); its message (one block fewer done after a passing check) led an agent to the cause: a piece whose last block was being written at a stop was hashed after it, set as had, and kept as partial too, so its blocks counted twice until the check dropped them. A late hash now takes the piece out of the partial pieces, and loading drops partial pieces that are also had (PORTING row corrected; it still said partial pieces were not saved).
+- **Evidence:** with a 200 ms delay on the second block's write the swarm test failed 19 of 20 times with CI's exact message, 0 of 20 with the fix; three deterministic engine tests (`stop_hash_tests.rs`) fail without it. Core suite, clippy and fmt pass.
+
 ## 2026-11-21_235809_1795301889: 1.2.73, the bug hunt's follow-ups
 
 - **The owner decided the follow-ups** (BUGHUNT-2026-11-21.md "Follow-ups decided"): A-H fixed here by four parallel agents, I-N accepted as known behaviour.

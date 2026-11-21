@@ -3402,11 +3402,21 @@ impl Engine {
                 let Some(t) = self.torrent(id) else { return };
                 let current = t.storage.as_ref().is_some_and(|s| s.id == storage);
                 if !current {
-                    // The torrent stopped meanwhile; a verified piece is still ours.
+                    // The torrent stopped meanwhile; a verified piece is still ours. Its last
+                    // block was still being written at the stop, so the partial piece the stop
+                    // saved (its other blocks) goes: kept, it would count twice in the bytes
+                    // done, and the next check, which finds the piece had, would drop it then
+                    // (one block fewer done after the check than before; macOS CI). A piece
+                    // that failed is downloaded again whole, as `piece_failed` does running.
+                    // (Started again already, its check has the set of the stop: the partial
+                    // piece is kept for it.)
                     if verdict == HashVerdict::Passed {
                         if let Some(h) = t.have.as_mut().filter(|h| (piece as usize) < h.len()) {
                             h.set(piece as usize, true);
                         }
+                    }
+                    if verdict != HashVerdict::Inconsistent && t.picker.is_none() {
+                        t.unfinished.retain(|&(p, _)| p != piece);
                     }
                     return;
                 }
@@ -4585,8 +4595,11 @@ fn apply_resume(t: &mut Torrent, r: &ResumeData) {
             if n > 0 {
                 p.resize(n, false);
             }
+            // a partial piece that is had as well (saved so by 1.2.73 and earlier when a hash
+            // came back after the stop) is had: its blocks would count twice
+            let had = |piece: u32| (piece as usize) < p.len() && p.get(piece as usize);
+            t.unfinished = r.unfinished.iter().filter(|&&(piece, _)| !had(piece)).cloned().collect();
             t.set_have(Some(p));
-            t.unfinished = r.unfinished.clone();
         }
     }
     t.prev_uploaded = r.total_uploaded;
@@ -4685,6 +4698,9 @@ impl AnnounceSlots {
 
 #[cfg(test)]
 mod check_progress_tests;
+
+#[cfg(test)]
+mod stop_hash_tests;
 
 #[cfg(test)]
 mod slots_tests {
