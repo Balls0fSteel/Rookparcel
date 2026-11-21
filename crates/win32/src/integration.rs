@@ -386,20 +386,25 @@ pub fn write(
     }
 
     if assoc_changed {
-        // Default apps lists the program while it handles anything
+        // Default apps lists the program while it handles anything. The entry is shared by
+        // every profile and copy, so it follows the ProgIDs as now registered, not this
+        // profile's boxes: another profile's association keeps its capability (D42).
+        let registered =
+            |progid: &str| get(&keys.class(&format!(r"{progid}\shell\open\command")), None).is_some();
+        let (torrent, magnet) = (registered(PROGID_TORRENT), registered(PROGID_MAGNET));
         let caps = keys.path(CAPABILITIES);
-        if want.torrent || want.magnet {
+        if torrent || magnet {
             set(&caps, Some("ApplicationName"), APP)?;
             set(&caps, Some("ApplicationDescription"), tr!(AppDescription))?;
             set(&caps, Some("ApplicationIcon"), &icon)?;
             let files = format!(r"{caps}\FileAssociations");
             let urls = format!(r"{caps}\URLAssociations");
-            if want.torrent {
+            if torrent {
                 set(&files, Some(".torrent"), PROGID_TORRENT)?;
             } else {
                 delete_value(&files, Some(".torrent"))?;
             }
-            if want.magnet {
+            if magnet {
                 set(&urls, Some("magnet"), PROGID_MAGNET)?;
             } else {
                 delete_value(&urls, Some("magnet"))?;
@@ -987,5 +992,34 @@ mod tests {
         assert_eq!(unregister(&s.keys, &exe()).unwrap(), Status::default());
         assert_eq!(read(&s.keys, &exe(), work), Status::default());
         assert_eq!(s.get(r"Software\Microsoft\Windows\CurrentVersion\Run", Some("Rookparcel (work)")), None);
+    }
+
+    /// The Default apps entry is shared: one profile's change keeps what another profile still
+    /// has registered (D42).
+    #[test]
+    fn default_apps_keeps_another_profiles_association() {
+        let s = Scratch::new();
+        let (work, off) = (Some("work"), Integration::default());
+        let caps =
+            |path: &str, name: &str| s.get(&format!(r"Software\Rookparcel\Capabilities\{path}"), Some(name));
+        let listed = || s.get(r"Software\RegisteredApplications", Some("Rookparcel")).is_some();
+        let magnet = Integration { magnet: true, ..off };
+        let torrent = Integration { torrent: true, ..off };
+        write(&s.keys, &exe(), None, &off, &magnet).unwrap();
+        // work ticks only .torrent: the default profile's magnet capability stays
+        let st = write(&s.keys, &exe(), work, &off, &torrent).unwrap();
+        assert_eq!(st.set, torrent);
+        assert_eq!(caps("URLAssociations", "magnet").as_deref(), Some(PROGID_MAGNET));
+        assert_eq!(caps("FileAssociations", ".torrent").as_deref(), Some(PROGID_TORRENT));
+        assert!(listed());
+        // work unticks it again: .torrent's capability goes, the entry stays for magnet
+        write(&s.keys, &exe(), work, &torrent, &off).unwrap();
+        assert_eq!(caps("FileAssociations", ".torrent"), None);
+        assert_eq!(caps("URLAssociations", "magnet").as_deref(), Some(PROGID_MAGNET));
+        assert!(listed() && read(&s.keys, &exe(), None).set.magnet);
+        // the last association gone: the entry goes
+        write(&s.keys, &exe(), None, &magnet, &off).unwrap();
+        assert!(!listed());
+        assert_eq!(s.get(r"Software\Rookparcel\Capabilities", Some("ApplicationName")), None);
     }
 }

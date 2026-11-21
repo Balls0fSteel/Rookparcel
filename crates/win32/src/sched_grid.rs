@@ -3,7 +3,7 @@
 //! with that same mode. The legend and the hovered hour's text are drawn below the cells.
 //!
 //! A window class of its own (`RookparcelSchedGrid`) for the dialog template; the dialog writes
-//! and reads the table with [`SET`] and [`GET`].
+//! and reads the table with [`set`] and [`get`].
 
 use std::mem::zeroed;
 use std::ptr::null;
@@ -20,19 +20,42 @@ use windows_sys::Win32::Graphics::Gdi::{
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{IsWindowEnabled, ReleaseCapture, SetCapture};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    DefWindowProcW, GWLP_USERDATA, GetClientRect, GetParent, GetWindowLongPtrW, IDC_ARROW, LoadCursorW,
-    RegisterClassExW, SetWindowLongPtrW, WM_CAPTURECHANGED, WM_ENABLE, WM_ERASEBKGND, WM_GETFONT,
-    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_USER, WNDCLASSEXW,
+    DefWindowProcW, GWLP_USERDATA, GetClassNameW, GetClientRect, GetParent, GetWindowLongPtrW, IDC_ARROW,
+    LoadCursorW, RegisterClassExW, SetWindowLongPtrW, WM_CAPTURECHANGED, WM_ENABLE, WM_ERASEBKGND,
+    WM_GETFONT, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WNDCLASSEXW,
 };
 
 use crate::util::{point_from_lparam, rtl, send, wide};
 
 pub const CLASS: &str = "RookparcelSchedGrid";
 
-/// `lParam` points to a `[Mode; CELLS]` to show.
-pub const SET: u32 = WM_USER + 1;
-/// `lParam` points to a `[Mode; CELLS]` to fill with the table as edited.
-pub const GET: u32 = WM_USER + 2;
+/// The grid `hwnd`'s state; `None` for a window that is not one (or not yet, or no longer).
+unsafe fn grid<'a>(hwnd: HWND) -> Option<&'a mut Grid> {
+    unsafe {
+        let mut class = [0u16; 64];
+        let n = GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32);
+        if n <= 0 || String::from_utf16_lossy(&class[..n as usize]) != CLASS {
+            return None;
+        }
+        (GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut Grid).as_mut()
+    }
+}
+
+/// Shows `table` in the grid `hwnd`. A function, not a message carrying a pointer: any
+/// program can post a window message.
+pub unsafe fn set(hwnd: HWND, table: &[Mode; CELLS]) {
+    unsafe {
+        if let Some(g) = grid(hwnd) {
+            g.table = *table;
+            InvalidateRect(hwnd, null(), 0);
+        }
+    }
+}
+
+/// The table as edited in the grid `hwnd`.
+pub unsafe fn get(hwnd: HWND) -> Option<[Mode; CELLS]> {
+    unsafe { grid(hwnd).map(|g| g.table) }
+}
 
 struct Grid {
     table: [Mode; CELLS],
@@ -276,15 +299,6 @@ unsafe extern "system" fn proc_(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) ->
         }
         let g = &mut *p;
         match msg {
-            SET => {
-                g.table = *(lp as *const [Mode; CELLS]);
-                InvalidateRect(hwnd, null(), 0);
-                0
-            }
-            GET => {
-                *(lp as *mut [Mode; CELLS]) = g.table;
-                0
-            }
             WM_PAINT => {
                 paint(hwnd, g);
                 0

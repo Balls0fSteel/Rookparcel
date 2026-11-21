@@ -109,6 +109,16 @@ pub fn remove_source(prefs: &mut Prefs, index: usize) -> bool {
     true
 }
 
+/// Where source `index` of `old` is in `new`, after one change to the list (an add, an edit, a
+/// removal, a switch): the source with its URL and name, else the one at its place when the list
+/// kept its length (it was edited there); `None` when it is gone. Enabled or not.
+pub fn moved_source(old: &[Source], index: usize, new: &[Source]) -> Option<usize> {
+    let was = old.get(index)?;
+    new.iter()
+        .position(|s| s.url == was.url && s.name == was.name)
+        .or_else(|| (old.len() == new.len()).then_some(index))
+}
+
 /// `text` (a URL, an error message) with the API key taken out: every occurrence of `key`
 /// (as is and percent-encoded) and the value of any `apikey=`-like query parameter
 /// (`apikey`, `api_key`, `jackett_apikey`: download links carry the server's key) become
@@ -249,6 +259,29 @@ mod tests {
         assert_eq!(l.len(), 2);
         assert!(l.iter().all(|s| s.enabled));
         assert_eq!(l[1].label(), "b.example.org");
+    }
+
+    #[test]
+    fn a_source_is_followed_through_a_change() {
+        let a = src("a", "http://h/1/api", "", true);
+        let b = src("b", "http://h/2/api", "", true);
+        let c = src("c", "http://h/3/api", "", false);
+        let old = [a.clone(), b.clone(), c.clone()];
+        // one above it removed: it moved up; itself removed: gone
+        assert_eq!(moved_source(&old, 1, &[b.clone(), c.clone()]), Some(0));
+        assert_eq!(moved_source(&old, 2, &[b.clone(), c.clone()]), Some(1));
+        assert_eq!(moved_source(&old, 0, &[b.clone(), c.clone()]), None);
+        // one added at the end, one switched on or off: where it was
+        let d = src("d", "http://h/4/api", "", true);
+        assert_eq!(moved_source(&old, 2, &[a.clone(), b.clone(), c.clone(), d]), Some(2));
+        let off = src("b", "http://h/2/api", "", false);
+        assert_eq!(moved_source(&old, 1, &[a.clone(), off, c.clone()]), Some(1));
+        // edited in place (new name or URL): the same place
+        let renamed = src("b2", "http://h/2b/api", "", true);
+        assert_eq!(moved_source(&old, 1, &[a.clone(), renamed, c.clone()]), Some(1));
+        // no such source before
+        assert_eq!(moved_source(&old, 3, &old), None);
+        assert_eq!(moved_source(&[], 0, &[a]), None);
     }
 
     #[test]

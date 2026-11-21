@@ -301,7 +301,10 @@ pub(crate) struct Session {
     handshaking: bool,
     /// Whether the peer's first bytes were seen to be a TLS record.
     started: bool,
+    /// The peer sent close_notify.
     closed: bool,
+    /// The session ended without close_notify: nothing more is read, and `closed` stays false.
+    ended: bool,
     /// The server's certificate, as a client saw it.
     peer: Option<Fingerprint>,
     /// A client checked the server's certificate. A handshake that ends without the
@@ -329,6 +332,7 @@ impl Session {
             handshaking: true,
             started: false,
             closed: false,
+            ended: false,
             peer: None,
             verified: false,
         };
@@ -500,8 +504,16 @@ impl Session {
             match status {
                 NO_ERR if n > 0 => {}
                 NO_ERR | ERR_SSL_WOULD_BLOCK => return Ok(()),
-                ERR_SSL_CLOSED_GRACEFUL | ERR_SSL_CLOSED_NO_NOTIFY => {
+                // close_notify: the only clean end (SEC-07)
+                ERR_SSL_CLOSED_GRACEFUL => {
                     self.closed = true;
+                    return Ok(());
+                }
+                // the connection ended without close_notify (as an attacker on the path can end
+                // it): the end of the stream, not a clean one, as SChannel and OpenSSL see it; the
+                // data before it stays readable, and the socket's own end ends the stream
+                ERR_SSL_CLOSED_NO_NOTIFY => {
+                    self.ended = true;
                     return Ok(());
                 }
                 e => return Err(error("TLS receive failed", e)),
@@ -516,7 +528,7 @@ impl super::TlsSession for Session {
     }
 
     fn feed(&mut self, ciphertext: &[u8], plain: &mut Vec<u8>) -> io::Result<()> {
-        if self.closed {
+        if self.closed || self.ended {
             return Ok(());
         }
         let input = &mut self.io().input;

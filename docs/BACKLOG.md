@@ -23,7 +23,9 @@ belong in [PORTING.md](PORTING.md); document deliberate setting-default changes.
   RSS smart filters losing a failed episode, a stale DNS answer steering another tracker request,
   a torn `resume.log` append retried, unbanned current-password guessing from bypass sessions.
   23 low (12-34). **2026-11-21_093211_1795249931:** 1-11 and 13 fixed in 1.2.71 with tests;
-  12 and 14-34 open. The fixes' own follow-ups (forged-layer pieces kept as "have", a complete
+  12 and 14-34 open. **2026-11-21_111517_1795256117:** 12 and 14-34 fixed in 1.2.72 with
+  tests; the GTK (25-27) and macOS (28) fixes are lint-checked only and need a VM run. The
+  fixes' own follow-ups (forged-layer pieces kept as "have", a complete
   v2-only torrent unable to refetch layers from seeds, the shim hashing under the lock, and
   more) are listed at the end of that file's "Fixes in 1.2.71".
 
@@ -1216,9 +1218,10 @@ Implemented 2026-10-27_112013_1793096413 (D35); see the changelog. Open:
   are not rate-limited in the `--log` file; no working-directory or environment options; nox
   without `--webui` has no Run Program. The safety note still says "only on this computer"
   when nox runs with `--webui-remote-run-program`. A magnet's "added" run gets the info hash
-  as %N (the name comes with the metadata). `shell_reads_codes` (1.2.43, 1.2.44) knows cmd,
-  PowerShell and the Unix shells only: `python -c`, `perl -e`, `wsl`, `env sh -c` and the like
-  stay the user's own risk. A remote session that sends exactly the stored line gets "no
+  as %N (the name comes with the metadata). `shell_reads_codes` (1.2.43, 1.2.44; widened in 1.2.72,
+  bug hunt 2026-11-21 #22) also knows wrappers, shell-handing programs and the common
+  interpreters' eval options; another program's own `-c`/`-e` is not guessed at, so an
+  unlisted interpreter stays the user's own risk. A remote session that sends exactly the stored line gets "no
   change", which confirms a fully guessed line (it never reveals one).
 - **Trackers for new downloads (1.2.40), hand checks:** a real https list through the Mac and
   the Web UI with a private torrent beside it (none added to it); the same list replaced by a

@@ -691,6 +691,8 @@ fn reset() {
 /// Returns what went wrong, if anything; the language is then English, or the table without
 /// its bad lines. Called at start; nox calls it again when the Web UI's choice changes.
 pub fn init(choice: &str) -> Vec<String> {
+    // the Logger's line for a stored Run Program line that cannot run, in this language
+    rookparcel_core::run_program::set_error_text(crate::pref_pages::run_error_text);
     // PaTorrent's `PATORRENT_LANG` still works (D59)
     let env = crate::legacy::env_var("LANG").and_then(|v| v.into_string().ok());
     let choice = resolve(env.as_deref().unwrap_or(choice), &system_languages());

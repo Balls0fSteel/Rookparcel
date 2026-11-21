@@ -151,6 +151,26 @@ fn subscription_with_smart_filter() {
     assert_eq!(d.feed(f).unwrap().title, "Example");
 }
 
+/// Bug hunt 2026-11-21 #24: "Ubuntu - 22.04" and "Ubuntu - 22.10" are two releases, not two
+/// copies of episode 22, so a smart filter takes both.
+#[test]
+fn a_smart_filter_takes_every_version_of_a_release() {
+    let mut d = RssDownloader::default();
+    let f = d.add_feed("https://a/rss", "");
+    d.add_filter(RssFilter { pattern: "ubuntu".into(), smart: true, ..RssFilter::default() });
+    let items = vec![
+        item("Ubuntu - 22.10 Desktop", Some(NOW - 10)),
+        item("Ubuntu - 22.04 Desktop", Some(NOW - 20)),
+        item("Ubuntu - 22.04.3 Desktop", Some(NOW - 5)),
+    ];
+    let reqs = d.feed_fetched(f, NOW, Ok(doc(items)));
+    assert_eq!(
+        titles(&reqs),
+        ["Ubuntu - 22.04 Desktop", "Ubuntu - 22.10 Desktop", "Ubuntu - 22.04.3 Desktop"]
+    );
+    assert!(reqs.iter().all(|r| r.recorded.episodes.is_empty()), "no episode recorded");
+}
+
 #[test]
 fn filters_pick_and_configure() {
     let mut d = RssDownloader::default();

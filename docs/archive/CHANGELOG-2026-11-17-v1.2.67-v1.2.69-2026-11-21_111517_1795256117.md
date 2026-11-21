@@ -1,0 +1,29 @@
+# Changelog archive: release 1.2.67, 1.2.68 and 1.2.69 (2026-11-17)
+
+Moved verbatim from the root `CHANGELOG.md` on 2026-11-21_111517_1795256117. Paths and links keep their repository-root context.
+
+## 2026-11-17_214949_1794948589: Release 1.2.69 published; the site's news and the wiki pushed
+
+- **On the owner's word** ("check CI, release"): CI on `d3df3c62` (1.2.68) was cancelled by the next push; FreeBSD and Fuzz were green on it. The review fixes made 1.2.69 (`661b5477`): CI, FreeBSD and Fuzz green. Release run [44171657404](https://github.com/Balls0fSteel/Rookparcel/actions/runs/44171657404) passed all 11 jobs on the first attempt; its x86_64 Flatpak leg ran on runner image `20261111.127`, the one that broke 1.2.67, so the runtime copy is now proven there.
+- **Checked on the draft:** all 13 files' GitHub SHA-256 digests match `SHA256SUMS`, the downloaded zip too; the zip holds the two exes, `LICENSE.md` and `THIRD-PARTY-NOTICES.md`; both exes say 1.2.69 in their version resources, and `rookparcel-nox --version` prints `rookparcel-nox 1.2.69`.
+- **Published** with `gh release edit v1.2.69 --draft=false --latest`; then the news entry and the README's and the wiki's version lines (the Trackers and Peers sort notes no longer "not in a published release yet") pushed to `main`, and the GitHub wiki's changed pages.
+
+## 2026-11-17_211440_1794946480: Version 1.2.69: the security review of 1.2.68 and its fixes; release 1.2.69 prepared
+
+- **Before the release (owner: "check CI, release"):** the review over `v1.2.67..HEAD -- crates` by one read-only reviewer: nothing critical, high or medium. Recorded in SECURITY-REVIEW.md "Release 1.2.69".
+- **Fixed (low):** the peer and tracker sorts made the Client, Flags and Status texts at each comparison and compared whole client names (any length a peer sends); now once per row per update, names and statuses cut to 128 bytes at a character (`capped`). GTK noted a sorted tab's selection only while the tab was shown; now always, as Win32 and the Mac.
+- **Found on the way:** CI on `fd496301` (the 1.2.67 publication, docs only) failed on macOS in `a_download_stopped_midway_resumes_with_its_names_and_pieces`: one 16 KiB block downloaded again after the restart. Not this release's code; recorded in BACKLOG "Validation".
+- **Release:** `docs/releases/1.2.69.md` (covers 1.2.68, which is not tagged); the Flatpak metainfo's first `<release>` is 1.2.69; the wiki's sort notes say 1.2.69.
+- **Checked after the fixes:** fmt clean; clippy `-D warnings` clean for frontend, nox, Win32, GTK (cross) and the Mac (aarch64); frontend tests and Win32 173 (one thread) passing.
+
+## 2026-11-17_210056_1794945656: Version 1.2.68: the Trackers and Peers tabs sort by their headers (D78)
+
+- **On the owner's word** ("Trackers/Peers sort", the next item after 1.2.67): no GUI sorted these tabs, Win32 included. The shared model (`Detail::sort_of` / `set_sort_of` / `toggle_sort_of` for Files, Trackers and Peers; `Core` wrappers for the Mac) uses the Files tab's three-click cycle: counts, progress, speeds and totals start descending, names, addresses, clients, flags, statuses and Update In ascending, the third click back to the engine's order. `set_peers` / `set_trackers` sort each update in place (with each row's engine position, to go back), so `peers[row]` / `trackers[row]` stay the displayed rows; every direct `detail.trackers =` became `set_trackers`. Ties go by address for peers, so equal rows do not swap every second; trackers without a reported count stay last in both directions. `row_keys` / `rows_of_keys` (a peer's address or web seed URL, a tracker's URL) keep the selection. Kept as `ui.trackers_sort`, `ui.peers_sort` (`sort_key`, `sort_from_pref_of`).
+- **Win32:** header clicks on both pages, the arrow from the stored sort at start (one loop for the three sorted pages), the selection noted once per alert batch while sorted and put back without scrolling. **GTK:** `header_changed` generalises the Files mapping (tested), selection kept on updates while the tab is shown and sorted. **macOS:** the tables use the `sort_click` hook; the selection is kept by key at every refresh, sorted or not; `RPTableSource::select` now re-reads the selection when AppKit stays silent but the kept ids were stale.
+- **Validation:** fmt clean; clippy `-D warnings` clean for core, frontend, nox, Win32, GTK (cross) and the Mac (both Darwin targets); tests frontend 452, Win32 173 (one thread, a new window test), Mac 24; on Xubuntu GTK 29 and frontend 451. Live: Win32 picture on the hidden desktop, GTK under Xvfb against a mock nox, the Mac app on the VM (BACKLOG "Trackers and Peers tab sort").
+
+## 2026-11-17_202441_1794943481: Release 1.2.67 published; the site's news and the wiki pushed
+
+- **On the owner's word** ("check CI, release"): the review fix made 1.2.67 (`5a920c98`); CI (its macOS job re-run once: cancelled before its first step), FreeBSD and Fuzz green. The Flatpak workflow fix (`7cd4b92f`, entry below) was green on CI and FreeBSD; `v1.2.67` moved there before any draft existed, and Release run [44154755443](https://github.com/Balls0fSteel/Rookparcel/actions/runs/44154755443) passed all 11 jobs. Its x86_64 Flatpak leg ran on image `.370`, so the copy step ran (3.9 GB) without meeting the EXDEV host; the probe had shown it there.
+- **Checked on the draft:** all 13 files' GitHub SHA-256 digests match `SHA256SUMS`, the downloaded zip too; the zip holds the two exes, `LICENSE.md` and `THIRD-PARTY-NOTICES.md`; both exes say 1.2.67 in their version resources, and `rookparcel-nox --version` prints `rookparcel-nox 1.2.67`.
+- **Published** with `gh release edit v1.2.67 --draft=false --latest`; then the news entry and the README's and the wiki's version lines (the sort note no longer "not in a published release yet") pushed to `main`, and the GitHub wiki's changed pages.

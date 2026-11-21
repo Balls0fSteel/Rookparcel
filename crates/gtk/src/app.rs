@@ -1821,6 +1821,9 @@ fn start_tray(window: &gtk::ApplicationWindow) {
                 }
             }
             prompt_follows_tray(on, start);
+            if !on {
+                tray_went();
+            }
         }),
     });
     TRAY.with(|t| *t.borrow_mut() = tray);
@@ -1828,6 +1831,23 @@ fn start_tray(window: &gtk::ApplicationWindow) {
     // window, a start locked behind the PIN): watched once it is realized
     watch_minimize(window);
     window.connect_realize(watch_minimize);
+}
+
+/// The tray went away (its host stopped or restarted): nothing would be left to bring the
+/// windows back with. Locked, the PIN prompt stands in (a prompt up already only lost its
+/// Cancel, `prompt_follows_tray`), as at a lock without a tray; a main window hidden in the tray
+/// comes back. Not while quitting: the panel can go before the program at a logout.
+fn tray_went() {
+    if QUITTING.with(Cell::get) || CLOSING.with(Cell::get) {
+        return;
+    }
+    if locked() {
+        if LOCK.with(|l| l.borrow().prompt.is_none()) {
+            ask_unlock(false);
+        }
+    } else if with_app(|a| !a.window.is_visible()) == Some(true) {
+        show_window();
+    }
 }
 
 /// "Minimize to tray": the window goes into the tray when its surface is minimized.
@@ -1972,12 +1992,44 @@ fn locked() -> bool {
 }
 
 /// Runs `f` now, or at the unlock while the windows are locked: something that would open a
-/// window over them.
-fn when_unlocked(f: impl FnOnce() + 'static) {
+/// window over them (also the other windows' own boxes, as Create New Torrent's error).
+pub(crate) fn when_unlocked(f: impl FnOnce() + 'static) {
     if locked() {
         LOCK.with(|l| l.borrow_mut().held.push(Box::new(f)));
     } else {
         f();
+    }
+}
+
+/// [`when_unlocked`] for async steps: returns at once, or once the windows are unlocked again
+/// (after they are back on screen), for a step about to open a window over them (the search
+/// helper's progress windows, boxes and site picker, after the work they wait for).
+pub(crate) async fn until_unlocked() {
+    // locked again before this step ran: it waits for that unlock too
+    while locked() {
+        let slot: Rc<RefCell<(bool, Option<std::task::Waker>)>> = Rc::default();
+        let s = slot.clone();
+        // `push`, never dropped as a held message box can be: a dropped one would never wake this
+        when_unlocked(move || {
+            let waker = {
+                let mut s = s.borrow_mut();
+                s.0 = true;
+                s.1.take()
+            };
+            if let Some(w) = waker {
+                w.wake();
+            }
+        });
+        std::future::poll_fn(|cx| {
+            let mut s = slot.borrow_mut();
+            if s.0 {
+                std::task::Poll::Ready(())
+            } else {
+                s.1 = Some(cx.waker().clone());
+                std::task::Poll::Pending
+            }
+        })
+        .await;
     }
 }
 

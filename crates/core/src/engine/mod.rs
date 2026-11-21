@@ -3059,7 +3059,9 @@ impl Engine {
         t.completed_time = now_unix();
         t.resume_dirty = true;
         if t.downloaded_in_session {
-            for tr in &mut t.trackers {
+            // every tracker, a hybrid's v2-hash announces too (libtorrent `completed` announces
+            // on each info hash)
+            for tr in t.trackers.iter_mut().chain(&mut t.trackers_v2) {
                 if tr.start_sent() && !tr.complete_sent() && !tr.updating() {
                     tr.run_mut().next_announce = None;
                 }
@@ -3438,8 +3440,12 @@ impl Engine {
             }
             Completion::Verified { storage, piece, verdict } => self.on_verified(storage, piece, verdict),
             Completion::CheckProgress { storage, checked } => {
+                // a check the torrent stopped (a stop and start, or a recheck, while it ran)
+                // may report once more: it must not overwrite the new check's "queued"
                 if let Some(&id) = self.storages.get(&storage) {
-                    if let Some(t) = self.torrent(id) {
+                    let current =
+                        |t: &&mut Torrent| t.checking && t.storage.as_ref().is_some_and(|s| s.id == storage);
+                    if let Some(t) = self.torrent(id).filter(current) {
                         t.checked_pieces = checked;
                         t.status_dirty = true;
                     }
@@ -4667,6 +4673,9 @@ impl AnnounceSlots {
         AnnounceTo { dht: take(&mut self.dht), trackers: take(&mut self.trackers), lsd: take(&mut self.lsd) }
     }
 }
+
+#[cfg(test)]
+mod check_progress_tests;
 
 #[cfg(test)]
 mod slots_tests {

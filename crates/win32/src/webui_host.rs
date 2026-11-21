@@ -16,6 +16,7 @@
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use rookparcel_core::{SessionHandle, Settings};
@@ -233,6 +234,9 @@ pub struct WindowHost {
     hwnd: isize,
     pending: Mutex<Vec<Change>>,
     rss_downloads: Mutex<Vec<AddRequest>>,
+    /// A browser asked the window to exit: [`POST_SHUTDOWN`] counts only then, as any
+    /// program can post the message.
+    shutdown_asked: AtomicBool,
 }
 
 impl WindowHost {
@@ -241,7 +245,13 @@ impl WindowHost {
             hwnd: hwnd as isize,
             pending: Mutex::new(Vec::new()),
             rss_downloads: Mutex::new(Vec::new()),
+            shutdown_asked: AtomicBool::new(false),
         })
+    }
+
+    /// Whether a browser asked the window to exit since the last call.
+    pub fn take_shutdown(&self) -> bool {
+        self.shutdown_asked.swap(false, Ordering::Relaxed)
     }
 
     /// The queued changes, oldest first.
@@ -267,6 +277,7 @@ impl Host for WindowHost {
     }
 
     fn shutdown(&self) {
+        self.shutdown_asked.store(true, Ordering::Relaxed);
         self.post(POST_SHUTDOWN);
     }
 
@@ -328,6 +339,17 @@ pub fn start(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `POST_SHUTDOWN` counts only after a browser asked (anyone can post the message), once.
+    #[test]
+    fn a_shutdown_is_taken_only_when_a_browser_asked() {
+        // no window: the posts go nowhere
+        let host = WindowHost::new(0x7ffe_0001_isize as HWND);
+        assert!(!host.take_shutdown());
+        Host::shutdown(&*host);
+        assert!(host.take_shutdown());
+        assert!(!host.take_shutdown(), "once");
+    }
 
     #[test]
     fn the_setup_round_trips_through_the_preferences() {

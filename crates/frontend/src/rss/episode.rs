@@ -44,6 +44,19 @@ fn is_word(c: u8) -> bool {
     c.is_ascii_alphanumeric()
 }
 
+/// When the number that ends at `j` goes on with `.` or `,` and digits (`22.04`, `12.5`): where
+/// those digits end.
+fn decimal_part_end(b: &[u8], j: usize) -> Option<usize> {
+    if !matches!(b.get(j), Some(b'.' | b',')) || !b.get(j + 1).is_some_and(u8::is_ascii_digit) {
+        return None;
+    }
+    let mut k = j + 1;
+    while b.get(k).is_some_and(u8::is_ascii_digit) {
+        k += 1;
+    }
+    Some(k)
+}
+
 /// The episode a release title names, if any.
 pub fn parse_episode(title: &str) -> Option<Episode> {
     let lower = title.to_ascii_lowercase();
@@ -148,7 +161,11 @@ pub fn parse_episode(title: &str) -> Option<Episode> {
                 continue;
             }
             if let Some((n, k)) = digits_at(b, j, 4) {
-                if after_ok(k) {
+                // "Ep 12.5", a recap between episodes, is not episode 12; a date or a year
+                // after a dot is another field ("E08.230310.1080p", "E08.2023.720p")
+                let decimal = decimal_part_end(b, k)
+                    .is_some_and(|l| l >= b.len() || matches!(b[l], b' ' | b'[' | b'(' | b'_'));
+                if after_ok(k) && !decimal {
                     return Some(Episode::Numbered { season: 0, first: n, last: n });
                 }
             }
@@ -173,7 +190,11 @@ pub fn parse_episode(title: &str) -> Option<Episode> {
                 j = next;
             }
         }
-        let end_ok = j >= b.len() || matches!(b[j], b' ' | b'[' | b'(' | b'.' | b'_');
+        // not a version ("Ubuntu - 22.04", "1.2.3") nor a recap ("Show - 12.5"): digits after
+        // the dot that no letter follows; a resolution or an extension ("12.1080p", "12.mkv")
+        // ends the number
+        let version = decimal_part_end(b, j).is_some_and(|l| !b.get(l).is_some_and(u8::is_ascii_alphabetic));
+        let end_ok = (j >= b.len() || matches!(b[j], b' ' | b'[' | b'(' | b'.' | b'_')) && !version;
         // a four-digit number there is far more often a year than an episode
         if end_ok && !(1950..2100).contains(&first) {
             // "Show S2 - 14": a season word right before the dash
@@ -503,6 +524,24 @@ mod tests {
             ("[Group] Show S2 - 14 (TV 1080p)", n(2, 14, 14)),
             ("[Group] Show Ss2 - 14", n(0, 14, 14)),
             ("Show - 2026 [Documentary]", None),
+            // bug hunt 2026-11-21 #24: versions and recaps are no episodes; a resolution or an
+            // extension after the dot still ends the number
+            ("Ubuntu - 22.04 Desktop amd64", None),
+            ("Ubuntu - 22.10", None),
+            ("Ubuntu - 22.04.3 LTS [ISO]", None),
+            ("Tool - 1.2.3 (Portable)", None),
+            ("[Group] Show - 12.5 [1080p]", None),
+            ("[Group] Show - 12.5.mkv", None),
+            ("Show Ep 12.5 HDTV", None),
+            ("Firmware E3.11", None),
+            ("[Group] Show - 12.1080p.mkv", n(0, 12, 12)),
+            ("[Group] Show - 12.mkv", n(0, 12, 12)),
+            ("[Group] Show - 12v2.mkv", n(0, 12, 12)),
+            ("Show.Ep.07.720p", n(0, 7, 7)),
+            ("Show.Name.E08.230310.1080p-NEXT", n(0, 8, 8)),
+            ("Show.Name.E08.2023.720p", n(0, 8, 8)),
+            // a version earlier in the title does not hide the episode after it
+            ("[Group] Show 2.0 - 1.5 - 07 [720p]", n(0, 7, 7)),
             ("Show Episode 7 HDTV", n(0, 7, 7)),
             ("Show.Ep.07.HDTV", n(0, 7, 7)),
             ("Show E07 HDTV", n(0, 7, 7)),

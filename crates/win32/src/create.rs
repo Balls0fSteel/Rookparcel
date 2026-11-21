@@ -229,8 +229,10 @@ unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
                 1
             }
             WM_APP_DONE => {
-                let result = *Box::from_raw(lp as *mut Result<Created, String>);
-                finished(dlg, st, result);
+                // a number naming the result (anyone can post this message)
+                if let Some(result) = crate::posted::take::<Result<Created, String>>(msg, lp) {
+                    finished(dlg, st, result);
+                }
                 1
             }
             _ => 0,
@@ -365,10 +367,7 @@ unsafe fn hash(dlg: HWND, st: &mut State, opts: CreateOptions, seed_from: Option
                 Ok(()) => Ok(c),
                 Err(e) => Err(format!("{}: {e}", file.display())),
             });
-            let boxed = Box::into_raw(Box::new(result));
-            if PostMessageW(target as HWND, WM_APP_DONE, 0, boxed as LPARAM) == 0 {
-                drop(Box::from_raw(boxed));
-            }
+            crate::posted::post::<Result<Created, String>>(target as HWND, WM_APP_DONE, 0, result);
         });
     }
 }

@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-21_093211_1795249931
+Last updated: 2026-11-21_111517_1795256117
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D78](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -19,7 +19,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Current status
 
-- **1.2.71 (not released):** the 2026-11-21 bug hunt's high and medium fixes. **1.2.70:** a check that cannot read a file stops with an error instead of finding no pieces (BACKLOG "Disk and storage" (a)); "Queued for checking" for a check waiting for its drive; round-robin connection attempts; the test flakes of BACKLOG "Validation". Remote `PROTOCOL` 21.
+- **1.2.71-1.2.72 (not released):** all 34 fixes of the 2026-11-21 bug hunt. **1.2.70:** a check that cannot read a file stops with an error instead of finding no pieces (BACKLOG "Disk and storage" (a)); "Queued for checking" for a check waiting for its drive; round-robin connection attempts; the test flakes of BACKLOG "Validation". Remote `PROTOCOL` 21.
 - **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.
@@ -34,7 +34,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Next steps
 
-**Bug hunt 2026-11-21** ([BUGHUNT-2026-11-21.md](docs/BUGHUNT-2026-11-21.md)): 1-11 and 13 fixed in 1.2.71; 22 low and the fixes' follow-ups open.
+**Bug hunt 2026-11-21** ([BUGHUNT-2026-11-21.md](docs/BUGHUNT-2026-11-21.md)): all fixed (1.2.71, 1.2.72); open: the fixes' follow-ups and a VM run of 25-28.
 
 **Open from releases 1.2.29-1.2.54** (notes in `docs/releases/`, full paragraphs in the [2026-11-13 snapshot](docs/archive/PLAN-2026-11-13.md)): RELEASING.md step 5 by hand (setup, zip, AppImages, Flatpaks, dmg and image on the VMs; updates from 1.2.30 and from an installed 1.2.46-1.2.54, the owner's copy starting with one "setup.exe is missing" line and no long check; the UI lock); the machine translations of 1.2.34-1.2.43 and D69; 1.2.44's GTK line and frontend change on the VMs; 1.2.33's fix with the installed client; a real Logger with private torrents; the owner's look at the GTK sizes; the dmg step and real Macs for the first-run guide; the Docker image's first push; then dropping the Mac's legacy notification centre. BACKLOG: "Themes", "Files tab folder tree", "Localisation", "GTK desktop checks", "macOS", "Statistics, trackers and Run Program", "Seeding goals", "Disk and storage", "UI lock".
 

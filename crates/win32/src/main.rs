@@ -39,6 +39,8 @@ mod lock;
 #[cfg(windows)]
 mod notices;
 #[cfg(windows)]
+mod posted;
+#[cfg(windows)]
 mod preferences;
 #[cfg(windows)]
 mod properties;
@@ -204,6 +206,7 @@ mod instance {
                     cbData: (payload.len() * 2) as u32,
                     lpData: payload.as_ptr() as *mut _,
                 };
+                let mut declined = 0;
                 loop {
                     let mut result = 0usize;
                     let sent = unsafe {
@@ -217,7 +220,7 @@ mod instance {
                             &mut result,
                         )
                     };
-                    let outcome = outcome(sent, unsafe { GetLastError() });
+                    let outcome = outcome(sent, result, unsafe { GetLastError() });
                     // the first instance runs as administrator: Windows keeps this one's message
                     // from it (SEC-25); say so rather than drop the torrent silently
                     if outcome == Outcome::Refused && !sources.is_empty() {
@@ -225,15 +228,21 @@ mod instance {
                         lang::init(prefs.get("ui.language").unwrap_or_default());
                         crate::dialogs::error(null_mut(), lang::text(lang::S::ForwardRefused));
                     }
-                    // it began to shut down meanwhile
+                    // it began to shut down meanwhile (a closing window declines them)
                     if outcome != Outcome::Taken && (unsafe { IsWindow(hwnd) } == 0 || exiting(hwnd)) {
                         return !take_over(m);
                     }
-                    if outcome != Outcome::Unanswered {
-                        return true;
+                    match outcome {
+                        Outcome::Taken | Outcome::Refused => return true,
+                        // declined, yet not marked closing: its mark goes just before the
+                        // window does, so asked again for a while (a window that never takes
+                        // them, after that, as before)
+                        Outcome::Declined if declined >= 50 => return true,
+                        Outcome::Declined => declined += 1,
+                        Outcome::Unanswered => {}
                     }
-                    // Its thread is busy (reading a .torrent from a slow share, a long batch of
-                    // alerts) or hung: Windows takes back a message that was not picked up, so
+                    // Unanswered: its thread is busy (reading a .torrent from a slow share, a long
+                    // batch of alerts) or hung: Windows takes back a message not picked up, so
                     // the arguments are sent again, for as long as the window is there. The
                     // handler only queues the arguments, so a message that was picked up is
                     // answered within the 5 s; only one picked up at their very end could get
@@ -273,7 +282,7 @@ mod instance {
                     &mut result,
                 )
             };
-            if outcome(sent, unsafe { GetLastError() }) != Outcome::Unanswered
+            if outcome(sent, result, unsafe { GetLastError() }) != Outcome::Unanswered
                 || unsafe { IsWindow(hwnd) } == 0
                 || exiting(hwnd)
             {
@@ -288,6 +297,8 @@ mod instance {
     pub enum Outcome {
         /// The window took them.
         Taken,
+        /// The window answered 0: it is closing (`EXITING_PROP`) and takes none any more.
+        Declined,
         /// Windows kept the message from a window of higher integrity (`ERROR_ACCESS_DENIED`).
         Refused,
         /// No answer: the window's thread did not pick the message up in time (a timeout, or
@@ -295,12 +306,12 @@ mod instance {
         Unanswered,
     }
 
-    /// The outcome of a send that returned `sent` with `error` from `GetLastError`. A failure
-    /// is only a hand-over when Windows refused the message outright: a timeout used to count
-    /// as one, and the second instance's torrents went with it.
-    pub fn outcome(sent: isize, error: u32) -> Outcome {
+    /// The outcome of a send that returned `sent`, the window's `answer` and `error` from
+    /// `GetLastError`. A failure is only a hand-over when Windows refused the message outright:
+    /// a timeout used to count as one, and the second instance's torrents went with it.
+    pub fn outcome(sent: isize, answer: usize, error: u32) -> Outcome {
         if sent != 0 {
-            Outcome::Taken
+            if answer != 0 { Outcome::Taken } else { Outcome::Declined }
         } else if error == ERROR_ACCESS_DENIED {
             Outcome::Refused
         } else {
@@ -411,12 +422,20 @@ mod tests {
         use windows_sys::Win32::Foundation::{
             ERROR_ACCESS_DENIED, ERROR_INVALID_WINDOW_HANDLE, ERROR_TIMEOUT,
         };
-        assert_eq!(outcome(1, 0), Outcome::Taken);
-        assert_eq!(outcome(1, ERROR_TIMEOUT), Outcome::Taken, "a stale error code does not matter");
-        assert_eq!(outcome(0, ERROR_ACCESS_DENIED), Outcome::Refused);
-        assert_eq!(outcome(0, ERROR_TIMEOUT), Outcome::Unanswered);
-        assert_eq!(outcome(0, ERROR_INVALID_WINDOW_HANDLE), Outcome::Unanswered, "the window went");
-        assert_eq!(outcome(0, 0), Outcome::Unanswered, "a hung thread with no error code");
+        assert_eq!(outcome(1, 1, 0), Outcome::Taken);
+        assert_eq!(outcome(1, 1, ERROR_TIMEOUT), Outcome::Taken, "a stale error code does not matter");
+        assert_eq!(outcome(0, 0, ERROR_ACCESS_DENIED), Outcome::Refused);
+        assert_eq!(outcome(0, 0, ERROR_TIMEOUT), Outcome::Unanswered);
+        assert_eq!(outcome(0, 0, ERROR_INVALID_WINDOW_HANDLE), Outcome::Unanswered, "the window went");
+        assert_eq!(outcome(0, 0, 0), Outcome::Unanswered, "a hung thread with no error code");
+    }
+
+    /// A closing window answers 0: the arguments are not counted as taken (the second start
+    /// then waits for the first to end and runs them itself).
+    #[test]
+    fn a_hand_over_a_closing_window_declines_is_not_taken() {
+        assert_eq!(outcome(1, 0, 0), Outcome::Declined);
+        assert_ne!(outcome(1, 0, 0), Outcome::Taken);
     }
 
     /// Ctrl counts as held only while it is down, not for having been pressed before (D69).

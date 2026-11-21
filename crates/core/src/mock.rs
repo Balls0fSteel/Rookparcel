@@ -600,8 +600,16 @@ impl Mock {
                 metadata_ticks = METADATA_TICKS;
             }
         }
-        let mut extra_trackers = parsed.trackers;
-        extra_trackers.extend(p.trackers.iter().cloned());
+        // each URL once, as the engine's `add_tracker` (and libtorrent's) keeps them: a magnet's
+        // `tr=` named again in the add's trackers is one tracker
+        let generated: Vec<String> = generated_trackers(seed).collect();
+        let mut extra_trackers: Vec<String> = Vec::new();
+        for url in parsed.trackers.iter().chain(&p.trackers) {
+            let url = url.trim();
+            if !url.is_empty() && !generated.iter().chain(&extra_trackers).any(|u| u == url) {
+                extra_trackers.push(url.to_owned());
+            }
+        }
         let t = Torrent {
             st,
             ti: parsed.ti,
@@ -1233,9 +1241,13 @@ fn tracker_count(t: &Torrent) -> u32 {
     }
 }
 
+/// The trackers made up for a torrent with this seed.
+fn generated_trackers(seed: u64) -> impl Iterator<Item = String> {
+    (0..1 + seed % 3).map(|i| format!("udp://tracker{i}.example:6969/announce"))
+}
+
 fn trackers_for(t: &Torrent) -> Vec<String> {
-    let mut v: Vec<String> =
-        (0..1 + t.seed % 3).map(|i| format!("udp://tracker{i}.example:6969/announce")).collect();
+    let mut v: Vec<String> = generated_trackers(t.seed).collect();
     v.extend(t.extra_trackers.iter().cloned());
     v
 }
@@ -1527,6 +1539,49 @@ mod tests {
             _ => None,
         });
         assert!(trackers.iter().any(|t| t.url == "udp://tracker.example:1337"));
+    }
+
+    /// Bug hunt 2026-11-21 #29: a tracker named twice (the magnet's `tr=` and the add's own
+    /// list) is listed once, as the engine lists it, so the Trackers tab has no two equal rows.
+    #[test]
+    fn a_tracker_named_twice_is_listed_once() {
+        let s = session(0, Settings::default());
+        let h = s.handle();
+        let mut p = AddTorrentParams::new(TorrentSource::Magnet(MAGNET.into()), "/dl");
+        p.trackers = vec!["udp://tracker.example:1337".into(), " udp://tracker.example:1337 ".into()];
+        h.add_torrent(p);
+        let id = wait_for(&h, |a| match a {
+            Alert::TorrentAdded { id, .. } => Some(*id),
+            _ => None,
+        });
+        h.torrent(id).post_trackers();
+        let trackers = wait_for(&h, |a| match a {
+            Alert::TrackerList { trackers, .. } => Some(trackers.clone()),
+            _ => None,
+        });
+        let urls: Vec<&str> = trackers.iter().map(|t| t.url.as_str()).collect();
+        let mut unique = urls.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(urls.len(), unique.len(), "{urls:?}");
+        assert_eq!(urls.iter().filter(|u| **u == "udp://tracker.example:1337").count(), 1, "{urls:?}");
+        // the status counts them alike
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut alerts = Vec::new();
+        let count = loop {
+            assert!(Instant::now() < deadline, "no status of the torrent");
+            h.post_torrent_updates();
+            std::thread::sleep(Duration::from_millis(5));
+            h.pop_alerts(&mut alerts);
+            let found = alerts.iter().find_map(|a| match a {
+                Alert::StateUpdate(v) => v.iter().find(|st| st.id == id).map(|st| st.num_trackers),
+                _ => None,
+            });
+            if let Some(n) = found {
+                break n;
+            }
+        };
+        assert_eq!(count as usize, urls.len());
     }
 
     #[test]

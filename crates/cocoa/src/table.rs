@@ -635,6 +635,8 @@ impl RPTableSource {
         } else {
             (self.ivars().hooks.rows_of)(&ids)
         };
+        // a flat table's ids may name rows that are gone (the last row removed)
+        let rows = rows_below(rows, tv.numberOfRows());
         tv.selectRowIndexes_byExtendingSelection(&index_set(rows), false);
         self.ivars().restoring.set(false);
         // ids gone from the list leave the selection
@@ -657,7 +659,7 @@ impl RPTableSource {
     /// Selects these ids (none: clears the selection), as the user would.
     pub fn select(&self, ids: &[u64]) {
         let Some(tv) = self.table() else { return };
-        let rows = (self.ivars().hooks.rows_of)(ids);
+        let rows = rows_below((self.ivars().hooks.rows_of)(ids), tv.numberOfRows());
         tv.selectRowIndexes_byExtendingSelection(&index_set(rows), false);
         // no notification when AppKit's selection stayed as it was, though the ids it was kept
         // as may not be (a reload that dropped rows while restoring)
@@ -676,6 +678,14 @@ impl RPTableSource {
             c.setHidden(!visible);
         }
     }
+}
+
+/// The rows of `rows` that a table of `count` rows has: `rows_of` may map ids to rows that are
+/// gone (a flat table's ids are its rows), and AppKit must not be asked to select those.
+fn rows_below(mut rows: Vec<usize>, count: isize) -> Vec<usize> {
+    let count = usize::try_from(count).unwrap_or(0);
+    rows.retain(|&r| r < count);
+    rows
 }
 
 /// The indices in an index set.
@@ -1078,5 +1088,20 @@ impl RPTableView {
         // SAFETY: `delegate` is NSTableView's property; ours is always an RPTableSource.
         let d: Option<Retained<AnyObject>> = unsafe { msg_send![self, delegate] };
         d.and_then(|d| d.downcast::<RPTableSource>().ok())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rows_below;
+
+    #[test]
+    fn rows_past_the_end_are_dropped() {
+        // the last of three rows was selected and removed
+        assert_eq!(rows_below(vec![2], 2), Vec::<usize>::new());
+        assert_eq!(rows_below(vec![0, 3, 1, 2], 2), vec![0, 1]);
+        assert_eq!(rows_below(vec![0, 1], 0), Vec::<usize>::new());
+        // AppKit's count is never negative; if it were, nothing is selected
+        assert_eq!(rows_below(vec![0], -1), Vec::<usize>::new());
     }
 }

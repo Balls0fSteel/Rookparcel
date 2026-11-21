@@ -678,6 +678,69 @@ fn a_check_waiting_for_its_drive_is_reported_as_queued() {
     }
 }
 
+/// Bug hunt 17: a recheck (a stop and start) of a running check queues the new check behind
+/// the one waiting for the drive, and the stopped check's last progress report, if one comes
+/// after the restart, does not overwrite "queued" (the row showed "Checking N %", and the
+/// percentage jumped back when the new check began). That report comes only when the stop
+/// lands while the check reads a piece it reports on, which a paced check rarely does: this
+/// guards the queueing around a restart more than it catches the race.
+#[test]
+fn a_restarted_check_stays_queued_behind_the_drive() {
+    let (a, b) = (fixture(None), fixture_padded(None, 10));
+    let (dir_a, dir_b) = (temp_dir("requeued-check-a"), temp_dir("requeued-check-b"));
+    write_files(&a, &dir_a);
+    write_files(&b, &dir_b);
+    let settings = Settings { check_rate_limit: true, check_rate_mb: 1, ..settings() };
+    let s = Session::start(SessionParams { settings, ..Default::default() }).expect("session starts");
+    let mut w = Watch::new(s.handle());
+    let id_a = add(&mut w, &a, &dir_a);
+    let id_b = add(&mut w, &b, &dir_b);
+    wait_state(&mut w, id_a, TorrentState::Seeding, 20);
+    wait_state(&mut w, id_b, TorrentState::Seeding, 20);
+    // B hashing, A queued behind it
+    s.handle().torrent(id_b).force_recheck();
+    wait(&mut w, 10, "B hashing", |x| {
+        status_of(x, id_b).filter(|s| s.state == TorrentState::CheckingFiles && !s.check_queued)
+    });
+    s.handle().torrent(id_a).force_recheck();
+    let st = wait_state(&mut w, id_a, TorrentState::CheckingFiles, 10);
+    assert!(st.check_queued, "A waits for B's check: {st:?}");
+    // B's check restarted: A's goes first, B's new one waits for it
+    s.handle().torrent(id_b).force_recheck();
+    let mut a_done = false;
+    wait(&mut w, 10, "B queued", |x| {
+        a_done |= status_of(x, id_a).is_some_and(|s| s.state == TorrentState::Seeding);
+        status_of(x, id_b).filter(|s| s.check_queued)
+    });
+    assert!(!a_done, "A was done before B's check was queued");
+    let (mut b_hashing, mut b_progress) = (false, 0);
+    wait(&mut w, 30, "B seeding", |x| {
+        if status_of(x, id_a).is_some_and(|s| s.state == TorrentState::Seeding) {
+            a_done = true;
+        }
+        let st = status_of(x, id_b)?;
+        if st.state == TorrentState::Seeding {
+            return Some(());
+        }
+        if !a_done {
+            assert!(st.check_queued && st.progress_ppm == 0, "B is queued until A is done: {st:?}");
+        } else if !st.check_queued {
+            // B's own check: from the start, onwards only
+            b_hashing = true;
+            assert!(st.progress_ppm >= b_progress, "B's progress went back: {st:?}");
+            b_progress = st.progress_ppm;
+        } else {
+            assert!(!b_hashing, "B queued again: {st:?}");
+        }
+        None
+    });
+    assert!(a_done, "A seeding before B");
+    s.shutdown();
+    for d in [dir_a, dir_b] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
 /// A seed whose file cannot be read (here a directory in its place; a scanner's lock or a
 /// permission alike) stops with an error and keeps its pieces: before, the check took every
 /// failed read as a missing piece, so such a seed came out with nothing and downloaded it all

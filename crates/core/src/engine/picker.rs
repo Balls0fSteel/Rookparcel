@@ -7,7 +7,8 @@
 // per-block states, as libtorrent's `downloading_piece` (each block remembers the peer it was
 // requested from or written by, libtorrent `block_info::peer`, by address). Same picking policy:
 // partial pieces first, then rarest-first by priority (or in order when sequential), then
-// end-game; a peer on parole only takes blocks of pieces it downloads alone.
+// end-game; a peer on parole only takes blocks of pieces it downloads alone (where libtorrent
+// counts pad blocks and blocks restored from resume data as another peer's, they are neutral).
 
 //! Which blocks to request from which peer.
 
@@ -45,9 +46,15 @@ impl Downloading {
     }
 
     /// No block of this piece came from, or is requested from, another peer (libtorrent's
-    /// `exclusive` pieces, the only ones a peer on parole may download).
+    /// `exclusive` pieces, the only ones a peer on parole may download). A finished block that
+    /// came from no peer (a pad block, or one restored from resume data) is neutral: libtorrent
+    /// counts it as another peer's, so a peer on parole could not go on with a piece it started
+    /// next to one and spread the piece over others (bug hunt 14).
     fn exclusive_to(&self, peer: SocketAddr) -> bool {
-        self.blocks.iter().zip(&self.peers).all(|(&b, &p)| b == BlockState::Free || p == Some(peer))
+        self.blocks.iter().zip(&self.peers).all(|(&b, &p)| match p {
+            None => matches!(b, BlockState::Free | BlockState::Finished),
+            Some(p) => b == BlockState::Free || p == peer,
+        })
     }
 }
 
@@ -972,6 +979,54 @@ mod tests {
         assert_eq!(q.pick(&bits("1"), true, 1, C, false, 0), [(0, 0)]);
         assert!(q.pick(&bits("1"), true, 1, A, true, 0).is_empty(), "parole: no end-game");
         assert_eq!(q.pick(&bits("1"), true, 1, A, false, 0), [(0, 0)]);
+        p.check_invariant();
+    }
+
+    /// Bug hunt 14: a finished block that came from no peer (a pad block, or one restored from
+    /// resume data) does not make a piece another peer's. A peer on parole goes on with such a
+    /// piece instead of starting the next one; a block another peer sent still keeps it out.
+    #[test]
+    fn parole_continues_pieces_with_pad_and_restored_blocks() {
+        let fresh = || {
+            let mut p = PiecePicker::new(2, 4 * B, 4 * B, B);
+            p.set_sequential(true);
+            p
+        };
+        // a pad block at the end of piece 0, finished as soon as A starts the piece
+        let mut p = fresh();
+        p.set_pad_bytes(0, B);
+        assert_eq!(p.pick(&bits("11"), true, 1, A, true, 0), [(0, 0)]);
+        assert_eq!(p.block_state(0, 3), BlockState::Finished);
+        assert_eq!(p.pick(&bits("11"), true, 1, A, true, 0), [(0, 1)], "A goes on with piece 0");
+        p.check_invariant();
+        // C sent a block of it: piece 0 is no longer A's alone
+        let mut p = fresh();
+        p.set_pad_bytes(0, B);
+        assert_eq!(p.pick(&bits("11"), true, 1, A, true, 0), [(0, 0)]);
+        assert_eq!(p.pick(&bits("11"), true, 1, C, false, 0), [(0, 1)]);
+        assert!(p.mark_as_writing(0, 1, C));
+        p.mark_as_finished(0, 1);
+        assert_eq!(p.pick(&bits("11"), true, 1, A, true, 0), [(1, 0)], "another peer's block");
+        p.check_invariant();
+
+        // a block restored from resume data
+        let mut p = fresh();
+        assert!(p.restore_partial(0, &bits("1000")).is_some());
+        assert_eq!(p.pick(&bits("11"), true, 1, A, true, 0), [(0, 1)]);
+        assert_eq!(p.pick(&bits("11"), true, 1, A, true, 0), [(0, 2)]);
+        p.check_invariant();
+
+        // the same for web seeds: the restored piece's free blocks, not a new piece
+        let mut p = fresh();
+        assert!(p.restore_partial(0, &bits("1000")).is_some());
+        let none = Bitfield::new(2, false);
+        assert_eq!(p.pick_contiguous(&none, true, 1, 1, A, true, 0), [(0, 1), (0, 2), (0, 3)]);
+        let mut p = fresh();
+        assert!(p.restore_partial(0, &bits("1000")).is_some());
+        assert!(p.mark_as_writing(0, 1, C));
+        p.mark_as_finished(0, 1);
+        let picked = p.pick_contiguous(&none, true, 1, 1, A, true, 0);
+        assert_eq!(picked, [(1, 0), (1, 1), (1, 2), (1, 3)], "another peer's block");
         p.check_invariant();
     }
 

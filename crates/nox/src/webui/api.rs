@@ -282,15 +282,35 @@ fn offered_key<'a>(st: &State, head: &'a Head) -> Option<&'a str> {
     head.header("authorization").and_then(auth::bearer_token)
 }
 
+/// The login session a request's `SID` cookie names; never one of the bypass sessions' fixed
+/// keys, which share the map.
+fn session_cookie(head: &Head) -> Option<&str> {
+    head.header("cookie").and_then(|c| cookie(c, "SID")).filter(|s| !is_bypass_session(s))
+}
+
+/// Whether login session `sid` exists and has not timed out at `now`.
+fn session_live(st: &State, sid: &str, now: Instant) -> bool {
+    let timeout = Duration::from_secs(st.prefs.session_timeout.max(1));
+    st.sessions.get(sid).is_some_and(|s| now.duration_since(s.last_used) < timeout)
+}
+
 /// Verifies a request's API key ahead of [`authenticate`], outside the State lock (the hash is
 /// slow on purpose), and remembers it when it is right. A wrong key counts as a failed login
 /// towards the client's ban, like [`check_login`]; a key already verified costs a SHA-256.
 /// Runs once per request: in [`authorized`] (every plain request passes there before
 /// [`serve`]) and in [`websocket_handshake`].
+///
+/// A request whose `SID` is a live login is not checked at all: [`authenticate`] takes the
+/// session first and never looks at the key, so a bearer token that a front proxy adds for its
+/// own use (bug hunt 2026-11-21, 20) does not count towards the ban, and a session holder
+/// learns nothing about the key from the answer.
 fn verify_api_key(shared: &Shared, head: &Head, ip: IpAddr, now: Instant) {
     let (key, hash) = {
         let mut st = shared.lock();
         let Some(key) = offered_key(&st, head) else { return };
+        if session_cookie(head).is_some_and(|sid| session_live(&st, sid, now)) {
+            return;
+        }
         let digest = auth::key_digest(key);
         if st.api_key_verified.is_some_and(|v| constant_time_eq(&v, &digest)) || st.bans.is_banned(ip, now) {
             return;
@@ -314,16 +334,16 @@ fn verify_api_key(shared: &Shared, head: &Head, ip: IpAddr, now: Instant) {
 /// ([`verify_api_key`]); a fixed key for loopback clients when the local-auth bypass is on, and
 /// for clients in the subnet whitelist (neither for a proxied request).
 fn authenticate(st: &mut State, head: &Head, ip: IpAddr, now: Instant) -> Option<String> {
-    let timeout = Duration::from_secs(st.prefs.session_timeout.max(1));
-    let sid = head.header("cookie").and_then(|c| cookie(c, "SID")).filter(|s| !is_bypass_session(s));
-    if let Some(sid) = sid {
-        if let Some(s) = st.sessions.get_mut(sid) {
-            if now.duration_since(s.last_used) < timeout {
+    // the same test as verify_api_key's, which skips the key for a live session
+    if let Some(sid) = session_cookie(head) {
+        if session_live(st, sid, now) {
+            if let Some(s) = st.sessions.get_mut(sid) {
                 s.last_used = now;
-                return Some(sid.to_owned());
             }
-            st.sessions.remove(sid);
+            return Some(sid.to_owned());
         }
+        // timed out (or unknown: nothing to remove)
+        st.sessions.remove(sid);
     }
     let key = if let Some(offered) = offered_key(st, head) {
         // a key given is the credential: a wrong one is refused, whatever the address
@@ -1569,10 +1589,14 @@ fn torrent_peers(shared: &Shared, key: &str, p: &Params) -> Response {
     else {
         return not_found();
     };
-    let rid = p.int("rid").unwrap_or(0);
-    let mut guard = shared.lock();
-    let st = &mut *guard;
-    let hash = st.torrents[&id].hash.clone();
+    peers_answer(&mut shared.lock(), key, id, &list, p.int("rid").unwrap_or(0))
+}
+
+/// [`torrent_peers`]' answer from the engine's peer `list`, under the lock taken again after
+/// the query: the torrent may have been removed meanwhile (bug hunt 2026-11-21, 19), which is
+/// a 404 like a hash the server never knew.
+fn peers_answer(st: &mut State, key: &str, id: TorrentId, list: &[PeerInfo], rid: i64) -> Response {
+    let Some(hash) = st.torrents.get(&id).map(|e| e.hash.clone()) else { return not_found() };
     let old = st.sessions.get_mut(key).and_then(|s| s.peers.take());
     let full = old.as_ref().is_none_or(|o| rid == 0 || o.rid != rid || o.hash != hash);
     let new_rid = old.as_ref().map_or(0, |o| o.rid) + 1;
@@ -1584,7 +1608,7 @@ fn torrent_peers(shared: &Shared, key: &str, p: &Params) -> Response {
     out.set("show_flags", true);
     let mut peers = Json::obj();
     let mut snap = HashMap::with_capacity(list.len());
-    for peer in &list {
+    for peer in list {
         let addr = peer_key(peer);
         let now = peer_fields(peer);
         match old.as_mut().and_then(|o| o.peers.remove(&addr)) {
@@ -2035,6 +2059,30 @@ mod tests {
         assert_eq!(f.get("client").and_then(Json::as_str), Some("nginx"));
         assert_eq!(f.get("port").and_then(Json::as_f64), Some(443.0));
         assert_eq!(peer_key(&seed), url);
+    }
+
+    /// Bug hunt 2026-11-21, 19: `sync/torrentPeers` takes the lock again after the engine's
+    /// answer; a torrent removed in between (an *arr app deleting it while a UI polls its
+    /// peers) is a 404, not a panic of the connection thread, and the client's last snapshot
+    /// stays as it was.
+    #[test]
+    fn peers_of_a_torrent_removed_during_the_query_are_not_found() {
+        use rookparcel_core::{InfoHashes, Sha1Hash, TorrentStatus};
+        let mut st = State::for_tests();
+        let id = TorrentId::from_raw(3);
+        let hash = Sha1Hash([3; 20]);
+        st.update(TorrentStatus { id, info_hashes: InfoHashes::v1(hash), ..TorrentStatus::default() }, 1);
+        let session = ClientSession { last_used: Instant::now(), maindata: None, peers: None };
+        st.sessions.insert("sid".into(), session);
+        let r = peers_answer(&mut st, "sid", id, &[], 0);
+        assert_eq!(r.status, 200, "{}", String::from_utf8_lossy(&r.body));
+        assert!(st.sessions["sid"].peers.is_some());
+        // removed after the query answered, before the lock was taken again
+        st.torrents.remove(&id);
+        st.by_hash.remove(&hash.to_hex());
+        let r = peers_answer(&mut st, "sid", id, &[], 1);
+        assert_eq!(r.status, 404);
+        assert!(st.sessions["sid"].peers.is_some(), "the snapshot is not taken");
     }
 
     #[test]

@@ -144,6 +144,9 @@ pub struct Client {
     /// `State::next_version` when the list was last synced: entries at or past it are new.
     synced: u64,
     removals: u64,
+    /// The hashes of torrents removed since the last tick (`removed` in the next one), so the
+    /// page drops them from its selection, wherever they were in the view or outside it.
+    removed: Vec<String>,
     view: Option<View>,
     idle: bool,
     detail: Option<Detail>,
@@ -180,6 +183,7 @@ impl Client {
             list: TorrentList::new(),
             synced: 0,
             removals: 0,
+            removed: Vec::new(),
             view: None,
             idle: false,
             detail: None,
@@ -459,6 +463,11 @@ impl Client {
         if self.removals != st.removals {
             let gone: Vec<TorrentId> = self.list.ids().filter(|id| !st.torrents.contains_key(id)).collect();
             for id in gone {
+                // the list holds every torrent, whatever the view shows: one missing from the
+                // cache is removed, not filtered out
+                if let Some(s) = self.list.get(id) {
+                    self.removed.push(super::torrent::hash_of(&s.info_hashes));
+                }
                 self.list.remove(id);
                 self.sent.remove(&id);
             }
@@ -553,6 +562,16 @@ impl Client {
         self.last_ids = ids;
         if !cells.entries().is_empty() {
             out.set("cells", cells);
+        }
+        // torrents removed since the last tick (a `rows` answer in between keeps them for this
+        // one); a hash added again meanwhile is there, so it stays selected
+        let removed: Vec<Json> = std::mem::take(&mut self.removed)
+            .into_iter()
+            .filter(|h| !st.by_hash.contains_key(h))
+            .map(Json::Str)
+            .collect();
+        if !removed.is_empty() {
+            out.set("removed", Json::Arr(removed));
         }
         out.set("counts", self.counts());
         if let Some((labels, no_label)) = self.labels_update(st) {
@@ -1196,6 +1215,66 @@ mod tests {
         st.removals += 1;
         let r = c.on_message(r#"{"t":"view","columns":["name"]}"#, &mut st);
         assert_eq!(r[0].get("total"), Some(&Json::from(2i64)));
+    }
+
+    /// Bug hunt 2026-11-21, 32: the page's selection may hold torrents outside the window or
+    /// filtered out of the view, so the tick names the torrents removed since the last one
+    /// (`removed`), once, wherever they were; a filter change alone, which only hides rows,
+    /// names none, nor does a torrent added again under its hash before the tick.
+    #[test]
+    fn a_tick_names_the_removed_torrents_once() {
+        let mut st = crate::webui::State::for_tests();
+        let hash = |i: u8| rookparcel_core::Sha1Hash([i; 20]);
+        let status = |i: u8| TorrentStatus {
+            id: TorrentId::from_raw(u64::from(i)),
+            info_hashes: rookparcel_core::InfoHashes::v1(hash(i)),
+            name: format!("t{i}"),
+            is_finished: i == 3,
+            ..TorrentStatus::default()
+        };
+        for i in 1..=4 {
+            st.update(status(i), 1);
+        }
+        let remove = |st: &mut crate::webui::State, i: u8| {
+            st.torrents.remove(&TorrentId::from_raw(u64::from(i)));
+            st.by_hash.remove(&hash(i).to_hex());
+            st.removals += 1;
+        };
+        let removed = |t: &Json| match t.get("removed") {
+            Some(Json::Arr(v)) => v.iter().map(|h| h.as_str().unwrap().to_owned()).collect(),
+            None => Vec::new(),
+            Some(other) => panic!("{}", other.to_json()),
+        };
+        let mut c = Client::new();
+        c.on_message(
+            r#"{"t":"view","filter":{"category":"downloading"},"columns":["name"],"window":[0,1]}"#,
+            &mut st,
+        );
+        let t = c.on_tick(&mut st).remove(0);
+        assert!(removed(&t).is_empty(), "{}", t.to_json());
+        // a filter change hides torrents: nothing is removed
+        let r = c.on_message(r#"{"t":"view","filter":{"category":"completed"},"columns":["name"]}"#, &mut st);
+        assert_eq!(r[0].get("total"), Some(&Json::from(1i64)));
+        assert!(removed(&c.on_tick(&mut st).remove(0)).is_empty());
+        // removed: 1 and 2 filtered out of view, 3 in it
+        remove(&mut st, 1);
+        remove(&mut st, 3);
+        let mut t = removed(&c.on_tick(&mut st).remove(0));
+        t.sort();
+        assert_eq!(t, [hash(1).to_hex(), hash(3).to_hex()]);
+        assert!(removed(&c.on_tick(&mut st).remove(0)).is_empty(), "named once");
+        // a view answered in between keeps them for the next tick
+        remove(&mut st, 2);
+        let r = c.on_message(r#"{"t":"view","columns":["name"]}"#, &mut st);
+        assert_eq!(r[0].get("total"), Some(&Json::from(1i64)));
+        assert!(r[0].get("removed").is_none());
+        assert_eq!(removed(&c.on_tick(&mut st).remove(0)), [hash(2).to_hex()]);
+        // removed and added again under the same hash (a new id) before the tick: still there
+        remove(&mut st, 4);
+        st.update(TorrentStatus { id: TorrentId::from_raw(9), ..status(4) }, 2);
+        let t = c.on_tick(&mut st).remove(0);
+        assert!(removed(&t).is_empty(), "{}", t.to_json());
+        assert_eq!(t.get("total"), Some(&Json::from(1i64)));
     }
 
     fn rows_of(m: &Json) -> Vec<Vec<String>> {

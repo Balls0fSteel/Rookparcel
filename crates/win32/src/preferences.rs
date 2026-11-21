@@ -1026,6 +1026,9 @@ struct State<'a> {
     integration: Status,
     /// The Web UI page as last read.
     webui: WebView,
+    /// A Web UI setup this dialog already tried to start and told the failure of: OK or Apply
+    /// with the page unchanged does not try it again, so OK closes (reopening tries again).
+    webui_failed: Option<WebSetup>,
     /// The Trackers page's status line as shown (`None`: not yet).
     tracker_status: Option<String>,
     /// The IP filter's status line as shown (`None`: not yet).
@@ -1084,6 +1087,7 @@ impl<'a> State<'a> {
             applied: false,
             integration: Status::default(),
             webui: WebView::default(),
+            webui_failed: None,
             tracker_status: None,
             ip_status: None,
             languages: Vec::new(),
@@ -1856,8 +1860,7 @@ unsafe fn write_controls(dlg: HWND, st: &mut State<'_>) {
         let range = network::range_of(&rule);
         set_text(item(dlg, ID_NET_RANGE), &range);
         st.shown.push((ID_NET_RANGE, range));
-        let table = st.opts.gui.schedule.table;
-        send(item(dlg, ID_SCHED_GRID), sched_grid::SET, 0, &table as *const _ as LPARAM);
+        sched_grid::set(item(dlg, ID_SCHED_GRID), &st.opts.gui.schedule.table);
         st.shown.push((ID_SCHED_GRID, st.opts.gui.schedule.table_text()));
         update_ip_filter_status(dlg, st, None);
         update_tracker_status(dlg, st);
@@ -2081,38 +2084,46 @@ unsafe fn webui_edit(dlg: HWND, st: &State<'_>) -> Result<Option<Edit>, String> 
             api_key_enabled,
             subnets,
         };
-        // as stored and running: nothing to do; a server that could not start is tried again
-        if setup == v.setup && password.is_empty() && key.is_none() && v.status.running() {
+        // as stored and running: nothing to do; a server that could not start is tried again,
+        // once per dialog (its failure told, OK then closes)
+        let tried = st.webui_failed.as_ref() == Some(&setup) && matches!(v.status, WebStatus::Failed(_));
+        if setup == v.setup && password.is_empty() && key.is_none() && (v.status.running() || tried) {
             return Ok(None);
         }
         Ok(Some(Edit { setup, password: (!password.is_empty()).then_some(password), api_key: key }))
     }
 }
 
-/// Stores the Web UI page's setup and restarts the server if the page asks for it. False
-/// (after saying why) when it could not: the page is shown with the reason in its status
-/// line.
-unsafe fn apply_webui(dlg: HWND, st: &mut State<'_>) -> bool {
+/// What the Web UI page asks for ([`webui_edit`]); `Err(())` after telling why it cannot be
+/// taken, before anything changes.
+unsafe fn read_webui(dlg: HWND, st: &mut State<'_>) -> Result<Option<Edit>, ()> {
     unsafe {
-        let edit = match webui_edit(dlg, st) {
-            Ok(None) => return true,
-            Ok(Some(e)) => e,
-            Err(text) => {
-                select_page(dlg, st, PAGE_WEBUI);
-                dialogs::error(dlg, &text);
-                return false;
-            }
-        };
-        st.webui = (st.hooks.webui)(Some(&edit));
+        webui_edit(dlg, st).map_err(|text| {
+            select_page(dlg, st, PAGE_WEBUI);
+            dialogs::error(dlg, &text);
+        })
+    }
+}
+
+/// Stores the Web UI page's setup and restarts the server. False (after saying why) when it
+/// could not start: the page is shown with the reason in its status line, and the same
+/// setup is not tried again in this dialog.
+unsafe fn apply_webui(dlg: HWND, st: &mut State<'_>, edit: &Edit) -> bool {
+    unsafe {
+        st.webui = (st.hooks.webui)(Some(edit));
         write_webui(dlg, st);
         match &st.webui.status {
             WebStatus::Failed(why) => {
                 let why = why.clone();
+                st.webui_failed = Some(edit.setup.clone());
                 select_page(dlg, st, PAGE_WEBUI);
                 dialogs::error(dlg, &tr!(WebUiFailed, error = why));
                 false
             }
-            _ => true,
+            _ => {
+                st.webui_failed = None;
+                true
+            }
         }
     }
 }
@@ -2129,9 +2140,7 @@ unsafe fn update_sched_controls(dlg: HWND) {
 
 /// The scheduler table as edited.
 unsafe fn sched_table(dlg: HWND) -> [Mode; scheduler::CELLS] {
-    let mut table = [Mode::Full; scheduler::CELLS];
-    unsafe { send(item(dlg, ID_SCHED_GRID), sched_grid::GET, 0, &mut table as *mut _ as LPARAM) };
-    table
+    unsafe { sched_grid::get(item(dlg, ID_SCHED_GRID)) }.unwrap_or([Mode::Full; scheduler::CELLS])
 }
 
 /// The list of names follows "Do not download files named" (D74, `pref_pages`' `needs`).
@@ -2386,11 +2395,19 @@ unsafe fn read_or_complain(dlg: HWND, st: &mut State<'_>) -> bool {
 unsafe fn apply(dlg: HWND, st: &mut State<'_>) -> bool {
     unsafe {
         let language = st.opts.gui.language.clone();
-        if !read_or_complain(dlg, st) || !apply_integration(dlg, st) || !apply_webui(dlg, st) {
+        if !read_or_complain(dlg, st) {
+            return false;
+        }
+        // every page is read before anything changes
+        let Ok(web) = read_webui(dlg, st) else { return false };
+        if !apply_integration(dlg, st) {
             return false;
         }
         (st.hooks.apply)(&st.opts);
         st.applied = true;
+        // the Web UI last: a server that cannot start holds none of the other settings back;
+        // its failure keeps the dialog open once, with the reason on its page
+        let web_started = web.is_none_or(|e| apply_webui(dlg, st, &e));
         // the windows are built in the language of the start
         if st.opts.gui.language != language {
             dialogs::info(dlg, tr!(LangRestart));
@@ -2398,7 +2415,7 @@ unsafe fn apply(dlg: HWND, st: &mut State<'_>) -> bool {
         write_controls(dlg, st);
         let sel = selected_row(dlg);
         fill_advanced(dlg, st, sel);
-        true
+        web_started
     }
 }
 
@@ -3276,27 +3293,49 @@ mod tests {
         assert_eq!(f.web_edits.borrow().last().cloned(), kept(&want));
 
         // the subnet whitelist: a bad entry is told, nothing is stored
+        // (nor an association or any other setting: every page is read first)
         f.set(ID_WEBUI_SUBNETS, "192.168.1.0/24; nonsense");
+        f.check(ID_ASSOC_MAGNET, true);
         let n = f.web_edits.borrow().len();
+        let applied = f.applied.borrow().len();
         dialogs::take_told();
         f.click(ID_APPLY);
         assert_eq!(dialogs::take_told(), [tr!(PrefBadSubnet, entry = "nonsense")]);
         assert_eq!(f.web_edits.borrow().len(), n);
+        assert!(f.integrations.borrow().is_empty() && f.applied.borrow().len() == applied);
+        f.check(ID_ASSOC_MAGNET, false);
         f.set(ID_WEBUI_SUBNETS, " 192.168.1.0/24;fd00::/8 ");
         f.click(ID_APPLY);
         let want = WebSetup { subnets: "192.168.1.0/24;fd00::/8".into(), ..want };
         assert_eq!(f.web_edits.borrow().last().cloned(), kept(&want));
         assert_eq!(f.text(ID_WEBUI_SUBNETS), "192.168.1.0/24;fd00::/8");
 
-        // a server that cannot start: the page says why, and Apply tries again
+        // a server that cannot start: the page says why, and the other settings are applied
         f.set(ID_WEBUI_PORT, "1");
+        f.set(ID_CONNECTIONS, "321");
         dialogs::take_told();
+        let applied = f.applied.borrow().len();
         f.click(ID_APPLY);
         let failed = tr!(WebUiFailed, error = "port 1 is in use");
         assert_eq!(dialogs::take_told(), std::slice::from_ref(&failed));
         assert_eq!(f.text(ID_WEBUI_STATUS), failed);
         assert!(!enabled(ID_WEBUI_OPEN));
+        assert_eq!(f.applied.borrow().len(), applied + 1, "the other settings are not held back");
+        assert_eq!(f.last_applied().settings.connections_limit, 321);
+        let tries = f.web_edits.borrow().len();
+        // told once: the same setup is not tried again in this dialog, so OK closes
+        assert!(unsafe { webui_edit(f.dlg, &f.st) }.unwrap().is_none(), "told once");
+        f.click(ID_APPLY);
+        assert!(dialogs::take_told().is_empty());
+        assert_eq!(f.web_edits.borrow().len(), tries);
+        // a dialog opened later tries it again (the Web UI page as the app reports it)
+        f.st.webui_failed = None;
         assert!(unsafe { webui_edit(f.dlg, &f.st) }.unwrap().is_some(), "tried again");
+        // so does a changed page: a new password is tried at once
+        f.st.webui_failed = Some(f.web.borrow().setup.clone());
+        f.set(ID_WEBUI_PASS, "n3w");
+        assert!(unsafe { webui_edit(f.dlg, &f.st) }.unwrap().is_some(), "a new password");
+        f.set(ID_WEBUI_PASS, "");
 
         // the box off turns it off
         f.check(ID_WEBUI, false);

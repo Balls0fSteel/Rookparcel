@@ -111,13 +111,16 @@ struct Progress {
 }
 
 /// Runs `job` on GIO's thread pool behind a modal progress window over `parent` (title,
-/// `name` above the bar, Cancel): its result, `None` when cancelled.
+/// `name` above the bar, Cancel): its result, `None` when cancelled. While the windows are
+/// locked (D69) it waits for the unlock first, as every window and box here does: a step after
+/// an `await` can come after a lock.
 pub async fn run_job<T: Send + 'static>(
     parent: &gtk::Window,
     title: &str,
     name: &str,
     job: impl FnOnce(&mut dyn FnMut(u64, Option<u64>) -> bool) -> Result<T, String> + Send + 'static,
 ) -> Option<Result<T, String>> {
+    crate::app::until_unlocked().await;
     let window = gtk::Window::builder()
         .title(title)
         .transient_for(parent)
@@ -183,12 +186,16 @@ pub async fn run_job<T: Send + 'static>(
     Some(answer.unwrap_or_else(|_| Err("the worker stopped".to_owned())))
 }
 
+/// A message box over `parent`; locked, it waits for the unlock (D69).
 async fn message(parent: &gtk::Window, text: &str) {
+    crate::app::until_unlocked().await;
     let d = gtk::AlertDialog::builder().message(text).modal(true).build();
     let _ = d.choose_future(Some(parent)).await;
 }
 
+/// A question over `parent`; locked, it waits for the unlock (D69).
 async fn ask(parent: &gtk::Window, text: &str, yes: &str) -> bool {
+    crate::app::until_unlocked().await;
     let d = gtk::AlertDialog::builder()
         .message(text)
         .buttons([tr!(BtnCancel), yes])
@@ -282,6 +289,8 @@ async fn open_page(m: Rc<Manager>) {
         None => {}
         Some(Err(e)) => message(&window, &tr!(SearchHelperFailed, error = e)).await,
         Some(Ok((url, password))) => {
+            // not onto the clipboard while locked either: the box shows it at the unlock
+            crate::app::until_unlocked().await;
             if let Some(display) = gdk::Display::default() {
                 display.clipboard().set_text(&password);
             }
@@ -328,8 +337,9 @@ pub fn initially_ticked(list: &[Indexer]) -> Vec<bool> {
 
 /// The site picker over `parent`: name, language, type and a note per public site, a check
 /// box each (nothing ticked for the user; FlareSolverr ones greyed and not tickable). The ids
-/// ticked on OK, `None` on Cancel.
+/// ticked on OK, `None` on Cancel. Locked, it waits for the unlock (D69).
 async fn picker(parent: &gtk::Window, list: Vec<Indexer>) -> Option<Vec<String>> {
+    crate::app::until_unlocked().await;
     let window = gtk::Window::builder()
         .title(tr!(SearchHelperSitesTitle))
         .transient_for(parent)

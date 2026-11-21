@@ -135,6 +135,14 @@ torrents without a tag) in place of a label or category; a name the tags refuse 
 empty view. A row in the window that did not change is not sent. Cells are strings in the client's
 column order; a column change re-sends the window.
 
+A `tick` names the torrents removed since the client's last tick, `"removed":["<hash>", ...]`
+(left out when none), wherever they were in the view, outside the window or filtered out of
+it: the page drops them from its selection, so "N selected" and the Remove question do not
+count them (a filter change only hides rows and names none; a hash added again before the
+tick is not named). A fresh socket starts with nothing removed, so a torrent removed while the
+page was disconnected stays selected until the selection changes; the server ignores ids it
+does not know.
+
 A `tick` also carries `"rss": n` when the RSS Downloader changed, `"search": n` when the
 torrent search's results, status lines or sources changed (the page asks `GET /pa/rss` or
 `GET /pa/search` again) and `"adds": n` when a magnet's Add dialog can open; each is sent
@@ -666,7 +674,11 @@ current password, and reported read-only by the shim's `app/preferences`:
   stored as a PBKDF2 hash like the password; the SHA-256 of the last key that verified is kept
   in memory so the hash runs once per key, not per request. A wrong key counts as a failed
   login towards the client's ban, and a request that names a key is refused when it is wrong
-  even from a whitelisted address. It works through a reverse proxy.
+  even from a whitelisted address. A request with a live login session (`SID`) is the
+  session's: its `Authorization` header is neither checked nor counted, so a front proxy that
+  adds a bearer token of its own does not get a logged-in browser banned. Before the login
+  (the page and the login form themselves) such a token still counts as a wrong key: a proxy
+  must not send one to nox while the API key is on. It works through a reverse proxy.
 - **Subnet whitelist** (`webui.bypass_auth_subnets`, qBittorrent's
   `bypass_auth_subnet_whitelist`): `;`-separated CIDRs or bare addresses, IPv4 and IPv6 (an
   IPv4-mapped client counts as its IPv4 address); an entry that does not parse is refused.

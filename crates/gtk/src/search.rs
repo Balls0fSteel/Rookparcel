@@ -33,7 +33,7 @@ use rookparcel_frontend::detail::ColumnDef;
 use rookparcel_frontend::lang::{S, gtk_mnemonic};
 use rookparcel_frontend::rss::Download;
 use rookparcel_frontend::search::helper::HelperProxy;
-use rookparcel_frontend::search::source::url_host;
+use rookparcel_frontend::search::source::{moved_source, url_host};
 use rookparcel_frontend::search::{
     Query, Search, SearchResult, SearchSource, Source, SourceStatus, category_text, fetch_caps,
     fetch_download, main_categories, redact,
@@ -114,21 +114,27 @@ pub fn menu_choices(sources: &[Source]) -> Vec<(Mode, String)> {
     out
 }
 
-/// `mode` after the sources changed from `old` to `new`: the same source (by URL and name)
-/// where it is now; the name filter when it is gone or switched off, or for "All sources" with
-/// none left on.
+/// `mode` after the sources changed from `old` to `new`: the same source where it is now
+/// ([`moved_source`]); the name filter when it is gone or switched off, or for "All sources"
+/// with none left on.
 pub fn remap(mode: Mode, old: &[Source], new: &[Source]) -> Mode {
     match mode {
         Mode::Filter => Mode::Filter,
         Mode::All if new.iter().any(|s| s.enabled) => Mode::All,
         Mode::All => Mode::Filter,
         Mode::Source(n) => {
-            let Some(was) = old.get(n) else { return Mode::Filter };
-            new.iter()
-                .position(|s| s.url == was.url && s.name == was.name)
-                .filter(|&i| new[i].enabled)
-                .map_or(Mode::Filter, Mode::Source)
+            moved_source(old, n, new).filter(|&i| new[i].enabled).map_or(Mode::Filter, Mode::Source)
         }
+    }
+}
+
+/// The Search Torrents window's source pick after the sources changed from `old` to `new`:
+/// the same source where it is now ([`moved_source`]), kept although switched off (as
+/// [`picked`] searches it); "All sources" when it is gone.
+pub fn remap_picked(mode: Mode, old: &[Source], new: &[Source]) -> Mode {
+    match mode {
+        Mode::Source(n) => moved_source(old, n, new).map_or(Mode::All, Mode::Source),
+        other => other,
     }
 }
 
@@ -367,11 +373,11 @@ pub fn search(parent: &gtk::ApplicationWindow, host: Rc<dyn Host>, text: &str, m
     }
 }
 
-/// The sources changed (the Search Sources window stored them): the open Search Torrents
-/// window's source list follows.
-fn sources_changed() {
+/// The sources changed from `old` to `new` (the Search Sources window stored them): the open
+/// Search Torrents window's source list follows, its pick on the same source where that is now.
+fn sources_changed(old: &[Source], new: &[Source]) {
     if let Some(r) = open_results() {
-        let mode = r.mode();
+        let mode = remap_picked(r.mode(), old, new);
         r.fill_sources(mode);
     }
 }
@@ -975,8 +981,9 @@ impl Manager {
 
 /// Stores `sources` through `host`; the Search Torrents window's source list follows.
 fn store(host: &dyn Host, sources: &[Source]) {
+    let old = host.sources();
     host.store(sources);
-    sources_changed();
+    sources_changed(&old, sources);
 }
 
 /// The Add / Edit Search Source dialog over `parent` (`current`: the source edited); `done`
@@ -1164,6 +1171,22 @@ mod tests {
         assert_eq!(remap(Mode::Source(1), &old, &off), Mode::Filter);
         assert_eq!(remap(Mode::All, &old, &[src("a", "http://h/1/api", false)]), Mode::Filter);
         assert_eq!(remap(Mode::Source(5), &old, &old), Mode::Filter);
+        // edited in place: still picked
+        let edited = [src("a2", "http://h/1b/api", true), src("b", "http://h/2/api", true)];
+        assert_eq!(remap(Mode::Source(0), &old, &edited), Mode::Source(0));
+    }
+
+    #[test]
+    fn the_window_keeps_its_source_through_a_change() {
+        let old = [src("a", "http://h/1/api", true), src("b", "http://h/2/api", true)];
+        let new = [src("b", "http://h/2/api", true)];
+        // "a" removed: "b" moved up, "a" itself falls back to All sources
+        assert_eq!(remap_picked(Mode::Source(1), &old, &new), Mode::Source(0));
+        assert_eq!(remap_picked(Mode::Source(0), &old, &new), Mode::All);
+        assert_eq!(remap_picked(Mode::All, &old, &new), Mode::All);
+        // switched off: still picked, as a search asks it then
+        let off = [src("a", "http://h/1/api", true), src("b", "http://h/2/api", false)];
+        assert_eq!(remap_picked(Mode::Source(1), &old, &off), Mode::Source(1));
     }
 
     #[test]

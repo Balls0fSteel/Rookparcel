@@ -91,9 +91,9 @@ mod bench;
 
 pub const WM_APP_ALERTS: u32 = WM_APP + 1;
 const WM_APP_TRAY: u32 = WM_APP + 2;
-/// A URL download finished; `lParam` is a `Box<UrlResult>`.
+/// A URL download finished; `lParam` names its `UrlResult` (`posted`).
 const WM_APP_URL: u32 = WM_APP + 3;
-/// Arguments forwarded by a second instance are waiting in `App::pending_args`.
+/// Arguments forwarded by a second instance are waiting in [`FORWARDED_ARGS`].
 const WM_APP_ARGS: u32 = WM_APP + 4;
 /// Auto Shutdown: the work is done, show the countdown; `wParam` = seconds.
 const WM_APP_COUNTDOWN: u32 = WM_APP + 5;
@@ -169,6 +169,32 @@ pub fn waiting_class() -> PCWSTR {
 
 /// What second starts handed to the waiting window, added once the main window exists.
 static WAITING_ARGS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+thread_local! {
+    /// What second starts handed to the main window, added (`WM_APP_ARGS`) once their
+    /// `WM_COPYDATA` has returned; both run on the window's thread. Kept outside the window's
+    /// state, which may be borrowed, or taken during the close, when the message arrives.
+    static FORWARDED_ARGS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Takes the arguments [`take_forwarded`] parked.
+fn take_forwarded_args() -> Vec<String> {
+    FORWARDED_ARGS.with(|f| std::mem::take(&mut *f.borrow_mut()))
+}
+
+/// The main window's answer to a second start's arguments (`WM_COPYDATA`): parked for
+/// `WM_APP_ARGS` and 1, or 0 while the window closes ([`EXITING_PROP`]): its engine is
+/// stopping, so the second start waits for this process to end and runs them itself.
+unsafe fn take_forwarded(hwnd: HWND, args: Vec<String>) -> LRESULT {
+    unsafe {
+        if !GetPropW(hwnd, EXITING_PROP).is_null() {
+            return 0;
+        }
+        FORWARDED_ARGS.with(|f| f.borrow_mut().extend(args));
+        PostMessageW(hwnd, WM_APP_ARGS, 0, 0);
+        1
+    }
+}
 
 unsafe extern "system" fn waiting_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if msg == WM_COPYDATA {
@@ -512,8 +538,6 @@ struct App {
     net_tip: String,
     quitting: bool,
     taskbar_created: u32,
-    /// Arguments from a second instance, added once its `WM_COPYDATA` has returned.
-    pending_args: Vec<String>,
     /// Torrents (by `InfoHashes::key_hex`) to move to the top of the queue once added.
     queue_top: HashSet<String>,
     /// Magnets waiting for their metadata before the Add New Torrent dialog opens, and whether
@@ -1529,7 +1553,6 @@ unsafe fn init(hwnd: HWND, session: Session, prefs: Prefs) {
             net_tip: String::new(),
             quitting: false,
             taskbar_created: RegisterWindowMessageW(w!("TaskbarCreated")),
-            pending_args: Vec::new(),
             queue_top: HashSet::new(),
             awaiting,
             awaiting_dialog: false,
@@ -3784,7 +3807,10 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 0
             }
             WM_APP_URL => {
-                show_or_hold(hwnd, Popup::Url(*Box::from_raw(lparam as *mut UrlResult)));
+                // a number naming the result (anyone can post this message)
+                if let Some(r) = crate::posted::take::<UrlResult>(msg, lparam) {
+                    show_or_hold(hwnd, Popup::Url(r));
+                }
                 0
             }
             WM_APP_UNLOCK => {
@@ -3810,7 +3836,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 if wait == Some(true) {
                     return 0;
                 }
-                let args = with_app(|a| std::mem::take(&mut a.pending_args)).unwrap_or_default();
+                let args = take_forwarded_args();
                 if args.is_empty() && is_locked() {
                     // a start without torrents shows the window: here, the PIN prompt
                     request_unlock(hwnd);
@@ -3833,18 +3859,22 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 0
             }
             WM_APP_UPDATE => {
-                update_done(hwnd, *Box::from_raw(lparam as *mut Result<Manifest, String>));
+                if let Some(r) = crate::posted::take::<Result<Manifest, String>>(msg, lparam) {
+                    update_done(hwnd, r);
+                }
                 0
             }
             WM_APP_WEBUI => {
                 match wparam {
                     webui_host::POST_CHANGES => on_web_changes(),
                     webui_host::POST_RSS => on_web_rss(),
-                    _ => {
-                        // a browser's shutdown request: as File > Exit
+                    // a browser's shutdown request: as File > Exit; anything else (another
+                    // program can post this message) does nothing
+                    webui_host::POST_SHUTDOWN if with_app(|a| a.web_host.take_shutdown()) == Some(true) => {
                         with_app(|a| a.quitting = true);
                         DestroyWindow(hwnd);
                     }
+                    _ => {}
                 }
                 0
             }
@@ -4064,14 +4094,13 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 // Locked, the PIN prompt comes with `WM_APP_ARGS` instead.
                 let activate = args.is_empty()
                     || with_app(|a| GuiOptions::load(&a.prefs, &a.save_path).activate_on_add).unwrap_or(true);
-                if activate && !is_locked() {
+                // The sender waits for this message to return: the Add New Torrent dialog must
+                // not run inside it. A closing window does not take them.
+                let taken = take_forwarded(hwnd, args);
+                if taken != 0 && activate && !is_locked() {
                     show_window(hwnd);
                 }
-                // The sender waits for this message to return: the Add New Torrent dialog must
-                // not run inside it.
-                with_app(|a| a.pending_args.extend(args));
-                PostMessageW(hwnd, WM_APP_ARGS, 0, 0);
-                1
+                taken
             }
             WM_CLOSE => {
                 let to_tray = with_app(|a| !a.quitting && a.prefs.get_bool("ui.close_to_tray", true));
@@ -6301,12 +6330,7 @@ fn download_url(hwnd: HWND, url: String) {
     let proxy = with_app(|a| rss_proxy(a)).flatten();
     std::thread::spawn(move || {
         let data = fetch_torrent(&url, proxy);
-        let result = Box::into_raw(Box::new(UrlResult { url, data }));
-        unsafe {
-            if PostMessageW(target as HWND, WM_APP_URL, 0, result as LPARAM) == 0 {
-                drop(Box::from_raw(result));
-            }
-        }
+        crate::posted::post::<UrlResult>(target as HWND, WM_APP_URL, 0, UrlResult { url, data });
     });
 }
 
@@ -6513,6 +6537,37 @@ mod url_tests {
                 sync_title(a);
             });
             assert_eq!(title(), profile::name_build());
+
+            // another program posting the window's own messages: a result number never
+            // given, an unknown Web UI code and a shutdown no browser asked for do nothing
+            for (msg, wp, lp) in [
+                (WM_APP_URL, 0, 0x1234_5678),
+                (WM_APP_UPDATE, 0, 0x1234_5678),
+                (WM_APP_WEBUI, 7, 0),
+                (WM_APP_WEBUI, webui_host::POST_SHUTDOWN, 0),
+            ] {
+                assert_ne!(PostMessageW(hwnd, msg, wp, lp), 0);
+            }
+            let until = Instant::now() + Duration::from_millis(300);
+            pump_until(|| Instant::now() >= until);
+            assert_ne!(IsWindow(hwnd), 0, "the window is still there");
+            assert!(with_app(|a| !a.quitting).unwrap_or(false));
+            URL_ERRORS.with(|e| assert_eq!(e.borrow().len(), 1, "{:?}", e.borrow()));
+            // a browser's shutdown request is told by the host before the message
+            assert!(!with_app(|a| a.web_host.take_shutdown()).unwrap());
+
+            // a second start's arguments while the window closes: declined, not parked
+            // (the second start then runs them once this process has ended)
+            let payload: Vec<u16> = "magnet:?xt=urn:btih:00\0\0".encode_utf16().collect();
+            let cds = COPYDATASTRUCT {
+                dwData: COPYDATA_ARGS,
+                cbData: (payload.len() * 2) as u32,
+                lpData: payload.as_ptr() as *mut _,
+            };
+            SetPropW(hwnd, EXITING_PROP, std::ptr::without_provenance_mut(1));
+            assert_eq!(SendMessageW(hwnd, WM_COPYDATA, 0, &cds as *const _ as LPARAM), 0);
+            assert!(take_forwarded_args().is_empty());
+            RemovePropW(hwnd, EXITING_PROP);
 
             drop(window);
         }
@@ -7557,12 +7612,8 @@ fn start_update_check(hwnd: HWND) {
     let target = hwnd as isize;
     let proxy = with_app(|a| rss_proxy(a)).flatten();
     std::thread::spawn(move || {
-        let result = Box::into_raw(Box::new(update::fetch(proxy)));
-        unsafe {
-            if PostMessageW(target as HWND, WM_APP_UPDATE, 0, result as LPARAM) == 0 {
-                drop(Box::from_raw(result));
-            }
-        }
+        let result: Result<Manifest, String> = update::fetch(proxy);
+        crate::posted::post(target as HWND, WM_APP_UPDATE, 0, result);
     });
 }
 
@@ -9012,6 +9063,31 @@ mod tests {
         assert_eq!(copydata_args(&cds(7, all, words.as_ptr())), None, "another sender's message");
         let odd = (words.as_ptr() as *const u8).wrapping_add(1) as *const u16;
         assert_eq!(copydata_args(&cds(COPYDATA_ARGS, 4, odd)), None, "misaligned");
+    }
+
+    /// A second start's arguments wait outside the window's state (none here: tests have no
+    /// `App`) for `WM_APP_ARGS`; a closing window answers 0 and keeps none.
+    #[test]
+    fn forwarded_arguments_wait_outside_the_window_state() {
+        let window = TestWindow(copy_window());
+        let hwnd = window.0;
+        let magnet = || vec!["magnet:?xt=urn:btih:x".to_owned()];
+        unsafe {
+            take_forwarded_args();
+            SetPropW(hwnd, EXITING_PROP, std::ptr::without_provenance_mut(1));
+            assert_eq!(take_forwarded(hwnd, magnet()), 0);
+            assert!(take_forwarded_args().is_empty());
+            RemovePropW(hwnd, EXITING_PROP);
+            assert!(with_app(|_| ()).is_none());
+            assert_eq!(take_forwarded(hwnd, magnet()), 1);
+            assert_eq!(take_forwarded_args(), magnet());
+            let mut m: MSG = std::mem::zeroed();
+            assert_ne!(
+                PeekMessageW(&mut m, hwnd, WM_APP_ARGS, WM_APP_ARGS, PM_REMOVE),
+                0,
+                "WM_APP_ARGS posted"
+            );
+        }
     }
 
     /// `WM_COPYDATA` messages a test window took.

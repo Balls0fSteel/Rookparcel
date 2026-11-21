@@ -336,6 +336,12 @@ struct Start {
     pick: Pick,
 }
 
+thread_local! {
+    /// The search [`start_in`] hands to its window with `WM_SEARCH_START`: kept here rather
+    /// than pointed at by the message, which any program can post.
+    static STARTING: RefCell<Option<Start>> = const { RefCell::new(None) };
+}
+
 /// What Add hands back from its thread.
 struct Fetched {
     name: String,
@@ -412,9 +418,10 @@ pub fn open(owner: HWND, host: Box<dyn Host>, query: &str, pick: Pick) -> HWND {
 
 /// Searches again in the open window `dlg` and brings it forward.
 pub fn start_in(dlg: HWND, query: &str, pick: Pick) {
-    let start = Start { query: query.to_owned(), pick };
+    STARTING.with(|s| *s.borrow_mut() = Some(Start { query: query.to_owned(), pick }));
     unsafe {
-        SendMessageW(dlg, WM_SEARCH_START, 0, &start as *const Start as LPARAM);
+        SendMessageW(dlg, WM_SEARCH_START, 0, 0);
+        STARTING.with(|s| s.borrow_mut().take());
         if !cfg!(test) {
             if IsIconic(dlg) != 0 {
                 ShowWindow(dlg, SW_RESTORE);
@@ -629,12 +636,15 @@ unsafe extern "system" fn results_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPAR
                 1
             }
             WM_SEARCH_START => {
-                let start = &*(lp as *const Start);
-                begin(dlg, st, &start.query, &start.pick);
+                // only what start_in left (anyone can post this message)
+                if let Some(start) = STARTING.with(|s| s.borrow_mut().take()) {
+                    begin(dlg, st, &start.query, &start.pick);
+                }
                 1
             }
             WM_SEARCH_FETCHED => {
-                let f = *Box::from_raw(lp as *mut Fetched);
+                // a number naming the result (anyone can post this message)
+                let Some(f) = crate::posted::take::<Fetched>(msg, lp) else { return 1 };
                 match f.result {
                     Ok(d) => {
                         st.note = tr!(SearchAdded, name = f.name);
@@ -906,10 +916,8 @@ unsafe fn add_selected(dlg: HWND, st: &mut Results) {
             let proxy = proxy.clone();
             std::thread::spawn(move || {
                 let result = download(&r, &src, proxy.as_ref()).map_err(|e| src.redact(&e));
-                let f = Box::into_raw(Box::new(Fetched { name: r.name.clone(), label: src.label(), result }));
-                if PostMessageW(target as HWND, WM_SEARCH_FETCHED, 0, f as LPARAM) == 0 {
-                    drop(Box::from_raw(f));
-                }
+                let f = Fetched { name: r.name.clone(), label: src.label(), result };
+                crate::posted::post(target as HWND, WM_SEARCH_FETCHED, 0, f);
             });
         }
     }
@@ -1053,7 +1061,7 @@ unsafe extern "system" fn sources_proc(dlg: HWND, msg: u32, wp: WPARAM, lp: LPAR
                 1
             }
             WM_SEARCH_TESTED => {
-                let t = *Box::from_raw(lp as *mut Tested);
+                let Some(t) = crate::posted::take::<Tested>(msg, lp) else { return 1 };
                 let text = match t.result {
                     Ok(n) => tr!(SearchTestOk, source = t.label, count = n),
                     Err(e) => tr!(SearchFailed, source = t.label, error = e),
@@ -1270,10 +1278,7 @@ unsafe fn test_source(dlg: HWND, st: &mut Sources<'_>) {
             let result = caps(&source, proxy.as_ref())
                 .map(|cats| cats.len() + cats.iter().map(|c| c.subcats.len()).sum::<usize>())
                 .map_err(|e| source.redact(&e.to_string()));
-            let t = Box::into_raw(Box::new(Tested { label, result }));
-            if PostMessageW(target as HWND, WM_SEARCH_TESTED, 0, t as LPARAM) == 0 {
-                drop(Box::from_raw(t));
-            }
+            crate::posted::post(target as HWND, WM_SEARCH_TESTED, 0, Tested { label, result });
         });
     }
 }

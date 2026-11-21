@@ -1386,6 +1386,63 @@ fn an_api_key_is_accepted_only_when_switched_on() {
     assert!(r.text().contains("banned"), "{}", r.text());
 }
 
+/// Bug hunt 2026-11-21, 20: with the API key on, a front proxy that adds a bearer token of its
+/// own to a logged-in browser's requests does not get it banned: a live session is the
+/// request's credential and its `Authorization` is not looked at. Without one (no cookie, an
+/// unknown SID, or a bypass session's fixed name as the cookie) a wrong key still counts.
+#[test]
+fn a_foreign_bearer_on_a_live_session_is_not_a_failed_login() {
+    let t = Harness::start("foreign-bearer");
+    let sid = t.login();
+    let r = t.pa(
+        &sid,
+        "/pa/prefs",
+        &format!(
+            r#"{{"webui.api_key":"{API_KEY}","webui.api_key_enabled":true,"webui.current_password":"{PASS}"}}"#
+        ),
+    );
+    assert_eq!(r.status, 204, "{}", r.text());
+    let version = "/api/v2/app/version";
+    let foreign = "Bearer eyJhbGciOiJIUzI1NiJ9.proxy-token.signature";
+    let wrong = "Bearer a-wrong-key-0123456789";
+    let right = format!("Bearer {API_KEY}");
+    let get = |headers: &[(&str, &str)]| t.req("GET", version, headers, Body::None);
+
+    // a browser behind the proxy, logged in: far more requests than the ban limit (5)
+    let xff = ("X-Forwarded-For", "203.0.113.50");
+    let r =
+        t.req("POST", "/api/v2/auth/login", &[xff], Body::Form(&format!("username=admin&password={PASS}")));
+    let browser = r.header("set-cookie").unwrap().split(';').next().unwrap().to_owned();
+    for i in 0..8 {
+        let r = get(&[("Cookie", &browser), ("Authorization", foreign), xff]);
+        assert_eq!(r.status, 200, "request {i}: {}", r.text());
+    }
+    // nothing counted: the key itself still works from that address
+    assert_eq!(get(&[("Authorization", &right), xff]).status, 200, "not banned");
+
+    // no live session: a wrong key counts, whatever the cookie names
+    for (client, cookie) in [("203.0.113.51", "SID=0123456789abcdef"), ("203.0.113.52", "SID=apikey")] {
+        let xff = ("X-Forwarded-For", client);
+        for _ in 0..5 {
+            assert_eq!(get(&[("Cookie", cookie), ("Authorization", wrong), xff]).status, 403, "{cookie}");
+        }
+        let r = get(&[("Authorization", &right), xff]);
+        assert_eq!(r.status, 403, "{cookie}");
+        assert!(r.text().contains("banned"), "{cookie}: {}", r.text());
+    }
+    // a session that timed out is no session either (the timeout is a minute at least, so
+    // logged out here): the browser's cookie after a logout
+    let xff = ("X-Forwarded-For", "203.0.113.53");
+    let r =
+        t.req("POST", "/api/v2/auth/login", &[xff], Body::Form(&format!("username=admin&password={PASS}")));
+    let ended = r.header("set-cookie").unwrap().split(';').next().unwrap().to_owned();
+    assert_eq!(t.req("POST", "/api/v2/auth/logout", &[("Cookie", &ended), xff], Body::Form("")).status, 200);
+    for _ in 0..5 {
+        assert_eq!(get(&[("Cookie", &ended), ("Authorization", wrong), xff]).status, 403);
+    }
+    assert!(get(&[("Authorization", &right), xff]).text().contains("banned"));
+}
+
 /// The subnet whitelist skips the login for its clients (here loopback, with the local-auth
 /// bypass off), never for a proxied request; an entry that is not a subnet is refused.
 #[test]

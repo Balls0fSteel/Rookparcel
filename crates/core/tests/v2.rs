@@ -933,12 +933,23 @@ type Announces = std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Vec<u
 /// the other ports of its own hash on 127.0.0.1. Also counts the announces per info-hash. Runs
 /// until the test process ends.
 fn swarm_tracker() -> (String, Swarms, Announces) {
+    let (url, swarms, announces, _) = swarm_tracker_with_events();
+    (url, swarms, announces)
+}
+
+/// The `event` of each announce, with its info-hash.
+type Events = std::sync::Arc<std::sync::Mutex<Vec<(Vec<u8>, String)>>>;
+
+/// [`swarm_tracker`], also listing the announces' events.
+fn swarm_tracker_with_events() -> (String, Swarms, Announces, Events) {
     let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}/announce", l.local_addr().unwrap());
     let swarms: Swarms = Default::default();
     let announces: Announces = Default::default();
+    let events: Events = Default::default();
     let shared = swarms.clone();
     let counts = announces.clone();
+    let seen = events.clone();
     std::thread::spawn(move || {
         use std::io::{Read, Write};
         for conn in l.incoming() {
@@ -961,6 +972,7 @@ fn swarm_tracker() -> (String, Swarms, Announces) {
             let ih = percent_decode(param("info_hash"));
             let port: u16 = param("port").parse().unwrap_or(0);
             *counts.lock().unwrap().entry(ih.clone()).or_default() += 1;
+            seen.lock().unwrap().push((ih.clone(), param("event").to_owned()));
             let mut peers = Vec::new();
             {
                 let mut s = shared.lock().unwrap();
@@ -982,7 +994,7 @@ fn swarm_tracker() -> (String, Swarms, Announces) {
             let _ = c.write_all(&body);
         }
     });
-    (url, swarms, announces)
+    (url, swarms, announces, events)
 }
 
 /// A hybrid announces under both of its hashes, each with its own tracker state, so a peer that
@@ -1083,4 +1095,63 @@ fn a_forced_reannounce_of_a_hybrid_announces_both_hashes() {
     wait_for(2, "the forced reannounces");
     s.shutdown();
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Bug hunt 15: a hybrid that finishes its download says `completed` to its trackers under
+/// both of its hashes at once (libtorrent `torrent::completed` announces on every info-hash);
+/// the v2-hash announces waited out the 30 minutes the tracker asked for.
+#[test]
+fn a_finished_hybrid_sends_completed_under_both_hashes() {
+    let files = files(11);
+    let src = temp_dir("completed-hybrid-src");
+    write_files(&files, &src);
+    let torrent = make_torrent(&src, CreateFlags::empty());
+    let ih = TorrentInfo::from_bytes(&torrent).unwrap().info_hashes();
+    let (v1, v2) = (ih.v1.unwrap().as_bytes().to_vec(), ih.truncated_v2().unwrap().as_bytes().to_vec());
+    let (url, _, announces, events) = swarm_tracker_with_events();
+    let count = |h: &[u8]| announces.lock().unwrap().get(h).copied().unwrap_or(0);
+    let completed = |h: &[u8]| events.lock().unwrap().iter().any(|(i, e)| i == h && e == "completed");
+
+    // the seed is not on the tracker: the leech is sent to it once both its `started`
+    // announces are answered
+    let seed = start(None);
+    let mut sw = Watch::new(seed.handle());
+    let port = listen_port(&mut sw);
+    let sid = add(&mut sw, &torrent, &src).unwrap();
+    wait_state(&mut sw, sid, TorrentState::Seeding, 20);
+
+    let dir = temp_dir("completed-hybrid-leech");
+    let leech = start(None);
+    let mut w = Watch::new(leech.handle());
+    let mut p = AddTorrentParams::new(TorrentSource::TorrentFile(torrent), dir.to_string_lossy());
+    p.flags = TorrentFlags::empty();
+    p.trackers = vec![url];
+    leech.handle().add_torrent(p);
+    let id = wait(&mut w, 5, "add", |a| match a {
+        Alert::TorrentAdded { id, .. } => Some(*id),
+        _ => None,
+    });
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while count(&v1) < 1 || count(&v2) < 1 {
+        assert!(Instant::now() < deadline, "started: v1 {}, v2 {}", count(&v1), count(&v2));
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    // (the replies are read)
+    std::thread::sleep(Duration::from_millis(500));
+    leech.handle().torrent(id).connect_peer(SocketAddr::from(([127, 0, 0, 1], port)));
+    wait(&mut w, 60, "finished", |a| matches!(a, Alert::TorrentFinished { id: i } if *i == id).then_some(()));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !completed(&v1) || !completed(&v2) {
+        if Instant::now() >= deadline {
+            let seen = events.lock().unwrap().clone();
+            panic!("completed: v1 {}, v2 {}; {seen:?}", completed(&v1), completed(&v2));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    leech.shutdown();
+    seed.shutdown();
+    assert_files(&files, &dir);
+    for d in [src, dir] {
+        let _ = std::fs::remove_dir_all(d);
+    }
 }

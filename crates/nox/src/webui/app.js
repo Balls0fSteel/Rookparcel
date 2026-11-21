@@ -572,6 +572,7 @@
       winFirst = m.first;
     }
     if (m.cells) for (const id in m.cells) cells.set(id, m.cells[id]);
+    if (m.removed) dropRemoved(m.removed);
     if (m.counts) updateCounts(m.counts);
     if (m.labels) updateLabels(m.labels, m.no_label);
     if (m.tags) updateTags(m.tags, m.no_tag);
@@ -594,6 +595,14 @@
       queueScroll();
       gateRender();
     } else gateRender();
+  }
+  /// The tick's `removed`: torrents the server no longer has (removed in another window or by
+  /// an *arr app) leave the selection, wherever they were in the view or outside it, so "N
+  /// selected" and the Remove question count only what is there.
+  function dropRemoved(hashes) {
+    let changed = false;
+    for (const id of hashes) if (sel.delete(id)) changed = true;
+    if (changed) updateSelClasses();
   }
   function afterRows() {
     updateSpacer();
@@ -2846,6 +2855,8 @@
     if (!addDlg.open) nextAdd();
   }
   async function nextAdd() {
+    // not while the login is shown: the queue waits for it (showApp goes on)
+    if ($("app").hidden) return;
     const file = addQueue.shift();
     if (!file) return;
     if (file.hash) {
@@ -2861,6 +2872,8 @@
         }
       }
       setup.in_session = true;
+      // the session ended meanwhile: the next socket's tick offers the magnet again
+      if ($("app").hidden) return;
       openAddDialog(file, info, setup);
       return;
     }
@@ -2870,7 +2883,9 @@
     try {
       info = await pa("torrent-info", fd);
     } catch (e) {
-      nextAdd();
+      // the session ended meanwhile: the file waits for the login
+      if ($("app").hidden) addQueue.unshift(file);
+      else nextAdd();
       return;
     }
     let setup = { save_in: [""], labels, start: true, show_dialog: true };
@@ -2886,6 +2901,10 @@
       out.append("options", JSON.stringify({}));
       pa("add", out).catch(() => {});
       nextAdd();
+      return;
+    }
+    if ($("app").hidden) {
+      addQueue.unshift(file);
       return;
     }
     openAddDialog(file, info, setup);
@@ -5464,6 +5483,35 @@
   });
 
   // ---- login ---------------------------------------------------------------------------
+  /// The session ended (it timed out, or a logout): the dialogs are siblings of #app and
+  /// modal, so one left open would keep the login form inert. Each is closed, topmost first,
+  /// with the page state its own Cancel resets, but without its requests to the server (the
+  /// session is gone, and each 403 would come back here): a waiting magnet is not cancelled,
+  /// the RSS edits not yet sent are dropped, the helper's task is left to the server. A
+  /// .torrent file whose Add dialog was open goes back to the front of the queue, and the
+  /// magnets are offered again after the login (the next socket's tick names them).
+  function closeDialogsForLogin() {
+    closeMenu();
+    if (addState) {
+      if (!addState.file.hash) addQueue.unshift(addState.file);
+      addState = null;
+      $("add-files").textContent = "";
+    }
+    for (let i = addQueue.length - 1; i >= 0; i--) if (addQueue[i].hash) addQueue.splice(i, 1);
+    shownAdds.clear();
+    addsVersion = 0; // so the next socket's first tick loads the waiting magnets again
+    clearTimeout(rssEditTimer);
+    rssEditTimer = 0;
+    rssPending = {};
+    fhTask = 0;
+    fhClose(false);
+    fsClose(null);
+    $("find-e-pass").value = "";
+    prefsEdits = new Map();
+    adv = null;
+    props = null;
+    for (const d of [...document.querySelectorAll("dialog[open]")].reverse()) d.close();
+  }
   function showLogin() {
     closing = true;
     clearTimeout(reconnectTimer);
@@ -5471,14 +5519,19 @@
     if (ws) ws.close();
     ws = null;
     $("app").hidden = true;
+    closeDialogsForLogin();
+    // late answers of requests already out land here again: the focus stays where it is
+    const shown = !$("login").hidden;
     $("login").hidden = false;
-    $("login").elements.username.focus();
+    if (!shown) $("login").elements.username.focus();
   }
   function showApp() {
     $("login").hidden = true;
     $("app").hidden = false;
     body.focus();
     connect();
+    // .torrent files dropped or queued while the login was shown
+    if (!addDlg.open) nextAdd();
   }
   $("login").addEventListener("submit", async (ev) => {
     ev.preventDefault();

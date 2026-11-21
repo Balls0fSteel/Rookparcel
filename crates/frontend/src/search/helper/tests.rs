@@ -345,5 +345,9 @@ fn the_source_searches_through_the_helper() {
     let again = with_helper_source(&edited, &state);
     assert_eq!(again.len(), 2);
     assert!(again[1].enabled && again[1].url == src.url);
+    // put back where it was: a window's pick of it follows (`moved_source`)
+    use crate::search::source::moved_source;
+    assert_eq!(moved_source(&edited, 1, &again), Some(1));
+    assert_eq!(moved_source(&again, 1, &without_helper_source(&again, &state)), None);
     assert_eq!(without_helper_source(&again, &state), vec![other]);
 }

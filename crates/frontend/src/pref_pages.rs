@@ -176,15 +176,24 @@ pub const RUN_FINISHED: &str = "run.finished";
 /// Why a Run Program command line cannot be stored, if it cannot (D67): the same rule for
 /// every client and the Web UI.
 pub fn run_command_error(line: &str) -> Option<String> {
-    use rookparcel_core::run_program::{CommandError, split_command};
-    match split_command(line.trim()) {
+    match rookparcel_core::run_program::split_command(line.trim()) {
         Ok(args) if args.is_empty() => Some(tr_owned(S::RunErrEmpty)),
         Ok(_) => None,
-        Err(CommandError::OpenQuote) => Some(tr_owned(S::RunErrQuote)),
-        Err(CommandError::ProgramPlaceholder) => Some(tr_owned(S::RunErrProgram)),
-        Err(CommandError::ShellPlaceholder) => Some(tr_owned(S::RunErrShell)),
-        Err(CommandError::Malformed) => Some(tr_owned(S::RunErrLong)),
+        Err(e) => Some(run_error_text(e)),
     }
+}
+
+/// The text of a Run Program refusal, in the current language: the Preferences' error, and
+/// the Logger's line for a stored line that cannot run
+/// (`rookparcel_core::run_program::set_error_text`, set by [`crate::lang::init`]).
+pub fn run_error_text(e: rookparcel_core::run_program::CommandError) -> String {
+    use rookparcel_core::run_program::CommandError;
+    tr_owned(match e {
+        CommandError::OpenQuote => S::RunErrQuote,
+        CommandError::ProgramPlaceholder => S::RunErrProgram,
+        CommandError::ShellPlaceholder => S::RunErrShell,
+        CommandError::Malformed => S::RunErrLong,
+    })
 }
 
 /// Why the text of a Trackers or Run Program field cannot be stored whatever its check box
@@ -1568,6 +1577,22 @@ mod tests {
 
     fn opts() -> Options {
         Options::load(&Prefs::default(), "/dl")
+    }
+
+    /// A stored Run Program line that cannot run is logged with the Preferences' own error
+    /// text once the language is set up (`lang::init` hands it to the core).
+    #[test]
+    fn a_refused_stored_run_line_is_logged_with_the_preferences_text() {
+        use rookparcel_core::Alert;
+        use rookparcel_core::run_program::{CommandError, RunProgram, set_error_text};
+        set_error_text(run_error_text);
+        let mut r = RunProgram::new(r#"ssh host "notify %N""#, "");
+        let log = r.on_alert(&Alert::StateUpdate(Vec::new()), |_| None);
+        assert_eq!(log.len(), 1, "{log:?}");
+        assert!(log[0].starts_with(r#"Run Program: ssh host "notify %N": "#), "{log:?}");
+        // the translated text, not the error's name (other tests may switch the language)
+        assert!(!log[0].ends_with("ShellPlaceholder"), "{log:?}");
+        assert!(!run_error_text(CommandError::ShellPlaceholder).is_empty());
     }
 
     #[test]

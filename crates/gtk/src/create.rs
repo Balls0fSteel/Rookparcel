@@ -270,9 +270,14 @@ impl Dialog {
         }
     }
 
+    /// A message box over the window; a worker that ends after a lock: it waits for the unlock
+    /// (D69), not over the hidden window.
     fn error(&self, message: &str) {
-        let window = self.window.upgrade();
-        gtk::AlertDialog::builder().message(message).modal(true).build().show(window.as_ref());
+        let (window, message) = (self.window.clone(), message.to_owned());
+        crate::app::when_unlocked(move || {
+            let window = window.upgrade();
+            gtk::AlertDialog::builder().message(&message).modal(true).build().show(window.as_ref());
+        });
     }
 
     /// "Add file" and "Add directory".

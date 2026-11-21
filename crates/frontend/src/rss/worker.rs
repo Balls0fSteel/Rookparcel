@@ -9,7 +9,7 @@
 //! A download that fails is forgotten ([`RssDownloader::forget`]), so the item is tried again
 //! at the next refresh; one the engine refuses (a duplicate, a broken file) stays added.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
@@ -107,7 +107,9 @@ impl Fetcher for Net {
 }
 
 enum Done {
-    Feed(FeedId, Result<Fetched, String>),
+    /// A feed fetched, with the URL it was fetched from ([`super::RssFeed::url`]) and the
+    /// validators the request sent.
+    Feed(FeedId, String, Validators, Result<Fetched, String>),
     Download(AddRequest, Result<Download, String>),
     /// A download batch is through.
     Batch,
@@ -131,8 +133,11 @@ pub struct Worker {
     rx: Receiver<Done>,
     notify: Arc<dyn Fn() + Send + Sync>,
     fetcher: Arc<dyn Fetcher>,
-    /// Feeds being fetched.
-    busy: HashSet<FeedId>,
+    /// Feeds being fetched, with the URL the newest fetch asked for: a feed whose URL was
+    /// edited meanwhile is fetched again at once, and the old fetch's result is dropped.
+    busy: HashMap<FeedId, String>,
+    /// Feed fetches under way, those of an old URL included.
+    feeds_out: usize,
     /// Download batches under way.
     batches: usize,
 }
@@ -145,17 +150,17 @@ impl Worker {
 
     pub fn with_fetcher(fetcher: Arc<dyn Fetcher>, notify: impl Fn() + Send + Sync + 'static) -> Worker {
         let (tx, rx) = channel();
-        Worker { tx, rx, notify: Arc::new(notify), fetcher, busy: HashSet::new(), batches: 0 }
+        Worker { tx, rx, notify: Arc::new(notify), fetcher, busy: HashMap::new(), feeds_out: 0, batches: 0 }
     }
 
     /// Whether feed `id` is being fetched.
     pub fn is_busy(&self, id: FeedId) -> bool {
-        self.busy.contains(&id)
+        self.busy.contains_key(&id)
     }
 
     /// Whether anything is under way.
     pub fn is_idle(&self) -> bool {
-        self.busy.is_empty() && self.batches == 0
+        self.feeds_out == 0 && self.batches == 0
     }
 
     /// Starts fetching the feeds due at `now` that are not being fetched already; returns how
@@ -165,18 +170,21 @@ impl Worker {
     }
 
     /// Starts fetching feed `id` now (the dialog's Update); false when it is being fetched
-    /// already or does not exist.
+    /// already from its current URL, or does not exist. A fetch from a URL the feed no longer
+    /// has (the Edit Feed dialog changed it) does not hold up the new one.
     pub fn refresh(&mut self, rss: &RssDownloader, id: FeedId, proxy: Option<&FetchProxy>) -> bool {
         let Some(feed) = rss.feed(id) else { return false };
-        if !self.busy.insert(id) {
+        if self.busy.get(&id) == Some(&feed.url) {
             return false;
         }
+        self.busy.insert(id, feed.url.clone());
+        self.feeds_out += 1;
         let (url, since) = (feed.url.clone(), feed.validators());
         let (tx, notify, fetcher, proxy) =
             (self.tx.clone(), self.notify.clone(), self.fetcher.clone(), proxy.cloned());
         std::thread::spawn(move || {
             let r = fetcher.feed(&url, &since, proxy);
-            if tx.send(Done::Feed(id, r)).is_ok() {
+            if tx.send(Done::Feed(id, url, since, r)).is_ok() {
                 notify();
             }
         });
@@ -226,10 +234,27 @@ impl Worker {
         while let Ok(done) = self.rx.try_recv() {
             match done {
                 Done::Batch => self.batches = self.batches.saturating_sub(1),
-                Done::Feed(id, result) => {
-                    self.busy.remove(&id);
-                    if rss.feed(id).is_none() {
+                Done::Feed(id, url, since, result) => {
+                    self.feeds_out = self.feeds_out.saturating_sub(1);
+                    if self.busy.get(&id) == Some(&url) {
+                        self.busy.remove(&id);
+                    }
+                    let Some(feed) = rss.feed(id) else {
                         continue; // removed while it was being fetched
+                    };
+                    // its URL was edited while it was being fetched: the document is the old
+                    // URL's, so neither its items nor its error are the feed's (bug hunt
+                    // 2026-11-21 #23). Edited away and back, the URL is the same, but a "not
+                    // modified" then speaks of the items the edit dropped.
+                    let stale = feed.url != url
+                        || (matches!(result, Ok(Fetched::NotModified)) && since != feed.validators());
+                    if stale {
+                        // the current URL is fetched, unless a fetch of it is under way or has
+                        // been taken since the edit
+                        if !self.busy.contains_key(&id) && feed.last_refresh.is_none() {
+                            self.refresh(rss, id, proxy);
+                        }
+                        continue;
                     }
                     if let Err(e) = &result {
                         let name = rss.feed(id).map(|f| f.name().to_owned()).unwrap_or_default();
@@ -396,6 +421,157 @@ mod tests {
         let c = collect_until(&mut w, &mut d, 1);
         let titles: Vec<&str> = c.adds.iter().map(|(r, _)| r.title.as_str()).collect();
         assert_eq!(titles, ["Show.S01E05.720p"]);
+    }
+
+    /// Feeds from a table, each answered with the validators `"v1"` (and "not modified" when
+    /// they are sent back); the fetch of the URL in `hold` waits for `gate`.
+    struct Gated {
+        feeds: Vec<(String, Feed)>,
+        hold: Mutex<Option<String>>,
+        gate: Mutex<std::sync::mpsc::Receiver<()>>,
+        asked: Mutex<Vec<(String, Validators)>>,
+    }
+
+    impl Gated {
+        fn new(feeds: Vec<(&str, Feed)>) -> (Arc<Gated>, std::sync::mpsc::Sender<()>) {
+            let (tx, rx) = channel();
+            let feeds = feeds.into_iter().map(|(u, f)| (u.to_owned(), f)).collect();
+            let g = Gated { feeds, hold: Mutex::new(None), gate: Mutex::new(rx), asked: Mutex::default() };
+            (Arc::new(g), tx)
+        }
+
+        fn v1() -> Validators {
+            Validators { etag: "\"v1\"".into(), last_modified: String::new() }
+        }
+    }
+
+    impl Fetcher for Gated {
+        fn feed(&self, url: &str, since: &Validators, _: Option<FetchProxy>) -> Result<Fetched, String> {
+            self.asked.lock().unwrap().push((url.to_owned(), since.clone()));
+            if self.hold.lock().unwrap().take_if(|h| h == url).is_some() {
+                let _ = self.gate.lock().unwrap().recv();
+            }
+            if *since == Gated::v1() {
+                return Ok(Fetched::NotModified);
+            }
+            let feed = self.feeds.iter().find(|(u, _)| u == url).map(|(_, f)| f.clone());
+            feed.map(|f| Fetched::Changed(f, Gated::v1())).ok_or_else(|| format!("HTTP 404 from {url}"))
+        }
+
+        fn download(&self, _: &AddRequest, _: Option<FetchProxy>) -> Result<Download, String> {
+            Err("no downloads here".into())
+        }
+    }
+
+    fn magnet(n: u8) -> String {
+        format!("magnet:?xt=urn:btih:{}", format!("{n:02x}").repeat(20))
+    }
+
+    /// The old and the new address of an edited feed: the old one's items are local, so their
+    /// links would reach this network (SEC-26), and its show is one the filter takes.
+    fn old_and_new() -> Vec<(&'static str, Feed)> {
+        let old = Feed {
+            title: "Old".into(),
+            items: vec![item("Show.S01E01", &magnet(1))],
+            served_locally: true,
+            ..Feed::default()
+        };
+        let new =
+            Feed { title: "New".into(), items: vec![item("Show.S02E01", &magnet(2))], ..Feed::default() };
+        vec![("https://old/rss", old), ("https://new/rss", new)]
+    }
+
+    fn assert_new_document(d: &RssDownloader, id: FeedId, c: &Collected) {
+        let titles: Vec<&str> = c.adds.iter().map(|(r, _)| r.title.as_str()).collect();
+        assert_eq!(titles, ["Show.S02E01"], "{:?}", c.log);
+        let f = d.feed(id).unwrap();
+        assert_eq!((f.url.as_str(), f.title.as_str()), ("https://new/rss", "New"));
+        assert_eq!(f.items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(), ["Show.S02E01"]);
+        assert!(!f.items_local, "the old server's reach is not the new feed's");
+        assert!(!f.downloaded.contains("Show.S01E01") && f.last_error.is_empty());
+        assert!(c.adds.iter().all(|(r, _)| r.links_reach == Reach::Public));
+        assert!(!c.log.iter().any(|l| l.contains("S01E01") || l.contains("404")), "{:?}", c.log);
+    }
+
+    /// Bug hunt 2026-11-21 #23: a feed whose URL is edited while it is being fetched does not
+    /// take the old URL's document; the Edit dialog's refresh fetches the new one at once.
+    #[test]
+    fn a_feed_edited_during_its_fetch_takes_the_new_urls_document_only() {
+        let (fake, gate) = Gated::new(old_and_new());
+        *fake.hold.lock().unwrap() = Some("https://old/rss".into());
+        let mut w = Worker::with_fetcher(fake.clone(), || {});
+        let mut d = RssDownloader::default();
+        let id = d.add_feed("https://old/rss", "");
+        d.add_filter(RssFilter { pattern: "show".into(), ..RssFilter::default() });
+        assert!(w.refresh(&d, id, None));
+        assert!(d.edit_feed(id, "https://new/rss", ""));
+        // what the frontends' Edit Feed does: refresh, which the old fetch does not hold up
+        assert!(w.refresh(&d, id, None), "the new URL is fetched at once");
+        assert!(!w.refresh(&d, id, None), "but not twice");
+        // the new document lands first, while the old fetch is still out
+        let mut c = Collected::default();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while c.adds.is_empty() && Instant::now() < deadline {
+            let more = w.collect(&mut d, NOW, None);
+            c.adds.extend(more.adds);
+            c.log.extend(more.log);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_new_document(&d, id, &c);
+        assert!(!w.is_idle(), "the old fetch is still out");
+        gate.send(()).unwrap();
+        let rest = collect_until(&mut w, &mut d, 0);
+        assert!(!w.is_busy(id) && w.is_idle());
+        assert!(rest.adds.is_empty() && rest.log.is_empty() && !rest.changed, "{:?}", rest.log);
+        assert_new_document(&d, id, &c);
+        assert_eq!(fake.asked.lock().unwrap().len(), 2, "nothing fetched a third time");
+    }
+
+    /// The same when nothing refreshes after the edit: the stale result starts the new fetch.
+    #[test]
+    fn a_stale_fetch_result_starts_the_fetch_of_the_new_url() {
+        let (fake, gate) = Gated::new(old_and_new());
+        *fake.hold.lock().unwrap() = Some("https://old/rss".into());
+        let mut w = Worker::with_fetcher(fake.clone(), || {});
+        let mut d = RssDownloader::default();
+        let id = d.add_feed("https://old/rss", "");
+        d.add_filter(RssFilter { pattern: "show".into(), ..RssFilter::default() });
+        assert!(w.refresh(&d, id, None));
+        d.edit_feed(id, "https://new/rss", "");
+        gate.send(()).unwrap();
+        let c = collect_until(&mut w, &mut d, 1);
+        assert_new_document(&d, id, &c);
+        let asked: Vec<String> = fake.asked.lock().unwrap().iter().map(|(u, _)| u.clone()).collect();
+        assert_eq!(asked, ["https://old/rss", "https://new/rss"]);
+    }
+
+    /// Edited away and back during a fetch that sent the validators: the "not modified" that
+    /// comes back speaks of items the edit dropped, so the document is fetched whole again.
+    #[test]
+    fn a_not_modified_for_items_an_edit_dropped_fetches_the_feed_again() {
+        let (fake, gate) = Gated::new(old_and_new());
+        let mut w = Worker::with_fetcher(fake.clone(), || {});
+        let mut d = RssDownloader::default();
+        let id = d.add_feed("https://new/rss", "");
+        assert!(w.refresh(&d, id, None));
+        collect_until(&mut w, &mut d, 0);
+        assert_eq!(d.feed(id).unwrap().validators(), Gated::v1());
+        *fake.hold.lock().unwrap() = Some("https://new/rss".into());
+        assert!(w.refresh(&d, id, None));
+        d.edit_feed(id, "https://old/rss", "");
+        d.edit_feed(id, "https://new/rss", "");
+        assert!(d.feed(id).unwrap().items.is_empty());
+        gate.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while d.feed(id).unwrap().items.is_empty() && Instant::now() < deadline {
+            w.collect(&mut d, NOW, None);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        collect_until(&mut w, &mut d, 0);
+        let f = d.feed(id).unwrap();
+        assert_eq!(f.items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(), ["Show.S02E01"]);
+        let sent: Vec<Validators> = fake.asked.lock().unwrap().iter().map(|(_, v)| v.clone()).collect();
+        assert_eq!(sent, [Validators::default(), Gated::v1(), Validators::default()]);
     }
 
     #[test]

@@ -4,7 +4,9 @@
 // Changes: the asio timers are deadlines polled by `service`; `http_connection` is a small
 // non-blocking client of its own (one request per root device at a time, IP-literal hosts
 // only); the callback is a queue of `PortmapEvent`s and log lines the engine drains; devices
-// live in a `Vec` (indices are the HTTP reactor tokens) instead of a `std::set`.
+// live in a `Vec` (indices are the HTTP reactor tokens) instead of a `std::set`. A deleted
+// mapping's slot is freed once no working device holds it (`release_slot`; libtorrent waits for
+// disabled devices too, which never answer).
 
 //! A UPnP IGD port mapper for one IPv4 interface: finds root devices with SSDP, reads their
 //! description for a WANIPConnection / WANPPPConnection control URL, asks for the external
@@ -113,6 +115,9 @@ struct GlobalMapping {
     protocol: Option<Protocol>,
     external_port: u16,
     local_port: u16,
+    /// `delete_mapping` asked for it: the slot is freed once no working device holds it
+    /// ([`Upnp::release_slot`]).
+    deleting: bool,
 }
 
 pub(super) struct Upnp {
@@ -289,6 +294,10 @@ impl Upnp {
         if self.disabled {
             return None;
         }
+        // a device disabled since a delete went out will not answer it
+        for i in 0..self.mappings.len() {
+            self.release_slot(i);
+        }
         let index = match self.mappings.iter().position(|m| m.protocol.is_none()) {
             Some(i) => i,
             None => {
@@ -296,11 +305,17 @@ impl Upnp {
                     self.log.push("too many mappings registered".into());
                     return None;
                 }
-                self.mappings.push(GlobalMapping { protocol: None, external_port: 0, local_port: 0 });
+                self.mappings.push(GlobalMapping {
+                    protocol: None,
+                    external_port: 0,
+                    local_port: 0,
+                    deleting: false,
+                });
                 self.mappings.len() - 1
             }
         };
-        self.mappings[index] = GlobalMapping { protocol: Some(p), external_port, local_port };
+        self.mappings[index] =
+            GlobalMapping { protocol: Some(p), external_port, local_port, deleting: false };
         for di in 0..self.devices.len() {
             let d = &mut self.devices[di];
             if d.disabled {
@@ -337,6 +352,7 @@ impl Upnp {
             m.external_port,
             m.local_port
         ));
+        self.mappings[index].deleting = true;
         for di in 0..self.devices.len() {
             let d = &mut self.devices[di];
             if d.disabled || index >= d.mapping.len() {
@@ -347,6 +363,34 @@ impl Upnp {
                 self.update_map(di, index, registry, now);
             }
         }
+        // with no working device holding it (none found yet, or the only one disabled) no
+        // reply will free the slot
+        self.release_slot(index);
+    }
+
+    /// Frees global slot `index` once it is being deleted and every working device has
+    /// deleted it. libtorrent waits for every device, disabled ones too, but a disabled device
+    /// sends nothing more: each listen-port remap leaked two slots until "too many mappings"
+    /// (bug hunt 16). A disabled device's entry is dropped here, unsent.
+    fn release_slot(&mut self, index: usize) {
+        let Some(g) = self.mappings.get(index) else { return };
+        if !g.deleting || g.protocol.is_none() {
+            return;
+        }
+        let held = |d: &RootDevice| !d.disabled && d.mapping.get(index).is_some_and(|m| m.protocol.is_some());
+        if self.devices.iter().any(held) {
+            return;
+        }
+        for d in &mut self.devices {
+            if let Some(m) = d.mapping.get_mut(index) {
+                m.protocol = None;
+                m.act = Action::None;
+                m.expires = None;
+            }
+        }
+        let g = &mut self.mappings[index];
+        g.protocol = None;
+        g.deleting = false;
     }
 
     /// Runs the timers: searches, the map check, lease refreshes and HTTP timeouts.
@@ -502,7 +546,8 @@ impl Upnp {
                 .mappings
                 .iter()
                 .map(|g| Mapping {
-                    protocol: g.protocol,
+                    // a mapping being deleted is not added to a router found meanwhile
+                    protocol: g.protocol.filter(|_| !g.deleting),
                     external_port: g.external_port,
                     local_port: g.local_port,
                     act: Action::Add,
@@ -1048,14 +1093,8 @@ impl Upnp {
         if let Some(m) = self.devices[di].mapping.get_mut(mapping) {
             m.protocol = None;
         }
-        // free the slot in global mappings
-        let all_gone =
-            self.devices.iter().all(|d| d.mapping.get(mapping).is_none_or(|m| m.protocol.is_none()));
-        if all_gone {
-            if let Some(g) = self.mappings.get_mut(mapping) {
-                g.protocol = None;
-            }
-        }
+        // free the slot in global mappings, once no working device holds it
+        self.release_slot(mapping);
         self.next(di, mapping, registry, now);
     }
 
@@ -1564,6 +1603,63 @@ Cache-Control:max-age=180\r\nDATE: Fri, 02 Jan 1970 08:10:38 GMT\r\n\r\n"
             upnp.add_mapping(Protocol::Tcp, 600, 600, poll.registry(), now).is_none(),
             "the 51st is refused"
         );
+    }
+
+    /// Bug hunt 16: a deleted mapping's slot is freed though no router answers the delete: none
+    /// found yet, or the one router disabled (its AddPortMapping failed). Each listen-port remap
+    /// deletes and adds; before, every remap kept the old slots until "too many mappings".
+    #[test]
+    fn deleted_mappings_free_their_slots_without_a_working_router() {
+        let poll = Poll::new().unwrap();
+        let now = Instant::now();
+        let remap = |upnp: &mut Upnp, mut m: usize| {
+            for i in 0..2 * MAX_MAPPINGS as u16 {
+                upnp.delete_mapping(m, poll.registry(), now);
+                m = upnp
+                    .add_mapping(Protocol::Tcp, 600 + i, 600 + i, poll.registry(), now)
+                    .expect("a free slot");
+            }
+            assert!(upnp.mappings.len() <= 2, "{} slots", upnp.mappings.len());
+        };
+        // no router found yet
+        let mut upnp = lan_upnp();
+        let m = upnp.add_mapping(Protocol::Tcp, 500, 500, poll.registry(), now).unwrap();
+        remap(&mut upnp, m);
+
+        // a router that took the mapping, then failed a request and was disabled
+        let mut upnp = lan_upnp();
+        let from: SocketAddr = "127.0.0.2:1900".parse().unwrap();
+        upnp.on_reply(&ssdp_reply("http://127.0.0.2:1/desc.xml"), from, poll.registry(), now);
+        assert_eq!(upnp.devices.len(), 1);
+        // (its description request may fail at once where 127.0.0.2 is not loopback)
+        upnp.devices[0].disabled = false;
+        let m = upnp.add_mapping(Protocol::Tcp, 500, 500, poll.registry(), now).unwrap();
+        assert_eq!(upnp.devices[0].mapping[m].protocol, Some(Protocol::Tcp));
+        upnp.devices[0].disabled = true;
+        // a mapping still in use is not given out again
+        let live = upnp.add_mapping(Protocol::Udp, 501, 501, poll.registry(), now).unwrap();
+        assert_ne!(live, m);
+        upnp.delete_mapping(m, poll.registry(), now);
+        assert!(upnp.devices[0].mapping[m].protocol.is_none(), "the disabled router's entry is dropped");
+        let m = upnp.add_mapping(Protocol::Tcp, 502, 502, poll.registry(), now).unwrap();
+        remap(&mut upnp, m);
+        assert_eq!(upnp.mappings[live].protocol, Some(Protocol::Udp));
+
+        // a router disabled while its delete waits: the next add frees the slot
+        let mut upnp = lan_upnp();
+        upnp.on_reply(&ssdp_reply("http://127.0.0.2:1/desc.xml"), from, poll.registry(), now);
+        upnp.devices[0].disabled = false;
+        let m = upnp.add_mapping(Protocol::Tcp, 500, 500, poll.registry(), now).unwrap();
+        assert_eq!(upnp.devices[0].mapping[m].protocol, Some(Protocol::Tcp));
+        upnp.delete_mapping(m, poll.registry(), now);
+        assert!(upnp.mappings[m].protocol.is_some(), "the router has not answered the delete");
+        // a router found meanwhile is not asked to add it
+        let from3: SocketAddr = "127.0.0.3:1900".parse().unwrap();
+        upnp.on_reply(&ssdp_reply("http://127.0.0.3:1/desc.xml"), from3, poll.registry(), now);
+        assert_eq!(upnp.devices.len(), 2, "{:?}", upnp.log);
+        assert!(upnp.devices[1].mapping[m].protocol.is_none());
+        upnp.devices[0].disabled = true;
+        assert_eq!(upnp.add_mapping(Protocol::Tcp, 501, 501, poll.registry(), now), Some(m));
     }
 
     #[test]

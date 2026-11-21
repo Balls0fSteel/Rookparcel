@@ -277,7 +277,10 @@ unsafe extern "system" fn proc_(dlg: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> 
                 1
             }
             WM_APP_DONE => {
-                let result = *Box::from_raw(lp as *mut Result<Box<dyn Any + Send>, String>);
+                // a number naming the result (anyone can post this message)
+                let Some(result) = crate::posted::take::<Result<Box<dyn Any + Send>, String>>(msg, lp) else {
+                    return 1;
+                };
                 // a cancelled download is no failure to report
                 st.result = if st.closing { None } else { Some(result) };
                 EndDialog(dlg, if st.closing { IDCANCEL as isize } else { 1 });
@@ -312,12 +315,7 @@ unsafe fn start(dlg: HWND, st: &mut State) {
             }
             !cancel.load(Ordering::Relaxed)
         });
-        let boxed = Box::into_raw(Box::new(result));
-        unsafe {
-            if PostMessageW(target as HWND, WM_APP_DONE, 0, boxed as LPARAM) == 0 {
-                drop(Box::from_raw(boxed));
-            }
-        }
+        crate::posted::post::<Result<Box<dyn Any + Send>, String>>(target as HWND, WM_APP_DONE, 0, result);
     });
 }
 

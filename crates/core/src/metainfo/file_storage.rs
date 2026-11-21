@@ -429,6 +429,8 @@ impl FileStorage {
     }
 
     /// Removes a trailing pad file (hybrid torrents made by libtorrent 2.0.0–2.0.7 lack one).
+    /// The per-file side tables (SHA-1, v2 root, mtime) lose the pad's slot too, so the files
+    /// after it keep their own (the port of libtorrent 2.0.11 erased the entry only).
     pub fn remove_tail_padding(&mut self) {
         let mut f = self.files.len();
         while f > 0 {
@@ -441,6 +443,16 @@ impl FileStorage {
                 self.files.remove(f);
                 for later in &mut self.files[f..] {
                     later.offset = self.total_size;
+                }
+                // sized on first use: a table may end before the pad
+                if f < self.file_hashes.len() {
+                    self.file_hashes.remove(f);
+                }
+                if f < self.roots.len() {
+                    self.roots.remove(f);
+                }
+                if f < self.mtime.len() {
+                    self.mtime.remove(f);
                 }
             }
             return;
@@ -1513,6 +1525,36 @@ mod tests {
         let mut fs1 = mk();
         fs1.remove_tail_padding();
         assert!(files_compatible(&fs1, &mk()), "no-op");
+    }
+
+    /// Bug hunt 2026-11-21 #33: the files after the removed pad keep their own mtime, SHA-1
+    /// and root, not their neighbour's.
+    #[test]
+    fn remove_tail_padding_keeps_the_side_tables_in_step() {
+        let mut fs = FileStorage::new();
+        fs.set_piece_length(0x4000);
+        let (ra, rb) = (Sha256Hash([1; 32]), Sha256Hash([2; 32]));
+        let hb = Sha1Hash([3; 20]);
+        fs.add_file("t/a", 100, NONE, 1111, "", Some(ra)).unwrap();
+        assert_eq!(fs.num_files(), 2, "a v2 file gets its tail pad");
+        fs.add_file_borrow(None, "t/b", 0, NONE, Some(hb), 2222, "", Some(rb)).unwrap();
+        fs.add_file("t/link", 0, FileFlags::SYMLINK, 3333, "a", None).unwrap();
+        fs.remove_tail_padding();
+        assert_eq!((fs.num_files(), fs.total_size()), (3, 100));
+        assert_eq!([fs.mtime(0), fs.mtime(1), fs.mtime(2)], [1111, 2222, 3333]);
+        assert_eq!([fs.root(0), fs.root(1), fs.root(2)], [ra, rb, Sha256Hash::default()]);
+        assert_eq!([fs.hash(0), fs.hash(1), fs.hash(2)], [Sha1Hash::default(), hb, Sha1Hash::default()]);
+        assert_eq!((fs.internal_symlink(2), fs.symlink(1)), ("a", String::new()));
+        assert_eq!([fs.file_offset(1), fs.file_offset(2)], [100, 100]);
+
+        // tables that end before the pad are left as they are
+        let mut fs = FileStorage::new();
+        fs.set_piece_length(0x4000);
+        fs.add_file_borrow(None, "t/a", 100, NONE, Some(hb), 1111, "", Some(ra)).unwrap();
+        add(&mut fs, "t/b", 0);
+        fs.remove_tail_padding();
+        assert_eq!((fs.num_files(), fs.mtime(0), fs.hash(0), fs.root(0)), (2, 1111, hb, ra));
+        assert_eq!((fs.mtime(1), fs.hash(1), fs.root(1)), (0, Sha1Hash::default(), Sha256Hash::default()));
     }
 
     #[test]

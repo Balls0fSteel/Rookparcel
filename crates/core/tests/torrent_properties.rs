@@ -363,6 +363,37 @@ fn replaced_trackers_are_announced_to_and_saved_with_the_switches() {
     }
 }
 
+/// Bug hunt 2026-11-21 #29: a tracker the `.torrent` names twice and the add names again (with
+/// blanks around it) is one entry of the list, in its first tier: the add path's trackers go
+/// through `add_tracker`, which drops repeats as libtorrent's does. So the Trackers tab, whose
+/// rows are keyed by URL, never has two rows of one tracker.
+#[test]
+fn a_tracker_named_twice_is_listed_once() {
+    let f = fixture("dup-trackers");
+    let url = "http://127.0.0.1:9/announce";
+    let other = "udp://127.0.0.1:9/announce";
+    let n = url.len();
+    let mut torrent =
+        format!("d8:announce{n}:{url}13:announce-listll{n}:{url}el{n}:{url}{}:{other}ee", other.len())
+            .into_bytes();
+    torrent.extend_from_slice(&f.torrent[1..]);
+    let dir = temp_dir("dup");
+    let (s, mut w) = start(settings(), None);
+    let mut p = AddTorrentParams::new(TorrentSource::TorrentFile(torrent), dir.to_string_lossy());
+    p.flags = TorrentFlags::PAUSED;
+    p.trackers = vec![url.into(), format!(" {url} "), other.into()];
+    p.tracker_tiers = vec![3, 0, 0];
+    w.h.add_torrent(p);
+    let id = wait(&mut w, 5, "add", |a| match a {
+        Alert::TorrentAdded { id, .. } => Some(*id),
+        Alert::AddTorrentFailed { error, .. } => panic!("add failed: {error}"),
+        _ => None,
+    });
+    assert_eq!(trackers(&mut w, id), [(url.to_owned(), 0), (other.to_owned(), 1)]);
+    s.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 fn copy_dir(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).unwrap();
     for e in std::fs::read_dir(from).unwrap() {
