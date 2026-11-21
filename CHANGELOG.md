@@ -4,6 +4,12 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-21_114756_1795258076: 1.2.72's GTK and macOS fixes on the VMs
+
+- **Xubuntu and the macOS VM**, by two parallel agents, all passed (details: BUGHUNT-2026-11-21.md "VM run"): the GTK and Mac crates' tests on their platforms; a vanished tray brings up the PIN prompt or the window (27); Create's failure box waits for the PIN (25); the Search window keeps its source (26); Manage Sources' last-row removal on macOS. A control build showed macOS 15.8 ignores an out-of-range row, so 28 is defensive there; 34 has no trigger.
+- **Found on the way** (BACKLOG): about 21 Auto Layout constraint warnings at the Mac app's start (older than 1.2.72); GTK's Ctrl+L does nothing while Create New Torrent is open; a window shown while the Xfce panel was gone sat under it.
+- **Problem:** `tools/mac-vm/push.sh` copied untracked but unignored folders, so the agents' `.claude/` worktrees and `graphify-out/` reached the VM (removed there); it now leaves them out.
+
 ## 2026-11-21_111517_1795256117: 1.2.72, the bug hunt's low fixes
 
 - **All 22 low findings (12, 14-34) fixed** by six parallel Opus agents in worktrees, reviewed and merged here; list and test names in BUGHUNT-2026-11-21.md "Fixes in 1.2.72".

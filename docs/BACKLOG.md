@@ -24,7 +24,8 @@ belong in [PORTING.md](PORTING.md); document deliberate setting-default changes.
   a torn `resume.log` append retried, unbanned current-password guessing from bypass sessions.
   23 low (12-34). **2026-11-21_093211_1795249931:** 1-11 and 13 fixed in 1.2.71 with tests;
   12 and 14-34 open. **2026-11-21_111517_1795256117:** 12 and 14-34 fixed in 1.2.72 with
-  tests; the GTK (25-27) and macOS (28) fixes are lint-checked only and need a VM run. The
+  tests. **2026-11-21_114756_1795258076:** the GTK (25-27) and macOS (28) fixes passed on the
+  VMs (BUGHUNT-2026-11-21.md "VM run"); 34 has no trigger and stays read only. The
   fixes' own follow-ups (forged-layer pieces kept as "have", a complete
   v2-only torrent unable to refetch layers from seeds, the shim hashing under the lock, and
   more) are listed at the end of that file's "Fixes in 1.2.71".
@@ -232,6 +233,11 @@ mirror the bitmaps) and the tray menu on screen; the Web UI (`nox`) was not audi
 
 ## GTK desktop checks and limitations
 
+- 2026-11-21_114756_1795258076 (bug hunt 25-27 VM run, all passed): two small notes. Ctrl+L
+  does nothing while Create New Torrent is open (the tray's Lock works); and after the tray
+  came back from a panel restart, a main window shown while the panel was gone sat at y=0
+  under the panel (the window manager placed it then).
+
 - Hand check of the Files tab menu and label folders (Xubuntu, 2026-11-03_090534_1793693134,
   all passed). UX notes: after the file chooser's "Replace?" a refused Relocate now shows an
   error dialog (re-check); Prioritize by File Order on three files gives High, High, Low (priorities 7, 5, 3, and
@@ -392,6 +398,11 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   Russian/French/Greek texts even with fitting disabled; cause is unresolved.
 
 ## macOS and packaged Linux builds
+
+- 2026-11-21_114756_1795258076 (bug hunt 28 VM run): the app logs about 21 "Unable to
+  simultaneously satisfy constraints" Auto Layout warnings at start, before any window is used
+  (seen with and without the 1.2.72 fix, so older). Find the clashing constraints
+  (`log show --predicate 'process == "Rookparcel"'` names them) and loosen one.
 
 - **Native macOS GUI (D61, [MACOS_GUI.md](MACOS_GUI.md), 2026-11-06_094234_1793954554)** follow-ups outside its slices:
   move the GTK GUI onto `frontend::app` once the Mac GUI has proven it (about 1,500 fewer GTK

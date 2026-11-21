@@ -8,7 +8,7 @@ slices share). Type-check on Windows first; one VM build or run at a time.
 
 | Script | Where | What |
 |---|---|---|
-| `push.sh SLICE` | Windows (Git Bash) | copies the checkout (tracked and new files, uncommitted changes too; not `docs/`, `site/`, `third_party/`) into `~/rp/SLICE/src`; the VM's scripts get LF line ends |
+| `push.sh SLICE` | Windows (Git Bash) | copies the checkout (tracked and new files, uncommitted changes too; not `docs/`, `site/`, `third_party/`, `.claude/`, `graphify-out/`) into `~/rp/SLICE/src`; the VM's scripts get LF line ends |
 | `build.sh SLICE [--release]` | VM | under the lock, `cargo build -j 1 -p rookparcel-mac` (at `nice 19`), then `macos_bundle.py native` makes `~/rp/SLICE/out/Rookparcel.app`, checked with `codesign --verify` and `plutil -lint` |
 | `run.sh SLICE [SECONDS] [SCRIPT] [-- ARGS]` | VM | under the lock, starts a portable copy with `ROOKPARCEL_SNAPSHOTS=~/rp/SLICE/shots`, runs the AppleScript half way, prints CPU and memory, quits the app |
 | `pull.sh SLICE DIR` | Windows (Git Bash) | copies `~/rp/SLICE/shots` into `DIR` |

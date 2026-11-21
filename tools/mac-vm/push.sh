@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # push.sh SLICE (Git Bash on Windows, or any shell with git, tar, ssh and scp): copies this
 # checkout's files (tracked ones and new ones not ignored, uncommitted changes included; not
-# docs/, site/, third_party/) to the Mac VM into ~/rp/SLICE/src, replacing what was there.
+# docs/, site/, third_party/, nor the agents' .claude/ and graphify-out/ folders) to the Mac VM into ~/rp/SLICE/src, replacing what was there.
 #
 #   RP_VM   the VM (default x@192.168.1.128)
 #   RP_KEY  the ssh key (default ~/.ssh/patorrent_vm)
@@ -20,7 +20,7 @@ trap 'rm -rf "$tmp"' EXIT
 # progress lists a conflicted file once per stage: each only once (tar would store a link)
 git ls-files --cached --others --exclude-standard \
     | sort -u \
-    | grep -v -E '^(docs|site|third_party)/' \
+    | grep -v -E '^(docs|site|third_party|\.claude|graphify-out)/' \
     | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done > "$tmp/files"
 tar -czf "$tmp/src.tgz" -T "$tmp/files"
 echo "push: $(wc -l < "$tmp/files") files, $(du -h "$tmp/src.tgz" | cut -f1)"
