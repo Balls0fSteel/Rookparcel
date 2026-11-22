@@ -11,6 +11,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="img/icon-16.png">
 <link rel="apple-touch-icon" href="img/icon-256.png">
 <link rel="stylesheet" href="css/style.css">
+<!-- build:alternates --><!-- /build:alternates -->
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -24,10 +25,12 @@
         <li><a href="faq.html"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-help"/></svg>FAQ</a></li>
         <li><a href="benchmarks.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-speed"/></svg>Benchmarks</a></li>
         <li><a href="docs.html" aria-current="page"><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-files"/></svg>Docs</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel/wiki"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-general"/></svg>Guide</a></li>
         <li><a href="donate.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-heart"/></svg>Donate</a></li>
         <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a></li>
       </ul>
     </nav>
+    <!-- build:langs --><!-- /build:langs -->
   </div>
 </header>
 
@@ -43,9 +46,20 @@
     <aside class="callout" aria-label="User guide">
       <svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-general"/></svg>
       <div>
-        <p><strong>A user guide is planned.</strong> A proper manual, as a wiki in the languages Rookparcel speaks, comes with a later version. Until then, this site, the release notes and the documents below are the manual. Rookparcel follows µTorrent 2.2.1 closely, so most of what you know from it applies.</p>
+        <p><strong>The user guide is the <a href="https://github.com/Balls0fSteel/Rookparcel/wiki">Rookparcel wiki</a>.</strong> About 30 pages on installing, adding and managing torrents, every setting, the Web UI, the headless daemon, Docker, Sonarr and Radarr, and troubleshooting, with screenshots. It is also in <a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Accueil" hreflang="fr" lang="fr">Français</a>, <a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Inicio" hreflang="es" lang="es">Español</a>, <a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Startseite" hreflang="de" lang="de">Deutsch</a> and <a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Kezd%C5%91lap" hreflang="hu" lang="hu">Magyar</a>.</p>
       </div>
     </aside>
+
+    <section class="section" aria-labelledby="guide-h">
+      <h2 id="guide-h">User guide</h2>
+      <ul class="doclist">
+        <li><a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Installing-Rookparcel">Installing Rookparcel</a><span>The downloads per system, the installer and the portable zip, SmartScreen and Gatekeeper, AppImage and Flatpak, uninstalling.</span></li>
+        <li><a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Adding-torrents">Adding torrents</a><span>Files, magnet links, web addresses, drag and drop, the Add New Torrent window and watched folders.</span></li>
+        <li><a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Preferences-reference">Preferences reference</a><span>Every page of Preferences, each setting in a line.</span></li>
+        <li><a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Web-UI">Web UI</a> and <a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Running-rookparcel-nox">Running rookparcel-nox</a><span>Driving Rookparcel from a browser, and the headless daemon as a service.</span></li>
+        <li><a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Troubleshooting-and-FAQ">Troubleshooting and FAQ</a><span>Slow or no downloads, ports and firewalls, private trackers, logs, resetting settings.</span></li>
+      </ul>
+    </section>
 
     <section class="section" aria-labelledby="start-h">
       <h2 id="start-h">Getting started</h2>
@@ -63,7 +77,7 @@
     <section class="section" aria-labelledby="use-h">
       <h2 id="use-h">Guides</h2>
       <ul class="doclist">
-        <li><a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/SEARCH_ON_WINDOWS.md">Searching for torrents on Windows</a><span>Getting the search helper (Jackett, downloaded at a click), ticking the sites it searches, searching and adding results, with screenshots; using your own Prowlarr or Jackett instead.</span></li>
+        <li><a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Searching-for-torrents-on-Windows">Searching for torrents on Windows</a><span>Getting the search helper (Jackett, downloaded at a click), ticking the sites it searches, searching and adding results, with screenshots; using your own Prowlarr or Jackett instead.</span></li>
         <li><a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/DAEMON.md">Running rookparcel-nox as a service</a><span>systemd units, the FreeBSD rc.d script, the Windows service, <code>--daemon</code>, proxies, HTTPS for the Web UI, and where the daemon keeps its files.</span></li>
         <li><a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/WEBUI.md">The Web UI and remote mode</a><span>How the Web UI and its API work, the qBittorrent-compatible subset, languages in the page, and how a desktop GUI drives a remote daemon.</span></li>
         <li><a href="https://github.com/Balls0fSteel/Rookparcel/tree/main/docs/releases">All release notes</a><span>The text of every release, one file per version.</span></li>

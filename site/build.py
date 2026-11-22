@@ -56,13 +56,103 @@ API = "https://api.github.com"
 VERSION_RE = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?")
 
 # Files of site/ that are not part of the site.
-NOT_PUBLISHED = ("build.py", "test_*.py", "testdata", "__pycache__", "*.pyc")
+NOT_PUBLISHED = ("build.py", "test_*.py", "testdata", "i18n", "__pycache__", "*.pyc")
 
 # The app icon sizes the pages use (img/icon-<size>.png).
 ICON_SIZES = (16, 32, 64, 128, 256)
 
 MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August",
           "September", "October", "November", "December")
+
+# ---------------------------------------------------------------------------------------------
+# Languages
+#
+# English pages are at the site's root; each other language has a folder of its own (fr/...),
+# with translated copies of some pages. A page a language does not have links to the English
+# one. The texts the build writes into the pages (the blocks below) come from
+# site/i18n/<code>.json: {"English text": "translation"}; `{name}` marks are kept as they are.
+
+LANGS = {"en": "English", "fr": "Français", "es": "Español", "de": "Deutsch", "hu": "Magyar"}
+I18N = SITE / "i18n"
+# Each language's own page of the user guide on the GitHub wiki.
+WIKI_HOME = {"en": "Home", "fr": "Accueil", "es": "Inicio", "de": "Startseite", "hu": "Kezdőlap"}
+
+_lang = {"code": "en", "table": {}, "missing": set()}
+
+
+def load_strings(code: str) -> dict:
+    if code == "en":
+        return {}
+    path = I18N / f"{code}.json"
+    if not path.is_file():
+        raise BuildError(f"site/i18n/{code}.json is missing")
+    table = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(table, dict) or not all(isinstance(v, str) for v in table.values()):
+        raise BuildError(f"site/i18n/{code}.json is not an object of strings")
+    return table
+
+
+def set_lang(code: str) -> None:
+    _lang.update(code=code, table=load_strings(code), missing=set())
+
+
+def t(text: str, **kw) -> str:
+    """`text` in the current language, with its {name} marks filled from `kw`."""
+    if _lang["code"] != "en" and text not in _lang["table"]:
+        _lang["missing"].add(text)
+    s = _lang["table"].get(text, text)
+    return s.format(**kw) if kw else s
+
+
+def all_strings() -> list:
+    """Every text the build passes through t(): the literal calls in this file, the file kinds,
+    the platforms and the months. site/i18n/<code>.json should have exactly these keys."""
+    src = Path(__file__).read_text(encoding="utf-8")
+    keys = []
+    for m in re.finditer(r'\bt\(((?:"(?:[^"\\]|\\.)*"\s*)+)', src):
+        keys.append("".join(json.loads(part) for part in re.findall(r'"(?:[^"\\]|\\.)*"', m.group(1))))
+    keys += [k.title for k in KINDS] + [k.what for k in KINDS] + list(PLATFORMS.values()) + list(MONTHS)
+    keys = [k for k in keys if k != "{day} {month} {year}"] + ["{day} {month} {year}"]
+    return list(dict.fromkeys(k for k in keys if k))
+
+
+def lang_of(rel: Path) -> str:
+    """The language of a page by its path in the output (fr/index.html is French)."""
+    return rel.parts[0] if len(rel.parts) > 1 and rel.parts[0] in LANGS else "en"
+
+
+def wiki_url(code: str) -> str:
+    return "https://github.com/Balls0fSteel/Rookparcel/wiki/" + urllib.parse.quote(WIKI_HOME[code])
+
+
+def lang_menu(rel: Path, out: Path) -> str:
+    """The language list in each page's top bar: the same page in each language where it
+    exists, else that language's home page."""
+    code = lang_of(rel)
+    name = rel.name
+    up = "../" if code != "en" else ""
+    items = []
+    for c, label in LANGS.items():
+        folder = out if c == "en" else out / c
+        target = name if (folder / name).is_file() else "index.html"
+        href = up + ("" if c == "en" else c + "/") + target
+        cur = ' aria-current="true"' if c == code else ""
+        items.append(f'<li><a href="{esc(href)}" hreflang="{c}" lang="{c}"{cur}>{esc(label)}</a></li>')
+    return ('<nav class="langs" aria-label="Language / Langue / Idioma / Sprache / Nyelv">'
+            '<ul>' + "".join(items) + "</ul></nav>")
+
+
+def alternate_links(rel: Path, out: Path) -> str:
+    """<link rel="alternate" hreflang> for the languages that have this page."""
+    code = lang_of(rel)
+    up = "../" if code != "en" else ""
+    links = []
+    for c in LANGS:
+        folder = out if c == "en" else out / c
+        if (folder / rel.name).is_file():
+            href = up + ("" if c == "en" else c + "/") + rel.name
+            links.append(f'<link rel="alternate" hreflang="{c}" href="{esc(href)}">')
+    return "".join(links)
 
 
 class BuildError(Exception):
@@ -125,8 +215,8 @@ class Release:
     @property
     def label(self) -> str:
         if not self.prerelease:
-            return "Stable release"
-        return "Release candidate" if self.is_rc else "Pre-release"
+            return t("Stable release")
+        return t("Release candidate") if self.is_rc else t("Pre-release")
 
 
 @dataclass
@@ -193,8 +283,8 @@ ARCH_RANK = {"x64": 0, "arm64": 0, "x86_64": 1, "aarch64": 2, "": 3}
 
 def arch_label(platform: str, arch: str) -> str:
     if platform == "macos":
-        return {"arm64": "Apple silicon", "x86_64": "Intel"}.get(arch, arch)
-    return {"x64": "x64", "x86_64": "x86_64", "aarch64": "aarch64 (ARM)"}.get(arch, arch)
+        return {"arm64": t("Apple silicon"), "x86_64": "Intel"}.get(arch, arch)
+    return {"x64": "x64", "x86_64": "x86_64", "aarch64": t("aarch64 (ARM)")}.get(arch, arch)
 
 
 def classify(name: str):
@@ -337,7 +427,8 @@ def nice_date(iso: str) -> tuple:
         d = datetime.strptime(iso[:10], "%Y-%m-%d")
     except (TypeError, ValueError):
         return "", ""
-    return d.strftime("%Y-%m-%d"), f"{d.day} {MONTHS[d.month - 1]} {d.year}"
+    return d.strftime("%Y-%m-%d"), t("{day} {month} {year}", day=d.day,
+                                      month=t(MONTHS[d.month - 1]), year=d.year)
 
 
 def stem(name: str) -> str:
@@ -372,7 +463,7 @@ GUIDE_ANCHORS = ("windows-setup", "windows-zip", "linux-appimage", "linux-flatpa
 def guide(anchor: str) -> str:
     """A link to one path of the install guide."""
     assert anchor in GUIDE_ANCHORS, anchor
-    return f'<a href="install.html#{anchor}">Step by step</a>.'
+    return f'<a href="install.html#{anchor}">{t("Step by step")}</a>.'
 
 
 def _how_to_start(kind: str, assets: list) -> str:
@@ -380,44 +471,51 @@ def _how_to_start(kind: str, assets: list) -> str:
     n = a.name
     alt = ""  # the other architectures' files
     if len(assets) > 1:
-        names = " and ".join(f"<code>{esc(x.name)}</code>" for x in assets[1:])
-        alt = f'<p class="alt">The same with {names}.</p>'
+        names = t(" and ").join(f"<code>{esc(x.name)}</code>" for x in assets[1:])
+        alt = '<p class="alt">' + t("The same with {names}.", names=names) + "</p>"
     if kind == "windows-setup":
-        return (f"<p>Run <code>{esc(n)}</code>. Running the installer of a newer version later "
-                f"upgrades the installed copy in place. {guide('windows-setup')}</p>")
+        return ("<p>" + t("Run {file}. Running the installer of a newer version later upgrades "
+                          "the installed copy in place.", file=f"<code>{esc(n)}</code>")
+                + f" {guide('windows-setup')}</p>")
     if kind == "windows-zip":
-        return (f"<p>Unzip <code>{esc(n)}</code> anywhere and start <code>rookparcel.exe</code>. "
-                f"{guide('windows-zip')}</p>")
+        return ("<p>" + t("Unzip {file} anywhere and start {exe}.", file=f"<code>{esc(n)}</code>",
+                          exe="<code>rookparcel.exe</code>")
+                + f" {guide('windows-zip')}</p>")
     if kind == "appimage":
-        return ("<p>Make it executable and run it:</p>"
+        return ("<p>" + t("Make it executable and run it:") + "</p>"
                 + commands(f"chmod +x {n}", f"./{n}") + alt
-                + "<p>Without FUSE 2 on the system, start it with "
-                f"<code>--appimage-extract-and-run</code>. {guide('linux-appimage')}</p>")
+                + "<p>" + t("Without FUSE 2 on the system, start it with {flag}.",
+                            flag="<code>--appimage-extract-and-run</code>")
+                + f" {guide('linux-appimage')}</p>")
     if kind == "flatpak":
-        return ("<p>The bundle holds the application; the runtime comes from Flathub:</p>"
+        return ("<p>" + t("The bundle holds the application; the runtime comes from Flathub:") + "</p>"
                 + commands("flatpak remote-add --if-not-exists --user flathub "
                            "https://dl.flathub.org/repo/flathub.flatpakrepo",
                            f"flatpak install --user {n}",
                            "flatpak run io.github.balls0fsteel.Rookparcel") + alt
                 + f"<p>{guide('linux-flatpak')}</p>")
     if kind == "linux-tar":
-        return ("<p>Unpack it and start the GUI:</p>"
+        return ("<p>" + t("Unpack it and start the GUI:") + "</p>"
                 + commands(f"tar -xzf {n}", f"./{stem(n)}/rookparcel-gtk") + alt
-                + "<p>The folder also has <code>rookparcel-nox</code>, the desktop entry and the "
-                "systemd units (<code>systemd/system</code>, <code>systemd/user</code>). "
-                f"{guide('linux-tar')}</p>")
+                + "<p>" + t("The folder also has {nox}, the desktop entry and the systemd units "
+                            "({units}).", nox="<code>rookparcel-nox</code>",
+                            units="<code>systemd/system</code>, <code>systemd/user</code>")
+                + f" {guide('linux-tar')}</p>")
     if kind == "nox-appimage":
-        return ("<p>A terminal program; this starts it with the Web UI on port 8080:</p>"
+        return ("<p>" + t("A terminal program; this starts it with the Web UI on port 8080:") + "</p>"
                 + commands(f"chmod +x {n}", f"./{n} run --webui 8080 --webui-pass PASS") + alt)
     if kind in ("dmg", "gtk-dmg"):
-        return (f"<p>Open <code>{esc(n)}</code> and drag <code>Rookparcel.app</code> to "
-                "Applications. macOS refuses it the first time and has to be told to open it: "
-                f'see <a href="#gatekeeper">Gatekeeper</a>. {guide("macos")}</p>')
+        return ("<p>" + t("Open {file} and drag {app} to Applications. macOS refuses it the first "
+                          "time and has to be told to open it: see {gatekeeper}.",
+                          file=f"<code>{esc(n)}</code>", app="<code>Rookparcel.app</code>",
+                          gatekeeper='<a href="#gatekeeper">Gatekeeper</a>')
+                + f' {guide("macos")}</p>')
     if kind == "macos-nox":
-        return ("<p>Unpack it and start the daemon with the Web UI on port 8080:</p>"
+        return ("<p>" + t("Unpack it and start the daemon with the Web UI on port 8080:") + "</p>"
                 + commands(f"tar -xzf {n}", f"./{stem(n)}/rookparcel-nox run --webui 8080 --webui-pass PASS")
-                + alt + "<p>If macOS refuses to start it, remove the quarantine flag: "
-                f"<code>xattr -d com.apple.quarantine {esc(stem(n))}/rookparcel-nox</code>.</p>")
+                + alt + "<p>" + t("If macOS refuses to start it, remove the quarantine flag: {cmd}.",
+                                  cmd=f"<code>xattr -d com.apple.quarantine {esc(stem(n))}/rookparcel-nox</code>")
+                + "</p>")
     return ""
 
 
@@ -425,21 +523,22 @@ def files_table(platform: str, assets: list) -> str:
     rows, described = [], set()
     for a in assets:
         kind = KIND_BY_KEY.get(a.kind)
-        title = kind.title if kind else "File"
+        title = t(kind.title) if kind else t("File")
         arch = arch_label(platform, a.arch) if a.arch else ""
         label = esc(title) + (f" · {esc(arch)}" if arch else "")
         what = ""
         if kind and kind.key not in described:  # once per kind, on its first row
             described.add(kind.key)
-            what = f" — {old_names(kind.what, a.name)}"
+            what = f" — {old_names(t(kind.what), a.name)}"
         rows.append(
             "<tr>"
             f'<td class="name"><a href="{esc(a.url)}">{esc(a.name)}</a>'
             f'<span class="what"><span class="kind">{label}</span>{what}</span></td>'
             f'<td class="size">{esc(human_size(a.size)) if a.size else ""}</td>'
             "</tr>")
-    return (f'<table class="listview files"><caption class="vh">{esc(PLATFORMS[platform])} files</caption>'
-            '<thead><tr><th scope="col">Name</th><th scope="col" class="size">Size</th></tr></thead>'
+    caption = esc(t("{platform} files", platform=t(PLATFORMS[platform])))
+    return (f'<table class="listview files"><caption class="vh">{caption}</caption>'
+            f'<thead><tr><th scope="col">{t("Name")}</th><th scope="col" class="size">{t("Size")}</th></tr></thead>'
             "<tbody>" + "".join(rows) + "</tbody></table>")
 
 
@@ -459,12 +558,15 @@ def group(release: Optional[Release]) -> dict:
 
 def platform_block(platform: str, release: Optional[Release], releases_url: str) -> str:
     if not release:
-        return ('<p class="note">The file list could not be filled in when this page was built. '
-                f'Every file is on the <a href="{esc(releases_url)}">releases page on GitHub</a>.</p>')
+        return ('<p class="note">' + t("The file list could not be filled in when this page was built. "
+                                       "Every file is on the {link}releases page on GitHub{end}.",
+                                       link=f'<a href="{esc(releases_url)}">', end="</a>") + "</p>")
     assets = group(release).get(platform, [])
     if not assets:
-        return (f"<p class=\"note\">Rookparcel {esc(release.version)} has no {esc(PLATFORMS[platform])} "
-                f'files. Other versions are on the <a href="{esc(releases_url)}">releases page</a>.</p>')
+        return ('<p class="note">' + t("Rookparcel {version} has no {platform} files. Other versions "
+                                       "are on the {link}releases page{end}.",
+                                       version=esc(release.version), platform=esc(t(PLATFORMS[platform])),
+                                       link=f'<a href="{esc(releases_url)}">', end="</a>") + "</p>")
     out = [files_table(platform, assets)]
     if platform in ("windows", "linux", "macos"):
         by_kind = {}
@@ -476,29 +578,32 @@ def platform_block(platform: str, release: Optional[Release], releases_url: str)
             if kind.key in by_kind:
                 body = how_to_start(kind.key, by_kind[kind.key])
                 if body:
-                    steps.append(f'<div class="step"><h4>{esc(kind.title)}</h4>{body}</div>')
+                    steps.append(f'<div class="step"><h4>{esc(t(kind.title))}</h4>{body}</div>')
         if steps:
-            out.append('<h3>Starting it</h3><div class="steps">' + "".join(steps) + "</div>")
+            out.append(f'<h3>{t("Starting it")}</h3><div class="steps">' + "".join(steps) + "</div>")
     return "".join(out)
 
 
 def checksums_block(release: Optional[Release], releases_url: str) -> str:
     if not release:
-        return (f'<p>Each release on the <a href="{esc(releases_url)}">releases page</a> has a '
-                "<code>SHA256SUMS</code> file.</p>")
+        return ("<p>" + t("Each release on the {link}releases page{end} has a {file} file.",
+                          link=f'<a href="{esc(releases_url)}">', end="</a>",
+                          file="<code>SHA256SUMS</code>") + "</p>")
     sums = next((a for a in release.assets if a.kind == "checksums"), None)
     out = []
     if sums:
-        out.append(f'<p><a class="btn btn-primary btn-small" href="{esc(sums.url)}">Download SHA256SUMS</a> '
-                   f"for Rookparcel {esc(release.version)}.</p>")
+        out.append(f'<p><a class="btn btn-primary btn-small" href="{esc(sums.url)}">{t("Download SHA256SUMS")}</a> '
+                   + t("for Rookparcel {version}.", version=esc(release.version)) + "</p>")
     else:
-        out.append(f"<p>Rookparcel {esc(release.version)} has no <code>SHA256SUMS</code> file.</p>")
+        out.append("<p>" + t("Rookparcel {version} has no {file} file.", version=esc(release.version),
+                             file="<code>SHA256SUMS</code>") + "</p>")
     lines = [f"{a.digest.split(':', 1)[1]}  {a.name}" for a in release.assets
              if a.digest.startswith("sha256:") and a.kind != "checksums"]
     if lines:
-        out.append("<details><summary>SHA-256 of each file, as GitHub recorded it on upload</summary>"
-                   '<pre class="sums"><code>' + esc("\n".join(lines)) + "</code></pre>"
-                   "<p>These should match the lines in <code>SHA256SUMS</code>.</p></details>")
+        out.append("<details><summary>" + t("SHA-256 of each file, as GitHub recorded it on upload")
+                   + '</summary><pre class="sums"><code>' + esc("\n".join(lines)) + "</code></pre>"
+                   "<p>" + t("These should match the lines in {file}.", file="<code>SHA256SUMS</code>")
+                   + "</p></details>")
     return "".join(out)
 
 
@@ -514,64 +619,66 @@ def direct_links(release: Release) -> str:
         return next((a for a in release.assets if a.kind == kind), None)
 
     out = []
-    win = [(label, a) for label, a in (("the installer", first("windows-setup")),
-                                       ("the portable zip", first("windows-zip"))) if a]
+    win = [(label, a) for label, a in ((t("the installer"), first("windows-setup")),
+                                       (t("the portable zip"), first("windows-zip"))) if a]
     if win:
-        out.append('<p class="direct" data-os="windows" hidden>For Windows: '
-                   + ", or ".join(f"{label} {link(a)}" for label, a in win) + "</p>")
+        out.append('<p class="direct" data-os="windows" hidden>' + t("For Windows:") + " "
+                   + t(", or ").join(f"{label} {link(a)}" for label, a in win) + "</p>")
     mac = groups.get("macos", [])
     dmg = next((a for a in mac if a.kind == "dmg"), None)
     old = next((a for a in mac if a.kind == "gtk-dmg" and a.arch == "arm64"), None)
     if dmg:  # the native app: one universal disk image for every Mac
-        out.append('<p class="direct" data-os="macos" hidden>For a Mac (Apple silicon or Intel): '
-                   + link(dmg) + ".</p>")
+        out.append('<p class="direct" data-os="macos" hidden>' + t("For a Mac (Apple silicon or Intel):")
+                   + " " + link(dmg) + ".</p>")
     elif old:
-        out.append('<p class="direct" data-os="macos" hidden>For a Mac with Apple silicon: '
-                   + link(old) + '. Intel Macs: <a href="download.html#macos">the headless '
-                   "daemon</a>.</p>")
+        out.append('<p class="direct" data-os="macos" hidden>' + t("For a Mac with Apple silicon:") + " "
+                   + link(old) + ". " + t("Intel Macs: {link}the headless daemon{end}.",
+                                          link='<a href="download.html#macos">', end="</a>") + "</p>")
     if groups.get("linux"):
-        out.append('<p class="direct" data-os="linux" hidden>For Linux: '
-                   '<a href="download.html#linux">AppImage, Flatpak or plain binaries</a>.</p>')
+        out.append('<p class="direct" data-os="linux" hidden>' + t("For Linux:") + " "
+                   '<a href="download.html#linux">' + t("AppImage, Flatpak or plain binaries") + "</a>.</p>")
     return "".join(out)
 
 
 def hero_block(featured: Optional[Release], releases_url: str) -> str:
     if not featured:
         return ('<div class="cta"><p class="cta-buttons">'
-                f'<a class="btn btn-primary" href="{esc(releases_url)}">Download from GitHub</a> '
-                '<a class="btn btn-ghost" href="download.html#which">Which file do I need?</a> '
-                '<a class="btn btn-ghost" href="install.html">Install guide</a></p></div>')
+                f'<a class="btn btn-primary" href="{esc(releases_url)}">{t("Download from GitHub")}</a> '
+                f'<a class="btn btn-ghost" href="download.html#which">{t("Which file do I need?")}</a> '
+                f'<a class="btn btn-ghost" href="install.html">{t("Install guide")}</a></p></div>')
     iso, nice = nice_date(featured.published)
     badge = "badge-pre" if featured.prerelease else "badge-stable"
     meta = f'<span class="badge {badge}">{esc(featured.label)}</span>'
     if nice:
-        meta += f' Published <time datetime="{iso}">{nice}</time>'
+        meta += " " + t("Published {date}", date=f'<time datetime="{iso}">{nice}</time>')
     if featured.url:
-        meta += f' · <a href="{esc(featured.url)}">Release notes</a>'
+        meta += f' · <a href="{esc(featured.url)}">{t("Release notes")}</a>'
     return ('<div class="cta"><p class="cta-buttons">'
-            f'<a class="btn btn-primary" href="download.html">Download Rookparcel {esc(featured.version)}</a> '
-            '<a class="btn btn-ghost" href="download.html#which">Which file do I need?</a> '
-            '<a class="btn btn-ghost" href="install.html">Install guide</a></p>'
+            f'<a class="btn btn-primary" href="download.html">{t("Download Rookparcel {version}", version=esc(featured.version))}</a> '
+            f'<a class="btn btn-ghost" href="download.html#which">{t("Which file do I need?")}</a> '
+            f'<a class="btn btn-ghost" href="install.html">{t("Install guide")}</a></p>'
             f'<p class="cta-meta">{meta}</p>{direct_links(featured)}</div>')
 
 
 def release_block(featured: Optional[Release], newer_pre: Optional[Release], releases_url: str) -> str:
     if not featured:
-        return ('<p class="release-line">The newest release could not be read when this page was '
-                f'built. Every release is on the <a href="{esc(releases_url)}">releases page on '
-                "GitHub</a>.</p>")
+        return ('<p class="release-line">' + t("The newest release could not be read when this page "
+                                               "was built. Every release is on the {link}releases page "
+                                               "on GitHub{end}.", link=f'<a href="{esc(releases_url)}">',
+                                               end="</a>") + "</p>")
     iso, nice = nice_date(featured.published)
     badge = "badge-pre" if featured.prerelease else "badge-stable"
     out = [f'<p class="release-line"><strong>Rookparcel {esc(featured.version)}</strong> '
            f'<span class="badge {badge}">{esc(featured.label)}</span>']
     if nice:
-        out.append(f' published <time datetime="{iso}">{nice}</time>')
+        out.append(" " + t("published {date}", date=f'<time datetime="{iso}">{nice}</time>'))
     if featured.url:
-        out.append(f' · <a href="{esc(featured.url)}">Release notes</a>')
-    out.append(f' · <a href="{esc(releases_url)}">All releases</a></p>')
+        out.append(f' · <a href="{esc(featured.url)}">{t("Release notes")}</a>')
+    out.append(f' · <a href="{esc(releases_url)}">{t("All releases")}</a></p>')
     if newer_pre:
-        out.append(f'<p class="note">A newer pre-release, <a href="{esc(newer_pre.url or releases_url)}">'
-                   f"{esc(newer_pre.version)}</a>, is out for testing.</p>")
+        out.append('<p class="note">' + t("A newer pre-release, {link}, is out for testing.",
+                                          link=f'<a href="{esc(newer_pre.url or releases_url)}">'
+                                               f"{esc(newer_pre.version)}</a>") + "</p>")
     return "".join(out)
 
 
@@ -580,7 +687,7 @@ def other_block(featured: Optional[Release]) -> str:
     if not assets:
         return ""
     return ('<section class="platform" id="other" aria-labelledby="other-h">'
-            '<h2 id="other-h">Other files</h2>' + files_table("other", assets) + "</section>")
+            f'<h2 id="other-h">{t("Other files")}</h2>' + files_table("other", assets) + "</section>")
 
 
 def blocks_for(releases: Optional[list], repo: str) -> dict:
@@ -601,10 +708,10 @@ def blocks_for(releases: Optional[list], repo: str) -> dict:
         "files-other": other_block(featured),
         "checksums": checksums_block(featured, releases_url),
         "latest-version": (f'<a href="download.html">{esc(version)}</a>' if version
-                           else f'<a href="{esc(releases_url)}">Releases</a>'),
-        "release-notes": (f'<a href="{esc(featured.url)}">Release notes for {esc(version)}</a>'
+                           else f'<a href="{esc(releases_url)}">{t("Releases")}</a>'),
+        "release-notes": (f'<a href="{esc(featured.url)}">{t("Release notes for {version}", version=esc(version))}</a>'
                           if featured and featured.url
-                          else f'<a href="{esc(releases_url)}">Release notes</a>'),
+                          else f'<a href="{esc(releases_url)}">{t("Release notes")}</a>'),
         # kept only while the release on offer is a pre-release (or there is none yet)
         "if-prerelease": lambda inner: inner if show_pre_notice else "",
     }
@@ -761,15 +868,28 @@ def atom_feed(entries: list, site_url: str) -> str:
     return text
 
 
-def latest_news_block(entries: list) -> str:
-    """The home page's line pointing at the newest news entry."""
+def latest_news_block(entries: list, up: str = "") -> str:
+    """The home page's line pointing at the newest news entry. `up` leads from the page to the
+    site's root ("../" in a language folder, where the entry's English text links back)."""
     e = entries[0]
     iso, nice = nice_date(e.date)
+    lede = relative_links(e.lede, up) if up else e.lede
+    hreflang = ' hreflang="en"' if up else ""
     return ('<p class="latest-news"><svg class="ico ico-sm ico-purple" aria-hidden="true" '
-            'focusable="false"><use href="img/icons.svg#i-rss"/></svg>'
-            f'<span><strong>Latest news, <time datetime="{iso}">{nice}</time>:</strong> '
-            f'<a href="{NEWS_PAGE}#{esc(e.id)}">{esc(e.title)}</a>. {e.lede} '
-            f'<a href="{NEWS_PAGE}">All news</a></span></p>')
+            f'focusable="false"><use href="{up}img/icons.svg#i-rss"/></svg>'
+            '<span><strong>' + t("Latest news, {date}:", date=f'<time datetime="{iso}">{nice}</time>')
+            + f'</strong> <a href="{up}{NEWS_PAGE}#{esc(e.id)}"{hreflang}>{esc(e.title)}</a>. '
+            f'{lede} <a href="{up}{NEWS_PAGE}"{hreflang}>{t("All news")}</a></span></p>')
+
+
+def relative_links(fragment: str, up: str) -> str:
+    """The fragment's relative href/src values with `up` in front."""
+    def repl(m):
+        url = m.group(2)
+        if urllib.parse.urlsplit(url).scheme or url.startswith(("#", "/")):
+            return m.group(0)
+        return f'{m.group(1)}="{up}{url}"'
+    return re.sub(r'\b(href|src)="([^"]*)"', repl, fragment)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -913,7 +1033,7 @@ def icon_version(img: Path) -> str:
 
 
 # <link rel="icon"> and <link rel="apple-touch-icon"> to the app icon
-ICON_LINK = re.compile(r'(<link\b[^>]*\brel="(?:icon|apple-touch-icon)"[^>]*\bhref="img/icon-\d+\.png)(")')
+ICON_LINK = re.compile(r'(<link\b[^>]*\brel="(?:icon|apple-touch-icon)"[^>]*\bhref="(?:\.\./)?img/icon-\d+\.png)(")')
 
 
 def stamp_icon_links(text: str, stamp: str) -> str:
@@ -940,12 +1060,24 @@ def build(out: Path, releases: Optional[list], repo: str, base_path: str) -> lis
         raise BuildError(f"site/{NEWS_PAGE} is missing")
     news = parse_news(news_page.read_text(encoding="utf-8"))
 
-    blocks = blocks_for(releases, repo)
-    blocks["base"] = f'<base href="{esc(base_path)}">'
-    blocks["latest-news"] = latest_news_block(news)
+    by_lang = {}
+    for code in LANGS:  # the blocks in each language
+        set_lang(code)
+        blocks = blocks_for(releases, repo)
+        blocks["base"] = f'<base href="{esc(base_path)}">'
+        blocks["latest-news"] = latest_news_block(news, "" if code == "en" else "../")
+        by_lang[code] = blocks
+        if _lang["missing"]:
+            warnings.extend(f"site/i18n/{code}.json: no translation for {s!r}"
+                            for s in sorted(_lang["missing"]))
+    set_lang("en")
     for page in sorted(out.rglob("*.html")):
+        rel = page.relative_to(out)
+        blocks = dict(by_lang[lang_of(rel)])
+        blocks["langs"] = lang_menu(rel, out)
+        blocks["alternates"] = alternate_links(rel, out)
         text = page.read_text(encoding="utf-8")
-        text = fill(text, blocks, str(page.relative_to(out)))
+        text = fill(text, blocks, str(rel))
         text = add_image_sizes(text, page, out, warnings)
         text = stamp_icon_links(text, icon_stamp)
         page.write_text(text, encoding="utf-8", newline="\n")

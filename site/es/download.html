@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Descargar Rookparcel</title>
+<meta name="description" content="Descargue Rookparcel para Windows, Linux y macOS: todos los archivos de la versión más reciente, cómo iniciarlo, las sumas de verificación y cómo funciona la actualización.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14233d">
+<link rel="icon" type="image/png" sizes="32x32" href="../img/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../img/icon-16.png">
+<link rel="apple-touch-icon" href="../img/icon-256.png">
+<link rel="stylesheet" href="../css/style.css">
+<!-- build:alternates --><!-- /build:alternates -->
+<script src="../js/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="./"><img src="../img/icon-32.png" srcset="../img/icon-64.png 2x" width="32" height="32" alt=""> Rookparcel</a>
+    <nav aria-label="Principal">
+      <ul class="toolbar">
+        <li><a href="download.html" aria-current="page"><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Descargar</a></li>
+        <li><a href="../news.html" hreflang="en"><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg>Noticias</a></li>
+        <li><a href="faq.html"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-help"/></svg>Preguntas</a></li>
+        <li><a href="../benchmarks.html" hreflang="en"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Rendimiento</a></li>
+        <li><a href="docs.html"><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>Documentos</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel/wiki/Inicio"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-general"/></svg>Guía</a></li>
+        <li><a href="donate.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-heart"/></svg>Donar</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a></li>
+      </ul>
+    </nav>
+    <!-- build:langs --><!-- /build:langs -->
+  </div>
+</header>
+
+<main id="main">
+  <div class="page-head">
+    <div class="wrap">
+      <h1>Descargar Rookparcel</h1>
+      <!-- build:release -->
+      <p class="release-line">Todas las versiones están en la <a href="https://github.com/Balls0fSteel/Rookparcel/releases">página de versiones de GitHub</a>.</p>
+      <!-- /build:release -->
+    </div>
+  </div>
+
+  <div class="wrap">
+    <!-- build:if-prerelease -->
+    <aside class="callout" aria-label="Versión candidata">
+      <svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-warning"/></svg>
+      <div>
+        <p><strong>Esta es una versión de preestreno.</strong> Apenas se ha probado fuera de los equipos de su autor, los ajustes aún pueden cambiar antes de la 1.0 y todavía no debe usarse en trackers privados. Sus notas de la versión enumeran las limitaciones conocidas.</p>
+      </div>
+    </aside>
+    <!-- /build:if-prerelease -->
+
+    <p class="guide-link"><a href="install.html">Guía de instalación paso a paso</a>: desde la descarga hasta el programa en marcha, con las advertencias del sistema en el primer inicio.</p>
+
+    <section class="section" id="which" aria-labelledby="which-h">
+      <h2 id="which-h">¿Qué archivo necesito?</h2>
+      <ul class="which">
+        <li><strong>Windows 10 u 11</strong> El instalador instala Rookparcel y más adelante lo actualiza en el mismo sitio (desde la 1.0.1). El zip portátil no instala nada: descomprímalo y ejecútelo.</li>
+        <li><strong>Escritorio Linux</strong> El AppImage lleva sus propias bibliotecas y requiere glibc 2.39 o posterior (Ubuntu 24.04, Fedora 40, Debian 13 o posteriores). ¿Prefiere Flatpak? Elija el bundle. Los binarios sueltos usan el GTK 4 y el OpenSSL 3 de su sistema.</li>
+        <li><strong>Servidor Linux</strong> El AppImage de <code>rookparcel-nox</code>, o <code>rookparcel-nox</code> de los binarios sueltos, con su <a href="#headless">interfaz web</a>.</li>
+        <li><strong>Mac</strong> La imagen de disco, tanto para Mac con Apple silicon como con Intel. Los servidores pueden usar <code>rookparcel-nox</code>, sin interfaz.</li>
+      </ul>
+      <p><code>x64</code> y <code>x86_64</code> son procesadores Intel y AMD; <code>aarch64</code> y <code>arm64</code> son ARM de 64 bits.</p>
+    </section>
+
+    <section class="platform" id="windows" aria-labelledby="windows-h">
+      <h2 id="windows-h">Windows <span class="yours" data-os="windows" hidden>Su sistema</span></h2>
+      <p class="req">Windows 10 u 11, de 64 bits (x64).</p>
+      <!-- build:files-windows -->
+      <p class="note">La lista de archivos se completa al construir el sitio. Todos los archivos están en la <a href="https://github.com/Balls0fSteel/Rookparcel/releases">página de versiones de GitHub</a>.</p>
+      <!-- /build:files-windows -->
+      <h3 id="smartscreen">SmartScreen</h3>
+      <p>Los programas no están firmados digitalmente, así que la primera vez Windows SmartScreen muestra «Windows protegió su PC». Elija <strong>Más información</strong> y después <strong>Ejecutar de todas formas</strong>. La <a href="install.html#windows">guía de instalación</a> muestra cada paso.</p>
+      <p>Los ajustes y los torrents se guardan en <code>%APPDATA%\Rookparcel</code>. Un archivo <code>rookparcel.ini</code> vacío junto a <code>rookparcel.exe</code> los guarda en esa carpeta, con las descargas en su carpeta <code>Downloads</code> (modo portátil, <a href="faq.html#settings">más información</a>). <code>--profile work</code> o Archivo &gt; Perfiles ejecuta un Rookparcel aparte junto al habitual.</p>
+    </section>
+
+    <section class="platform" id="linux" aria-labelledby="linux-h">
+      <h2 id="linux-h">Linux <span class="yours" data-os="linux" hidden>Su sistema</span></h2>
+      <p class="req">x86_64 o aarch64.</p>
+      <!-- build:files-linux -->
+      <p class="note">La lista de archivos se completa al construir el sitio. Todos los archivos están en la <a href="https://github.com/Balls0fSteel/Rookparcel/releases">página de versiones de GitHub</a>.</p>
+      <!-- /build:files-linux -->
+      <h3>Conviene saber</h3>
+      <ul>
+        <li>Los ajustes están en <code>~/.config/rookparcel/gtk</code> y los torrents en <code>~/.local/share/rookparcel/gtk</code>. El Flatpak los guarda en <code>~/.var/app/io.github.balls0fsteel.Rookparcel/</code>. Un archivo <code>rookparcel.ini</code> vacío junto a <code>rookparcel-gtk</code> o al <code>.AppImage</code> guarda todo en esa carpeta (modo portátil, no disponible en el Flatpak).</li>
+        <li>El Flatpak puede escribir en su carpeta personal, ya que un cliente de torrents sigue escribiendo en las carpetas que usted elige. Una carpeta de otro disco necesita <code>flatpak override --user --filesystem=/mnt/data io.github.balls0fsteel.Rookparcel</code> (con su carpeta).</li>
+        <li>El demonio como servicio de systemd: <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/DAEMON.md#systemd">docs/DAEMON.md</a>.</li>
+      </ul>
+    </section>
+
+    <section class="platform" id="macos" aria-labelledby="macos-h">
+      <h2 id="macos-h">macOS <span class="yours" data-os="macos" hidden>Su sistema</span></h2>
+      <p class="req">La interfaz: Apple silicon e Intel, macOS 11 Big Sur o posterior. El demonio: Apple silicon (macOS 11 o posterior) e Intel (macOS 10.14 o posterior).</p>
+      <!-- build:files-macos -->
+      <p class="note">La lista de archivos se completa al construir el sitio. Todos los archivos están en la <a href="https://github.com/Balls0fSteel/Rookparcel/releases">página de versiones de GitHub</a>.</p>
+      <!-- /build:files-macos -->
+      <h3 id="gatekeeper">Gatekeeper</h3>
+      <p><code>Rookparcel.app</code> tiene una firma ad hoc y no está notarizada, así que Gatekeeper la rechaza la primera vez («No se ha abierto», o «no se puede abrir porque no se puede verificar el desarrollador»). Permítala una vez; la <a href="install.html#macos">guía de instalación</a> muestra cada paso, y la imagen de disco los incluye en <code>How to open Rookparcel.html</code>.</p>
+      <ul>
+        <li><strong>macOS 15 Sequoia y posteriores:</strong> intente abrir la app y haga clic en <strong>Hecho</strong>. Después abra <strong>Ajustes del Sistema &gt; Privacidad y seguridad</strong>, haga clic en <strong>Abrir igualmente</strong> en Seguridad y confirme.</li>
+        <li><strong>macOS 11 a 14:</strong> haga Control-clic (o clic derecho) en la app, elija <strong>Abrir</strong> y luego <strong>Abrir</strong> otra vez.</li>
+      </ul>
+      <p>O, también cuando macOS dice que la app «está dañada», quite la marca de cuarentena después de copiarla a Aplicaciones:</p>
+      <pre class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Rookparcel.app</code></pre>
+      <p><code>Rookparcel.app</code> es un programa nativo de macOS, un único archivo para Apple silicon e Intel. Los ajustes y los torrents están en <code>~/Library/Application Support/Rookparcel/mac</code>. Si viene de la versión anterior de la app con GTK, su carpeta <code>gtk</code> de ahí pasa a llamarse <code>mac</code> en el primer inicio, de modo que los ajustes y los torrents se conservan.</p>
+    </section>
+
+    <!-- build:files-other --><!-- /build:files-other -->
+
+    <section class="section" id="headless" aria-labelledby="headless-h">
+      <h2 id="headless-h">Sin interfaz: <code>rookparcel-nox</code></h2>
+      <p>El demonio está en el zip de Windows, en los binarios sueltos de Linux, en su propio AppImage de Linux y en el tarball de macOS. Inícielo con la interfaz web en el puerto 8080:</p>
+      <pre class="cmd"><code>rookparcel-nox run --webui 8080 --webui-pass PASS</code></pre>
+      <p>Después abra <code>http://127.0.0.1:8080</code> en el mismo equipo e inicie sesión como <code>admin</code>. Sin <code>--webui-pass</code>, muestra una contraseña temporal en el primer inicio; establezca una en Preferencias &gt; Interfaz web. El mismo puerto ofrece una API web compatible con qBittorrent para las herramientas existentes.</p>
+      <p>Desde otros equipos: indique una dirección, como <code>--webui 0.0.0.0:8443</code>, y añada <code>--webui-https</code> para que la contraseña no viaje en claro (en el primer uso se crea un certificado autofirmado). <code>rookparcel-nox add file.torrent --save DIR</code> añade un torrent. Cómo ejecutarlo como servicio (systemd, rc.d de FreeBSD, un servicio de Windows, <code>--daemon</code>) está en <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/DAEMON.md">docs/DAEMON.md</a>.</p>
+    </section>
+
+    <section class="section" id="checksums" aria-labelledby="checksums-h">
+      <h2 id="checksums-h">Comprobar una descarga</h2>
+      <!-- build:checksums -->
+      <p>Cada versión de la <a href="https://github.com/Balls0fSteel/Rookparcel/releases">página de versiones</a> tiene un archivo <code>SHA256SUMS</code>.</p>
+      <!-- /build:checksums -->
+      <p>Con <code>SHA256SUMS</code> en la misma carpeta que su descarga:</p>
+      <div class="steps cols">
+        <div class="step">
+          <h3>Linux</h3>
+          <pre class="cmd"><code>sha256sum -c --ignore-missing SHA256SUMS</code></pre>
+        </div>
+        <div class="step">
+          <h3>macOS</h3>
+          <pre class="cmd"><code>shasum -a 256 Rookparcel-*.dmg</code></pre>
+          <p>Compare el resultado con la línea del archivo en <code>SHA256SUMS</code>.</p>
+        </div>
+        <div class="step">
+          <h3>Windows (PowerShell)</h3>
+          <pre class="cmd"><code>Get-FileHash .\rookparcel-*.zip</code></pre>
+          <p>Compare el hash con la línea del archivo en <code>SHA256SUMS</code> (no importan las mayúsculas y minúsculas).</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="updating" aria-labelledby="updating-h">
+      <h2 id="updating-h">Actualizar</h2>
+      <p>Rookparcel no se actualiza por sí mismo. Desde la 1.0.1, las interfaces muestran una breve nota en su barra de estado cuando hay una versión más reciente (desde la 1.1.17, <code>rookparcel-nox</code> imprime una línea y muestra un enlace en su interfaz web); descárguela de esta página o de GitHub. Lo que ha cambiado está en la página de <a href="../news.html" hreflang="en">Noticias</a>. La comprobación lee un archivo pequeño de este sitio y puede desactivarse (<a href="faq.html#privacy">qué envía</a>).</p>
+      <ul>
+        <li><strong>Instalador:</strong> ejecute el nuevo instalador. Actualiza la copia instalada en el mismo sitio.</li>
+        <li><strong>Zip portátil:</strong> cierre Rookparcel y después sustituya a mano <code>rookparcel.exe</code> y <code>rookparcel-nox.exe</code> por los nuevos. Sus ajustes se quedan donde están (en modo portátil, deje el resto de esa carpeta como está).</li>
+        <li><strong>AppImage:</strong> sustituya el archivo antiguo por el nuevo.</li>
+        <li><strong>Flatpak:</strong> instale el nuevo bundle sobre el antiguo con <code>flatpak install --user --reinstall</code> y el nombre de su archivo.</li>
+        <li><strong>Binarios sueltos y el tarball de macOS:</strong> descomprima el nuevo archivo y use sus programas.</li>
+        <li><strong>macOS:</strong> arrastre la nueva <code>Rookparcel.app</code> a Aplicaciones y sustituya la antigua.</li>
+      </ul>
+      <p>Las versiones anteriores y todas las versiones de preestreno están en la <a href="https://github.com/Balls0fSteel/Rookparcel/releases">página de versiones</a>. Para compilar Rookparcel usted mismo, vea <a href="https://github.com/Balls0fSteel/Rookparcel#building">Building</a> en el README.</p>
+    </section>
+  </div>
+</main>
+
+<footer class="statusbar">
+  <div class="wrap">
+    <ul>
+      <li>Última: <!-- build:latest-version --><a href="https://github.com/Balls0fSteel/Rookparcel/releases">Versiones</a><!-- /build:latest-version --></li>
+      <li><a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial 1.0.0</a></li>
+      <li>© 2026 <a href="https://dukecorp1996.x35.in/">DukeCorp1996</a></li>
+      <li class="grow"><a href="https://github.com/Balls0fSteel/Rookparcel/issues">Informar de un problema</a></li>
+    </ul>
+    <p>Sin afiliación con µTorrent, BitTorrent, Inc., libtorrent ni qBittorrent. Este sitio no usa cookies y no carga nada de otros sitios.</p>
+  </div>
+</footer>
+</body>
+</html>

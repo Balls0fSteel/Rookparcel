@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rookparcel installieren, Schritt für Schritt</title>
+<meta name="description" content="Schritt-für-Schritt-Anleitung zur Installation von Rookparcel unter Windows, Linux und macOS, einschließlich der Warnungen von SmartScreen und Gatekeeper beim ersten Start.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14233d">
+<link rel="icon" type="image/png" sizes="32x32" href="../img/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../img/icon-16.png">
+<link rel="apple-touch-icon" href="../img/icon-256.png">
+<link rel="stylesheet" href="../css/style.css">
+<!-- build:alternates --><!-- /build:alternates -->
+<script src="../js/install.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="./"><img src="../img/icon-32.png" srcset="../img/icon-64.png 2x" width="32" height="32" alt=""> Rookparcel</a>
+    <nav aria-label="Hauptnavigation">
+      <ul class="toolbar">
+        <li><a href="download.html" aria-current="page"><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Download</a></li>
+        <li><a href="../news.html" hreflang="en"><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg>News</a></li>
+        <li><a href="faq.html"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-help"/></svg>FAQ</a></li>
+        <li><a href="../benchmarks.html" hreflang="en"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Benchmarks</a></li>
+        <li><a href="docs.html"><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>Doku</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel/wiki/Startseite"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-general"/></svg>Anleitung</a></li>
+        <li><a href="donate.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-heart"/></svg>Spenden</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a></li>
+      </ul>
+    </nav>
+    <!-- build:langs --><!-- /build:langs -->
+  </div>
+</header>
+
+<main id="main">
+  <div class="page-head">
+    <div class="wrap">
+      <h1>Rookparcel installieren</h1>
+      <p class="release-line">Von der heruntergeladenen Datei bis zum laufenden Programm, Schritt für Schritt. Die Dateien finden Sie auf der Seite <a href="download.html">Download</a>.</p>
+    </div>
+  </div>
+
+  <div class="wrap guide" id="guide" data-back="Zurück" data-next="Weiter" data-all="Alle Schritte anzeigen" data-one="Ein Schritt nach dem anderen" data-step="Schritt {n} von {m}" data-done="Schritt {n} von {m}: erledigt">
+    <aside class="callout" aria-label="Warum das System warnt">
+      <svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-warning"/></svg>
+      <div>
+        <p><strong>Windows und macOS warnen beim ersten Start.</strong> Die Dateien von Rookparcel sind nicht codesigniert, und die Mac-App ist von Apple nicht notarisiert; das System kann deshalb nicht erkennen, von wem sie stammen. Die Schritte unten zeigen, wie die Warnung aussieht und worauf Sie klicken. Um zu prüfen, ob eine Datei die veröffentlichte ist, vergleichen Sie ihre <a href="download.html#checksums">Prüfsumme</a>.</p>
+      </div>
+    </aside>
+
+    <div class="guide-pick" id="pick" hidden>
+      <div class="pick-row">
+        <span class="pick-label" id="pick-sys-l">Ihr System</span>
+        <div class="pick-btns" role="group" aria-labelledby="pick-sys-l">
+          <button type="button" class="pick" data-pick-sys="windows" aria-pressed="false">Windows</button>
+          <button type="button" class="pick" data-pick-sys="linux" aria-pressed="false">Linux</button>
+          <button type="button" class="pick" data-pick-sys="macos" aria-pressed="false">macOS</button>
+          <button type="button" class="pick" data-pick-sys="" aria-pressed="false">Alle anzeigen</button>
+        </div>
+      </div>
+      <div class="pick-row" data-for="windows" hidden>
+        <span class="pick-label" id="pick-win-l">Ihre Datei</span>
+        <div class="pick-btns" role="group" aria-labelledby="pick-win-l">
+          <button type="button" class="pick" data-pick-path="windows-setup" aria-pressed="false">Installer <small>…-setup.exe</small></button>
+          <button type="button" class="pick" data-pick-path="windows-zip" aria-pressed="false">Portable ZIP-Datei <small>….zip</small></button>
+        </div>
+      </div>
+      <div class="pick-row" data-for="linux" hidden>
+        <span class="pick-label" id="pick-linux-l">Ihre Datei</span>
+        <div class="pick-btns" role="group" aria-labelledby="pick-linux-l">
+          <button type="button" class="pick" data-pick-path="linux-appimage" aria-pressed="false">AppImage <small>….AppImage</small></button>
+          <button type="button" class="pick" data-pick-path="linux-flatpak" aria-pressed="false">Flatpak <small>….flatpak</small></button>
+          <button type="button" class="pick" data-pick-path="linux-tar" aria-pressed="false">Einfache Binärdateien <small>….tar.gz</small></button>
+        </div>
+      </div>
+      <div class="pick-row" data-for="macos" hidden>
+        <span class="pick-label" id="pick-mac-l">Ihr macOS</span>
+        <div class="pick-btns" role="group" aria-labelledby="pick-mac-l">
+          <button type="button" class="pick" data-pick-path="macos-15" aria-pressed="false">15 Sequoia oder neuer</button>
+          <button type="button" class="pick" data-pick-path="macos-older" aria-pressed="false">11 bis 14</button>
+          <button type="button" class="pick" data-pick-path="macos-terminal" aria-pressed="false">Mit dem Terminal</button>
+        </div>
+      </div>
+    </div>
+
+    <nav class="toc" id="guide-toc" aria-labelledby="toc-h">
+      <h2 id="toc-h">Auf dieser Seite</h2>
+      <ol>
+        <li><a href="#windows-setup">Windows: der Installer</a></li>
+        <li><a href="#windows-zip">Windows: die portable ZIP-Datei</a></li>
+        <li><a href="#linux-appimage">Linux: AppImage</a></li>
+        <li><a href="#linux-flatpak">Linux: Flatpak</a></li>
+        <li><a href="#linux-tar">Linux: einfache Binärdateien</a></li>
+        <li><a href="#macos-15">macOS 15 Sequoia oder neuer</a></li>
+        <li><a href="#macos-older">macOS 11 bis 14</a></li>
+        <li><a href="#macos-terminal">macOS mit dem Terminal</a></li>
+        <li><a href="#after">Nach dem ersten Start</a></li>
+      </ol>
+    </nav>
+
+    <section class="guide-sys platform" id="windows" data-sys="windows" aria-labelledby="windows-h">
+      <h2 id="windows-h">Windows</h2>
+      <p class="req">Windows 10 oder 11, 64 Bit. Der Installer legt einen Eintrag im Startmenü an und aktualisiert sich selbst; die ZIP-Datei installiert nichts.</p>
+
+      <section class="guide-path" id="windows-setup" aria-labelledby="windows-setup-h">
+        <h3 id="windows-setup-h">Der Installer</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Das Setup herunterladen und ausführen</h4>
+            <p>Laden Sie <code>rookparcel-…-windows-x64-setup.exe</code> von der <a href="download.html#windows">Download-Seite</a> herunter und öffnen Sie die Datei über die Downloads Ihres Browsers oder den Ordner „Downloads“.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> SmartScreen: Weitere Informationen</h4>
+            <p>Windows zeigt „Der Computer wurde durch Windows geschützt“. Klicken Sie unter dem Text auf den kleinen Link <strong>Weitere Informationen</strong>. Erscheint kein solches Fenster, gehen Sie zum nächsten Schritt.</p>
+            <div class="mock mock-win" role="img" aria-label="Zeichnung des blauen SmartScreen-Fensters „Der Computer wurde durch Windows geschützt“, mit markiertem Link „Weitere Informationen“ und einer Schaltfläche „Nicht ausführen“.">
+              <div class="mock-title">Der Computer wurde durch Windows geschützt</div>
+              <p class="mock-text">Microsoft Defender SmartScreen hat den Start einer unbekannten App verhindert. <span class="mock-link press">Weitere Informationen</span></p>
+              <div class="mock-btns"><span class="mock-btn">Nicht ausführen</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">3</span> SmartScreen: Trotzdem ausführen</h4>
+            <p>Das Fenster nennt nun die Datei und sagt „Unbekannter Herausgeber“. Klicken Sie auf <strong>Trotzdem ausführen</strong>.</p>
+            <div class="mock mock-win" role="img" aria-label="Zeichnung des SmartScreen-Fensters nach „Weitere Informationen“: Es nennt die App und den unbekannten Herausgeber und hat die Schaltflächen „Trotzdem ausführen“, markiert, und „Nicht ausführen“.">
+              <div class="mock-title">Der Computer wurde durch Windows geschützt</div>
+              <p class="mock-text">App: rookparcel-…-setup.exe<br>Herausgeber: Unbekannter Herausgeber</p>
+              <div class="mock-btns"><span class="mock-btn press">Trotzdem ausführen</span><span class="mock-btn">Nicht ausführen</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Wählen, für wen es gilt</h4>
+            <p>Wählen Sie die Sprache und akzeptieren Sie die Lizenz. Auf der Seite <strong>Benutzer auswählen</strong> braucht <strong>Nur für mich installieren</strong> keine Administratorrechte. Bei <strong>Für alle Benutzer dieses Computers installieren</strong> fragt Windows nach der Erlaubnis; auch diese Abfrage sagt „Unbekannter Herausgeber“. Klicken Sie auf <strong>Ja</strong>.</p>
+            <div class="mock" role="img" aria-label="Zeichnung der Abfrage der Benutzerkontensteuerung: Möchten Sie zulassen, dass durch diese App von einem unbekannten Herausgeber Änderungen an Ihrem Gerät vorgenommen werden, mit den Schaltflächen „Ja“, markiert, und „Nein“.">
+              <div class="mock-bar">Benutzerkontensteuerung</div>
+              <div class="mock-title">Möchten Sie zulassen, dass durch diese App von einem unbekannten Herausgeber Änderungen an Ihrem Gerät vorgenommen werden?</div>
+              <p class="mock-text">rookparcel-…-setup.exe<br>Herausgeber: Unbekannt</p>
+              <div class="mock-btns"><span class="mock-btn press">Ja</span><span class="mock-btn">Nein</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">5</span> Komponenten, Ordner, Installieren</h4>
+            <p>Lassen Sie die Häkchen, wie sie sind, es sei denn, Sie wollen die Verknüpfung auf dem Desktop oder die Zuordnung zu <code>.torrent</code>-Dateien und <code>magnet:</code>-Links nicht. Behalten Sie den angezeigten Ordner bei und klicken Sie auf <strong>Installieren</strong>.</p>
+          </li>
+          <li>
+            <h4><span class="num">6</span> Fertig stellen</h4>
+            <p>Lassen Sie <strong>Rookparcel ausführen</strong> angehakt und klicken Sie auf <strong>Fertig stellen</strong>. Rookparcel öffnet sich mit seinem Einrichtungsassistenten. Neuere Versionen werden über diese installiert: Rookparcel weist in seiner Statusleiste darauf hin, wenn eine erschienen ist.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="guide-path" id="windows-zip" aria-labelledby="windows-zip-h">
+        <h3 id="windows-zip-h">Die portable ZIP-Datei</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Herunterladen und entpacken</h4>
+            <p>Laden Sie <code>rookparcel-…-windows-x64.zip</code> von der <a href="download.html#windows">Download-Seite</a> herunter. Klicken Sie die Datei mit der rechten Maustaste an, wählen Sie <strong>Alle extrahieren…</strong> und einen Ordner, in den Sie schreiben dürfen, etwa <code>Documents\Rookparcel</code>. Starten Sie das Programm nicht aus der ZIP-Datei heraus.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Optional: alles in diesem Ordner behalten</h4>
+            <p>Für den portablen Modus legen Sie vor dem ersten Start eine leere Datei namens <code>rookparcel.ini</code> neben <code>rookparcel.exe</code> an. Einstellungen und Torrents bleiben dann im Ordner; ohne die Datei kommen sie nach <code>%APPDATA%\Rookparcel</code>.</p>
+          </li>
+          <li>
+            <h4><span class="num">3</span> rookparcel.exe starten</h4>
+            <p>Doppelklicken Sie <code>rookparcel.exe</code>. Windows zeigt beim ersten Mal „Der Computer wurde durch Windows geschützt“: Klicken Sie auf <strong>Weitere Informationen</strong> und dann auf <strong>Trotzdem ausführen</strong>.</p>
+            <div class="mock mock-win" role="img" aria-label="Zeichnung des SmartScreen-Fensters nach „Weitere Informationen“, mit den Schaltflächen „Trotzdem ausführen“, markiert, und „Nicht ausführen“.">
+              <div class="mock-title">Der Computer wurde durch Windows geschützt</div>
+              <p class="mock-text">App: rookparcel.exe<br>Herausgeber: Unbekannter Herausgeber</p>
+              <div class="mock-btns"><span class="mock-btn press">Trotzdem ausführen</span><span class="mock-btn">Nicht ausführen</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Optional: Torrents damit öffnen</h4>
+            <p>Haken Sie die Zuordnungen für <code>.torrent</code>-Dateien und <code>magnet:</code>-Links unter <strong>Optionen &gt; Einstellungen &gt; Allgemein</strong> an. Sie nennen diese Kopie und funktionieren nicht mehr, wenn Sie den Ordner verschieben.</p>
+          </li>
+        </ol>
+      </section>
+    </section>
+
+    <section class="guide-sys platform" id="linux" data-sys="linux" aria-labelledby="linux-h">
+      <h2 id="linux-h">Linux</h2>
+      <p class="req">x86_64 (Intel und AMD) oder aarch64 (64-Bit-ARM); <code>uname -m</code> zeigt, was Sie haben. Die Befehle unten funktionieren in dem Ordner, der den Download enthält, meist <code>~/Downloads</code>.</p>
+
+      <section class="guide-path" id="linux-appimage" aria-labelledby="linux-appimage-h">
+        <h3 id="linux-appimage-h">AppImage</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Das AppImage herunterladen</h4>
+            <p>Laden Sie <code>Rookparcel-…-x86_64.AppImage</code> (oder <code>-aarch64</code>) von der <a href="download.html#linux">Download-Seite</a> herunter. Es braucht glibc 2.39 oder neuer: Ubuntu 24.04, Fedora 40, Debian 13 oder später.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Die Ausführung erlauben</h4>
+            <p>Eine heruntergeladene Datei darf erst ausgeführt werden, wenn Sie es erlauben. In einem Terminal:</p>
+            <pre class="cmd"><code>cd ~/Downloads
+chmod +x Rookparcel-*.AppImage</code></pre>
+            <p>Oder im Dateimanager: Klicken Sie die Datei mit der rechten Maustaste an, wählen Sie <strong>Eigenschaften</strong>, <strong>Zugriffsrechte</strong> und haken Sie das Kästchen an, das die Ausführung als Programm erlaubt.</p>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Starten</h4>
+            <p>Doppelklicken Sie die Datei, oder:</p>
+            <pre class="cmd"><code>./Rookparcel-*.AppImage</code></pre>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Wenn FUSE verlangt wird</h4>
+            <p>Manche Systeme liefern FUSE 2 nicht mehr mit, und das AppImage bricht dann mit „AppImages require FUSE to run“ ab. Starten Sie es stattdessen so:</p>
+            <pre class="cmd"><code>./Rookparcel-*.AppImage --appimage-extract-and-run</code></pre>
+          </li>
+        </ol>
+      </section>
+
+      <section class="guide-path" id="linux-flatpak" aria-labelledby="linux-flatpak-h">
+        <h3 id="linux-flatpak-h">Flatpak</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Das Bundle herunterladen</h4>
+            <p>Laden Sie <code>Rookparcel-…-x86_64.flatpak</code> (oder <code>-aarch64</code>) von der <a href="download.html#linux">Download-Seite</a> herunter. Ihr System braucht <code>flatpak</code> selbst; die meisten Desktops haben es.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Flathub einmalig hinzufügen</h4>
+            <p>Das Bundle enthält die Anwendung; ihre Laufzeitumgebung kommt von Flathub:</p>
+            <pre class="cmd"><code>flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo</code></pre>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Das Bundle installieren</h4>
+            <pre class="cmd"><code>cd ~/Downloads
+flatpak install --user Rookparcel-*.flatpak</code></pre>
+            <p>Antworten Sie mit <kbd>y</kbd>, wenn nach der Laufzeitumgebung gefragt wird.</p>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Starten</h4>
+            <p>Rookparcel steht nun in Ihrem Anwendungsmenü, oder:</p>
+            <pre class="cmd"><code>flatpak run io.github.balls0fsteel.Rookparcel</code></pre>
+            <p>Es darf in Ihren Home-Ordner schreiben. Für Downloads auf einem anderen Datenträger siehe <a href="download.html#linux">Gut zu wissen</a> auf der Download-Seite.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="guide-path" id="linux-tar" aria-labelledby="linux-tar-h">
+        <h3 id="linux-tar-h">Einfache Binärdateien</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Das Archiv herunterladen</h4>
+            <p>Laden Sie <code>rookparcel-…-linux-x86_64.tar.gz</code> (oder <code>-aarch64</code>) von der <a href="download.html#linux">Download-Seite</a> herunter. Die Programme nutzen das GTK 4 (4.12 oder neuer) und das OpenSSL 3 Ihres Systems, wie Ubuntu 24.04 sie hat.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Entpacken</h4>
+            <pre class="cmd"><code>cd ~/Downloads
+tar -xzf rookparcel-*-linux-*.tar.gz</code></pre>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Das Fenster starten</h4>
+            <pre class="cmd"><code>./rookparcel-*-linux-*/rookparcel-gtk</code></pre>
+            <p>Der Ordner enthält außerdem <code>rookparcel-nox</code> (den Daemon), einen Desktop-Eintrag und systemd-Units.</p>
+          </li>
+        </ol>
+      </section>
+    </section>
+
+    <section class="guide-sys platform" id="macos" data-sys="macos" aria-labelledby="macos-h">
+      <h2 id="macos-h">macOS</h2>
+      <p class="req">macOS 11 Big Sur oder neuer, Apple Silicon und Intel. <strong>Apple-Menü &gt; Über diesen Mac</strong> zeigt Ihre macOS-Version. Das Disk-Image enthält diese Schritte ebenfalls, in <code>How to open Rookparcel.html</code>.</p>
+
+      <section class="guide-path" id="macos-15" aria-labelledby="macos-15-h">
+        <h3 id="macos-15-h">macOS 15 Sequoia oder neuer</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Die App nach „Programme“ kopieren</h4>
+            <p>Öffnen Sie <code>Rookparcel-…-macos.dmg</code> von der <a href="download.html#macos">Download-Seite</a> und ziehen Sie <code>Rookparcel.app</code> auf den Ordner <strong>Programme</strong> in seinem Fenster. Starten Sie die App aus „Programme“, nicht vom Disk-Image.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Versuchen, sie zu öffnen, dann auf „Fertig“ klicken</h4>
+            <p>Doppelklicken Sie <strong>Rookparcel</strong> in „Programme“. macOS meldet, dass es die App nicht überprüfen konnte. Klicken Sie auf <strong>Fertig</strong>, nicht auf „In den Papierkorb legen“.</p>
+            <div class="mock mock-mac" role="img" aria-label="Zeichnung der macOS-Warnung „Rookparcel“ nicht geöffnet, mit den Schaltflächen „In den Papierkorb legen“ und „Fertig“. „Fertig“ ist markiert.">
+              <div class="mock-title">„Rookparcel“ nicht geöffnet</div>
+              <p class="mock-text">Apple konnte nicht überprüfen, ob „Rookparcel“ frei von Malware ist, die Ihrem Mac schaden oder Ihre Privatsphäre gefährden könnte.</p>
+              <div class="mock-btns"><span class="mock-btn">In den Papierkorb legen</span><span class="mock-btn press">Fertig</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Systemeinstellungen: Trotzdem öffnen</h4>
+            <p>Öffnen Sie im Apple-Menü die <strong>Systemeinstellungen</strong> und klicken Sie in der Seitenleiste auf <strong>Datenschutz &amp; Sicherheit</strong>. Scrollen Sie zu <strong>Sicherheit</strong> und klicken Sie bei der Zeile zu Rookparcel auf <strong>Trotzdem öffnen</strong>. Die Schaltfläche ist nach Schritt 2 etwa eine Stunde lang da; ist sie weg, wiederholen Sie Schritt 2.</p>
+            <div class="mock" role="img" aria-label="Zeichnung des Bereichs Sicherheit unter Datenschutz und Sicherheit in den Systemeinstellungen: eine Zeile, die sagt, dass Rookparcel zum Schutz des Mac blockiert wurde, und die Schaltfläche „Trotzdem öffnen“, markiert.">
+              <div class="mock-bar">Datenschutz &amp; Sicherheit</div>
+              <div class="mock-title">Sicherheit</div>
+              <div class="mock-row"><p class="mock-text">„Rookparcel“ wurde zum Schutz deines Mac blockiert.</p><span class="mock-btn press">Trotzdem öffnen</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Bestätigen</h4>
+            <p>Klicken Sie in der folgenden Abfrage auf <strong>Trotzdem öffnen</strong> und geben Sie dann Ihr Passwort ein oder verwenden Sie Touch ID. Rookparcel startet und öffnet sich von nun an mit einem Doppelklick.</p>
+            <div class="mock mock-mac" role="img" aria-label="Zeichnung der macOS-Abfrage „Rookparcel“ öffnen?, mit den Schaltflächen „Trotzdem öffnen“, markiert, „In den Papierkorb legen“ und „Fertig“.">
+              <div class="mock-title">„Rookparcel“ öffnen?</div>
+              <p class="mock-text">Apple kann nicht überprüfen, ob die App frei von Malware ist.</p>
+              <div class="mock-btns"><span class="mock-btn press">Trotzdem öffnen</span><span class="mock-btn">In den Papierkorb legen</span><span class="mock-btn">Fertig</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">5</span> Lokales Netzwerk</h4>
+            <p>macOS fragt möglicherweise, ob Rookparcel Geräte in Ihrem lokalen Netzwerk finden darf. Wählen Sie <strong>Erlauben</strong>, damit Rookparcel Peers im lokalen Netz finden und einen Port an Ihrem Router öffnen kann; ohne das funktioniert es ebenfalls.</p>
+            <div class="mock mock-mac" role="img" aria-label="Zeichnung der macOS-Frage, ob Rookparcel Geräte in lokalen Netzwerken finden darf, mit den Schaltflächen „Nicht erlauben“ und „Erlauben“.">
+              <div class="mock-title">„Rookparcel“ erlauben, Geräte in lokalen Netzwerken zu finden?</div>
+              <div class="mock-btns"><span class="mock-btn">Nicht erlauben</span><span class="mock-btn press">Erlauben</span></div>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="guide-path" id="macos-older" aria-labelledby="macos-older-h">
+        <h3 id="macos-older-h">macOS 11 bis 14</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Die App nach „Programme“ kopieren</h4>
+            <p>Öffnen Sie <code>Rookparcel-…-macos.dmg</code> von der <a href="download.html#macos">Download-Seite</a> und ziehen Sie <code>Rookparcel.app</code> auf den Ordner <strong>Programme</strong> in seinem Fenster.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Control-Klick, dann „Öffnen“</h4>
+            <p>Ein Doppelklick zeigt nur eine Warnung ohne Weiterkommen. Halten Sie stattdessen in „Programme“ die Taste <kbd>Control</kbd> gedrückt und klicken Sie auf <strong>Rookparcel</strong> (oder klicken Sie mit der rechten Maustaste) und wählen Sie im Menü <strong>Öffnen</strong>.</p>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Öffnen</h4>
+            <p>Diesmal hat die Warnung eine Schaltfläche <strong>Öffnen</strong>. Klicken Sie darauf. Rookparcel startet und öffnet sich von nun an mit einem Doppelklick.</p>
+            <div class="mock mock-mac" role="img" aria-label="Zeichnung der macOS-Warnung, dass der Entwickler von Rookparcel nicht überprüft werden kann, mit den Schaltflächen „In den Papierkorb legen“, „Öffnen“, markiert, und „Abbrechen“.">
+              <div class="mock-title">macOS kann den Entwickler von „Rookparcel“ nicht überprüfen. Möchten Sie das Programm wirklich öffnen?</div>
+              <div class="mock-btns"><span class="mock-btn">In den Papierkorb legen</span><span class="mock-btn press">Öffnen</span><span class="mock-btn">Abbrechen</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Wenn es keine Schaltfläche „Öffnen“ gibt</h4>
+            <p>Öffnen Sie die <strong>Systemeinstellungen</strong> <strong>&gt; Datenschutz &amp; Sicherheit</strong> (unter macOS 11 und 12: <strong>Sicherheit</strong>) und klicken Sie auf <strong>Trotzdem öffnen</strong>, oder nutzen Sie <a href="#macos-terminal">das Terminal</a>.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="guide-path" id="macos-terminal" aria-labelledby="macos-terminal-h">
+        <h3 id="macos-terminal-h">Mit dem Terminal, oder wenn macOS „ist beschädigt“ meldet</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Die App nach „Programme“ kopieren</h4>
+            <p>Öffnen Sie <code>Rookparcel-…-macos.dmg</code> und ziehen Sie <code>Rookparcel.app</code> auf den Ordner <strong>Programme</strong> in seinem Fenster.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Die Download-Markierung entfernen</h4>
+            <p>Öffnen Sie das <strong>Terminal</strong> (Programme &gt; Dienstprogramme), fügen Sie diese Zeile ein und drücken Sie die <kbd>Return</kbd>-Taste:</p>
+            <pre class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Rookparcel.app</code></pre>
+            <p>Sie entfernt die Markierung „aus dem Internet geladen“ von dieser einen App. Hat es geklappt, gibt der Befehl nichts aus.</p>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Öffnen</h4>
+            <p>Doppelklicken Sie <strong>Rookparcel</strong> in „Programme“. Die App startet ohne Warnung. „Rookparcel ist beschädigt und kann nicht geöffnet werden“ ist dieselbe Sperre in anderen Worten; auch sie hebt dieser Befehl auf.</p>
+          </li>
+        </ol>
+      </section>
+    </section>
+
+    <section class="section" id="after" aria-labelledby="after-h">
+      <h2 id="after-h">Nach dem ersten Start</h2>
+      <ul>
+        <li>Der Einrichtungsassistent öffnet sich von selbst: Er testet Ihre Verbindung und wählt Geschwindigkeitseinstellungen. Wo Einstellungen und Torrents liegen, steht in den <a href="faq.html#settings">FAQ</a>.</li>
+        <li>Ein Server ohne Bildschirm führt <code>rookparcel-nox</code> mit der Web-UI aus: <a href="download.html#headless">Headless</a>.</li>
+        <li>Neuere Versionen: <a href="download.html#updating">Aktualisieren</a>. Hängen Sie fest? Sehen Sie in die <a href="faq.html">FAQ</a> oder <a href="https://github.com/Balls0fSteel/Rookparcel/issues">melden Sie ein Problem</a>.</li>
+      </ul>
+    </section>
+  </div>
+</main>
+
+<footer class="statusbar">
+  <div class="wrap">
+    <ul>
+      <li>Neueste Version: <!-- build:latest-version --><a href="https://github.com/Balls0fSteel/Rookparcel/releases">Releases</a><!-- /build:latest-version --></li>
+      <li><a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial 1.0.0</a></li>
+      <li>© 2026 <a href="https://dukecorp1996.x35.in/">DukeCorp1996</a></li>
+      <li class="grow"><a href="https://github.com/Balls0fSteel/Rookparcel/issues">Ein Problem melden</a></li>
+    </ul>
+    <p>Nicht verbunden mit µTorrent, BitTorrent, Inc., libtorrent oder qBittorrent. Diese Website setzt keine Cookies und lädt nichts von anderen Websites.</p>
+  </div>
+</footer>
+</body>
+</html>

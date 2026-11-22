@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rookparcel: ein schlanker BitTorrent-Client im Geist von µTorrent 2.2.1</title>
+<meta name="description" content="Rookparcel ist ein schlanker BitTorrent-Client im Geist von µTorrent 2.2.1: eine native Win32-Oberfläche, eine native macOS-Oberfläche, eine GTK-4-Oberfläche für Linux und BSD und ein Daemon ohne Fenster mit eigener Weboberfläche.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14233d">
+<link rel="icon" type="image/png" sizes="32x32" href="../img/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../img/icon-16.png">
+<link rel="apple-touch-icon" href="../img/icon-256.png">
+<link rel="alternate" type="application/atom+xml" title="Rookparcel-News" href="../news.atom">
+<link rel="stylesheet" href="../css/style.css">
+<!-- build:alternates --><!-- /build:alternates -->
+<script src="../js/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="./"><img src="../img/icon-32.png" srcset="../img/icon-64.png 2x" width="32" height="32" alt=""> Rookparcel</a>
+    <nav aria-label="Hauptnavigation">
+      <ul class="toolbar">
+        <li><a href="download.html"><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Download</a></li>
+        <li><a href="../news.html" hreflang="en"><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg>News</a></li>
+        <li><a href="faq.html"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-help"/></svg>FAQ</a></li>
+        <li><a href="../benchmarks.html" hreflang="en"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Benchmarks</a></li>
+        <li><a href="docs.html"><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>Doku</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel/wiki/Startseite"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-general"/></svg>Anleitung</a></li>
+        <li><a href="donate.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-heart"/></svg>Spenden</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a></li>
+      </ul>
+    </nav>
+    <!-- build:langs --><!-- /build:langs -->
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" aria-labelledby="title">
+    <div class="wrap hero-in">
+      <img class="hero-icon" src="../img/icon-128.png" srcset="../img/icon-256.png 2x" width="112" height="112" alt="">
+      <div>
+        <h1 id="title">Rookparcel</h1>
+        <p class="lede">Ein schlanker BitTorrent-Client im Geist von µTorrent 2.2.1: kleine native Programme, geringer Verbrauch an RAM und CPU und eine Oberfläche, die auch mit Zehntausenden Torrents flüssig bleibt.</p>
+        <p>Eine native Win32-Oberfläche unter Windows, eine native AppKit-Oberfläche unter macOS, eine GTK-4-Oberfläche unter Linux und BSD und ein Daemon ohne Fenster, <code>rookparcel-nox</code>, mit eigener Weboberfläche. Die Engine ist unsere eigene Rust-Portierung von libtorrent-rasterbar 2.0.11.</p>
+        <!-- build:hero-download -->
+        <div class="cta"><p class="cta-buttons"><a class="btn btn-primary" href="https://github.com/Balls0fSteel/Rookparcel/releases">Von GitHub herunterladen</a> <a class="btn btn-ghost" href="download.html#which">Welche Datei brauche ich?</a> <a class="btn btn-ghost" href="install.html">Installationsanleitung</a></p></div>
+        <!-- /build:hero-download -->
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <!-- build:latest-news -->
+    <p class="latest-news"><svg class="ico ico-sm ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg><span><a href="../news.html" hreflang="en">News</a>: was sich in jeder Version geändert hat.</span></p>
+    <!-- /build:latest-news -->
+
+    <!-- build:if-prerelease -->
+    <aside class="callout" aria-label="Release Candidate">
+      <svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-warning"/></svg>
+      <div>
+        <p><strong>Release Candidate: Vorabversion.</strong> Rookparcel läuft beim Autor, wurde aber noch nicht breiter getestet. Einstellungen und gespeicherter Zustand können sich zwischen Versionen noch ändern, einige Funktionen sind nur wenig getestet, und nichts ist codesigniert.</p>
+        <p>Verwenden Sie es nicht für Torrents, die Ihnen wichtig sind, und nicht auf privaten Trackern: Die Client-ID steht noch nirgends auf einer Whitelist. Rückmeldungen und <a href="https://github.com/Balls0fSteel/Rookparcel/issues">Fehlerberichte</a> sind willkommen.</p>
+      </div>
+    </aside>
+    <!-- /build:if-prerelease -->
+
+    <section class="section" aria-labelledby="look">
+      <h2 id="look">Das Fenster von µTorrent 2.2.1, neu gebaut</h2>
+      <p class="lead">Die Windows-Oberfläche ist eine getreue Nachbildung des Hauptfensters von µTorrent 2.2.1: die Kategorienliste, die Torrent-Liste mit allen Spalten, die Detailregisterkarten, die Einstellungen und die Dialoge. Sie verwendet weder Code noch Grafiken von µTorrent.</p>
+      <div class="shots">
+        <figure class="shot">
+          <img src="../img/screenshot-windows.png" alt="Das Hauptfenster von Rookparcel unter Windows, aufgebaut wie µTorrent 2.2.1: die Symbolleiste, die Kategorienliste, die Torrent-Liste und darunter die Detailregisterkarten.">
+          <figcaption>Die Windows-Oberfläche, <code>rookparcel.exe</code>.</figcaption>
+        </figure>
+        <div class="shot-pair">
+          <figure class="shot">
+            <img src="../img/add-new-torrent.png" width="751" height="602" loading="lazy" alt="Der Dialog Neuen Torrent hinzufügen: oben der Speicherordner, der Name des Torrents, die Torrent-Optionen und ein Label; darunter die Details des Torrents und seine Dateien mit Größen und Prioritäten.">
+            <figcaption>Neuen Torrent hinzufügen: Ordner, Dateien und deren Prioritäten wählen.</figcaption>
+          </figure>
+          <div>
+            <h3>Auf jedem Desktop</h3>
+            <p>Unter macOS sind dasselbe Hauptfenster und dieselben Dialoge eine native Mac-App, und unter Linux und BSD laufen sie mit GTK 4, aus demselben Oberflächencode wie das Windows-Fenster.</p>
+            <p>Oder lassen Sie den Daemon ohne Fenster auf einem Server laufen und nutzen Sie ihn im Browser oder von beiden Desktop-Oberflächen aus im Fernsteuerungsmodus.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="share">
+      <h2 id="share">Es teilt sich Ihren PC</h2>
+      <p class="lead">Ein Torrent-Client sollte nicht der Grund sein, warum ein Spiel ruckelt oder der ganze Computer träge wirkt. Rookparcel kann von selbst Platz machen, für Ihre Leitung und für Ihre Datenträger.</p>
+      <ul class="spotlights">
+        <li class="spotlight">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Gamer-Modus: den Ping niedrig halten</h3>
+          <p>Aktivieren Sie <strong>Ping niedrig halten</strong> unter Einstellungen &gt; Bandbreite. Rookparcel findet den ersten Router hinter Ihrer Leitung und beobachtet dessen Ping, während es herunter- und hochlädt. Sobald sich auf der Leitung eine Warteschlange bildet, drosselt es sich selbst und wird wieder schneller, wenn sie sich auflöst. So bleiben Spiele und Videoanrufe reaktionsfähig. Es gibt keine Spieleliste und nichts einzurichten.</p>
+          <p class="spotlight-fact">Auf einer Testleitung mit einer halben Sekunde Puffer fiel der Ping von etwa 480&nbsp;ms auf 10&nbsp;ms, während Rookparcel 80 bis 92&nbsp;% der Leitungsgeschwindigkeit behielt. Es funktioniert unter Windows, Linux und macOS; unter BSD richtet es sich nach den Verzögerungen, die seine uTP-Peers messen.</p>
+        </li>
+        <li class="spotlight">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>Intelligente Festplatten-E/A</h3>
+          <p>Überprüfungen laufen schonend: mit der Hintergrundpriorität des Systems für Datenträger, ohne die Dateien anderer Programme aus dem Speicher zu verdrängen, und sie weichen, sobald ein anderes Programm den Datenträger braucht. Rookparcel unterscheidet SSDs, Festplatten und Netzwerkfreigaben. Es prüft einen Torrent pro Laufwerk, mehrere Laufwerke gleichzeitig, und gibt einer Festplatte nur zwei Aufträge zugleich, damit sie nicht ihre Zeit mit Suchen verbringt.</p>
+          <p class="spotlight-fact">Auf Wunsch bremst es auch Downloads oder Uploads, solange ein Datenträger ausgelastet ist, und begrenzt die Überprüfung auf eine Geschwindigkeit Ihrer Wahl: Einstellungen &gt; Erweitert &gt; Festplatten-E/A.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="section" aria-labelledby="features">
+      <h2 id="features">Was alles drinsteckt</h2>
+      <ul class="features">
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-downloading"/></svg>Eine vollständige Engine</h3>
+          <p>TCP und uTP; HTTP-, HTTPS- und UDP-Tracker; Magnet-Links, DHT, Peer-Austausch und lokale Peer-Suche; Protokollverschlüsselung, Web-Seeds, SOCKS- und HTTP-Proxys, UPnP / NAT-PMP und IP-Filter; Super-Seeding, sequenzieller Download und Geschwindigkeitsbegrenzungen pro Torrent.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-bittorrent"/></svg>BitTorrent v2 und Hybrid</h3>
+          <p>v2- und Hybrid-Torrents (BEP 52): hinzufügen, herunterladen, seeden und erstellen.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-all-torrents"/></svg>Der ganze 2.2.1-Client</h3>
+          <p>Detailregisterkarten (Allgemein, Tracker, Peers, Teile, Dateien, Geschwindigkeit, Protokoll), Einstellungen, Hinzufügen, Erstellen und Eigenschaften, der RSS-Downloader, der Zeitplaner, das automatische Herunterfahren, das Symbol im Infobereich sowie Datei- und Magnet-Verknüpfungen.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Für große Mengen gebaut</h3>
+          <p>Das Ziel sind 100.000 Torrents auf einem bescheidenen PC mit sofort reagierender Oberfläche. Auf dem PC des Autors listet die Windows-Oberfläche 100.000 Torrents in etwa einer Sekunde, mit einer CPU-Last im Leerlauf unter 0,1 %.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-privacy"/></svg>Bleibt in Ihrem VPN</h3>
+          <p><strong>Nur dieses Netzwerk verwenden</strong> (Einstellungen &gt; Verbindung) bindet den gesamten Torrent-Verkehr an ein Netzwerk: einen beliebigen VPN-Adapter, einen Adapter nach Namen oder einen Adressbereich. Peers, DHT, Tracker und Web-Seeds laufen darüber und über nichts anderes. Fällt das VPN aus, warten die Torrents, statt über Ihre normale Verbindung weiterzulaufen, und setzen von selbst fort, wenn es wieder da ist.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-general"/></svg>Dunkler Modus und Designs</h3>
+          <p>Jedes Programm folgt der hellen oder dunklen Einstellung Ihres Systems. Das Windows-Programm lässt sich auch auf Hell oder Dunkel festlegen (Einstellungen &gt; Oberfläche &gt; Design), und jedes Fenster und jeder Dialog folgt. Die Weboberfläche hat neun Designs, darunter Midnight, Slate, Solarized und High Contrast, und nimmt eigene CSS-Dateien an.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-web-ui"/></svg>Ohne Fenster, mit Weboberfläche</h3>
+          <p><code>rookparcel-nox</code> läuft als Daemon mit eigener Weboberfläche (auch für Smartphones eingerichtet), HTTPS und einer qBittorrent-kompatiblen Teilmenge der Web-API, damit vorhandene Werkzeuge mit ihm sprechen können. Er läuft als Dienst unter systemd, FreeBSD rc.d oder Windows und als Docker-Image. Die Windows-Oberfläche stellt dieselbe Weboberfläche über ihre eigenen Torrents bereit, einschließlich RSS-Downloader: Einstellungen &gt; Web-UI.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg>Suche und RSS</h3>
+          <p>Suchen Sie Torrents über das Prowlarr oder Jackett, das Sie schon betreiben (Torznab), aus beiden Oberflächen oder der Weboberfläche. Es gibt keine eigenen Such-Plugins, also geht nichts kaputt, wenn sich eine Website ändert. Wenn Sie keines von beiden betreiben, lädt der Suchhelfer Jackett für Sie herunter und startet es per Klick. Der RSS-Downloader holt neue Veröffentlichungen nach Ihren Filtern.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-downloading"/></svg>Sonarr, Radarr, Prowlarr</h3>
+          <p>Binden Sie Rookparcel dort als qBittorrent-Download-Client ein, gegen <code>rookparcel-nox</code> oder die Windows-Oberfläche. Seed-Ziele der Indexer kommen mit jedem Abruf an, und Remove Completed funktioniert; ein API-Schlüssel und eine Subnetz-Whitelist sind da, wenn Sie sie wollen.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-remote"/></svg>Fernsteuerungsmodus</h3>
+          <p>Beide Desktop-Oberflächen können ein <code>rookparcel-nox</code> auf einem anderen Rechner steuern: Datei &gt; Mit Fernsitzung verbinden... oder Start mit <code>--remote</code>.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-all-torrents"/></svg>Profile und portabler Modus</h3>
+          <p>Ein Profil ist ein ganzes eigenes Rookparcel: Einstellungen, Torrents, RSS-Feeds, Ports und Fenster. Lassen Sie eines, das nur Ihr VPN nutzt, neben einem normalen laufen, beide gleichzeitig (Datei &gt; Profile oder <code>--profile</code>). Eine leere <code>rookparcel.ini</code> neben dem Programm hält stattdessen alles in diesem Ordner: der portable Modus.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Ihre Torrents mitnehmen</h3>
+          <p>Importieren Sie aus µTorrent oder qBittorrent auf demselben Computer. Die Daten bleiben, wo sie sind; Labels, Dateiprioritäten, Tracker und Statistiken kommen mit, und Rookparcel prüft die Dateien selbst, bevor es sich darauf verlässt.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-downloading"/></svg>Warteschlange, Seed-Ziele, überwachter Ordner</h3>
+          <p>Eine Warteschlange für Downloads und Seeds, Seed-Ziele nach Verhältnis oder Zeit (für alle Torrents oder einen), abgeschlossene Downloads in einen anderen Ordner verschoben, Labels, ein Ordner, der auf neue <code>.torrent</code>-Dateien überwacht wird, Geschwindigkeitsbegrenzungen und der Wochenplaner.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>Große Torrents bleiben beherrschbar</h3>
+          <p>Die Registerkarte Dateien zeigt die Ordner eines Torrents als Baum, filtert Tausende Dateien beim Tippen und setzt die Priorität für einen ganzen Ordner auf einmal. Der Dialog Neuen Torrent hinzufügen hat denselben Filter.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-help"/></svg>Hilfe dort, wo Sie sie brauchen</h3>
+          <p>Ein Einrichtungsassistent stellt beim ersten Start einige Fragen. Jede Einstellung erklärt sich selbst in einem Tooltip und mit F1, und die <a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Startseite">Anleitung</a> behandelt den Rest, mit Screenshots.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Sagt Ihnen, wenn es Updates gibt</h3>
+          <p>Rookparcel prüft, ob eine neuere Version erschienen ist, und sagt es Ihnen. Eine mit dem Windows-Setup installierte Kopie kann das neue Setup herunterladen, es anhand der Prüfsummen der Version kontrollieren und installieren; ohne Ihr Ja wird nichts heruntergeladen, und die Prüfung lässt sich abschalten.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-language"/></svg>Englisch und 34 weitere Sprachen</h3>
+          <p>Einschließlich Rechts-nach-links-Layouts für Arabisch, Hebräisch und Persisch. Die Übersetzungen sind maschinell erstellt und ungeprüft, daher sind Korrekturen willkommen.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-tray"/></svg>Klein und eigenständig</h3>
+          <p>Einzelne eigenständige ausführbare Dateien mit minimalen Abhängigkeiten. Unter Windows: statisch gelinkt, keine Laufzeitumgebung zu installieren, und ein portabler Modus.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="section" aria-labelledby="platforms">
+      <h2 id="platforms">Wo es läuft</h2>
+      <div class="platforms">
+        <div class="platform-card">
+          <h3>Windows</h3>
+          <p>Windows 10 und 11, x64. Die native Win32-Oberfläche und der Daemon.</p>
+          <p><a href="download.html#windows">Downloads für Windows</a></p>
+        </div>
+        <div class="platform-card">
+          <h3>Linux</h3>
+          <p>x86_64 und aarch64. Die GTK-4-Oberfläche als AppImage, Flatpak oder reine Binärdateien; der Daemon als AppImage oder im Tarball.</p>
+          <p><a href="download.html#linux">Downloads für Linux</a></p>
+        </div>
+        <div class="platform-card">
+          <h3>macOS</h3>
+          <p>Eine native Oberfläche für Apple Silicon und Intel (macOS 11 Big Sur oder neuer) und der Daemon.</p>
+          <p><a href="download.html#macos">Downloads für macOS</a></p>
+        </div>
+        <div class="platform-card">
+          <h3>FreeBSD</h3>
+          <p>Noch keine fertigen Dateien: Die GTK-Oberfläche und der Daemon werden aus dem Quellcode gebaut, ein rc.d-Skript liegt bei.</p>
+          <p><a href="https://github.com/Balls0fSteel/Rookparcel#building">Aus dem Quellcode bauen</a></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="support">
+      <h2 id="support">Rookparcel unterstützen</h2>
+      <p>Rookparcel ist kostenlos und zeigt keine Werbung. Wenn es Ihnen gefällt, hilft eine Spende, das Projekt am Laufen zu halten: über <a href="https://www.paypal.com/ncp/payment/2UDQNM8TGRUA4" rel="noopener">PayPal</a> oder <a href="https://github.com/sponsors/Balls0fSteel" rel="noopener">GitHub Sponsors</a>. Bitte geben Sie nur, wenn Sie es sich ohne Weiteres leisten können.</p>
+      <p><a class="btn btn-primary" href="donate.html">Spenden</a></p>
+    </section>
+
+    <section class="section" aria-labelledby="free">
+      <h2 id="free">Kostenlos für nichtkommerzielle Nutzung</h2>
+      <p>Rookparcel ist kostenlos für den persönlichen Gebrauch, für Studium, Hobbyprojekte und die Nutzung durch gemeinnützige Organisationen, Schulen, Forschung und öffentliche Einrichtungen, unter der <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial License 1.0.0</a>. Sie dürfen es unter denselben Bedingungen weitergeben und ändern. Kommerzielle Nutzung braucht eine gesonderte Erlaubnis. Mehr in den <a href="faq.html#license">FAQ</a>.</p>
+      <p class="note">Rookparcel ist ein unabhängiges Projekt. Es bildet Aussehen und Verhalten von µTorrent 2.2.1 nach, ist aber weder mit µTorrent oder BitTorrent, Inc. verbunden noch von ihnen unterstützt oder gesponsert, und verwendet weder deren Code noch deren Grafiken oder Marken.</p>
+    </section>
+  </div>
+</main>
+
+<footer class="statusbar">
+  <div class="wrap">
+    <ul>
+      <li>Neueste Version: <!-- build:latest-version --><a href="https://github.com/Balls0fSteel/Rookparcel/releases">Releases</a><!-- /build:latest-version --></li>
+      <li><a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial 1.0.0</a></li>
+      <li>© 2026 <a href="https://dukecorp1996.x35.in/">DukeCorp1996</a></li>
+      <li class="grow"><a href="https://github.com/Balls0fSteel/Rookparcel/issues">Ein Problem melden</a></li>
+    </ul>
+    <p>Nicht verbunden mit µTorrent, BitTorrent, Inc., libtorrent oder qBittorrent. Diese Website setzt keine Cookies und lädt nichts von anderen Websites.</p>
+  </div>
+</footer>
+</body>
+</html>

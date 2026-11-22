@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preguntas frecuentes sobre Rookparcel</title>
+<meta name="description" content="Preguntas sobre Rookparcel: su licencia en palabras sencillas, dónde se guardan los ajustes, el modo portátil, los idiomas, el modo remoto y la interfaz web, la búsqueda de torrents, Sonarr y Radarr, la privacidad y la comprobación de actualizaciones.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14233d">
+<link rel="icon" type="image/png" sizes="32x32" href="../img/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../img/icon-16.png">
+<link rel="apple-touch-icon" href="../img/icon-256.png">
+<link rel="stylesheet" href="../css/style.css">
+<!-- build:alternates --><!-- /build:alternates -->
+</head>
+<body>
+<a class="skip" href="#main">Ir al contenido</a>
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="./"><img src="../img/icon-32.png" srcset="../img/icon-64.png 2x" width="32" height="32" alt=""> Rookparcel</a>
+    <nav aria-label="Principal">
+      <ul class="toolbar">
+        <li><a href="download.html"><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Descargar</a></li>
+        <li><a href="../news.html" hreflang="en"><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg>Noticias</a></li>
+        <li><a href="faq.html" aria-current="page"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-help"/></svg>Preguntas</a></li>
+        <li><a href="../benchmarks.html" hreflang="en"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Rendimiento</a></li>
+        <li><a href="docs.html"><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>Documentos</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel/wiki/Inicio"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-general"/></svg>Guía</a></li>
+        <li><a href="donate.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-heart"/></svg>Donar</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a></li>
+      </ul>
+    </nav>
+    <!-- build:langs --><!-- /build:langs -->
+  </div>
+</header>
+
+<main id="main">
+  <div class="page-head">
+    <div class="wrap narrow">
+      <h1>Preguntas y respuestas</h1>
+      <p>Sobre Rookparcel, su licencia, sus ajustes y su privacidad.</p>
+    </div>
+  </div>
+
+  <div class="wrap narrow">
+    <nav class="toc" aria-labelledby="toc-h">
+      <h2 id="toc-h">En esta página</h2>
+      <ol>
+        <li><a href="#what">¿Qué es Rookparcel?</a></li>
+        <li><a href="#ready">¿Está listo para usarse?</a></li>
+        <li><a href="#license">¿Es gratuito? ¿Qué permite la licencia?</a></li>
+        <li><a href="#settings">¿Dónde están mis ajustes? ¿Qué son el modo portátil y los perfiles?</a></li>
+        <li><a href="#languages">¿Qué idiomas habla?</a></li>
+        <li><a href="#remote">¿Cómo funcionan la interfaz web y el modo remoto?</a></li>
+        <li><a href="#search">¿Cómo busco torrents?</a></li>
+        <li><a href="#arr">¿Pueden Sonarr, Radarr o Prowlarr usar Rookparcel?</a></li>
+        <li><a href="#privacy">¿Qué envía Rookparcel y a quién?</a></li>
+        <li><a href="#private-trackers">¿Puedo usarlo en trackers privados?</a></li>
+        <li><a href="#warnings">¿Por qué avisan Windows y macOS?</a></li>
+        <li><a href="#affiliation">¿Tiene relación con µTorrent o qBittorrent?</a></li>
+        <li><a href="#bugs">¿Cómo informo de un problema?</a></li>
+      </ol>
+    </nav>
+
+    <section class="qa" id="what" aria-labelledby="what-h">
+      <h2 id="what-h">¿Qué es Rookparcel?</h2>
+      <p>Un cliente BitTorrent ligero en el espíritu de µTorrent 2.2.1: programas nativos pequeños, bajo uso de memoria y de procesador, y una lista que responde con rapidez incluso con decenas de miles de torrents.</p>
+      <p>Hay cuatro programas: <code>rookparcel</code>, la interfaz gráfica nativa de Windows; <code>Rookparcel.app</code>, la interfaz gráfica nativa de macOS; <code>rookparcel-gtk</code>, la interfaz gráfica GTK 4 para Linux y BSD; y <code>rookparcel-nox</code>, un demonio sin ventana con su propia interfaz web para todas las plataformas. El motor es nuestra propia versión en Rust de libtorrent-rasterbar 2.0.11: el código de libtorrent es la referencia, pero no se enlaza nada de él.</p>
+      <p>Rookparcel lo crea <a href="https://dukecorp1996.x35.in/">DukeCorp1996</a>. El código fuente está en <a href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a>.</p>
+    </section>
+
+    <section class="qa" id="ready" aria-labelledby="ready-h">
+      <h2 id="ready-h">¿Está listo para usarse?</h2>
+      <p>En su mayor parte. La 1.0.1 fue la primera versión estable, y los ajustes y los torrents pasan de una versión a la siguiente. Pero hasta ahora lo ha usado sobre todo su autor, y algunos cuadros de diálogo y ajustes se han usado poco, así que guarde en otro lugar una copia de lo que le importe e informe, por favor, de lo que falle.</p>
+      <p>Lo que cambió en cada versión está en la página <a href="../news.html" hreflang="en">Noticias</a>. Las notas de cada versión enumeran sus limitaciones conocidas, y lo que aún no se ha comprobado está en <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/PLAN.md">PLAN.md</a>.</p>
+    </section>
+
+    <section class="qa" id="license" aria-labelledby="license-h">
+      <h2 id="license-h">¿Es gratuito? ¿Qué permite la licencia?</h2>
+      <p>Rookparcel es gratuito para uso <strong>no comercial</strong> bajo la <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial License 1.0.0</a>. En palabras sencillas:</p>
+      <ul>
+        <li><strong>Puede</strong> usarlo para uso personal, estudio, proyectos de afición y en organizaciones benéficas, escuelas, centros de investigación e instituciones públicas, sin coste.</li>
+        <li><strong>Puede</strong> compartirlo y modificarlo, en los mismos términos, conservando la licencia y su aviso de derechos de autor en cada copia.</li>
+        <li><strong>El uso comercial</strong> necesita un permiso aparte de DukeCorp1996.</li>
+      </ul>
+      <p>Eso hace que Rookparcel sea de código disponible, pero no de código abierto en el sentido de la OSI, y por eso las distribuciones de Linux no lo empaquetan; sus propias AppImage, su Flatpak y sus tarballs son la forma de obtenerlo. El código portado de libtorrent sigue disponible también con la licencia BSD-3-Clause de libtorrent (<a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/THIRD-PARTY-NOTICES.md">avisos de terceros</a>).</p>
+      <p>Esto es un resumen; lo que cuenta es el texto de la licencia.</p>
+    </section>
+
+    <section class="qa" id="settings" aria-labelledby="settings-h">
+      <h2 id="settings-h">¿Dónde están mis ajustes? ¿Qué son el modo portátil y los perfiles?</h2>
+      <table class="listview plain">
+        <caption class="vh">Dónde guarda cada programa sus ajustes y sus torrents</caption>
+        <thead><tr><th scope="col">Programa</th><th scope="col">Ajustes y torrents</th></tr></thead>
+        <tbody>
+          <tr><td>Interfaz gráfica de Windows</td><td><code>%APPDATA%\Rookparcel</code></td></tr>
+          <tr><td>Modo portátil, en cualquier plataforma</td><td>La carpeta del programa (véase más abajo)</td></tr>
+          <tr><td>Interfaz GTK en Linux y BSD</td><td>Los ajustes en <code>~/.config/rookparcel/gtk</code>, los torrents en <code>~/.local/share/rookparcel/gtk</code> (o bajo <code>$XDG_CONFIG_HOME</code> y <code>$XDG_DATA_HOME</code>)</td></tr>
+          <tr><td>Interfaz GTK como Flatpak</td><td>Lo mismo, bajo <code>~/.var/app/io.github.balls0fsteel.Rookparcel/</code> (<code>config/</code> y <code>data/</code>)</td></tr>
+          <tr><td>Interfaz gráfica de macOS</td><td><code>~/Library/Application Support/Rookparcel/mac</code> (la versión GTK anterior usaba <code>gtk</code> en ese lugar; el primer inicio de la aplicación nativa lo cambia a <code>mac</code>)</td></tr>
+          <tr><td><code>rookparcel-nox</code></td><td>Una carpeta <code>nox</code> en los mismos lugares: <code>%APPDATA%\Rookparcel\nox</code>, <code>~/.config/rookparcel/nox</code> y <code>~/.local/share/rookparcel/nox</code>, o <code>~/Library/Application Support/Rookparcel/nox</code>; como servicio, consulte <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/DAEMON.md#files">docs/DAEMON.md</a></td></tr>
+        </tbody>
+      </table>
+      <p><strong>Modo portátil</strong>: ponga un archivo vacío llamado <code>rookparcel.ini</code> junto al programa y Rookparcel guardará sus ajustes y sus torrents en esa carpeta, como hacía µTorrent: junto a <code>rookparcel.exe</code> en Windows, junto a <code>rookparcel-gtk</code> o al archivo <code>.AppImage</code> en Linux y BSD, junto a <code>Rookparcel.app</code> en un Mac (no en el Flatpak). <code>rookparcel-nox</code> sigue la misma regla, en una carpeta <code>nox</code> de ese lugar. El primer inicio descarga en la carpeta <code>Downloads</code> de esa carpeta, y las rutas dentro de ella se guardan como relativas a ella, de modo que toda la carpeta puede estar en una memoria USB o pasar a otro equipo y los torrents siguen sin necesidad de una nueva comprobación. Una carpeta portátil escrita por esta versión necesita esta versión o una posterior.</p>
+      <p><strong>Perfiles</strong>: inicie un programa con <code>--profile work</code> (o use Archivo &gt; Perfiles) para ejecutar un Rookparcel aparte, con sus propios ajustes, torrents, puerto de escucha y ventana, junto al habitual: uno detrás de una VPN, otro para trackers privados, otro para probar un ajuste nuevo. Cada perfil está en <code>profiles/work</code>, dentro de las carpetas indicadas arriba. Las asociaciones con <code>.torrent</code> y <code>magnet:</code> pertenecen a un solo perfil a la vez, aquel en el que las marcó. <code>rookparcel-nox --profile work</code> funciona del mismo modo, con su propio servicio de Windows o su unidad de systemd <code>rookparcel-nox@work</code>; consulte <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/DAEMON.md#profiles">docs/DAEMON.md</a>.</p>
+    </section>
+
+    <section class="qa" id="languages" aria-labelledby="languages-h">
+      <h2 id="languages-h">¿Qué idiomas habla?</h2>
+      <p>Inglés y 34 más: árabe, búlgaro, catalán, chino (simplificado y tradicional), croata, checo, danés, neerlandés, finés, francés, alemán, griego, hebreo, húngaro, indonesio, italiano, japonés, coreano, noruego bokmål, persa, polaco, portugués (Brasil y Portugal), rumano, ruso, serbio, eslovaco, español, sueco, tailandés, turco, ucraniano y vietnamita. El árabe, el hebreo y el persa usan una disposición de derecha a izquierda.</p>
+      <p>Todos los idiomas están integrados en todos los programas; no hay archivos de idioma que descargar. De forma predeterminada Rookparcel sigue el idioma del sistema; elija otro en Preferencias &gt; General &gt; Idioma («Interfaz»), tanto en las interfaces gráficas como en la interfaz web.</p>
+      <p>Las traducciones son automáticas y nadie las ha revisado todavía. Si la de su idioma suena rara, <a href="https://github.com/Balls0fSteel/Rookparcel/issues">abra una incidencia</a> con una corrección. Quien traduzca puede probar una tabla sin recompilar: <code>ROOKPARCEL_LANG=file.lng</code> la carga.</p>
+    </section>
+
+    <section class="qa" id="remote" aria-labelledby="remote-h">
+      <h2 id="remote-h">¿Cómo funcionan la interfaz web y el modo remoto?</h2>
+      <p><code>rookparcel-nox</code> es el demonio sin ventana. Con <code>--webui</code> sirve su propia interfaz web: la ventana principal de µTorrent 2.2.1 en un navegador, con actualizaciones enviadas por el servidor en lugar de sondeos, atajos de teclado, un modo oscuro y una disposición para teléfonos.</p>
+      <pre class="cmd"><code>rookparcel-nox run --webui 8080 --webui-pass PASS</code></pre>
+      <p>Eso escucha solo en <code>127.0.0.1</code>; abra <code>http://127.0.0.1:8080</code> e inicie sesión como <code>admin</code>. Para usarla desde otros equipos, indique una dirección (<code>--webui 0.0.0.0:8443</code>) y sírvala por HTTPS con <code>--webui-https</code>, que crea un certificado autofirmado la primera vez; compare la huella que muestra su navegador con la línea <code>certificate SHA-256</code> que imprime el demonio.</p>
+      <p><strong>Desde la interfaz gráfica de Windows</strong> (1.1.7 y posteriores): Preferencias &gt; Interfaz web sirve la misma página desde el propio <code>rookparcel.exe</code>, sobre los torrents de esa ventana, como hacía µTorrent. Marque Activar la interfaz web, indique una contraseña y pulse Aceptar; la página muestra la URL (<code>http://127.0.0.1:8080/</code> de forma predeterminada). «Permitir conexiones desde otros equipos» escucha en todas las direcciones (deje pasar el puerto por el cortafuegos), y «Usar HTTPS» crea un certificado autofirmado. Las etiquetas y los ajustes cambiados en el navegador aparecen en la ventana, y al revés. Desde la 1.1.17 el Descargador RSS de la página edita los propios canales y filtros de la ventana; los límites de velocidad alternativos se quedan en la ventana. La interfaz GTK aún no tiene esa página.</p>
+      <p><strong>Modo remoto:</strong> cualquiera de las dos interfaces de escritorio puede manejar un <code>rookparcel-nox</code> de otro equipo, por el mismo puerto. Elija Archivo &gt; Conectar en remoto..., o inicie la interfaz con <code>--remote</code>, e indique el host, el puerto, el usuario y si se usa HTTPS. Un certificado en el que su sistema no confía se muestra con su huella y se recuerda cuando lo acepta. La ventana trabaja entonces con los torrents del demonio remoto; la contraseña nunca se guarda.</p>
+      <p>El mismo puerto sirve también un subconjunto de la API web de qBittorrent, para herramientas escritas para qBittorrent (como Sonarr, Radarr o Prowlarr). Es un subconjunto, así que no están todas las llamadas. Para ejecutar el demonio como servicio: <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/DAEMON.md">docs/DAEMON.md</a>; el diseño: <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/WEBUI.md">docs/WEBUI.md</a>.</p>
+    </section>
+
+    <section class="qa" id="search" aria-labelledby="search-h">
+      <h2 id="search-h">¿Cómo busco torrents?</h2>
+      <p>Desde la 1.1.17, mediante un Prowlarr o un Jackett que usted mismo ejecute. Rookparcel les pregunta por Torznab, la API de búsqueda que comparten; no tiene complementos de búsqueda ni extractores de sitios propios, de modo que nada se rompe cuando un sitio cambia. La búsqueda funciona en la interfaz de Windows, en la interfaz GTK y en la interfaz web.</p>
+      <p><strong>¿Sin Prowlarr ni Jackett?</strong> Desde la 1.1.59, Administrar fuentes tiene un botón «Obtener el asistente de búsqueda (Jackett)...»: Rookparcel descarga la versión oficial de Jackett por usted, la guarda en su propia carpeta, la ejecuta solo mientras busca y le deja marcar los sitios públicos en los que busca. La guía paso a paso con capturas de pantalla: <a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Buscar-torrents-en-Windows">Searching for torrents on Windows</a>.</p>
+      <p>Con su propio Prowlarr o Jackett:</p>
+      <ol>
+        <li>Obtenga una URL de Torznab y la clave de API. En Prowlarr, copie la URL del canal Torznab de un indexador y la clave de API de Settings &gt; General. En Jackett, use la URL de Torznab del indexador <code>all</code> y la clave de API de Jackett.</li>
+        <li>Abra Administrar fuentes desde el menú junto al cuadro de búsqueda (la flecha junto a él en Windows; en la interfaz web, Buscar &gt; Administrar fuentes), añada la fuente y pulse Probar.</li>
+        <li>Elija una fuente, o Todas las fuentes, escriba en el cuadro de búsqueda y pulse Intro. En los resultados, ordénelos y añada los que quiera.</li>
+      </ol>
+      <p>Las claves de API se guardan cifradas en Windows y no se vuelven a mostrar. <strong>Proxy:</strong> a una fuente de este equipo o de su red local se accede directamente; a una pública se accede mediante el proxy, si ha configurado uno (Preferencias &gt; Conexión).</p>
+    </section>
+
+    <section class="qa" id="arr" aria-labelledby="arr-h">
+      <h2 id="arr-h">¿Pueden Sonarr, Radarr o Prowlarr usar Rookparcel?</h2>
+      <p>Sí, como cliente de descargas qBittorrent: active la interfaz web (véase arriba) y, en Sonarr, Radarr o Prowlarr, añada un cliente de descargas de tipo qBittorrent con el host, el puerto, el nombre de usuario y la contraseña de Rookparcel. Funciona con <code>rookparcel-nox</code> y con la interfaz web de la interfaz gráfica de Windows. Las categorías son las etiquetas de Rookparcel, y una adición sin carpeta va a la carpeta de su categoría. Las etiquetas (tags) se aceptan, pero no se conservan.</p>
+      <p><strong>Clave de API y lista blanca de subredes</strong> (1.1.17 y posteriores): Preferencias &gt; Autenticación de la interfaz web tiene una clave de API opcional, que las aplicaciones envían como <code>Authorization: Bearer</code>, y una lista opcional de subredes cuyas solicitudes no necesitan inicio de sesión. Ambas están desactivadas de forma predeterminada y necesitan la contraseña actual para cambiarse. La lista blanca nunca se aplica a las solicitudes que llegan a través de un proxy.</p>
+      <p><strong>Nombres de host, como en Docker:</strong> para bloquear los ataques de reenlace de DNS, la interfaz web responde solo a las solicitudes dirigidas a una dirección IP, a <code>localhost</code> o a un nombre que usted haya permitido. Si el otro programa llega a Rookparcel por un nombre de host (<code>http://rookparcel:8080</code>, <code>http://nas.lan:8080</code>), su prueba de conexión falla con «unexpected Host header». Abra la interfaz web por la dirección IP y añada después el nombre en Preferencias &gt; Interfaz web &gt; Dominios del servidor (por ejemplo <code>rookparcel;*.lan</code>); desde la 1.1.17 las Preferencias &gt; Interfaz web de la interfaz gráfica de Windows tienen el mismo campo. O bien dé al otro programa la dirección IP.</p>
+      <p><strong>Remove Completed</strong> (1.1.7 y posteriores) elimina una descarga cuando Rookparcel la ha detenido al alcanzar su objetivo de siembra (Preferencias &gt; Cola &gt; Objetivo de siembra, o la proporción y el tiempo que pide el indexador). Un objetivo configurado para limitar la velocidad de subida deja el torrent sembrando, así que no se elimina nada.</p>
+    </section>
+
+    <section class="qa" id="privacy" aria-labelledby="privacy-h">
+      <h2 id="privacy-h">¿Qué envía Rookparcel y a quién?</h2>
+      <p><strong>La comprobación de actualizaciones.</strong> Desde la 1.0.1, Rookparcel busca una versión más reciente al iniciarse y cada 12 horas después. Descarga un pequeño archivo de texto, <code>https://balls0fsteel.github.io/Rookparcel/update.txt</code>, que indica las versiones más recientes, y las compara con la suya. La solicitud lleva solo el User-Agent <code>Rookparcel/&lt;version&gt;</code>: ningún identificador, ningún ajuste, nada sobre sus torrents. Como en cualquier solicitud web, GitHub, que aloja este sitio, ve su dirección IP. Si hay una versión más reciente, Rookparcel pregunta una vez y deja una nota en su barra de estado; no se descarga nada sin su sí. Un Rookparcel instalado con el instalador de Windows puede entonces obtener el nuevo instalador y el <code>SHA256SUMS</code> de la versión desde GitHub, comprobar el archivo, cerrarse e instalarse sobre sí mismo; una copia portátil y la interfaz GTK abren en su lugar la página de la versión.</p>
+      <p>Para desactivar la comprobación: Preferencias &gt; General &gt; Privacidad. Desde la 1.1.17 <code>rookparcel-nox</code> también comprueba, imprime una línea y muestra un enlace en su interfaz web cuando hay una versión más reciente; inícielo con <code>--no-update-check</code>, o desactívelo en Preferencias &gt; General &gt; Privacidad de la interfaz web.</p>
+      <p><strong>La búsqueda de torrents</strong> pregunta solo a las fuentes Prowlarr o Jackett que usted ha añadido. A una fuente pública se accede mediante su proxy, si ha configurado uno; a una fuente de su propio equipo o red se accede directamente.</p>
+      <p><strong>BitTorrent en sí.</strong> Como todo cliente BitTorrent, Rookparcel comunica su dirección IP a los trackers, a la DHT y a los pares de sus torrents, y estos pueden ver lo que descarga y comparte. Un proxy (Preferencias &gt; Conexión) puede llevar ese tráfico en su lugar.</p>
+      <p><strong>Este sitio web</strong> no usa cookies, no tiene analíticas ni rastreadores y no carga nada de otros sitios. Lo sirve GitHub Pages, bajo la <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">declaración de privacidad de GitHub</a>.</p>
+    </section>
+
+    <section class="qa" id="private-trackers" aria-labelledby="private-trackers-h">
+      <h2 id="private-trackers-h">¿Puedo usarlo en trackers privados?</h2>
+      <p>Todavía no. Los trackers privados aceptan solo los clientes que han admitido en una lista blanca, y el identificador de cliente de Rookparcel, <code>RP</code>, aún no está admitido en ninguno. Rookparcel siempre se identifica con honestidad como Rookparcel (nunca toma prestado el identificador de otro cliente), de modo que usarlo allí podría meter una cuenta en problemas. Registrar el identificador en las listas de clientes queda por hacer.</p>
+    </section>
+
+    <section class="qa" id="warnings" aria-labelledby="warnings-h">
+      <h2 id="warnings-h">¿Por qué avisan Windows y macOS?</h2>
+      <p>Los programas no tienen firma de código. Por eso Windows SmartScreen dice «Windows protegió su PC» la primera vez (Más información &gt; Ejecutar de todas formas), y Gatekeeper de macOS rechaza la aplicación con firma ad hoc hasta que usted la permite una vez en Ajustes del Sistema &gt; Privacidad y seguridad (Abrir igualmente). La <a href="install.html">guía de instalación</a> muestra los pasos de cada sistema. Para comprobar que un archivo es el que se publicó, compare su <a href="download.html#checksums">suma de comprobación</a>.</p>
+    </section>
+
+    <section class="qa" id="affiliation" aria-labelledby="affiliation-h">
+      <h2 id="affiliation-h">¿Tiene relación con µTorrent o qBittorrent?</h2>
+      <p>No. Rookparcel es un proyecto independiente, sin afiliación, respaldo ni patrocinio de ninguno de estos:</p>
+      <ul>
+        <li><strong>µTorrent y BitTorrent, Inc.</strong> Rookparcel recrea el aspecto y el comportamiento de µTorrent 2.2.1, pero no usa nada de su código, sus gráficos, sus traducciones ni sus marcas.</li>
+        <li><strong>libtorrent-rasterbar.</strong> El motor es una versión de libtorrent 2.0.11 y conserva su licencia BSD-3-Clause y sus avisos de derechos de autor; los nombres de libtorrent y de sus autores no se usan para promocionar Rookparcel.</li>
+        <li><strong>qBittorrent.</strong> Rookparcel no contiene código, gráficos ni interfaz web de qBittorrent. Su API web compatible sigue la documentación publicada de qBittorrent para que las herramientas existentes puedan comunicarse con él.</li>
+      </ul>
+      <p>Los demás nombres de productos son marcas de sus propietarios y se usan solo para identificar esos productos.</p>
+    </section>
+
+    <section class="qa" id="bugs" aria-labelledby="bugs-h">
+      <h2 id="bugs-h">¿Cómo informo de un problema?</h2>
+      <p>Abra una <a href="https://github.com/Balls0fSteel/Rookparcel/issues">incidencia en GitHub</a> con su sistema, el archivo que descargó y lo que ocurrió. Para un cierre inesperado o un torrent atascado, ayuda la pestaña Registro o la salida de <code>rookparcel-nox run --verbose</code>.</p>
+      <p>¿Busca un manual? Consulte la <a href="docs.html">Documentación</a>; una guía de usuario completa está prevista para una versión posterior.</p>
+    </section>
+  </div>
+</main>
+
+<footer class="statusbar">
+  <div class="wrap">
+    <ul>
+      <li>Última: <!-- build:latest-version --><a href="https://github.com/Balls0fSteel/Rookparcel/releases">Versiones</a><!-- /build:latest-version --></li>
+      <li><a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial 1.0.0</a></li>
+      <li>© 2026 <a href="https://dukecorp1996.x35.in/">DukeCorp1996</a></li>
+      <li class="grow"><a href="https://github.com/Balls0fSteel/Rookparcel/issues">Informar de un problema</a></li>
+    </ul>
+    <p>Sin afiliación con µTorrent, BitTorrent, Inc., libtorrent ni qBittorrent. Este sitio no usa cookies y no carga nada de otros sitios.</p>
+  </div>
+</footer>
+</body>
+</html>

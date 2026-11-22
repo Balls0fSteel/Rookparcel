@@ -11,6 +11,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="img/icon-16.png">
 <link rel="apple-touch-icon" href="img/icon-256.png">
 <link rel="stylesheet" href="css/style.css">
+<!-- build:alternates --><!-- /build:alternates -->
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -24,10 +25,12 @@
         <li><a href="faq.html" aria-current="page"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-help"/></svg>FAQ</a></li>
         <li><a href="benchmarks.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-speed"/></svg>Benchmarks</a></li>
         <li><a href="docs.html"><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-files"/></svg>Docs</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel/wiki"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-general"/></svg>Guide</a></li>
         <li><a href="donate.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-heart"/></svg>Donate</a></li>
         <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a></li>
       </ul>
     </nav>
+    <!-- build:langs --><!-- /build:langs -->
   </div>
 </header>
 
@@ -122,7 +125,7 @@
     <section class="qa" id="search" aria-labelledby="search-h">
       <h2 id="search-h">How do I search for torrents?</h2>
       <p>From 1.1.17, through a Prowlarr or Jackett you run yourself. Rookparcel asks them over Torznab, the search API they share; it has no search plugins or site scrapers of its own, so nothing breaks when a site changes. Search works in the Windows GUI, the GTK GUI and the Web UI.</p>
-      <p><strong>No Prowlarr or Jackett?</strong> From 1.1.59, Manage Sources has a "Get the Search Helper (Jackett)..." button: Rookparcel downloads Jackett's own release for you, keeps it in its own folder, runs it only while you search, and lets you tick the public sites it searches. The step-by-step guide with screenshots: <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/SEARCH_ON_WINDOWS.md">Searching for torrents on Windows</a>.</p>
+      <p><strong>No Prowlarr or Jackett?</strong> From 1.1.59, Manage Sources has a "Get the Search Helper (Jackett)..." button: Rookparcel downloads Jackett's own release for you, keeps it in its own folder, runs it only while you search, and lets you tick the public sites it searches. The step-by-step guide with screenshots: <a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Searching-for-torrents-on-Windows">Searching for torrents on Windows</a>.</p>
       <p>With your own Prowlarr or Jackett:</p>
       <ol>
         <li>Get a Torznab URL and the API key. In Prowlarr, copy an indexer's Torznab feed URL, and the API key from Settings &gt; General. In Jackett, use the <code>all</code> indexer's Torznab URL and Jackett's API key.</li>

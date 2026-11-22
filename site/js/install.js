@@ -11,6 +11,14 @@
   var systems = root.querySelectorAll(".guide-sys");
   var paths = root.querySelectorAll(".guide-path");
   var state = { sys: null, path: null, step: 0, all: false };
+  // the buttons' texts, from the page's language (data-* on #guide), English by default
+  var d = root.dataset || {};
+  var txt = {
+    back: d.back || "Back", next: d.next || "Next", all: d.all || "Show all steps",
+    one: d.one || "One step at a time", step: d.step || "Step {n} of {m}",
+    done: d.done || "Step {n} of {m}: done"
+  };
+  function fmt(s, n, m) { return s.replace("{n}", n).replace("{m}", m); }
 
   function detect() {
     var ua = navigator.userAgent || "";
@@ -59,12 +67,12 @@
   for (var i = 0; i < paths.length; i++) {
     var nav = document.createElement("div");
     nav.className = "guide-nav";
-    var back = button("Back", "pick guide-back");
+    var back = button(txt.back, "pick guide-back");
     var count = document.createElement("span");
     count.className = "guide-count";
     count.setAttribute("aria-live", "polite");
-    var next = button("Next", "pick guide-next");
-    var all = button("Show all steps", "guide-all");
+    var next = button(txt.next, "pick guide-next");
+    var all = button(txt.all, "guide-all");
     nav.appendChild(back);
     nav.appendChild(count);
     nav.appendChild(next);
@@ -109,9 +117,8 @@
       nav.querySelector(".guide-back").disabled = state.step === 0;
       nav.querySelector(".guide-next").disabled = state.step === last;
       nav.querySelector(".guide-count").textContent =
-        state.step === last ? "Step " + (last + 1) + " of " + (last + 1) + ": done"
-                            : "Step " + (state.step + 1) + " of " + (last + 1);
-      nav.querySelector(".guide-all").textContent = state.all ? "One step at a time" : "Show all steps";
+        state.step === last ? fmt(txt.done, last + 1, last + 1) : fmt(txt.step, state.step + 1, last + 1);
+      nav.querySelector(".guide-all").textContent = state.all ? txt.one : txt.all;
       if (focus && single) {
         var head = steps[state.step].querySelector("h4");
         if (head) head.focus();

@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rookparcel: könnyű BitTorrent-kliens a µTorrent 2.2.1 szellemében</title>
+<meta name="description" content="A Rookparcel könnyű BitTorrent-kliens a µTorrent 2.2.1 szellemében: natív Win32-es és natív macOS-es grafikus felülettel, GTK 4-es felülettel Linuxra és BSD-re, valamint saját Webes felülettel rendelkező, fej nélküli démonnal.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14233d">
+<link rel="icon" type="image/png" sizes="32x32" href="../img/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../img/icon-16.png">
+<link rel="apple-touch-icon" href="../img/icon-256.png">
+<link rel="alternate" type="application/atom+xml" title="Rookparcel hírek" href="../news.atom">
+<link rel="stylesheet" href="../css/style.css">
+<!-- build:alternates --><!-- /build:alternates -->
+<script src="../js/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Ugrás a tartalomra</a>
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="./"><img src="../img/icon-32.png" srcset="../img/icon-64.png 2x" width="32" height="32" alt=""> Rookparcel</a>
+    <nav aria-label="Főmenü">
+      <ul class="toolbar">
+        <li><a href="download.html"><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Letöltés</a></li>
+        <li><a href="../news.html" hreflang="en"><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg>Hírek</a></li>
+        <li><a href="faq.html"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-help"/></svg>GYIK</a></li>
+        <li><a href="../benchmarks.html" hreflang="en"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Teljesítménymérések</a></li>
+        <li><a href="docs.html"><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>Dokumentáció</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel/wiki/Kezd%C5%91lap"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-general"/></svg>Útmutató</a></li>
+        <li><a href="donate.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-heart"/></svg>Támogatás</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a></li>
+      </ul>
+    </nav>
+    <!-- build:langs --><!-- /build:langs -->
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" aria-labelledby="title">
+    <div class="wrap hero-in">
+      <img class="hero-icon" src="../img/icon-128.png" srcset="../img/icon-256.png 2x" width="112" height="112" alt="">
+      <div>
+        <h1 id="title">Rookparcel</h1>
+        <p class="lede">Könnyű BitTorrent-kliens a µTorrent 2.2.1 szellemében: kis méretű natív programok, kevés memória- és processzorhasználat, és egy felület, amely több tízezer torrent mellett is gyorsan reagál.</p>
+        <p>Natív Win32-es grafikus felület Windowson, natív AppKit-es felület macOS-en, GTK 4-es felület Linuxon és BSD-n, valamint egy fej nélküli démon, a <code>rookparcel-nox</code>, saját Webes felülettel. A motor a libtorrent-rasterbar 2.0.11 saját Rust-portja.</p>
+        <!-- build:hero-download -->
+        <div class="cta"><p class="cta-buttons"><a class="btn btn-primary" href="https://github.com/Balls0fSteel/Rookparcel/releases">Letöltés a GitHubról</a> <a class="btn btn-ghost" href="download.html#which">Melyik fájlra van szükségem?</a> <a class="btn btn-ghost" href="install.html">Telepítési útmutató</a></p></div>
+        <!-- /build:hero-download -->
+      </div>
+    </div>
+  </section>
+
+  <div class="wrap">
+    <!-- build:latest-news -->
+    <p class="latest-news"><svg class="ico ico-sm ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg><span><a href="../news.html" hreflang="en">Hírek</a>: mi változott az egyes kiadásokban.</span></p>
+    <!-- /build:latest-news -->
+
+    <!-- build:if-prerelease -->
+    <aside class="callout" aria-label="Kiadásjelölt">
+      <svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-warning"/></svg>
+      <div>
+        <p><strong>Kiadásjelölt: előzetes kiadású szoftver.</strong> A Rookparcel a készítőjénél működik, de szélesebb körű tesztelésen még nem esett át. A beállítások és a mentett állapot még változhat a verziók között, egyes funkciók csak kevéssé tesztelettek, és semmi sincs kódaláírással ellátva.</p>
+        <p>Ne használja fontos torrentekhez, és privát trackereken sem: a kliensazonosítója még sehol sincs engedélyezőlistán. Visszajelzést és <a href="https://github.com/Balls0fSteel/Rookparcel/issues">hibajelentést</a> szívesen fogadunk.</p>
+      </div>
+    </aside>
+    <!-- /build:if-prerelease -->
+
+    <section class="section" aria-labelledby="look">
+      <h2 id="look">A µTorrent 2.2.1 ablaka, újraalkotva</h2>
+      <p class="lead">A Windows-os grafikus felület a µTorrent 2.2.1 főablakának hű újraalkotása: a kategórialista, a torrentlista minden oszloppal, a részletek lapjai, a Tulajdonságok ablak és a párbeszédablakok. A µTorrent kódjából és grafikájából semmit sem használ.</p>
+      <div class="shots">
+        <figure class="shot">
+          <img src="../img/screenshot-windows.png" alt="A Rookparcel főablaka Windowson, a µTorrent 2.2.1 elrendezésében: az eszköztár, a kategórialista, a torrentlista és alatta a részletek lapjai.">
+          <figcaption>A Windows-os grafikus felület, a <code>rookparcel.exe</code>.</figcaption>
+        </figure>
+        <div class="shot-pair">
+          <figure class="shot">
+            <img src="../img/add-new-torrent.png" width="751" height="602" loading="lazy" alt="Az Új torrent hozzáadása ablak: felül a Mentés ide mappa, a torrent neve, a torrent beállításai és egy címke; alattuk a torrent adatai és a fájljai a méretükkel és a prioritásukkal.">
+            <figcaption>Új torrent hozzáadása: a mappa, a fájlok és a prioritásaik kiválasztása.</figcaption>
+          </figure>
+          <div>
+            <h3>Minden asztali rendszeren</h3>
+            <p>macOS-en ugyanez a főablak és ugyanezek a párbeszédablakok natív Mac-alkalmazásként jelennek meg, Linuxon és BSD-n pedig GTK 4-en futnak, ugyanabból a felületi kódból, mint a Windows-os ablak.</p>
+            <p>Vagy hagyja futni a démont fej nélkül egy szerveren, és használja böngészőből, illetve bármelyik asztali grafikus felületről távoli módban.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="share">
+      <h2 id="share">Megosztozik a gépén</h2>
+      <p class="lead">Egy torrentkliens ne legyen az oka annak, hogy egy játék akadozik, vagy az egész számítógép lassúnak érződik. A Rookparcel magától is félreáll, az internetkapcsolat és a lemezek kedvéért.</p>
+      <ul class="spotlights">
+        <li class="spotlight">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Játékosmód: alacsony ping</h3>
+          <p>Jelölje be az <strong>Alacsony ping megtartása</strong> négyzetet a Tulajdonságok &gt; Sávszélesség oldalon. A Rookparcel megkeresi az első útválasztót a vonalán túl, és figyeli a ping értékét letöltés és feltöltés közben. Amint a vonalon sorban állás kezdődik, lassít, majd újra gyorsít, ha a sor elfogy, így a játékok és a videohívások reagálóképesek maradnak. Nincs játéklista, és semmit sem kell beállítani.</p>
+          <p class="spotlight-fact">Egy fél másodpercnyi pufferrel rendelkező tesztvonalon a ping nagyjából 480&nbsp;ms-ról 10&nbsp;ms-ra csökkent, miközben a Rookparcel megtartotta a vonal sebességének 80-92&nbsp;%-át. Windowson, Linuxon és macOS-en működik; BSD-n a uTP-peerek által mért késleltetésekből dolgozik.</p>
+        </li>
+        <li class="spotlight">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>Okos lemezkezelés</h3>
+          <p>Az újraellenőrzések kíméletesen futnak: a rendszer háttérbeli lemezprioritásával, anélkül, hogy más programok fájljait kiszorítanák a memóriából, és félreállnak, amikor másik programnak kell a lemez. A Rookparcel megkülönbözteti az SSD-ket, a merevlemezeket és a hálózati megosztásokat. Meghajtónként egy torrentet ellenőriz, több meghajtón egyszerre, a merevlemezre pedig egyszerre csak két feladatot bíz, hogy ne a keresgéléssel teljen az ideje.</p>
+          <p class="spotlight-fact">Kívánságra a letöltéseket és a feltöltéseket is lassítja, amíg a lemez foglalt, és az ellenőrzést az Ön által megadott sebességre korlátozza: Tulajdonságok &gt; Haladó &gt; Lemez I/O.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="section" aria-labelledby="features">
+      <h2 id="features">Mi van benne</h2>
+      <ul class="features">
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-downloading"/></svg>Teljes értékű motor</h3>
+          <p>TCP és uTP; HTTP-, HTTPS- és UDP-trackerek; magnet-hivatkozások, DHT, peer-csere és helyi peer-felderítés; protokolltitkosítás, webes seedek, SOCKS- és HTTP-proxyk, UPnP / NAT-PMP és IP-szűrők; szuper-seedelés, sorrendi letöltés és torrentenkénti sebességkorlátok.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-bittorrent"/></svg>BitTorrent v2 és hibrid</h3>
+          <p>v2 és hibrid torrentek (BEP 52): hozzáadásuk, letöltésük, seedelésük és létrehozásuk.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-all-torrents"/></svg>A teljes 2.2.1-es kliens</h3>
+          <p>A részletek lapjai (Általános, Trackerek, Peerek, Részek, Fájlok, Sebesség, Napló), a Tulajdonságok ablak, a hozzáadás, a létrehozás és a torrent tulajdonságai, az RSS letöltő, az ütemező, az automatikus leállítás, a tálcaikon, valamint a fájl- és magnet-társítások.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Nagy számokra tervezve</h3>
+          <p>A cél 100 000 torrent egy szerény számítógépen, azonnal reagáló felülettel. A készítő gépén a Windows-os felület körülbelül egy másodperc alatt listáz 100 000 torrentet, tétlenül 0,1 % alatti processzorhasználattal.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-privacy"/></svg>A VPN-en marad</h3>
+          <p>A <strong>Csak ennek a hálózatnak a használata</strong> (Tulajdonságok &gt; Kapcsolat) az összes torrentforgalmat egyetlen hálózathoz köti: bármelyik VPN-adapterhez, egy név szerint megadott adapterhez vagy egy címtartományhoz. A peerek, a DHT, a trackerek és a webes seedek ezen mennek át, más úton semmi. Ha a VPN megszakad, a torrentek várakoznak, ahelyett hogy a megszokott kapcsolaton folytatnák, és maguktól újraindulnak, amikor a VPN visszatér.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-general"/></svg>Sötét mód és témák</h3>
+          <p>Minden program követi a rendszer világos vagy sötét beállítását. A Windows-os program rögzíthető Világos vagy Sötét módra is (Tulajdonságok &gt; Felület &gt; Téma), és minden ablak és párbeszédablak ehhez igazodik. A Webes felületnek kilenc témája van, köztük az Éjfél, a Pala, a Solarized és a Nagy kontraszt, és saját CSS-fájlokat is elfogad.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-web-ui"/></svg>Fej nélkül, Webes felülettel</h3>
+          <p>A <code>rookparcel-nox</code> démonként fut, saját Webes felülettel (telefonra is kialakítva), HTTPS-sel és a qBittorrent Web API-jának egy kompatibilis részhalmazával, így a meglévő eszközök beszélni tudnak vele. Szolgáltatásként fut systemd, a FreeBSD rc.d vagy a Windows alatt, és Docker-képként is. A Windows-os grafikus felület ugyanezt a Webes felületet szolgálja ki a saját torrentjeihez, az RSS letöltővel együtt: Tulajdonságok &gt; Webes felület.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg>Keresés és RSS</h3>
+          <p>Torrenteket kereshet a már futtatott Prowlarron vagy Jacketten keresztül (Torznab), bármelyik grafikus felületről vagy a Webes felületről. Nincsenek saját keresőbővítményei, így semmi sem romlik el, ha egy oldal megváltozik. Ha egyiket sem futtatja, a keresési segéd egy kattintásra letölti és elindítja Önnek a Jacketet. Az RSS letöltő a szűrői alapján felveszi az új kiadásokat.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-downloading"/></svg>Sonarr, Radarr, Prowlarr</h3>
+          <p>Adja hozzá a Rookparcelt qBittorrent-letöltőkliensként, a <code>rookparcel-nox</code> vagy a Windows-os grafikus felület ellen. Az indexer seedelési céljai minden letöltéssel megérkeznek, és a Remove Completed (a Sonarr beállítása) működik; API-kulcs és alhálózati engedélyezőlista is van, ha szeretné.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-remote"/></svg>Távoli mód</h3>
+          <p>Bármelyik asztali grafikus felület vezérelhet egy másik gépen futó <code>rookparcel-nox</code>-ot: Fájl &gt; Csatlakozás távoli géphez..., vagy indítsa a <code>--remote</code> kapcsolóval.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-all-torrents"/></svg>Profilok és hordozható mód</h3>
+          <p>A profil egy teljes, különálló Rookparcel: beállításokkal, torrentekkel, RSS-hírcsatornákkal, portokkal és ablakkal. Futtathat egyet, amely csak a VPN-jét használja, egy hétköznapi mellett, egyszerre mindkettőt (Fájl &gt; Profilok, vagy <code>--profile</code>). A program mellé tett üres <code>rookparcel.ini</code> mindent abban a mappában tart: ez a hordozható mód.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Hozza magával a torrentjeit</h3>
+          <p>Importálhat ugyanazon a számítógépen lévő µTorrentből vagy qBittorrentből. Az adatok ott maradnak, ahol vannak; a címkék, a fájlprioritások, a trackerek és a statisztikák átkerülnek, és a Rookparcel maga ellenőrzi a fájlokat, mielőtt rájuk támaszkodna.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-downloading"/></svg>Várólista, seedelési célok, figyelt mappa</h3>
+          <p>Várólista a letöltésekhez és a seedekhez, arány vagy idő szerinti seedelési célok (az összes torrentre vagy egyre), a kész letöltések másik mappába helyezése, címkék, az új <code>.torrent</code> fájlokat figyelő mappa, sebességkorlátok és a heti ütemező.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>A nagy torrentek is kezelhetők maradnak</h3>
+          <p>A Fájlok lap fanézetben mutatja a torrent mappáit, gépelés közben szűri a több ezer fájlt, és egy egész mappának egyszerre ad prioritást. Az Új torrent hozzáadása ablakban ugyanez a szűrő megvan.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-help"/></svg>Segítség ott, ahol szükség van rá</h3>
+          <p>A Beállítási útmutató néhány kérdést tesz fel az első indításkor. A Tulajdonságok ablak minden beállítása magyarázza önmagát egy buboréksúgóban és az F1 billentyűre, a többit pedig a <a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Kezd%C5%91lap">felhasználói útmutató</a> tartalmazza, képernyőképekkel.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Szól a frissítésekről</h3>
+          <p>A Rookparcel megnézi, van-e újabb kiadás, és szól róla. A Windows-os telepítővel telepített példány le tudja tölteni az új telepítőt, ellenőrizni a kiadás ellenőrző összegeivel, és telepíteni; az Ön beleegyezése nélkül semmi sem töltődik le, és az ellenőrzés kikapcsolható.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-language"/></svg>Angol és további 34 nyelv</h3>
+          <p>Beleértve az arab, a héber és a perzsa jobbról balra író elrendezését is. A fordítások gépiek és nincsenek átnézve, ezért a javításokat szívesen fogadjuk.</p>
+        </li>
+        <li class="feature">
+          <h3><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-tray"/></svg>Kicsi és önálló</h3>
+          <p>Egyetlen, önálló futtatható fájlok, minimális függőségekkel. Windowson: statikusan szerkesztve, nincs telepítendő futtatókörnyezet, és van hordozható mód.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="section" aria-labelledby="platforms">
+      <h2 id="platforms">Hol fut</h2>
+      <div class="platforms">
+        <div class="platform-card">
+          <h3>Windows</h3>
+          <p>Windows 10 és 11, x64. A natív Win32-es grafikus felület és a démon.</p>
+          <p><a href="download.html#windows">Windows-letöltések</a></p>
+        </div>
+        <div class="platform-card">
+          <h3>Linux</h3>
+          <p>x86_64 és aarch64. A GTK 4-es grafikus felület AppImage-ként, Flatpakként vagy egyszerű binárisokként; a démon AppImage-ként vagy a tarballban.</p>
+          <p><a href="download.html#linux">Linux-letöltések</a></p>
+        </div>
+        <div class="platform-card">
+          <h3>macOS</h3>
+          <p>Natív grafikus felület Apple silicon és Intel gépekhez (macOS 11 Big Sur vagy újabb), és a démon.</p>
+          <p><a href="download.html#macos">macOS-letöltések</a></p>
+        </div>
+        <div class="platform-card">
+          <h3>FreeBSD</h3>
+          <p>Még nincsenek kész fájlok: a GTK-s grafikus felület és a démon forráskódból fordítható, és egy rc.d szkript is jár hozzá.</p>
+          <p><a href="https://github.com/Balls0fSteel/Rookparcel#building">Fordítás forráskódból</a></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="support">
+      <h2 id="support">A Rookparcel támogatása</h2>
+      <p>A Rookparcel ingyenes, és nem mutat reklámot. Ha tetszik, egy adomány segít életben tartani a projektet: a <a href="https://www.paypal.com/ncp/payment/2UDQNM8TGRUA4" rel="noopener">PayPalon</a> vagy a <a href="https://github.com/sponsors/Balls0fSteel" rel="noopener">GitHub Sponsorson</a> keresztül. Kérjük, csak akkor adakozzon, ha kényelmesen megteheti.</p>
+      <p><a class="btn btn-primary" href="donate.html">Támogatás</a></p>
+    </section>
+
+    <section class="section" aria-labelledby="free">
+      <h2 id="free">Ingyenes nem kereskedelmi használatra</h2>
+      <p>A Rookparcel ingyenes személyes használatra, tanulmányokhoz, hobbiprojektekhez, valamint jótékonysági szervezetek, iskolák, kutatási és közintézmények használatára a <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial License 1.0.0</a> alapján. Ugyanezen feltételekkel megoszthatja és módosíthatja. Kereskedelmi használathoz külön engedély kell. Bővebben a <a href="faq.html#license">GYIK</a>-ben.</p>
+      <p class="note">A Rookparcel független projekt. A µTorrent 2.2.1 kinézetét és viselkedését idézi, de nincs kapcsolatban a µTorrenttel vagy a BitTorrent, Inc.-kel, nem áll támogatásuk vagy szponzorálásuk alatt, és nem használja a kódjukat, a grafikájukat vagy a védjegyeiket.</p>
+    </section>
+  </div>
+</main>
+
+<footer class="statusbar">
+  <div class="wrap">
+    <ul>
+      <li>Legújabb: <!-- build:latest-version --><a href="https://github.com/Balls0fSteel/Rookparcel/releases">Kiadások</a><!-- /build:latest-version --></li>
+      <li><a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial 1.0.0</a></li>
+      <li>© 2026 <a href="https://dukecorp1996.x35.in/">DukeCorp1996</a></li>
+      <li class="grow"><a href="https://github.com/Balls0fSteel/Rookparcel/issues">Hibabejelentés</a></li>
+    </ul>
+    <p>A Rookparcelnek nincs köze a µTorrenthez, a BitTorrent, Inc.-hez, a libtorrenthez és a qBittorrenthez. Ez az oldal nem állít be sütiket, és nem tölt be semmit más oldalakról.</p>
+  </div>
+</footer>
+</body>
+</html>

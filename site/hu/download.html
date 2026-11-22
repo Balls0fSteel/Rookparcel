@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Rookparcel letöltése</title>
+<meta name="description" content="A Rookparcel letöltése Windowsra, Linuxra és macOS-re: a legújabb kiadás minden fájlja, az indításuk módja, az ellenőrző összegek és a frissítés menete.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14233d">
+<link rel="icon" type="image/png" sizes="32x32" href="../img/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../img/icon-16.png">
+<link rel="apple-touch-icon" href="../img/icon-256.png">
+<link rel="stylesheet" href="../css/style.css">
+<!-- build:alternates --><!-- /build:alternates -->
+<script src="../js/site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Ugrás a tartalomra</a>
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="./"><img src="../img/icon-32.png" srcset="../img/icon-64.png 2x" width="32" height="32" alt=""> Rookparcel</a>
+    <nav aria-label="Főmenü">
+      <ul class="toolbar">
+        <li><a href="download.html" aria-current="page"><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Letöltés</a></li>
+        <li><a href="../news.html" hreflang="en"><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg>Hírek</a></li>
+        <li><a href="faq.html"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-help"/></svg>GYIK</a></li>
+        <li><a href="../benchmarks.html" hreflang="en"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Teljesítménymérések</a></li>
+        <li><a href="docs.html"><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>Dokumentáció</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel/wiki/Kezd%C5%91lap"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-general"/></svg>Útmutató</a></li>
+        <li><a href="donate.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-heart"/></svg>Támogatás</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a></li>
+      </ul>
+    </nav>
+    <!-- build:langs --><!-- /build:langs -->
+  </div>
+</header>
+
+<main id="main">
+  <div class="page-head">
+    <div class="wrap">
+      <h1>A Rookparcel letöltése</h1>
+      <!-- build:release -->
+      <p class="release-line">Minden kiadás megtalálható a <a href="https://github.com/Balls0fSteel/Rookparcel/releases">GitHub kiadási oldalán</a>.</p>
+      <!-- /build:release -->
+    </div>
+  </div>
+
+  <div class="wrap">
+    <!-- build:if-prerelease -->
+    <aside class="callout" aria-label="Kiadásjelölt">
+      <svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-warning"/></svg>
+      <div>
+        <p><strong>Ez egy előzetes kiadás.</strong> A készítő gépein kívül alig tesztelték, a beállítások az 1.0 előtt még változhatnak, és privát trackereken még nem szabad használni. A kiadási megjegyzések felsorolják az ismert korlátozásokat.</p>
+      </div>
+    </aside>
+    <!-- /build:if-prerelease -->
+
+    <p class="guide-link"><a href="install.html">Lépésről lépésre követhető telepítési útmutató</a>: a letöltéstől a futó programig, a rendszer első indításkori figyelmeztetéseivel együtt.</p>
+
+    <section class="section" id="which" aria-labelledby="which-h">
+      <h2 id="which-h">Melyik fájlra van szükségem?</h2>
+      <ul class="which">
+        <li><strong>Windows 10 vagy 11</strong> A telepítő felrakja a Rookparcelt, és később helyben frissíti (az 1.0.1-től). A hordozható zip semmit sem telepít: csomagolja ki, és futtassa.</li>
+        <li><strong>Linux asztali gép</strong> Az AppImage magával hozza a könyvtárait, és glibc 2.39 vagy újabb kell hozzá (Ubuntu 24.04, Fedora 40, Debian 13 vagy újabb). Inkább Flatpakot szeretne? Válassza a csomagot. Az egyszerű binárisok a rendszer GTK 4 és OpenSSL 3 könyvtárát használják.</li>
+        <li><strong>Linux szerver</strong> A <code>rookparcel-nox</code> AppImage, vagy a <code>rookparcel-nox</code> az egyszerű binárisok közül, a saját <a href="#headless">Webes felületével</a>.</li>
+        <li><strong>Mac</strong> A lemezkép, Apple silicon és Intel Macre egyaránt. Szerverek használhatják a fej nélküli <code>rookparcel-nox</code>-ot.</li>
+      </ul>
+      <p>Az <code>x64</code> és az <code>x86_64</code> Intel és AMD processzort jelent; az <code>aarch64</code> és az <code>arm64</code> 64 bites ARM-et.</p>
+    </section>
+
+    <section class="platform" id="windows" aria-labelledby="windows-h">
+      <h2 id="windows-h">Windows <span class="yours" data-os="windows" hidden>Az Ön rendszere</span></h2>
+      <p class="req">Windows 10 vagy 11, 64 bites (x64).</p>
+      <!-- build:files-windows -->
+      <p class="note">A fájllista az oldal elkészítésekor töltődik ki. Minden fájl megtalálható a <a href="https://github.com/Balls0fSteel/Rookparcel/releases">GitHub kiadási oldalán</a>.</p>
+      <!-- /build:files-windows -->
+      <h3 id="smartscreen">SmartScreen</h3>
+      <p>A programok nincsenek kódaláírással ellátva, ezért a Windows SmartScreen első alkalommal ezt az üzenetet jeleníti meg: „A Windows védte a számítógépét”. Kattintson a <strong>További információ</strong>, majd a <strong>Futtatás mindenképp</strong> gombra. A <a href="install.html#windows">telepítési útmutató</a> minden lépést megmutat.</p>
+      <p>A beállítások és a torrentek a <code>%APPDATA%\Rookparcel</code> mappába kerülnek. A <code>rookparcel.exe</code> mellé tett üres <code>rookparcel.ini</code> ehelyett abban a mappában tartja őket, a letöltésekkel együtt a mappa <code>Downloads</code> almappájában (hordozható mód, <a href="faq.html#settings">bővebben</a>). A <code>--profile work</code> vagy a Fájl &gt; Profilok külön Rookparcelt futtat a megszokott mellett.</p>
+    </section>
+
+    <section class="platform" id="linux" aria-labelledby="linux-h">
+      <h2 id="linux-h">Linux <span class="yours" data-os="linux" hidden>Az Ön rendszere</span></h2>
+      <p class="req">x86_64 vagy aarch64.</p>
+      <!-- build:files-linux -->
+      <p class="note">A fájllista az oldal elkészítésekor töltődik ki. Minden fájl megtalálható a <a href="https://github.com/Balls0fSteel/Rookparcel/releases">GitHub kiadási oldalán</a>.</p>
+      <!-- /build:files-linux -->
+      <h3>Jó tudni</h3>
+      <ul>
+        <li>A beállítások a <code>~/.config/rookparcel/gtk</code> mappában vannak, a torrentek a <code>~/.local/share/rookparcel/gtk</code> mappában. A Flatpak ezeket a <code>~/.var/app/io.github.balls0fsteel.Rookparcel/</code> alatt tartja. A <code>rookparcel-gtk</code> vagy az <code>.AppImage</code> mellé tett üres <code>rookparcel.ini</code> ehelyett mindent abban a mappában tart (hordozható mód, a Flatpakban nem működik).</li>
+        <li>A Flatpak írhat a saját mappájába, mivel a torrentkliens folyamatosan ír az Ön által választott mappákba. Egy másik lemezen lévő mappához a <code>flatpak override --user --filesystem=/mnt/data io.github.balls0fsteel.Rookparcel</code> parancs kell (a saját mappájával).</li>
+        <li>A démon systemd-szolgáltatásként: <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/DAEMON.md#systemd">docs/DAEMON.md</a>.</li>
+      </ul>
+    </section>
+
+    <section class="platform" id="macos" aria-labelledby="macos-h">
+      <h2 id="macos-h">macOS <span class="yours" data-os="macos" hidden>Az Ön rendszere</span></h2>
+      <p class="req">A grafikus felület: Apple silicon és Intel, macOS 11 Big Sur vagy újabb. A démon: Apple silicon (macOS 11 vagy újabb) és Intel (macOS 10.14 vagy újabb).</p>
+      <!-- build:files-macos -->
+      <p class="note">A fájllista az oldal elkészítésekor töltődik ki. Minden fájl megtalálható a <a href="https://github.com/Balls0fSteel/Rookparcel/releases">GitHub kiadási oldalán</a>.</p>
+      <!-- /build:files-macos -->
+      <h3 id="gatekeeper">Gatekeeper</h3>
+      <p>A <code>Rookparcel.app</code> ad-hoc aláírású és nincs közjegyzően hitelesítve (notarised), ezért a Gatekeeper először elutasítja („Nincs megnyitva”, vagy „nem nyitható meg, mert a fejlesztő nem ellenőrizhető”). Egyszer engedélyeznie kell; a <a href="install.html#macos">telepítési útmutató</a> minden lépést megmutat, a lemezkép pedig a <code>How to open Rookparcel.html</code> fájlban tartalmazza őket.</p>
+      <ul>
+        <li><strong>macOS 15 Sequoia és újabb:</strong> próbálja megnyitni az alkalmazást, és kattintson a <strong>Kész</strong> gombra. Ezután nyissa meg a <strong>Rendszerbeállítások &gt; Adatvédelem és biztonság</strong> oldalt, kattintson a <strong>Megnyitás mindenképp</strong> gombra a Biztonság részben, és erősítse meg.</li>
+        <li><strong>macOS 11–14:</strong> Control-kattintással (vagy jobb kattintással) nyissa meg az alkalmazás menüjét, válassza a <strong>Megnyitás</strong> parancsot, majd kattintson újra a <strong>Megnyitás</strong> gombra.</li>
+      </ul>
+      <p>Vagy, akkor is, ha a macOS azt mondja, hogy az alkalmazás „sérült”, távolítsa el a karanténjelzőt, miután átmásolta az Alkalmazások mappába:</p>
+      <pre class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Rookparcel.app</code></pre>
+      <p>A <code>Rookparcel.app</code> natív macOS-program, egyetlen fájl Apple silicon és Intel gépekhez. A beállítások és a torrentek a <code>~/Library/Application Support/Rookparcel/mac</code> mappában vannak. Az alkalmazás régebbi, GTK-s változatáról átállva az ottani <code>gtk</code> mappa az első indításkor <code>mac</code> nevűre változik, így a beállítások és a torrentek átkerülnek.</p>
+    </section>
+
+    <!-- build:files-other --><!-- /build:files-other -->
+
+    <section class="section" id="headless" aria-labelledby="headless-h">
+      <h2 id="headless-h">Fej nélkül: <code>rookparcel-nox</code></h2>
+      <p>A démon benne van a Windows zipben, a Linux egyszerű binárisaiban, a saját Linux AppImage-ében és a macOS tarballban. Indítsa el a Webes felülettel a 8080-as porton:</p>
+      <pre class="cmd"><code>rookparcel-nox run --webui 8080 --webui-pass PASS</code></pre>
+      <p>Ezután nyissa meg ugyanazon a gépen a <code>http://127.0.0.1:8080</code> címet, és jelentkezzen be <code>admin</code> felhasználóként. A <code>--webui-pass</code> nélkül az első indításkor egy ideiglenes jelszót ír ki; állítson be egyet a Tulajdonságok &gt; Webes felület oldalon. Ugyanez a port egy qBittorrent-kompatibilis Web API-t is kiszolgál a meglévő eszközöknek.</p>
+      <p>Más gépekről: adjon meg egy címet, például <code>--webui 0.0.0.0:8443</code>, és tegye hozzá a <code>--webui-https</code> kapcsolót, hogy a jelszó ne titkosítatlanul haladjon (az első használatkor önaláírt tanúsítvány készül). A <code>rookparcel-nox add file.torrent --save DIR</code> hozzáad egy torrentet. A szolgáltatásként futtatásról (systemd, FreeBSD rc.d, Windows-szolgáltatás, <code>--daemon</code>) a <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/DAEMON.md">docs/DAEMON.md</a> szól.</p>
+    </section>
+
+    <section class="section" id="checksums" aria-labelledby="checksums-h">
+      <h2 id="checksums-h">Letöltés ellenőrzése</h2>
+      <!-- build:checksums -->
+      <p>A <a href="https://github.com/Balls0fSteel/Rookparcel/releases">kiadási oldalon</a> minden kiadáshoz tartozik egy <code>SHA256SUMS</code> fájl.</p>
+      <!-- /build:checksums -->
+      <p>Ha a <code>SHA256SUMS</code> ugyanabban a mappában van, mint a letöltött fájl:</p>
+      <div class="steps cols">
+        <div class="step">
+          <h3>Linux</h3>
+          <pre class="cmd"><code>sha256sum -c --ignore-missing SHA256SUMS</code></pre>
+        </div>
+        <div class="step">
+          <h3>macOS</h3>
+          <pre class="cmd"><code>shasum -a 256 Rookparcel-*.dmg</code></pre>
+          <p>Hasonlítsa össze az eredményt a fájl sorával a <code>SHA256SUMS</code> fájlban.</p>
+        </div>
+        <div class="step">
+          <h3>Windows (PowerShell)</h3>
+          <pre class="cmd"><code>Get-FileHash .\rookparcel-*.zip</code></pre>
+          <p>Hasonlítsa össze a kivonatot a fájl sorával a <code>SHA256SUMS</code> fájlban (a kis- és nagybetű nem számít).</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="updating" aria-labelledby="updating-h">
+      <h2 id="updating-h">Frissítés</h2>
+      <p>A Rookparcel nem frissíti magát. Az 1.0.1-től a grafikus felületek rövid üzenetet mutatnak az állapotsorban, ha újabb kiadás jelent meg (az 1.1.17-től a <code>rookparcel-nox</code> kiír egy sort, és hivatkozást mutat a Webes felületén); töltse le ezt erről az oldalról vagy a GitHubról. Hogy mi változott, a <a href="../news.html" hreflang="en">Hírek</a> oldalon olvasható. Az ellenőrzés egyetlen kis fájlt olvas be erről az oldalról, és kikapcsolható (<a href="faq.html#privacy">mit küld el</a>).</p>
+      <ul>
+        <li><strong>Telepítő:</strong> futtassa az új telepítőt. Az helyben frissíti a telepített példányt.</li>
+        <li><strong>Hordozható zip:</strong> lépjen ki a Rookparcelből, majd cserélje le kézzel a <code>rookparcel.exe</code> és a <code>rookparcel-nox.exe</code> fájlt az újakra. A beállításai ott maradnak, ahol vannak (hordozható módban hagyja érintetlenül a mappa többi részét).</li>
+        <li><strong>AppImage:</strong> cserélje le a régi fájlt az újra.</li>
+        <li><strong>Flatpak:</strong> telepítse az új csomagot a régi fölé a <code>flatpak install --user --reinstall</code> paranccsal és a fájl nevével.</li>
+        <li><strong>Egyszerű binárisok és a macOS tarball:</strong> csomagolja ki az új archívumot, és használja a benne lévő programokat.</li>
+        <li><strong>macOS:</strong> húzza az új <code>Rookparcel.app</code> alkalmazást az Alkalmazások mappába, és cserélje le a réginél.</li>
+      </ul>
+      <p>A régebbi verziók és az összes előzetes kiadás a <a href="https://github.com/Balls0fSteel/Rookparcel/releases">kiadási oldalon</a> található. Ha maga szeretné lefordítani a Rookparcelt, lásd a README <a href="https://github.com/Balls0fSteel/Rookparcel#building">Building</a> részét.</p>
+    </section>
+  </div>
+</main>
+
+<footer class="statusbar">
+  <div class="wrap">
+    <ul>
+      <li>Legújabb: <!-- build:latest-version --><a href="https://github.com/Balls0fSteel/Rookparcel/releases">Kiadások</a><!-- /build:latest-version --></li>
+      <li><a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial 1.0.0</a></li>
+      <li>© 2026 <a href="https://dukecorp1996.x35.in/">DukeCorp1996</a></li>
+      <li class="grow"><a href="https://github.com/Balls0fSteel/Rookparcel/issues">Hibabejelentés</a></li>
+    </ul>
+    <p>A Rookparcelnek nincs köze a µTorrenthez, a BitTorrent, Inc.-hez, a libtorrenthez és a qBittorrenthez. Ez az oldal nem állít be sütiket, és nem tölt be semmit más oldalakról.</p>
+  </div>
+</footer>
+</body>
+</html>

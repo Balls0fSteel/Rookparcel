@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A Rookparcel telepítése lépésről lépésre</title>
+<meta name="description" content="Lépésről lépésre útmutató a Rookparcel telepítéséhez Windowson, Linuxon és macOS-en, a SmartScreen és a Gatekeeper első indításkori figyelmeztetéseivel együtt.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14233d">
+<link rel="icon" type="image/png" sizes="32x32" href="../img/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../img/icon-16.png">
+<link rel="apple-touch-icon" href="../img/icon-256.png">
+<link rel="stylesheet" href="../css/style.css">
+<!-- build:alternates --><!-- /build:alternates -->
+<script src="../js/install.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Ugrás a tartalomra</a>
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="./"><img src="../img/icon-32.png" srcset="../img/icon-64.png 2x" width="32" height="32" alt=""> Rookparcel</a>
+    <nav aria-label="Főmenü">
+      <ul class="toolbar">
+        <li><a href="download.html" aria-current="page"><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Letöltés</a></li>
+        <li><a href="../news.html" hreflang="en"><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg>Hírek</a></li>
+        <li><a href="faq.html"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-help"/></svg>GYIK</a></li>
+        <li><a href="../benchmarks.html" hreflang="en"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Teljesítménymérések</a></li>
+        <li><a href="docs.html"><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>Dokumentáció</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel/wiki/Kezd%C5%91lap"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-general"/></svg>Útmutató</a></li>
+        <li><a href="donate.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-heart"/></svg>Támogatás</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a></li>
+      </ul>
+    </nav>
+    <!-- build:langs --><!-- /build:langs -->
+  </div>
+</header>
+
+<main id="main">
+  <div class="page-head">
+    <div class="wrap">
+      <h1>A Rookparcel telepítése</h1>
+      <p class="release-line">A letöltött fájltól a futó programig, lépésről lépésre. A fájlok a <a href="download.html">Letöltés</a> oldalon vannak.</p>
+    </div>
+  </div>
+
+  <div class="wrap guide" id="guide" data-back="Vissza" data-next="Tovább" data-all="Az összes lépés mutatása" data-one="Egyszerre egy lépés" data-step="{n}. lépés / {m}" data-done="{n}. lépés / {m}: kész">
+    <aside class="callout" aria-label="Miért figyelmeztet a rendszer">
+      <svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-warning"/></svg>
+      <div>
+        <p><strong>A Windows és a macOS az első indításkor figyelmeztet.</strong> A Rookparcel fájljai nincsenek kódaláírással ellátva, a Mac-alkalmazást pedig nem hitelesítette az Apple, ezért a rendszer nem tudja megállapítani, ki készítette őket. Az alábbi lépések megmutatják, hogyan néz ki a figyelmeztetés, és mire kell kattintani. Hogy a fájl valóban a közzétett fájl-e, a <a href="download.html#checksums">ellenőrző összegével</a> ellenőrizheti.</p>
+      </div>
+    </aside>
+
+    <div class="guide-pick" id="pick" hidden>
+      <div class="pick-row">
+        <span class="pick-label" id="pick-sys-l">Az Ön rendszere</span>
+        <div class="pick-btns" role="group" aria-labelledby="pick-sys-l">
+          <button type="button" class="pick" data-pick-sys="windows" aria-pressed="false">Windows</button>
+          <button type="button" class="pick" data-pick-sys="linux" aria-pressed="false">Linux</button>
+          <button type="button" class="pick" data-pick-sys="macos" aria-pressed="false">macOS</button>
+          <button type="button" class="pick" data-pick-sys="" aria-pressed="false">Mind</button>
+        </div>
+      </div>
+      <div class="pick-row" data-for="windows" hidden>
+        <span class="pick-label" id="pick-win-l">Az Ön fájlja</span>
+        <div class="pick-btns" role="group" aria-labelledby="pick-win-l">
+          <button type="button" class="pick" data-pick-path="windows-setup" aria-pressed="false">Telepítő <small>…-setup.exe</small></button>
+          <button type="button" class="pick" data-pick-path="windows-zip" aria-pressed="false">Hordozható zip <small>….zip</small></button>
+        </div>
+      </div>
+      <div class="pick-row" data-for="linux" hidden>
+        <span class="pick-label" id="pick-linux-l">Az Ön fájlja</span>
+        <div class="pick-btns" role="group" aria-labelledby="pick-linux-l">
+          <button type="button" class="pick" data-pick-path="linux-appimage" aria-pressed="false">AppImage <small>….AppImage</small></button>
+          <button type="button" class="pick" data-pick-path="linux-flatpak" aria-pressed="false">Flatpak <small>….flatpak</small></button>
+          <button type="button" class="pick" data-pick-path="linux-tar" aria-pressed="false">Önálló programfájlok <small>….tar.gz</small></button>
+        </div>
+      </div>
+      <div class="pick-row" data-for="macos" hidden>
+        <span class="pick-label" id="pick-mac-l">Az Ön macOS-e</span>
+        <div class="pick-btns" role="group" aria-labelledby="pick-mac-l">
+          <button type="button" class="pick" data-pick-path="macos-15" aria-pressed="false">15 Sequoia vagy újabb</button>
+          <button type="button" class="pick" data-pick-path="macos-older" aria-pressed="false">11–14</button>
+          <button type="button" class="pick" data-pick-path="macos-terminal" aria-pressed="false">A Terminállal</button>
+        </div>
+      </div>
+    </div>
+
+    <nav class="toc" id="guide-toc" aria-labelledby="toc-h">
+      <h2 id="toc-h">Ezen az oldalon</h2>
+      <ol>
+        <li><a href="#windows-setup">Windows: a telepítő</a></li>
+        <li><a href="#windows-zip">Windows: a hordozható zip</a></li>
+        <li><a href="#linux-appimage">Linux: AppImage</a></li>
+        <li><a href="#linux-flatpak">Linux: Flatpak</a></li>
+        <li><a href="#linux-tar">Linux: önálló programfájlok</a></li>
+        <li><a href="#macos-15">macOS 15 Sequoia vagy újabb</a></li>
+        <li><a href="#macos-older">macOS 11–14</a></li>
+        <li><a href="#macos-terminal">macOS a Terminállal</a></li>
+        <li><a href="#after">Az első indítás után</a></li>
+      </ol>
+    </nav>
+
+    <section class="guide-sys platform" id="windows" data-sys="windows" aria-labelledby="windows-h">
+      <h2 id="windows-h">Windows</h2>
+      <p class="req">Windows 10 vagy 11, 64 bites. A telepítő Start menü-bejegyzést ad hozzá, és helyben frissít; a zip semmit sem telepít.</p>
+
+      <section class="guide-path" id="windows-setup" aria-labelledby="windows-setup-h">
+        <h3 id="windows-setup-h">A telepítő</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Töltse le a telepítőt, és futtassa</h4>
+            <p>Vegye a <code>rookparcel-…-windows-x64-setup.exe</code> fájlt a <a href="download.html#windows">Letöltés oldalról</a>, és nyissa meg a böngésző letöltései közül vagy a Letöltések mappából.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> SmartScreen: További információ</h4>
+            <p>A Windows ezt írja: „A Windows megvédte a számítógépet”. Kattintson a szöveg alatti apró <strong>További információ</strong> hivatkozásra. Ha ilyen ablak nem jelenik meg, folytassa a következő lépéssel.</p>
+            <div class="mock mock-win" role="img" aria-label="Rajz a kék SmartScreen-ablakról („A Windows megvédte a számítógépet”): a További információ hivatkozás ki van emelve, és egyetlen gomb van rajta, a Ne futtassa.">
+              <div class="mock-title">A Windows megvédte a számítógépet</div>
+              <p class="mock-text">A Microsoft Defender SmartScreen megakadályozta egy ismeretlen alkalmazás elindítását. <span class="mock-link press">További információ</span></p>
+              <div class="mock-btns"><span class="mock-btn">Ne futtassa</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">3</span> SmartScreen: Futtatás mindenképp</h4>
+            <p>Az ablak most megnevezi a fájlt, és „Ismeretlen közzétevő” áll benne. Kattintson a <strong>Futtatás mindenképp</strong> gombra.</p>
+            <div class="mock mock-win" role="img" aria-label="Rajz a SmartScreen-ablakról a További információ megnyomása után: megnevezi az alkalmazást és az ismeretlen közzétevőt, a gombok: Futtatás mindenképp (kiemelve) és Ne futtassa.">
+              <div class="mock-title">A Windows megvédte a számítógépet</div>
+              <p class="mock-text">Alkalmazás: rookparcel-…-setup.exe<br>Közzétevő: Ismeretlen közzétevő</p>
+              <div class="mock-btns"><span class="mock-btn press">Futtatás mindenképp</span><span class="mock-btn">Ne futtassa</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Válassza ki, kinek szól</h4>
+            <p>Válassza ki a nyelvet, és fogadja el a licencet. A <strong>Felhasználók kiválasztása</strong> oldalon a <strong>Telepítés csak a saját részemre</strong> nem igényel rendszergazdai jogot. A <strong>Telepítés a számítógép minden felhasználója számára</strong> esetén a Windows engedélyt kér; ez a kérdés is „ismeretlen közzétevőt” említ. Kattintson az <strong>Igen</strong> gombra.</p>
+            <div class="mock" role="img" aria-label="Rajz a Felhasználói fiókok felügyelete kérdéséről: Engedélyezi, hogy egy ismeretlen közzétevőtől származó alkalmazás módosításokat hajtson végre az eszközén?, a gombok: Igen (kiemelve) és Nem.">
+              <div class="mock-bar">Felhasználói fiókok felügyelete</div>
+              <div class="mock-title">Engedélyezi, hogy egy ismeretlen közzétevőtől származó alkalmazás módosításokat hajtson végre az eszközén?</div>
+              <p class="mock-text">rookparcel-…-setup.exe<br>Közzétevő: Ismeretlen</p>
+              <div class="mock-btns"><span class="mock-btn press">Igen</span><span class="mock-btn">Nem</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">5</span> Összetevők, mappa, Telepítés</h4>
+            <p>Hagyja úgy a pipákat, ahogy vannak, hacsak nem szeretné kihagyni az asztali parancsikont vagy a <code>.torrent</code> és <code>magnet:</code> társításokat. Tartsa meg a megjelenített mappát, és kattintson a <strong>Telepítés</strong> gombra.</p>
+          </li>
+          <li>
+            <h4><span class="num">6</span> Befejezés</h4>
+            <p>Hagyja bejelölve a <strong>Rookparcel futtatása</strong> jelölőnégyzetet, és kattintson a <strong>Befejezés</strong> gombra. A Rookparcel megnyílik a Beállítási útmutatóval. A későbbi verziók ennek tetejére települnek: ha megjelent egy újabb, a Rookparcel szól az állapotsorában.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="guide-path" id="windows-zip" aria-labelledby="windows-zip-h">
+        <h3 id="windows-zip-h">A hordozható zip</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Töltse le, és bontsa ki</h4>
+            <p>Vegye a <code>rookparcel-…-windows-x64.zip</code> fájlt a <a href="download.html#windows">Letöltés oldalról</a>. Kattintson rá a jobb gombbal, válassza az <strong>Az összes kibontása…</strong> parancsot, és adjon meg egy olyan mappát, amelybe írhat, például <code>Documents\Rookparcel</code>. Ne a zip belsejéből indítsa.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Nem kötelező: minden maradjon abban a mappában</h4>
+            <p>Hordozható módhoz hozzon létre egy üres, <code>rookparcel.ini</code> nevű fájlt a <code>rookparcel.exe</code> mellett az első indítás előtt. A beállítások és a torrentek ekkor a mappában maradnak; nélküle a <code>%APPDATA%\Rookparcel</code> mappába kerülnek.</p>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Indítsa el a rookparcel.exe-t</h4>
+            <p>Kattintson duplán a <code>rookparcel.exe</code> fájlra. A Windows először ezt írja: „A Windows megvédte a számítógépet”: kattintson a <strong>További információ</strong>, majd a <strong>Futtatás mindenképp</strong> gombra.</p>
+            <div class="mock mock-win" role="img" aria-label="Rajz a SmartScreen-ablakról a További információ megnyomása után, a gombok: Futtatás mindenképp (kiemelve) és Ne futtassa.">
+              <div class="mock-title">A Windows megvédte a számítógépet</div>
+              <p class="mock-text">Alkalmazás: rookparcel.exe<br>Közzétevő: Ismeretlen közzétevő</p>
+              <div class="mock-btns"><span class="mock-btn press">Futtatás mindenképp</span><span class="mock-btn">Ne futtassa</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Nem kötelező: torrentek megnyitása vele</h4>
+            <p>Jelölje be a <code>.torrent</code> és <code>magnet:</code> társításokat a <strong>Beállítások &gt; Tulajdonságok &gt; Általános</strong> oldalon. Ezek erre a példányra mutatnak, ezért nem működnek tovább, ha áthelyezi a mappát.</p>
+          </li>
+        </ol>
+      </section>
+    </section>
+
+    <section class="guide-sys platform" id="linux" data-sys="linux" aria-labelledby="linux-h">
+      <h2 id="linux-h">Linux</h2>
+      <p class="req">x86_64 (Intel és AMD) vagy aarch64 (64 bites ARM); az <code>uname -m</code> megmondja, melyik van Önnél. Az alábbi parancsok abban a mappában működnek, amelyben a letöltés van, általában a <code>~/Downloads</code> mappában.</p>
+
+      <section class="guide-path" id="linux-appimage" aria-labelledby="linux-appimage-h">
+        <h3 id="linux-appimage-h">AppImage</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Töltse le az AppImage-et</h4>
+            <p>Vegye a <code>Rookparcel-…-x86_64.AppImage</code> fájlt (vagy az <code>-aarch64</code> változatot) a <a href="download.html#linux">Letöltés oldalról</a>. Glibc 2.39 vagy újabb kell hozzá: Ubuntu 24.04, Fedora 40, Debian 13 vagy újabb.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Engedélyezze a futtatását</h4>
+            <p>A letöltött fájlt addig nem lehet futtatni, amíg Ön nem engedi. Terminálban:</p>
+            <pre class="cmd"><code>cd ~/Downloads
+chmod +x Rookparcel-*.AppImage</code></pre>
+            <p>Vagy a fájlkezelőben: kattintson a fájlra a jobb gombbal, válassza a <strong>Tulajdonságok</strong>, majd az <strong>Engedélyek</strong> lapot, és jelölje be azt a négyzetet, amely engedi a fájl programként való futtatását.</p>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Indítsa el</h4>
+            <p>Kattintson duplán a fájlra, vagy:</p>
+            <pre class="cmd"><code>./Rookparcel-*.AppImage</code></pre>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Ha azt írja, hogy FUSE kell hozzá</h4>
+            <p>Egyes rendszerekhez már nem tartozik FUSE 2, és az AppImage ilyenkor ezzel áll le: „AppImages require FUSE to run”. Ekkor így indítsa:</p>
+            <pre class="cmd"><code>./Rookparcel-*.AppImage --appimage-extract-and-run</code></pre>
+          </li>
+        </ol>
+      </section>
+
+      <section class="guide-path" id="linux-flatpak" aria-labelledby="linux-flatpak-h">
+        <h3 id="linux-flatpak-h">Flatpak</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Töltse le a csomagot</h4>
+            <p>Vegye a <code>Rookparcel-…-x86_64.flatpak</code> fájlt (vagy az <code>-aarch64</code> változatot) a <a href="download.html#linux">Letöltés oldalról</a>. A rendszerén magának a <code>flatpak</code>-nek is kell lennie; a legtöbb asztali környezetben megvan.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Adja hozzá egyszer a Flathubot</h4>
+            <p>A csomag az alkalmazást tartalmazza; a futtatókörnyezete a Flathubról jön:</p>
+            <pre class="cmd"><code>flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo</code></pre>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Telepítse a csomagot</h4>
+            <pre class="cmd"><code>cd ~/Downloads
+flatpak install --user Rookparcel-*.flatpak</code></pre>
+            <p>Amikor a futtatókörnyezetről kérdez, válaszoljon <kbd>y</kbd>-nal.</p>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Indítsa el</h4>
+            <p>A Rookparcel most már ott van az alkalmazások menüjében, vagy:</p>
+            <pre class="cmd"><code>flatpak run io.github.balls0fsteel.Rookparcel</code></pre>
+            <p>Írhat a saját mappájába. Ha másik lemezre szeretne letölteni, nézze meg a Letöltés oldal <a href="download.html#linux">Jó tudni</a> részét.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="guide-path" id="linux-tar" aria-labelledby="linux-tar-h">
+        <h3 id="linux-tar-h">Önálló programfájlok</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Töltse le az archívumot</h4>
+            <p>Vegye a <code>rookparcel-…-linux-x86_64.tar.gz</code> fájlt (vagy az <code>-aarch64</code> változatot) a <a href="download.html#linux">Letöltés oldalról</a>. A programok a rendszer GTK 4 (4.12 vagy újabb) és OpenSSL 3 könyvtárát használják, ahogy az Ubuntu 24.04-ben megvannak.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Csomagolja ki</h4>
+            <pre class="cmd"><code>cd ~/Downloads
+tar -xzf rookparcel-*-linux-*.tar.gz</code></pre>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Indítsa el az ablakot</h4>
+            <pre class="cmd"><code>./rookparcel-*-linux-*/rookparcel-gtk</code></pre>
+            <p>A mappában ott van a <code>rookparcel-nox</code> (a démon), egy asztali bejegyzés és systemd-egységek is.</p>
+          </li>
+        </ol>
+      </section>
+    </section>
+
+    <section class="guide-sys platform" id="macos" data-sys="macos" aria-labelledby="macos-h">
+      <h2 id="macos-h">macOS</h2>
+      <p class="req">macOS 11 Big Sur vagy újabb, Apple szilícium és Intel. A macOS verzióját az <strong>Apple menü &gt; A Mac névjegye</strong> mutatja. A lemezkép ezeket a lépéseket is tartalmazza, a <code>How to open Rookparcel.html</code> fájlban.</p>
+
+      <section class="guide-path" id="macos-15" aria-labelledby="macos-15-h">
+        <h3 id="macos-15-h">macOS 15 Sequoia vagy újabb</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Másolja az alkalmazást az Alkalmazások mappába</h4>
+            <p>Nyissa meg a <code>Rookparcel-…-macos.dmg</code> fájlt a <a href="download.html#macos">Letöltés oldalról</a>, és húzza a <code>Rookparcel.app</code> fájlt az ablakában lévő <strong>Alkalmazások</strong> mappára. Az Alkalmazások mappából indítsa, ne a lemezképből.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Próbálja megnyitni, majd kattintson a Kész gombra</h4>
+            <p>Kattintson duplán a <strong>Rookparcel</strong> alkalmazásra az Alkalmazások mappában. A macOS azt írja, hogy nem tudta ellenőrizni az alkalmazást. Kattintson a <strong>Kész</strong> gombra, ne az Áthelyezés a Kukába gombra.</p>
+            <div class="mock mock-mac" role="img" aria-label="Rajz a macOS figyelmeztetéséről, „Rookparcel” nem lett megnyitva, a gombok: Áthelyezés a Kukába és Kész. A Kész ki van emelve.">
+              <div class="mock-title">A(z) „Rookparcel” nem lett megnyitva</div>
+              <p class="mock-text">Az Apple nem tudta ellenőrizni, hogy a(z) „Rookparcel” mentes-e a Macet károsító vagy az adatvédelmet sértő kártevőktől.</p>
+              <div class="mock-btns"><span class="mock-btn">Áthelyezés a Kukába</span><span class="mock-btn press">Kész</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Rendszerbeállítások: Megnyitás mindenképp</h4>
+            <p>Nyissa meg az Apple menüből a <strong>Rendszerbeállítások</strong> alkalmazást, és kattintson az oldalsávon az <strong>Adatvédelem és biztonság</strong> elemre. Görgessen le a <strong>Biztonság</strong> részhez, és kattintson a <strong>Megnyitás mindenképp</strong> gombra a Rookparcelről szóló sor mellett. A gomb a 2. lépés után körülbelül egy óráig ott van; ha eltűnt, ismételje meg a 2. lépést.</p>
+            <div class="mock" role="img" aria-label="Rajz a Rendszerbeállítások Adatvédelem és biztonság oldalának Biztonság részéről: egy sor, amely szerint a Rookparcelt blokkolták a Mac védelme érdekében, és a Megnyitás mindenképp gomb, kiemelve.">
+              <div class="mock-bar">Adatvédelem és biztonság</div>
+              <div class="mock-title">Biztonság</div>
+              <div class="mock-row"><p class="mock-text">A(z) „Rookparcel” blokkolva lett a Mac védelme érdekében.</p><span class="mock-btn press">Megnyitás mindenképp</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Erősítse meg</h4>
+            <p>A következő kérdésben kattintson a <strong>Megnyitás mindenképp</strong> gombra, majd adja meg a jelszavát, vagy használja a Touch ID-t. A Rookparcel elindul, és ezentúl dupla kattintással nyílik meg.</p>
+            <div class="mock mock-mac" role="img" aria-label="Rajz a macOS kérdéséről, Megnyitja a „Rookparcel” alkalmazást?, a gombok: Megnyitás mindenképp (kiemelve), Áthelyezés a Kukába és Kész.">
+              <div class="mock-title">Megnyitja a(z) „Rookparcel” alkalmazást?</div>
+              <p class="mock-text">Az Apple nem tudja ellenőrizni, hogy mentes-e a kártevőktől.</p>
+              <div class="mock-btns"><span class="mock-btn press">Megnyitás mindenképp</span><span class="mock-btn">Áthelyezés a Kukába</span><span class="mock-btn">Kész</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">5</span> Helyi hálózat</h4>
+            <p>A macOS megkérdezheti, hogy a Rookparcel megtalálhatja-e az eszközöket a helyi hálózaton. Az <strong>Engedélyezés</strong> a helyi partnerkereséshez és a router egy portjának megnyitásához kell; a Rookparcel nélküle is működik.</p>
+            <div class="mock mock-mac" role="img" aria-label="Rajz a macOS kérdéséről, hogy a Rookparcel megtalálhatja-e az eszközöket a helyi hálózatokon, a gombok: Ne engedélyezze és Engedélyezés.">
+              <div class="mock-title">Engedélyezi, hogy a(z) „Rookparcel” eszközöket találjon a helyi hálózatokon?</div>
+              <div class="mock-btns"><span class="mock-btn">Ne engedélyezze</span><span class="mock-btn press">Engedélyezés</span></div>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="guide-path" id="macos-older" aria-labelledby="macos-older-h">
+        <h3 id="macos-older-h">macOS 11–14</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Másolja az alkalmazást az Alkalmazások mappába</h4>
+            <p>Nyissa meg a <code>Rookparcel-…-macos.dmg</code> fájlt a <a href="download.html#macos">Letöltés oldalról</a>, és húzza a <code>Rookparcel.app</code> fájlt az ablakában lévő <strong>Alkalmazások</strong> mappára.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Control-kattintás, majd Megnyitás</h4>
+            <p>A dupla kattintás csak olyan figyelmeztetést mutat, amelyből nincs tovább. Ehelyett az Alkalmazások mappában tartsa nyomva a <kbd>Control</kbd> billentyűt, és kattintson a <strong>Rookparcel</strong> alkalmazásra (vagy kattintson rá a jobb gombbal), majd válassza a menü <strong>Megnyitás</strong> parancsát.</p>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Megnyitás</h4>
+            <p>Ezúttal a figyelmeztetésen van <strong>Megnyitás</strong> gomb. Kattintson rá. A Rookparcel elindul, és ezentúl dupla kattintással nyílik meg.</p>
+            <div class="mock mock-mac" role="img" aria-label="Rajz a macOS figyelmeztetéséről, hogy a Rookparcel fejlesztője nem ellenőrizhető, a gombok: Áthelyezés a Kukába, Megnyitás (kiemelve) és Mégsem.">
+              <div class="mock-title">A macOS nem tudja ellenőrizni a(z) „Rookparcel” fejlesztőjét. Biztosan megnyitja?</div>
+              <div class="mock-btns"><span class="mock-btn">Áthelyezés a Kukába</span><span class="mock-btn press">Megnyitás</span><span class="mock-btn">Mégsem</span></div>
+            </div>
+          </li>
+          <li>
+            <h4><span class="num">4</span> Ha nincs Megnyitás gomb</h4>
+            <p>Nyissa meg a <strong>Rendszerbeállítások</strong> alkalmazást (macOS 11-en és 12-n Rendszerprioritások) <strong>&gt; Adatvédelem és biztonság</strong>, és kattintson a <strong>Megnyitás mindenképp</strong> gombra, vagy használja <a href="#macos-terminal">a Terminált</a>.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="guide-path" id="macos-terminal" aria-labelledby="macos-terminal-h">
+        <h3 id="macos-terminal-h">A Terminállal, vagy ha a macOS azt írja: „sérült”</h3>
+        <ol class="guide-steps">
+          <li>
+            <h4><span class="num">1</span> Másolja az alkalmazást az Alkalmazások mappába</h4>
+            <p>Nyissa meg a <code>Rookparcel-…-macos.dmg</code> fájlt, és húzza a <code>Rookparcel.app</code> fájlt az ablakában lévő <strong>Alkalmazások</strong> mappára.</p>
+          </li>
+          <li>
+            <h4><span class="num">2</span> Távolítsa el a letöltésjelet</h4>
+            <p>Nyissa meg a <strong>Terminál</strong> alkalmazást (Alkalmazások &gt; Segédprogramok), illessze be ezt a sort, és nyomja meg a <kbd>Return</kbd> billentyűt:</p>
+            <pre class="cmd"><code>xattr -dr com.apple.quarantine /Applications/Rookparcel.app</code></pre>
+            <p>Eltávolítja az „internetről letöltve” jelet erről az egy alkalmazásról. Ha sikerült, nem ír ki semmit.</p>
+          </li>
+          <li>
+            <h4><span class="num">3</span> Nyissa meg</h4>
+            <p>Kattintson duplán a <strong>Rookparcel</strong> alkalmazásra az Alkalmazások mappában. Figyelmeztetés nélkül elindul. A „A(z) Rookparcel sérült, ezért nem nyitható meg” ugyanez a tiltás más szavakkal; ez a parancs azt is feloldja.</p>
+          </li>
+        </ol>
+      </section>
+    </section>
+
+    <section class="section" id="after" aria-labelledby="after-h">
+      <h2 id="after-h">Az első indítás után</h2>
+      <ul>
+        <li>A Beállítási útmutató magától megnyílik: kipróbálja a kapcsolatát, és sebességbeállításokat választ. Hogy hol tárolódnak a beállítások és a torrentek, azt a <a href="faq.html#settings">GYIK</a> írja le.</li>
+        <li>A képernyő nélküli kiszolgálón a <code>rookparcel-nox</code> fut a webes felülettel: <a href="download.html#headless">Képernyő nélkül</a>.</li>
+        <li>Újabb verziók: <a href="download.html#updating">Frissítés</a>. Elakadt? Nézze meg a <a href="faq.html">GYIK</a>-ot, vagy <a href="https://github.com/Balls0fSteel/Rookparcel/issues">jelentsen egy hibát</a>.</li>
+      </ul>
+    </section>
+  </div>
+</main>
+
+<footer class="statusbar">
+  <div class="wrap">
+    <ul>
+      <li>Legújabb: <!-- build:latest-version --><a href="https://github.com/Balls0fSteel/Rookparcel/releases">Kiadások</a><!-- /build:latest-version --></li>
+      <li><a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial 1.0.0</a></li>
+      <li>© 2026 <a href="https://dukecorp1996.x35.in/">DukeCorp1996</a></li>
+      <li class="grow"><a href="https://github.com/Balls0fSteel/Rookparcel/issues">Hibabejelentés</a></li>
+    </ul>
+    <p>A Rookparcelnek nincs köze a µTorrenthez, a BitTorrent, Inc.-hez, a libtorrenthez és a qBittorrenthez. Ez az oldal nem állít be sütiket, és nem tölt be semmit más oldalakról.</p>
+  </div>
+</footer>
+</body>
+</html>

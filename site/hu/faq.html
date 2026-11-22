@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rookparcel GYIK</title>
+<meta name="description" content="Kérdések a Rookparcelről: a licenc közérthetően, hol vannak a beállítások, hordozható mód, nyelvek, távoli mód és a webes felület, torrentkeresés, Sonarr és Radarr, adatvédelem és a frissítésellenőrzés.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#14233d">
+<link rel="icon" type="image/png" sizes="32x32" href="../img/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="../img/icon-16.png">
+<link rel="apple-touch-icon" href="../img/icon-256.png">
+<link rel="stylesheet" href="../css/style.css">
+<!-- build:alternates --><!-- /build:alternates -->
+</head>
+<body>
+<a class="skip" href="#main">Ugrás a tartalomra</a>
+<header class="topbar">
+  <div class="wrap topbar-in">
+    <a class="brand" href="./"><img src="../img/icon-32.png" srcset="../img/icon-64.png 2x" width="32" height="32" alt=""> Rookparcel</a>
+    <nav aria-label="Főmenü">
+      <ul class="toolbar">
+        <li><a href="download.html"><svg class="ico ico-teal" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-download"/></svg>Letöltés</a></li>
+        <li><a href="../news.html" hreflang="en"><svg class="ico ico-purple" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-rss"/></svg>Hírek</a></li>
+        <li><a href="faq.html" aria-current="page"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-help"/></svg>GYIK</a></li>
+        <li><a href="../benchmarks.html" hreflang="en"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-speed"/></svg>Teljesítménymérések</a></li>
+        <li><a href="docs.html"><svg class="ico ico-amber" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-files"/></svg>Dokumentáció</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel/wiki/Kezd%C5%91lap"><svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-general"/></svg>Útmutató</a></li>
+        <li><a href="donate.html"><svg class="ico ico-orange" aria-hidden="true" focusable="false"><use href="../img/icons.svg#i-heart"/></svg>Támogatás</a></li>
+        <li><a class="ext" href="https://github.com/Balls0fSteel/Rookparcel">GitHub</a></li>
+      </ul>
+    </nav>
+    <!-- build:langs --><!-- /build:langs -->
+  </div>
+</header>
+
+<main id="main">
+  <div class="page-head">
+    <div class="wrap narrow">
+      <h1>Kérdések és válaszok</h1>
+      <p>A Rookparcelről, a licencéről, a beállításairól és az adatvédelemről.</p>
+    </div>
+  </div>
+
+  <div class="wrap narrow">
+    <nav class="toc" aria-labelledby="toc-h">
+      <h2 id="toc-h">Ezen az oldalon</h2>
+      <ol>
+        <li><a href="#what">Mi a Rookparcel?</a></li>
+        <li><a href="#ready">Használatra kész?</a></li>
+        <li><a href="#license">Ingyenes? Mit engedélyez a licenc?</a></li>
+        <li><a href="#settings">Hol vannak a beállításaim? Mi a hordozható mód és a profil?</a></li>
+        <li><a href="#languages">Milyen nyelveken beszél?</a></li>
+        <li><a href="#remote">Hogyan működik a webes felület és a távoli mód?</a></li>
+        <li><a href="#search">Hogyan keresek torrenteket?</a></li>
+        <li><a href="#arr">Használhatja a Sonarr, a Radarr vagy a Prowlarr a Rookparcelt?</a></li>
+        <li><a href="#privacy">Mit küld a Rookparcel, és kinek?</a></li>
+        <li><a href="#private-trackers">Használhatom privát trackereken?</a></li>
+        <li><a href="#warnings">Miért figyelmeztet a Windows és a macOS?</a></li>
+        <li><a href="#affiliation">Köze van a µTorrenthez vagy a qBittorrenthez?</a></li>
+        <li><a href="#bugs">Hogyan jelentek hibát?</a></li>
+      </ol>
+    </nav>
+
+    <section class="qa" id="what" aria-labelledby="what-h">
+      <h2 id="what-h">Mi a Rookparcel?</h2>
+      <p>Karcsú BitTorrent-kliens a µTorrent 2.2.1 szellemében: kicsi, natív programok, alacsony memória- és processzorhasználat, és egy lista, amely több tízezer torrenttel is gyors marad.</p>
+      <p>Négy program van: a <code>rookparcel</code>, a natív Windows-felület; a <code>Rookparcel.app</code>, a natív macOS-felület; a <code>rookparcel-gtk</code>, a GTK 4-es felület Linuxra és BSD-re; és a <code>rookparcel-nox</code>, egy képernyő nélküli démon saját webes felülettel, minden platformra. A motor a libtorrent-rasterbar 2.0.11 saját Rust-portunk: a libtorrent kódja a mérvadó előkép, de belőle semmit sem linkelünk.</p>
+      <p>A Rookparcelt a <a href="https://dukecorp1996.x35.in/">DukeCorp1996</a> készíti. A forráskód a <a href="https://github.com/Balls0fSteel/Rookparcel">GitHubon</a> van.</p>
+    </section>
+
+    <section class="qa" id="ready" aria-labelledby="ready-h">
+      <h2 id="ready-h">Használatra kész?</h2>
+      <p>Nagyrészt igen. Az 1.0.1 volt az első stabil kiadás, és a beállítások és a torrentek verzióról verzióra átmennek. De eddig főleg a készítője használta, néhány párbeszédablakot és beállítást keveset próbáltak ki, ezért a fontos dolgairól tartson másolatot máshol is, és kérjük, jelezze, ha valami elromlik.</p>
+      <p>Hogy az egyes kiadásokban mi változott, azt a <a href="../news.html" hreflang="en">Hírek</a> oldal mutatja (angolul). Minden kiadás jegyzete felsorolja az ismert korlátozásait, és a <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/PLAN.md">PLAN.md</a> tartalmazza, mi van még ellenőrizetlenül.</p>
+    </section>
+
+    <section class="qa" id="license" aria-labelledby="license-h">
+      <h2 id="license-h">Ingyenes? Mit engedélyez a licenc?</h2>
+      <p>A Rookparcel <strong>nem kereskedelmi</strong> célra ingyenes, a <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial License 1.0.0</a> alapján. Közérthetően:</p>
+      <ul>
+        <li><strong>Szabad</strong> személyes használatra, tanulmányokhoz, hobbiprojektekhez, valamint jótékonysági szervezetekben, iskolákban, kutatásban és közintézményekben használni, díjmentesen.</li>
+        <li><strong>Szabad</strong> megosztani és módosítani, ugyanezen feltételekkel, a licencet és a szerzői jogi közleményt minden másolat mellett megtartva.</li>
+        <li>A <strong>kereskedelmi használathoz</strong> külön engedély kell a DukeCorp1996-tól.</li>
+      </ul>
+      <p>Ezért a Rookparcel forrása hozzáférhető, de nem nyílt forráskódú az OSI értelmében; ezért nem csomagolják be a Linux-disztribúciók sem, és a saját AppImage-ei, a Flatpak és a tarballok a beszerzés útjai. A libtorrentből átvett kód a libtorrent BSD-3-Clause licence szerint is elérhető marad (<a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/THIRD-PARTY-NOTICES.md">harmadik felek közleményei</a>).</p>
+      <p>Ez összefoglaló; a licenc szövege a mérvadó.</p>
+    </section>
+
+    <section class="qa" id="settings" aria-labelledby="settings-h">
+      <h2 id="settings-h">Hol vannak a beállításaim? Mi a hordozható mód és a profil?</h2>
+      <table class="listview plain">
+        <caption class="vh">Hol tárolja az egyes program a beállításait és a torrentjeit</caption>
+        <thead><tr><th scope="col">Program</th><th scope="col">Beállítások és torrentek</th></tr></thead>
+        <tbody>
+          <tr><td>Windows-felület</td><td><code>%APPDATA%\Rookparcel</code></td></tr>
+          <tr><td>Hordozható mód, bármely platformon</td><td>A program mappája (lásd alább)</td></tr>
+          <tr><td>GTK-felület Linuxon és BSD-n</td><td>A beállítások a <code>~/.config/rookparcel/gtk</code>, a torrentek a <code>~/.local/share/rookparcel/gtk</code> mappában (vagy az <code>$XDG_CONFIG_HOME</code> és <code>$XDG_DATA_HOME</code> alatt)</td></tr>
+          <tr><td>GTK-felület Flatpakként</td><td>Ugyanez, a <code>~/.var/app/io.github.balls0fsteel.Rookparcel/</code> alatt (<code>config/</code> és <code>data/</code>)</td></tr>
+          <tr><td>macOS-felület</td><td><code>~/Library/Application Support/Rookparcel/mac</code> (a régebbi GTK-s változat itt a <code>gtk</code> nevet használta; a natív alkalmazás első indításakor átnevezi <code>mac</code>-re)</td></tr>
+          <tr><td><code>rookparcel-nox</code></td><td>Egy <code>nox</code> mappa ugyanazokon a helyeken: <code>%APPDATA%\Rookparcel\nox</code>, <code>~/.config/rookparcel/nox</code> és <code>~/.local/share/rookparcel/nox</code>, illetve <code>~/Library/Application Support/Rookparcel/nox</code>; szolgáltatásként lásd: <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/DAEMON.md#files">docs/DAEMON.md</a></td></tr>
+        </tbody>
+      </table>
+      <p><strong>Hordozható mód</strong>: tegyen egy üres, <code>rookparcel.ini</code> nevű fájlt a program mellé, és a Rookparcel a beállításait és a torrentjeit ebben a mappában tartja, ahogy a µTorrent tette: Windowson a <code>rookparcel.exe</code> mellett, Linuxon és BSD-n a <code>rookparcel-gtk</code> vagy az <code>.AppImage</code> fájl mellett, Macen a <code>Rookparcel.app</code> mellett (a Flatpakban nem). A <code>rookparcel-nox</code> ugyanezt a szabályt követi, egy ottani <code>nox</code> mappában. Az első indításkor a mappa <code>Downloads</code> almappájába tölt le, és a mappán belüli útvonalakat a mappához képest relatívan tárolja, így az egész mappa lehet egy pendrive-on, vagy átvihető másik számítógépre, és a torrentek újraellenőrzés nélkül folytatódnak. Az ezzel a verzióval írt hordozható mappához ez vagy egy későbbi verzió kell.</p>
+      <p><strong>Profilok</strong>: indítson egy programot <code>--profile work</code> kapcsolóval (vagy használja a Fájl &gt; Profilok menüt), és külön Rookparcel fut a saját beállításaival, torrentjeivel, figyelőportjával és ablakával, a megszokott mellett: az egyik VPN mögött, egy másik privát trackerekhez, egy harmadik egy új beállítás kipróbálásához. Minden profil a fenti mappákon belül, a <code>profiles/work</code> alatt él. A <code>.torrent</code> és <code>magnet:</code> társítások egyszerre egy profilhoz tartoznak, ahhoz, amelyiknél bejelölte őket. A <code>rookparcel-nox --profile work</code> ugyanígy működik, saját Windows-szolgáltatással vagy <code>rookparcel-nox@work</code> systemd-egységgel; lásd: <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/DAEMON.md#profiles">docs/DAEMON.md</a>.</p>
+    </section>
+
+    <section class="qa" id="languages" aria-labelledby="languages-h">
+      <h2 id="languages-h">Milyen nyelveken beszél?</h2>
+      <p>Angolul és még 34 nyelven: arabul, bolgárul, katalánul, kínaiul (egyszerűsített és hagyományos), horvátul, csehül, dánul, hollandul, finnül, franciául, németül, görögül, héberül, magyarul, indonézül, olaszul, japánul, koreaiul, norvég bokmålul, perzsául, lengyelül, portugálul (brazil és portugáliai), románul, oroszul, szerbül, szlovákul, spanyolul, svédül, thaiul, törökül, ukránul és vietnamiul. Az arab, a héber és a perzsa jobbról balra író elrendezést használ.</p>
+      <p>Minden nyelv be van építve minden programba; nincs letölthető nyelvi fájl. A Rookparcel alapból a rendszer nyelvét követi; másikat a Tulajdonságok &gt; Általános &gt; „Felület” alatt választhat, a grafikus felületeken és a webes felületen egyaránt.</p>
+      <p>A fordítások gépiek, és még senki sem nézte át őket. Ha a magyar szöveg furcsán hangzik, kérjük, <a href="https://github.com/Balls0fSteel/Rookparcel/issues">nyisson egy hibajegyet</a> a javítással. A fordítók újraépítés nélkül is kipróbálhatnak egy táblát: a <code>ROOKPARCEL_LANG=file.lng</code> betölti.</p>
+    </section>
+
+    <section class="qa" id="remote" aria-labelledby="remote-h">
+      <h2 id="remote-h">Hogyan működik a webes felület és a távoli mód?</h2>
+      <p>A <code>rookparcel-nox</code> a képernyő nélküli démon. A <code>--webui</code> kapcsolóval saját webes felületet szolgál ki: a µTorrent 2.2.1 főablakát böngészőben, lekérdezés helyett kiszolgálói értesítésekkel, billentyűparancsokkal, sötét móddal és telefonokra szabott elrendezéssel.</p>
+      <pre class="cmd"><code>rookparcel-nox run --webui 8080 --webui-pass PASS</code></pre>
+      <p>Ez csak a <code>127.0.0.1</code> címen figyel; nyissa meg a <code>http://127.0.0.1:8080</code> címet, és jelentkezzen be <code>admin</code> néven. Más gépekről való használathoz adjon meg címet (<code>--webui 0.0.0.0:8443</code>), és szolgálja ki HTTPS-en a <code>--webui-https</code> kapcsolóval, amely az első használatkor önaláírt tanúsítványt készít; hasonlítsa össze a böngészője által mutatott ujjlenyomatot a démon által kiírt <code>certificate SHA-256</code> sorral.</p>
+      <p><strong>A Windows-felületről</strong> (az 1.1.7-től): a Tulajdonságok &gt; Webes felület ugyanezt az oldalt szolgálja ki magából a <code>rookparcel.exe</code>-ből, az adott ablak torrentjei fölött, ahogy a µTorrent tette. Jelölje be a Webes felület bekapcsolása négyzetet, adjon meg jelszót, és kattintson az OK gombra; az oldal mutatja az URL-t (alapból <code>http://127.0.0.1:8080/</code>). A „Kapcsolatok engedélyezése más gépekről” minden címen figyel (engedje át a portot a tűzfalon), a „HTTPS használata” pedig önaláírt tanúsítványt készít. A böngészőben módosított címkék és beállítások megjelennek az ablakban, és fordítva is. Az 1.1.17-től az oldal RSS letöltője az ablak saját csatornáit és szűrőit szerkeszti; az alternatív sebességkorlátok az ablakban maradnak. A GTK-felületnek még nincs ilyen oldala.</p>
+      <p><strong>Távoli mód:</strong> bármelyik asztali felület vezérelhet egy másik gépen futó <code>rookparcel-nox</code>-ot, ugyanazon a porton keresztül. Válassza a Fájl &gt; Csatlakozás távoli géphez... parancsot, vagy indítsa a felületet a <code>--remote</code> kapcsolóval, és adja meg a gépet, a portot, a bejelentkezést, és hogy használjon-e HTTPS-t. A rendszer által nem megbízhatónak tartott tanúsítványt az ujjlenyomatával mutatja, és megjegyzi, miután elfogadta. Az ablak ezután a távoli démon torrentjein dolgozik; a jelszót soha nem tárolja.</p>
+      <p>Ugyanez a port a qBittorrent Web API egy részhalmazát is kiszolgálja, a qBittorrenthez írt eszközöknek (például a Sonarrnak, a Radarrnak vagy a Prowlarrnak). Ez csak részhalmaz, ezért nem minden hívás érhető el. A démon szolgáltatásként való futtatásáról: <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/DAEMON.md">docs/DAEMON.md</a>; a tervezésről: <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/WEBUI.md">docs/WEBUI.md</a>.</p>
+    </section>
+
+    <section class="qa" id="search" aria-labelledby="search-h">
+      <h2 id="search-h">Hogyan keresek torrenteket?</h2>
+      <p>Az 1.1.17-től egy Ön által futtatott Prowlarron vagy Jacketten keresztül. A Rookparcel Torznab protokollal kérdezi őket, ez a közös keresési API; nincsenek saját keresőbővítményei vagy oldalkaparói, ezért nem romlik el semmi, ha egy oldal megváltozik. A keresés működik a Windows-felületen, a GTK-felületen és a webes felületen.</p>
+      <p><strong>Nincs Prowlarr vagy Jackett?</strong> Az 1.1.59-től a Források kezelése ablakban van egy „Keresősegéd letöltése (Jackett)...” gomb: a Rookparcel letölti Önnek a Jackett saját kiadását, a saját mappájában tartja, csak amíg keres, addig futtatja, és Ön jelölheti be a nyilvános oldalakat, amelyekben keres. A lépésről lépésre útmutató képernyőképekkel: <a href="https://github.com/Balls0fSteel/Rookparcel/wiki/Torrentek-keres%C3%A9se-Windowson">Torrentek keresése Windowson</a>.</p>
+      <p>Saját Prowlarral vagy Jacketttel:</p>
+      <ol>
+        <li>Szerezzen egy Torznab URL-t és az API-kulcsot. A Prowlarrban másolja ki egy indexelő Torznab-csatornájának URL-jét, az API-kulcsot pedig a Settings &gt; General oldalról. A Jacketten az <code>all</code> indexelő Torznab URL-jét és a Jackett API-kulcsát használja.</li>
+        <li>Nyissa meg a Források kezelése ablakot a keresőmező melletti menüből (Windowson a mellette lévő nyíllal; a webes felületen Keresés &gt; Források kezelése), adja hozzá a forrást, és nyomja meg a Teszt gombot.</li>
+        <li>Válasszon egy forrást vagy az Összes forrást, írjon a keresőmezőbe, és nyomja meg az Entert. Az eredményeket rendezheti, és hozzáadhatja közülük, amelyiket szeretné.</li>
+      </ol>
+      <p>Az API-kulcsokat Windowson titkosítva tároljuk, és soha többé nem jelennek meg. <strong>Proxy:</strong> az ezen a számítógépen vagy a helyi hálózaton lévő forrást közvetlenül éri el; a nyilvánosat a proxyn keresztül, ha beállított ilyet (Tulajdonságok &gt; Kapcsolat).</p>
+    </section>
+
+    <section class="qa" id="arr" aria-labelledby="arr-h">
+      <h2 id="arr-h">Használhatja a Sonarr, a Radarr vagy a Prowlarr a Rookparcelt?</h2>
+      <p>Igen, qBittorrent letöltési kliensként: kapcsolja be a webes felületet (lásd fent), majd a Sonarrban, a Radarrban vagy a Prowlarrban adjon hozzá qBittorrent típusú letöltési klienst a Rookparcel gépével, portjával, felhasználónevével és jelszavával. Ez működik a <code>rookparcel-nox</code>-szal és a Windows-felület webes felületével is. A kategóriák a Rookparcel címkéi, és a mappa nélkül hozzáadott torrent a kategóriája mappájába kerül. A címkéket (tag) elfogadja, de nem őrzi meg.</p>
+      <p><strong>API-kulcs és alhálózati engedélylista</strong> (az 1.1.17-től): a webes felület Tulajdonságok &gt; Hitelesítés oldalán van egy nem kötelező API-kulcs, amelyet az alkalmazások <code>Authorization: Bearer</code> fejlécként küldenek, és egy nem kötelező lista azokról az alhálózatokról, amelyek kéréseihez nem kell bejelentkezés. Mindkettő alapból ki van kapcsolva, és a módosításukhoz a jelenlegi jelszó kell. Az engedélylista soha nem vonatkozik a proxyn át érkező kérésekre.</p>
+      <p><strong>Gépnevek, mint Dockerben:</strong> a DNS-rebinding támadások kivédésére a webes felület csak azokra a kérésekre válaszol, amelyeket IP-címre, a <code>localhost</code> névre vagy egy Ön által engedélyezett névre címeztek. Ha a másik program gépnévvel éri el a Rookparcelt (<code>http://rookparcel:8080</code>, <code>http://nas.lan:8080</code>), a kapcsolatpróbája „unexpected Host header” hibával elbukik. Nyissa meg a webes felületet IP-címmel, majd adja hozzá a nevet a Tulajdonságok &gt; Webes felület &gt; Kiszolgálótartományok mezőben (például <code>rookparcel;*.lan</code>); az 1.1.17-től a Windows-felület saját Tulajdonságok &gt; Webes felület oldalán ugyanez a mező megvan. Vagy adja meg a másik programnak inkább az IP-címet.</p>
+      <p>A <strong>Remove Completed</strong> (az 1.1.7-től) eltávolítja a letöltést, miután a Rookparcel megállította a megosztási céljánál (Tulajdonságok &gt; Sorba állítás &gt; Megosztási cél, vagy az indexelő által kért arány és idő). Az a cél, amely inkább a feltöltési sebességet korlátozza, a torrentet megosztásban tartja, ezért semmi sem törlődik.</p>
+    </section>
+
+    <section class="qa" id="privacy" aria-labelledby="privacy-h">
+      <h2 id="privacy-h">Mit küld a Rookparcel, és kinek?</h2>
+      <p><strong>A frissítésellenőrzés.</strong> Az 1.0.1-től a Rookparcel induláskor, majd 12 óránként megnézi, van-e újabb kiadás. Egy kis szövegfájlt tölt le, a <code>https://balls0fsteel.github.io/Rookparcel/update.txt</code> címről, amely megnevezi a legújabb verziókat, és összeveti őket a sajátjával. A kérés csak a <code>Rookparcel/&lt;version&gt;</code> User-Agentet hordozza: nincs azonosító, nincsenek beállítások, semmi a torrentjeiről. Mint minden webes kérésnél, a GitHub, amely ezt a webhelyet tárolja, látja az IP-címét. Ha megjelent újabb verzió, a Rookparcel egyszer rákérdez, és megjegyzést tart az állapotsorában; az Ön igenje nélkül semmit sem tölt le. A Windows-telepítővel telepített Rookparcel ezután le tudja kérni a GitHubról az új telepítőt és a kiadás <code>SHA256SUMS</code> fájlját, ellenőrzi a fájlt, bezár, és önmaga fölé telepít; a hordozható példány és a GTK-felület a kiadás oldalát nyitja meg.</p>
+      <p>Az ellenőrzés kikapcsolása: Tulajdonságok &gt; Általános &gt; Adatvédelem. Az 1.1.17-től a <code>rookparcel-nox</code> is ellenőriz, kiír egy sort, és hivatkozást mutat a webes felületén, ha újabb verzió van; indítsa a <code>--no-update-check</code> kapcsolóval, vagy kapcsolja ki a webes felület Tulajdonságok &gt; Általános &gt; Adatvédelem oldalán.</p>
+      <p>A <strong>torrentkeresés</strong> csak az Ön által hozzáadott Prowlarr- vagy Jackett-forrásokat kérdezi. A nyilvános forrást a proxyján át éri el, ha beállított ilyet; a saját gépén vagy hálózatán lévőt közvetlenül.</p>
+      <p><strong>Maga a BitTorrent.</strong> Mint minden BitTorrent-kliens, a Rookparcel is közli a torrentjei trackereivel, a DHT-val és a partnerekkel az IP-címét, és ők láthatják, mit tölt le és oszt meg. Ezt a forgalmat egy proxy (Tulajdonságok &gt; Kapcsolat) is továbbíthatja.</p>
+      <p><strong>Ez a webhely</strong> nem használ sütiket, nincs benne analitika vagy követő, és nem tölt be semmit más webhelyekről. A GitHub Pages szolgálja ki, a <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub adatvédelmi nyilatkozata</a> szerint.</p>
+    </section>
+
+    <section class="qa" id="private-trackers" aria-labelledby="private-trackers-h">
+      <h2 id="private-trackers-h">Használhatom privát trackereken?</h2>
+      <p>Még nem. A privát trackerek csak az általuk engedélyezett klienseket fogadják el, és a Rookparcel kliensazonosítója, az <code>RP</code>, még sehol sincs engedélyezve. A Rookparcel mindig őszintén Rookparcelként jelentkezik (soha nem kölcsönzi más kliens azonosítóját), ezért az ottani használata bajba sodorhatja a fiókot. Az azonosító bejegyzése a klienslistákba még hátravan.</p>
+    </section>
+
+    <section class="qa" id="warnings" aria-labelledby="warnings-h">
+      <h2 id="warnings-h">Miért figyelmeztet a Windows és a macOS?</h2>
+      <p>A programok nincsenek kódaláírással ellátva. Ezért a Windows SmartScreen először ezt írja: „A Windows megvédte a számítógépet” (További információ &gt; Futtatás mindenképp), a macOS Gatekeeper pedig addig elutasítja az ad hoc aláírt alkalmazást, amíg egyszer engedélyt nem ad rá a Rendszerbeállítások &gt; Adatvédelem és biztonság alatt (Megnyitás mindenképp). A <a href="install.html">telepítési útmutató</a> megmutatja a lépéseket minden rendszerhez. Hogy a fájl az, amelyet közzétettek, az <a href="download.html#checksums">ellenőrző összegével</a> ellenőrizheti.</p>
+    </section>
+
+    <section class="qa" id="affiliation" aria-labelledby="affiliation-h">
+      <h2 id="affiliation-h">Köze van a µTorrenthez vagy a qBittorrenthez?</h2>
+      <p>Nincs. A Rookparcel független projekt, amelyet ezek egyike sem támogat, nem kapcsolódik hozzájuk, és nem tőlük származik:</p>
+      <ul>
+        <li><strong>µTorrent és BitTorrent, Inc.</strong> A Rookparcel a µTorrent 2.2.1 megjelenését és viselkedését alkotja újra, de nem használja sem a kódját, sem a grafikáját, sem a fordításait, sem a védjegyeit.</li>
+        <li><strong>libtorrent-rasterbar.</strong> A motor a libtorrent 2.0.11 portja, és megtartja a BSD-3-Clause licencét és a szerzői jogi közleményeit; a libtorrent és szerzőinek nevét nem használjuk a Rookparcel népszerűsítésére.</li>
+        <li><strong>qBittorrent.</strong> A Rookparcel nem tartalmaz qBittorrent-kódot, -grafikát vagy -webes felületet. A kompatibilis Web API a qBittorrent közzétett dokumentációját követi, hogy a meglévő eszközök beszélhessenek vele.</li>
+      </ul>
+      <p>A többi terméknév a tulajdonosaik védjegye, és csak e termékek azonosítására használjuk őket.</p>
+    </section>
+
+    <section class="qa" id="bugs" aria-labelledby="bugs-h">
+      <h2 id="bugs-h">Hogyan jelentek hibát?</h2>
+      <p>Nyisson egy <a href="https://github.com/Balls0fSteel/Rookparcel/issues">hibajegyet a GitHubon</a> a rendszerével, a letöltött fájllal és azzal, hogy mi történt. Összeomlás vagy elakadt torrent esetén segít a Napló lap vagy a <code>rookparcel-nox run --verbose</code> kimenete.</p>
+      <p>Kézikönyvet keres? Lásd a <a href="docs.html">Dokumentáció</a> oldalt; a rendes felhasználói útmutató egy későbbi verzióra van tervezve.</p>
+    </section>
+  </div>
+</main>
+
+<footer class="statusbar">
+  <div class="wrap">
+    <ul>
+      <li>Legújabb: <!-- build:latest-version --><a href="https://github.com/Balls0fSteel/Rookparcel/releases">Kiadások</a><!-- /build:latest-version --></li>
+      <li><a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/LICENSE.md">PolyForm Noncommercial 1.0.0</a></li>
+      <li>© 2026 <a href="https://dukecorp1996.x35.in/">DukeCorp1996</a></li>
+      <li class="grow"><a href="https://github.com/Balls0fSteel/Rookparcel/issues">Hibabejelentés</a></li>
+    </ul>
+    <p>A Rookparcelnek nincs köze a µTorrenthez, a BitTorrent, Inc.-hez, a libtorrenthez és a qBittorrenthez. Ez az oldal nem állít be sütiket, és nem tölt be semmit más oldalakról.</p>
+  </div>
+</footer>
+</body>
+</html>

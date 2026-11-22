@@ -1,8 +1,8 @@
 # The website
 
 <https://balls0fsteel.github.io/Rookparcel/> is Rookparcel's project site: what it is, the
-downloads of the newest release, a short changelog (News, with an Atom feed), questions and answers, and pointers to the documentation, until
-a user guide comes with a later version (PLAN.md, V2.0 goal 4). It also serves `update.txt`, the
+downloads of the newest release, a short changelog (News, with an Atom feed), questions and answers, and pointers to the documentation and the
+user guide (the [GitHub wiki](https://github.com/Balls0fSteel/Rookparcel/wiki), source in `docs/wiki`), in English, French, Spanish, German and Hungarian. It also serves `update.txt`, the
 file Rookparcel's update check reads.
 
 The pages are hand-written HTML and CSS in `site/`: no framework, no generator, no external
@@ -22,7 +22,7 @@ only) copies them to `_site/` and fills in the newest release from the GitHub re
 | `site/js/install.js` | The guide's chooser, on that page only: picks the visitor's system, shows one path and one step at a time (Back, Next, Show all steps), and follows the address's `#fragment`. Without it the page lists every path in full; nothing is stored |
 | `site/faq.html` | The license in plain words, settings and portable mode, languages, the Web UI and remote mode, torrent search, Sonarr and Radarr, privacy and the update check, private trackers |
 | `site/benchmarks.html` | Measurements beside other clients ([BENCHMARKS.md](BENCHMARKS.md)); its charts and tables between `<!-- bench:NAME -->` markers are written by `tools/bench/summarize.py RESULTS --fill site/benchmarks.html` |
-| `site/docs.html` | Links to the documents in the repository, a command-line summary |
+| `site/docs.html` | The user guide (the wiki, in five languages), links to the documents in the repository, a command-line summary |
 | `site/donate.html` | The donation page Help > Donate opens (`frontend::update::DONATE_URL`; the Web UI's button too). The ways to give are listed here only, so they change without a release; PayPal and GitHub Sponsors, each as a button and as its address. In every page's toolbar (Donate) and linked from the home page |
 | `site/404.html` | Served by Pages for any missing path; its `<base>` makes its links start at the site's root |
 | `site/css/style.css` | All styles: colour tokens for light and dark (`prefers-color-scheme`), layout down to 360 px |
@@ -40,6 +40,29 @@ icon PNGs>` to every page's favicon and `apple-touch-icon` links: browsers keep 
 page and ignore a changed file at the same URL, so only a new URL makes them show a new icon. Screenshots should stay small (a PNG
 of the window at 100 % scaling, run through an optimiser); the build gives every local PNG
 `<img>` without a size its `width` and `height`, so the page does not jump while it loads.
+
+## Languages
+
+English pages are at the root of `site/`; `site/fr/`, `es/`, `de/` and `hu/` hold translated
+copies of `index`, `download`, `install`, `faq`, `docs` and `donate` (News, Benchmarks and the
+404 page are English only, and the translated pages link them with `hreflang="en"`). A
+translated page is the English one with `lang="<code>"`, `../` in front of `css/`, `img/`, `js/`,
+`news.html`, `benchmarks.html` and `news.atom`, the toolbar's Guide pointing at that language's
+wiki home, and the same ids, classes, `data-*` attributes and build blocks. **When an English
+page changes, change its four copies too.**
+
+- `<!-- build:langs -->` (in the top bar) becomes the language list: the same page in each
+  language where it exists, else that language's home page. `<!-- build:alternates -->` (in
+  `<head>`) becomes `<link rel="alternate" hreflang>` for the languages that have the page.
+  `build.py`'s `LANGS` and `WIKI_HOME` list the languages.
+- The texts the build writes (download buttons, file tables, "Starting it", dates) go through
+  `t()`; `site/i18n/<code>.json` maps each English text to its translation, keeping `{name}`
+  marks and `<code>` parts. The build warns about a missing translation; `test_build.py`
+  checks that each table has exactly the texts `all_strings()` finds. A new `t("...")` in the
+  build needs a line in all four tables.
+- `install.js` takes its button texts from `data-back`, `data-next`, `data-all`, `data-one`,
+  `data-step` and `data-done` on `#guide` (English when absent).
+- UI names on the translated pages come from the app's `crates/frontend/lang/<code>.lng`.
 
 ## Previewing it
 

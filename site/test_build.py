@@ -430,6 +430,40 @@ class InstallGuide(unittest.TestCase):
         self.assertNotRegex(dmg, r'(src|href)="(?!https://balls0fsteel\.github\.io/Rookparcel/)')
 
 
+class Languages(unittest.TestCase):
+    def test_each_table_has_every_string_and_no_other(self):
+        keys = set(b.all_strings())
+        for code in b.LANGS:
+            if code == "en":
+                continue
+            table = b.load_strings(code)
+            self.assertEqual(sorted(keys - set(table)), [], f"site/i18n/{code}.json lacks these")
+            self.assertEqual(sorted(set(table) - keys), [], f"site/i18n/{code}.json: not used")
+
+    def test_translations_keep_the_marks(self):
+        for code in b.LANGS:
+            if code == "en":
+                continue
+            for key, text in b.load_strings(code).items():
+                self.assertEqual(sorted(re.findall(r"\{\w+\}", key)), sorted(re.findall(r"\{\w+\}", text)),
+                                 f"{code}: {key!r}")
+                self.assertEqual(key.count("<code>"), text.count("<code>"), f"{code}: {key!r}")
+
+    def test_t_formats_and_falls_back(self):
+        b.set_lang("en")
+        self.assertEqual(b.t("Published {date}", date="today"), "Published today")
+        b._lang.update(code="xx", table={"Name": "Nom"}, missing=set())
+        self.assertEqual(b.t("Name"), "Nom")
+        self.assertEqual(b.t("Size"), "Size")
+        self.assertEqual(b._lang["missing"], {"Size"})
+        b.set_lang("en")
+
+    def test_lang_of(self):
+        self.assertEqual(b.lang_of(Path("index.html")), "en")
+        self.assertEqual(b.lang_of(Path("fr/index.html")), "fr")
+        self.assertEqual(b.lang_of(Path("img/x.html")), "en")
+
+
 class WholeBuild(unittest.TestCase):
     def test_build_from_sample(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -467,6 +501,28 @@ class WholeBuild(unittest.TestCase):
             self.assertFalse((out / "testdata").exists())
             self.assertFalse(any(out.glob("test_*.py")))
             self.assertIn('<base href="/Rookparcel/">', (out / "404.html").read_text(encoding="utf-8"))
+
+            # the languages: each folder's pages, the menu and the translated blocks
+            self.assertIn('href="fr/download.html" hreflang="fr"',
+                          (out / "download.html").read_text(encoding="utf-8"))
+            self.assertIn('href="fr/index.html" hreflang="fr"',  # no French news page
+                          (out / "news.html").read_text(encoding="utf-8"))
+            for code in b.LANGS:
+                if code == "en":
+                    continue
+                for page in ("index.html", "download.html", "install.html", "faq.html",
+                             "docs.html", "donate.html"):
+                    text = (out / code / page).read_text(encoding="utf-8")
+                    self.assertIn(f'<html lang="{code}"', text, f"{code}/{page}")
+                    self.assertIn(f'href="../{page}" hreflang="en"', text, f"{code}/{page}")
+                    self.assertIn(f'href="../img/icon-32.png?v={stamp}"', text, f"{code}/{page}")
+                    self.assertIn(b.wiki_url(code), text, f"{code}/{page}")
+                index = (out / code / "index.html").read_text(encoding="utf-8")
+                self.assertIn(f'href="../news.html#{news[0].id}"', index, code)
+                b.set_lang(code)
+                self.assertIn(b.t("Which file do I need?"), index, code)
+                self.assertIn(b.t("Starting it"), (out / code / "download.html").read_text(encoding="utf-8"))
+                b.set_lang("en")
             # the main screenshot is added to site/img separately; nothing else may be missing
             self.assertEqual([w for w in warnings if "screenshot-windows.png" not in w], [])
 
