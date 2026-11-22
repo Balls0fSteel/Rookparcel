@@ -4,6 +4,10 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-22_210021_1795377621: the website's benchmarks now show the Hetzner run
+
+- **On the owner's word** ("update the benchmark on the site if you still have the VPS run results"): `site/benchmarks.html` filled with `summarize.py --fill` from the 2026-11-19 Hetzner CCX23 run, which replaces the 2026-11-11 VM run. The Rookparcel there was built from source (a 1.2.70 pre-release and the 1.2.69 tag), not a published tarball, and the page says so; 1.2.76 is not measured yet. Prose rechecked against the numbers: "Since 1.0.1" became "Against the previous release" (the older history points at BENCHMARKS.md), the method names the server, and a new limit says Rookparcel's download CPU depends on SHA extensions (about twice the others' on the Xeon run). Site tests pass.
+
 ## 2026-11-22_184404_1795369444: 1.2.76, the release review's fixes; release notes for 1.2.76
 
 - **Release review** of 1.2.71-1.2.75 (SECURITY-REVIEW.md "Release 1.2.76"; one fresh reviewer, findings checked here), nothing critical or high. **Medium, fixed:** 1.2.71 kept banned peers in the list for good, so peers banned from enough addresses (one IPv6 /64) could fill it and keep every new peer out; an entry banned for bad data is now the first a full list gives up, its IP staying banned. **Low, fixed:** Run Program's list knows `script`, `expect`, `forfiles`, `wmic`, editors, debuggers and `dc`; a Stop ends a requested check's place outside the queue, and a magnet without metadata takes none. Open: Run Program stays a list (environment variables would end the guessing).
