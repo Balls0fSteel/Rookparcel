@@ -3,7 +3,7 @@ from PIL import Image, ImageDraw, ImageFont
 import json, zipfile
 from collections import deque
 
-ROOT=Path(r"C:\Users\x\Documents\dev\foss\libretorrent")
+ROOT=Path(r"C:\dev\foss\libretorrent")
 BASE=ROOT/"docs/art/rookparcel-candidates-2026-11-05"
 OUT=BASE/"ico"
 OUT.mkdir(exist_ok=True)

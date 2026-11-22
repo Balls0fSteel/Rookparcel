@@ -13,7 +13,7 @@ param(
     [Parameter(Mandatory = $true)][string]$OutDir,
     [int]$DemoCount = 40,
     [string]$Desktop = 'AgentHidden',
-    [string]$RunHidden = 'L:\dev\tools\run_hidden\run_hidden.ps1',
+    [string]$RunHidden = 'C:\dev\tools\run_hidden\run_hidden.ps1',
     [switch]$SkipMenu,
     [switch]$ResetIni,  # truncate rookparcel.ini first, so the run starts from a fresh portable profile
     [string]$Language,  # with -ResetIni: the fresh ini says ui.language=<code>

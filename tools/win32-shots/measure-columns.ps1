@@ -17,7 +17,7 @@ param(
     [int]$FirstReadAfterSec = 3,
     [int]$SecondReadAfterSec = 3,
     [string]$Desktop = 'AgentHidden',
-    [string]$RunHidden = 'L:\dev\tools\run_hidden\run_hidden.ps1'
+    [string]$RunHidden = 'C:\dev\tools\run_hidden\run_hidden.ps1'
 )
 $ErrorActionPreference = 'Stop'
 (Get-Process -Id $PID).PriorityClass = 'BelowNormal'
