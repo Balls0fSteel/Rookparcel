@@ -412,3 +412,10 @@ SSH key and the server. `-SelfTest -Type cx23` checks that path first for a cent
 the `bench` user through sudo as a real run does. A full run took 3 h 30 min on a CCX23 (4
 dedicated AMD vCPUs), about €0.62 at €0.175 an hour; the default 6 h deadline is the cap. Numbers
 from different providers, or different days, do not compare: only the controls of the same run do.
+
+For the website, measure the published releases instead of builds: `-Published 1.2.76 -Controls
+1.2.69,1.2.46,1.2.29,1.1.40,1.0.1` runs `fetch.sh`, which downloads each version's Linux tarball
+from GitHub, checks it against that release's `SHA256SUMS` (PaTorrent's names up to 1.2.0) and
+puts the first version where `run.sh` expects `main`. No Rust is needed. If the fetch fails, the
+server uploads its log and deletes itself at once. Every extra Rookparcel version adds roughly
+25 minutes, so give a long run a matching `-DeadlineHours`.

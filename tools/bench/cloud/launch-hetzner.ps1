@@ -17,6 +17,9 @@ param(
     [string]$Location = 'fsn1',
     [string]$Image = 'ubuntu-26.04',
     [string[]]$Controls = @('v1.2.69'),
+    # measure published releases instead of building: this version (e.g. 1.2.76) against
+    # -Controls given as versions (1.2.69 1.0.1 ...), downloaded and checked by fetch.sh
+    [string]$Published,
     [double]$DeadlineHours = 6,
     [string]$RunName = "$(Get-Date -Format yyyy-MM-dd-HHmm)-hetzner-$Type",
     [string]$WorkDir = (Join-Path $env:TEMP "rookparcel-bench-$RunName"),
@@ -58,7 +61,7 @@ try {
     do { Start-Sleep 5; $s = (Invoke-Hcloud GET "/v1/servers/$($server.id)").server } while ($s.status -ne 'running')
     $ip = $s.public_net.ipv4.ip
     for ($i = 0; $i -lt 30; $i++) { ssh @ssh "root@$ip" true 2>$null; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 5 }
-    scp @ssh (Join-Path $here 'setup.sh') (Join-Path $here 'build.sh') (Join-Path $here 'run.sh') `
+    scp @ssh (Join-Path $here 'setup.sh') (Join-Path $here 'build.sh') (Join-Path $here 'fetch.sh') (Join-Path $here 'run.sh') `
         (Join-Path $here 'finish-hetzner.sh') "root@${ip}:/root/"
     if ($LASTEXITCODE) { throw 'scp failed' }
     # the env file goes over stdin: the values never appear on a command line or in cloud-init data
@@ -92,11 +95,19 @@ SSH_KEY_ID='$keyId'
         "self-test: server deleted: $gone; SSH key deleted: $(-not $keys); uploaded: $($files -join ' ')"
         return
     }
-    ssh @ssh "root@$ip" 'bash /root/setup.sh > /root/setup.log 2>&1; echo setup exit $?; cp /root/build.sh /root/run.sh /home/bench/ && chown bench:bench /home/bench/*.sh'
+    ssh @ssh "root@$ip" 'bash /root/setup.sh > /root/setup.log 2>&1; echo setup exit $?; cp /root/build.sh /root/fetch.sh /root/run.sh /home/bench/ && chown bench:bench /home/bench/*.sh'
     ssh @ssh "bench@$ip" 'sudo -n test -x /usr/local/sbin/bench-finish'
     if ($LASTEXITCODE) { 'WARNING: bench cannot run bench-finish; only the deadline will end this server' }
     $labels = ($Controls | ForEach-Object { $_ -replace '^v', '' }) -join ' '
-    ssh @ssh "bench@$ip" "bash ~/build.sh $($Controls -join ' ') > ~/build.log 2>&1; echo build exit `$?; grep -E 'rookparcel-nox|rustc' ~/build.log | grep -v '^+'"
+    if ($Published) {
+        ssh @ssh "bench@$ip" "bash ~/fetch.sh $Published $labels > ~/build.log 2>&1; r=`$?; echo fetch exit `$r; grep -E 'nox [0-9]|: OK' ~/build.log | grep -v '^+'; exit `$r"
+    } else {
+        ssh @ssh "bench@$ip" "bash ~/build.sh $($Controls -join ' ') > ~/build.log 2>&1; echo build exit `$?; grep -E 'rookparcel-nox|rustc' ~/build.log | grep -v '^+'"
+    }
+    if ($Published -and $LASTEXITCODE) {
+        ssh @ssh "root@$ip" '/usr/local/sbin/bench-finish fetch-failed'
+        throw "fetch.sh failed; build.log uploaded to https://$sHost/$RunName/, server deleting itself"
+    }
     ssh @ssh "bench@$ip" "mkdir -p ~/bench; nohup setsid bash ~/run.sh $labels > ~/bench/run.log 2>&1 < /dev/null & sleep 5; head -3 ~/bench/run.log"
     "started on $ip; results go to https://$sHost/$RunName/ when it ends"
 } catch {
