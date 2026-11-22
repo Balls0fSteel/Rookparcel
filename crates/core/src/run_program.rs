@@ -225,10 +225,13 @@ const SHELLS: &[&str] = &[
     "yash", "ash", "hush", "fish", "csh", "tcsh", "nu", "xonsh", "elvish", "osh", "ysh", "rc", "es", "ion",
 ];
 
-/// Programs that hand the rest of their line to a shell, whatever their options.
+/// Programs that hand the rest of their line to a shell, whatever their options, or run a
+/// string of it as code (`script -c`, `expect -c`, `forfiles /c`, `wmic ... create`, an
+/// editor's or debugger's commands, `dc`'s `!`): no code anywhere in their line.
 const RE_PARSE_LINE: &[&str] = &[
     "ssh", "slogin", "rsh", "rlogin", "plink", "mosh", "dbclient", "autossh", "mshta", "wt", "runas",
-    "parallel", "tmux",
+    "parallel", "tmux", "script", "expect", "forfiles", "wmic", "vi", "vim", "nvim", "gvim", "emacs", "gdb",
+    "lldb", "dc",
 ];
 
 /// Programs some rule here knows, so that none of the guesses for unknown ones applies.
@@ -1214,6 +1217,16 @@ mod tests {
             r#"su media -c "echo %N""#,
             r#"su -c "echo %N" media"#,
             r#"flock /tmp/lock -c "echo %N""#,
+            // programs that run a string as code (release review of 1.2.75)
+            r#"script -qc "notify-send %N" /dev/null"#,
+            r#"expect -c "spawn echo %N""#,
+            r#"forfiles /c "cmd /c echo %N""#,
+            r#"wmic process call create "cmd /c echo %N""#,
+            r#"vim -c "!echo %N""#,
+            r#"nvim --cmd "!echo %N""#,
+            r#"emacs --batch --eval "(shell-command \"echo %N\")""#,
+            r#"gdb -batch -ex "shell echo %N""#,
+            r#"dc -e "!echo %N""#,
             "watch notify-send %N",
             r#"watch -n 5 -x sh -c "echo %N""#,
             // WSL hands the line to the distribution's shell unless -e names the program

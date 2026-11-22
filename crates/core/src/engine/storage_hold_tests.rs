@@ -75,6 +75,14 @@ fn a_held_torrent_starts_when_its_path_is_back() {
         let t = e.torrent(id).unwrap();
         assert!(t.error.is_none() && t.storage.is_some(), "started again");
 
+        // a requested check runs outside the queue until it ends, and a stop ends it too
+        // (release review of 1.2.75: a check aborted by a stop kept the torrent past the limits)
+        e.user_recheck(id);
+        assert!(e.rechecks.contains(&id), "checking outside the queue");
+        e.set_flags(id, TorrentFlags::PAUSED, TorrentFlags::PAUSED);
+        assert!(!e.rechecks.contains(&id), "a stop gives the slot back");
+        e.set_flags(id, TorrentFlags::empty(), TorrentFlags::PAUSED);
+
         // a user Start (pause, resume) ends a hold too; Remove forgets it
         e.hold_for_storage(id, path.clone());
         e.set_flags(id, TorrentFlags::PAUSED, TorrentFlags::PAUSED);

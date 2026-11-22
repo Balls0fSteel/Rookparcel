@@ -2589,7 +2589,13 @@ impl Engine {
             t.error = None;
         }
         match (old.contains(TorrentFlags::PAUSED), new.contains(TorrentFlags::PAUSED)) {
-            (false, true) => self.alert(Alert::TorrentPaused { id }),
+            (false, true) => {
+                // a stop ends a requested check's hold on a queue slot
+                if self.rechecks.remove(&id) {
+                    self.needs_auto_manage = true;
+                }
+                self.alert(Alert::TorrentPaused { id });
+            }
             (true, false) => {
                 // the start checks again: still missing, it is held again (D79)
                 self.release_storage_hold(id);
@@ -2875,9 +2881,13 @@ impl Engine {
         if t.error.take().is_some() {
             t.status_dirty = true;
         }
+        // a magnet without metadata has nothing to check: no slot is held for it
+        let has_metadata = t.has_metadata();
         self.release_storage_hold(id);
-        self.rechecks.insert(id);
-        self.needs_auto_manage = true;
+        if has_metadata {
+            self.rechecks.insert(id);
+            self.needs_auto_manage = true;
+        }
         self.force_recheck(id);
         self.update_running(id);
     }

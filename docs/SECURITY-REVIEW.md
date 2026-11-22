@@ -287,6 +287,51 @@ only show a lower round trip, with the same effect as a zero delay.
   `qbittorrent_flags` are private behind a file-based entry. The new runs are one short local
   run each.
 
+## Release 1.2.76 (since v1.2.69)
+
+Date: 2026-11-22_184404_1795369444. Scope: `git diff 13d405d0..HEAD -- crates` (1.2.71-1.2.75); the code up to
+`13d405d0` (1.2.70) was read by the 2026-11-21 bug hunt ([BUGHUNT-2026-11-21.md](BUGHUNT-2026-11-21.md)),
+so this read covered its fixes and the storage hold (D79) and Recheck changes. One read-only
+reviewer (a fresh agent given the areas, not the fixes' reasoning), its findings checked at the
+cited lines here. Nothing critical or high.
+
+### Found and fixed
+
+| Severity | Where | Problem | Fix | Test |
+|---|---|---|---|---|
+| Medium | `engine/peer_list.rs` `erase_candidate`, `Peers::add`, `Peers::incoming` | 1.2.71 kept every banned entry in the list (so no eviction lifted a ban), counted towards `max_peerlist_size` (3000). A swarm member with many addresses (one IPv6 /64 is enough) that sends one bad block from each gets each banned; once banned and connected entries fill the list, every tracker, DHT and PEX peer and every incoming connection is refused until the torrent stops. About 3000 × 16 KiB of upload. | `banned_ips` already holds the ban, so an unconnected entry whose IP is in it is the first a full list gives up (`evict_ip_banned`; libtorrent erases a banned peer that failed). A peer banned as ourselves (`ban`) has no IP entry and stays. PORTING row updated. | `bans_cover_the_ip_and_survive_a_full_list`, `incoming_peers_keep_to_the_cap` (reworked: the banned entry goes first, its IP stays banned) |
+| Low | `run_program.rs` `RE_PARSE_LINE` | The guard is a list; programs not on it that run a string as code passed with a code inside that string: `script -qc "cmd %N" /dev/null`, `expect -c`, `forfiles /c "cmd /c ..."`, `wmic process call create`, `vim -c "!..."`, `emacs --eval`, `gdb -ex`, `dc -e`. Only a user's own Run Program line reaches this. | Those programs (and `vi`, `nvim`, `gvim`, `lldb`) take no code anywhere in their line. | `wrappers_and_interpreters_that_run_a_string_get_no_codes` (nine more lines) |
+| Low (not security) | `engine/mod.rs` `user_recheck`, `set_flags` | A requested check holds its torrent outside the queue (`rechecks`) until `on_checked`; a check ended by a Stop, or a Recheck of a magnet without metadata, left the entry, and the torrent ran past the queue limits at its next start. | A pause removes the entry; a torrent without metadata gets none. | `a_held_torrent_starts_when_its_path_is_back` (Recheck, then Stop) |
+
+### Reviewed and judged fine
+
+- Piece layers against the file roots (`parse_piece_layers`, `set_piece_layers`, `build_trees`,
+  `distrust_pieces`): lengths checked before `chunks_exact`, all or nothing, as libtorrent's
+  `merkle_root_scratch` with `merkle_pad`. Remote adds and renames (`is_relative_name`: both
+  separators, `..`, drive and UNC roots, `:`, names Windows trims to nothing); the Web UI's
+  `valid_new_path` now splits on `\` too.
+- RSS and fetch reach follow the server that answered (`peer_addr`), so rebinding the feed's
+  name does not help; names the proxy resolves are not looked up. Feed-edit races and the
+  episode undo are bounded.
+- Web UI auth: the failure counts before PBKDF2, the ban check is under the lock, the hash
+  outside it; the retry loops end; a live session skips the API key safely; `peers_answer`
+  answers 404 instead of panicking.
+- Storage hold: guarded arithmetic, one probe thread at a time (a hung probe only delays the
+  next). `recheck_now` drops its lock before engine calls. Picker end-game, tracker cookies and
+  `late_announce`, UPnP `release_slot`, `store.rs` `write_log`, Win32 `posted.rs` (an id, not a
+  pointer, in `lParam`). MSRV 1.85 holds (no let-chains).
+- `banned_ips` is not capped: each entry costs a ban for bad data, about 16 KiB of upload for
+  some 50 bytes kept, and the set goes with the torrent's list.
+
+### Open
+
+- Run Program stays a list: a program not on it that runs a string as code still passes, and a
+  code that fills a whole argument can start with `-` and act as an option (older than this
+  range). Handing the values over as environment variables would remove the guessing.
+- Not read: the test files beyond their intent; the GTK and Win32 UI changes other than
+  `posted.rs`; `app.js`, `secure_transport.rs`, `ip_filter.rs`, `web_seed.rs`, `mock.rs`,
+  `pref_pages.rs`, `rss/episode.rs`, `rss/feed.rs`; the `merkle_*` helpers' bodies.
+
 ## Release 1.2.69 (since v1.2.67)
 
 Date: 2026-11-17_211440_1794946480. Scope: `git diff v1.2.67..HEAD -- crates` (1.2.68): the Trackers and Peers tab

@@ -4,8 +4,9 @@
 // Changes: a Vec plus an address index instead of a sorted vector of pooled `torrent_peer`
 // pointers. Connect candidates are chosen by a scan with libtorrent's ordering (fewest failures,
 // then BEP 40 rank); the list is capped at `max_peerlist_size` by libtorrent's erase-candidate
-// rule, except that banned peers are kept. Entries are per address (ip:port); the IPs of peers
-// banned for bad data are kept in a set of their own, which refuses their connections.
+// rule, except that a peer banned as ourselves is kept. Entries are per address (ip:port); the
+// IPs of peers banned for bad data are kept in a set of their own, which refuses their
+// connections, and their entries are the first a full list gives up.
 // Peers restored from resume data stay in their compact saved bytes until the torrent starts.
 
 //! Every peer a torrent knows about, connected or not.
@@ -277,9 +278,10 @@ impl PeerList {
     /// An incoming connection from `addr` joins the torrent (libtorrent
     /// `peer_list::new_connection`). A peer not in the list yet goes into it within
     /// `max_size`: a full list gives up an erase candidate as [`add_capped`](Self::add_capped)
-    /// does, else (libtorrent's `force_erase`) the least useful unconnected peer, never a
-    /// banned one. Returns false, adding nothing, when every peer is connected or banned: the
-    /// connection is refused (`too_many_connections`).
+    /// does (an entry banned for bad data first), else (libtorrent's `force_erase`) the least
+    /// useful unconnected peer, never one banned as ourselves. Returns false, adding nothing,
+    /// when every other peer is connected or banned as ourselves: the connection is refused
+    /// (`too_many_connections`).
     pub fn incoming(
         &mut self,
         addr: SocketAddr,
@@ -477,8 +479,9 @@ impl KnownPeer {
     }
 
     /// libtorrent `peer_list::is_erase_candidate`: an unconnected peer that is no connect
-    /// candidate and failed or is known from resume data only. A banned peer is not, unlike in
-    /// libtorrent, which drops a banned peer that ever failed and so forgets the ban.
+    /// candidate and failed or is known from resume data only. A banned peer is not: one
+    /// banned for bad data goes before any candidate (`Peers::evict_ip_banned`, its IP stays
+    /// banned), and one banned as ourselves stays.
     fn erase_candidate(&self, finished: bool, policy: Reconnect) -> bool {
         self.connection.is_none()
             && !self.banned
@@ -542,7 +545,10 @@ impl Peers {
             }
             return true;
         }
-        if self.peers.len() >= max_size && !self.evict(|p| p.erase_candidate(finished, policy)) {
+        if self.peers.len() >= max_size
+            && !self.evict_ip_banned()
+            && !self.evict(|p| p.erase_candidate(finished, policy))
+        {
             return false;
         }
         let rank = rank(&external_ip, addr);
@@ -561,6 +567,29 @@ impl Peers {
             .filter(|(_, p)| eligible(p))
             .max_by_key(|(_, p)| p.erase_order())
             .map(|(i, _)| i);
+        match victim {
+            Some(i) => {
+                self.remove_at(i);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Drops an unconnected entry whose IP is banned for bad data, the first to go from a full
+    /// list (libtorrent erases a banned peer that failed). `banned_ips` keeps the ban, so the
+    /// entry is no use; without this, peers banned from enough addresses would fill the list
+    /// and keep every new peer out. A peer banned as ourselves ([`PeerList::ban`]) has no IP
+    /// entry and stays.
+    fn evict_ip_banned(&mut self) -> bool {
+        if self.banned_ips.is_empty() {
+            return false;
+        }
+        let banned_ips = &self.banned_ips;
+        let victim = self
+            .peers
+            .iter()
+            .position(|p| p.banned && p.connection.is_none() && banned_ips.contains(&p.addr.ip()));
         match victim {
             Some(i) => {
                 self.remove_at(i);
@@ -638,6 +667,7 @@ impl Peers {
     ) -> bool {
         if self.get(&addr).is_none()
             && self.peers.len() >= max_size
+            && !self.evict_ip_banned()
             && !self.evict(|p| p.erase_candidate(finished, policy))
             && !self.evict(|p| p.connection.is_none() && !p.banned)
         {
@@ -886,24 +916,19 @@ mod tests {
         pl.disconnected(&bad, true, false, false, now);
         assert!(pl.ip_banned(bad.ip()), "whatever port it comes from next");
         assert!(!pl.ip_banned(x.ip()));
-        // libtorrent would erase the banned peer (it failed and is no connect candidate);
-        // here it stays, and so does x, a connect candidate: the new peer is rejected
+        // a full list gives up the banned entry first (release review of 1.2.75: banned
+        // entries that stayed filled the list from enough addresses); the IP set keeps the ban
         assert!(pl.add(x, PeerSource::TRACKER, ExternalIp::default(), 2));
-        assert!(!pl.add(y, PeerSource::PEX, ExternalIp::default(), 2));
-        assert!(pl.get(&bad).is_some_and(|p| p.banned));
-        // x failing for good makes room; the banned peer still stays
-        for conn in 2..5 {
-            pl.connecting(x, conn, PeerSource::TRACKER, now);
-            pl.disconnected(&x, true, false, false, now);
-        }
         assert!(pl.add(y, PeerSource::PEX, ExternalIp::default(), 2));
-        assert!(pl.get(&x).is_none() && pl.get(&bad).is_some_and(|p| p.banned));
-        assert_eq!(pl.connect_candidates(5, now, r, false), [y]);
-        // its listen port, listed by a tracker, is not connected to either
+        assert!(pl.get(&bad).is_none() && pl.ip_banned(bad.ip()));
+        assert_eq!(pl.num_connect_candidates(false, r), 2);
+        // x and y are wanted: a third peer is refused
+        assert!(!pl.add(ep("10.0.0.3", 1), PeerSource::PEX, ExternalIp::default(), 2));
+        // its listen port, listed by a tracker, is not connected to
         let listen = ep("10.0.0.9", 6881);
         assert!(pl.add(listen, PeerSource::TRACKER, ExternalIp::default(), 3));
-        assert_eq!(pl.connect_candidates(5, now, r, false), [y]);
-        assert_eq!(pl.num_connect_candidates(false, r), 1);
+        assert!(!pl.connect_candidates(5, now, r, false).contains(&listen));
+        assert_eq!(pl.num_connect_candidates(false, r), 2);
         // trimmed to nothing, the IP ban remains and the list with it
         pl.trim(0);
         assert_eq!(pl.len(), 0);
@@ -984,21 +1009,25 @@ mod tests {
         pl.connecting(banned, 7, PeerSource::TRACKER, now);
         pl.ban_ip(&banned);
         pl.disconnected(&banned, true, false, false, now);
-        // the erase candidate goes first, though it failed: the fresh peer is a connect candidate
+        // the entry banned for bad data goes first (its IP stays banned)
         assert!(pl.incoming(i1, 10, now, 3, false, r));
-        assert!(pl.get(&failed).is_none() && pl.get(&fresh).is_some());
+        assert!(pl.get(&banned).is_none() && pl.ip_banned(banned.ip()));
         assert!(pl.get(&i1).is_some_and(|p| p.connection == Some(10) && p.source == PeerSource::INCOMING));
-        // then, forced, the fresh one; never the banned one
+        // then the erase candidate, though it failed: the fresh peer is a connect candidate
         assert!(pl.incoming(i2, 11, now, 3, false, r));
-        assert!(pl.get(&fresh).is_none() && pl.get(&banned).is_some_and(|p| p.banned));
+        assert!(pl.get(&failed).is_none() && pl.get(&fresh).is_some());
+        // then, forced, the fresh one
+        assert!(pl.incoming(i3, 12, now, 3, false, r));
+        assert!(pl.get(&fresh).is_none());
         // every other peer connected: refused, nothing added
-        assert!(!pl.incoming(i3, 12, now, 3, false, r));
-        assert!(pl.get(&i3).is_none());
+        let i4 = ep("10.0.3.4", 40004);
+        assert!(!pl.incoming(i4, 13, now, 3, false, r));
+        assert!(pl.get(&i4).is_none());
         assert_eq!(pl.len(), 3);
         // a listed peer connecting in needs no room
         pl.disconnected(&i1, false, false, false, now);
-        assert!(pl.incoming(i1, 13, now, 3, false, r));
-        assert_eq!(pl.get(&i1).and_then(|p| p.connection), Some(13));
+        assert!(pl.incoming(i1, 14, now, 3, false, r));
+        assert_eq!(pl.get(&i1).and_then(|p| p.connection), Some(14));
         assert_eq!(pl.len(), 3);
     }
 

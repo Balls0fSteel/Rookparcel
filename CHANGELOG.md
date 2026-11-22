@@ -4,6 +4,11 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-22_184404_1795369444: 1.2.76, the release review's fixes; release notes for 1.2.76
+
+- **Release review** of 1.2.71-1.2.75 (SECURITY-REVIEW.md "Release 1.2.76"; one fresh reviewer, findings checked here), nothing critical or high. **Medium, fixed:** 1.2.71 kept banned peers in the list for good, so peers banned from enough addresses (one IPv6 /64) could fill it and keep every new peer out; an entry banned for bad data is now the first a full list gives up, its IP staying banned. **Low, fixed:** Run Program's list knows `script`, `expect`, `forfiles`, `wmic`, editors, debuggers and `dc`; a Stop ends a requested check's place outside the queue, and a magnet without metadata takes none. Open: Run Program stays a list (environment variables would end the guessing).
+- **Release 1.2.76** (1.2.75 was not published, so its notes, metainfo and news name 1.2.76 and cover 1.2.70-1.2.75); remote protocol 21 since 1.2.70, so a window and `rookparcel-nox` both need 1.2.76.
+
 ## 2026-11-22_142957_1795354197: 1.2.75, a torrent whose storage is gone is held; Recheck starts a stopped torrent
 
 - **The owner's report (on 1.2.69):** a storage was removed, and instead of "missing files" its torrents downloaded again. Not fixed by 1.2.70-1.2.74: the resume check took every file that was not found as lost (1.2.46's per-file rule, meant for a virus scanner removing one file), so a pulled drive cleared every piece and the empty set was saved.
