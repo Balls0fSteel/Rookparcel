@@ -45,6 +45,21 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.76" data-date="2026-11-22" aria-labelledby="v1.2.76-h">
+      <h2 id="v1.2.76-h"><a href="#v1.2.76"><time datetime="2026-11-22">Sun 22 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.76</span></a></h2>
+      <p class="news-lede">A torrent whose drive or share has gone keeps its pieces and starts again by itself when the storage is back, instead of downloading everything again. Force Re-Check now starts a stopped torrent.</p>
+      <ul class="changes">
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>When none of a torrent's files is found (a USB disk pulled, a share or mount not there), it stops with "files missing" and keeps its pieces, across restarts too. Every 30 seconds Rookparcel looks again, and once the storage is back the torrent starts without hashing.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>Force Re-Check on a stopped or queued torrent runs the check at once and starts it; stop it again if you like. The qBittorrent-compatible API keeps qBittorrent's behaviour for Sonarr and Radarr.</span></li>
+        <li><span class="tag tag-new">New</span><span class="vh">:</span> <span>A check waiting for its drive says "Queued for checking" instead of "Checking 0.0 %", in all programs and the Web UI.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>A check that cannot read a file (held open by another program, no permission) stops with the error instead of downloading the file again.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>New connections are shared fairly between torrents. Turning the DHT on or off applies at once. A peer banned for bad data cannot come back from another port. Many small files finish much faster at the end.</span></li>
+        <li><span class="tag tag-sec">Security</span><span class="vh">:</span> <span>From a full code review: v2 piece layers are checked against the file hashes, a remote window cannot rename files out of the daemon's save folders, an RSS feed's links reach your network only when the feed came from it, and a wrong current password counts towards the login ban.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>A failed write of the resume journal (a full disk) is repaired at the next save. An RSS smart filter tries a failed episode again. The Run Program check refuses more ways of running a torrent's name as code.</span></li>
+      </ul>
+      <p class="news-note">The remote protocol is now 21: a window and the <code>rookparcel-nox</code> it drives must both be 1.2.76. The Web UI and the qBittorrent-compatible API are not affected.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.76">Download 1.2.76 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.76.md">Full release notes</a></p>
+    </article>
     <article class="news-entry" id="v1.2.69" data-date="2026-11-17" aria-labelledby="v1.2.69-h">
       <h2 id="v1.2.69-h"><a href="#v1.2.69"><time datetime="2026-11-17">Tue 17 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.69</span></a></h2>
       <p class="news-lede">The Trackers and Peers tabs sort by their columns in the Windows, Linux and Mac programs, as the Files tab already did.</p>

@@ -7,7 +7,7 @@ Earlier history: [archive index](docs/archive/README.md), including all 148 orig
 ## 2026-11-22_184404_1795369444: 1.2.76, the release review's fixes; release notes for 1.2.76
 
 - **Release review** of 1.2.71-1.2.75 (SECURITY-REVIEW.md "Release 1.2.76"; one fresh reviewer, findings checked here), nothing critical or high. **Medium, fixed:** 1.2.71 kept banned peers in the list for good, so peers banned from enough addresses (one IPv6 /64) could fill it and keep every new peer out; an entry banned for bad data is now the first a full list gives up, its IP staying banned. **Low, fixed:** Run Program's list knows `script`, `expect`, `forfiles`, `wmic`, editors, debuggers and `dc`; a Stop ends a requested check's place outside the queue, and a magnet without metadata takes none. Open: Run Program stays a list (environment variables would end the guessing).
-- **Release 1.2.76** (1.2.75 was not published, so its notes, metainfo and news name 1.2.76 and cover 1.2.70-1.2.75); remote protocol 21 since 1.2.70, so a window and `rookparcel-nox` both need 1.2.76.
+- **Release 1.2.76, published 2026-11-22** after CI, FreeBSD and Fuzz passed on `c12e3fe5`; the draft's digests matched SHA256SUMS, the zip held the four files and both programs said 1.2.76; nothing started on a clean machine or a Linux desktop (1.2.75 was not published, so its notes, metainfo and news name 1.2.76 and cover 1.2.70-1.2.75); remote protocol 21 since 1.2.70, so a window and `rookparcel-nox` both need 1.2.76.
 
 ## 2026-11-22_142957_1795354197: 1.2.75, a torrent whose storage is gone is held; Recheck starts a stopped torrent
 

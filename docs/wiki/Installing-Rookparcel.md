@@ -4,7 +4,7 @@ This page lists the downloads for each platform, how to install and start each o
 
 ## Where to download
 
-Every release is on the [Releases page](https://github.com/Balls0fSteel/Rookparcel/releases). The latest published release is 1.2.69. Each release has notes with the first-run steps per platform, and a `SHA256SUMS` file with the checksum of every download.
+Every release is on the [Releases page](https://github.com/Balls0fSteel/Rookparcel/releases). The latest published release is 1.2.76. Each release has notes with the first-run steps per platform, and a `SHA256SUMS` file with the checksum of every download.
 
 | Platform | File | What is inside |
 |---|---|---|
@@ -73,7 +73,7 @@ The setup takes these switches, for scripts and administrators:
 For example, from an administrator prompt:
 
 ```
-rookparcel-1.2.69-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
+rookparcel-1.2.76-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
 ```
 
 ### The zip
@@ -90,7 +90,7 @@ To open `.torrent` files and `magnet:` links with the zip copy, tick the associa
 Each release's `SHA256SUMS` lists the SHA-256 of every file. In PowerShell:
 
 ```
-Get-FileHash .\rookparcel-1.2.69-windows-x64-setup.exe -Algorithm SHA256
+Get-FileHash .\rookparcel-1.2.76-windows-x64-setup.exe -Algorithm SHA256
 ```
 
 The hash should match the file's line in `SHA256SUMS`.
@@ -103,8 +103,8 @@ The hash should match the file's line in `SHA256SUMS`.
 2. Make it executable and start it:
 
    ```bash
-   chmod +x Rookparcel-1.2.69-x86_64.AppImage
-   ./Rookparcel-1.2.69-x86_64.AppImage
+   chmod +x Rookparcel-1.2.76-x86_64.AppImage
+   ./Rookparcel-1.2.76-x86_64.AppImage
    ```
 
 3. Without FUSE 2 on the system, start it with `--appimage-extract-and-run` added.
@@ -117,7 +117,7 @@ The bundle holds the application; the runtime comes from Flathub. Add Flathub on
 
 ```bash
 flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak install --user Rookparcel-1.2.69-x86_64.flatpak
+flatpak install --user Rookparcel-1.2.76-x86_64.flatpak
 flatpak run io.github.balls0fsteel.Rookparcel
 ```
 

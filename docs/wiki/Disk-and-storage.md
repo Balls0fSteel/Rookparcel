@@ -53,7 +53,7 @@ If you quit while files are moving, the closing window waits for the moves, with
 
 ## When a drive or share is missing
 
-If none of a torrent's files can be found when it starts (a USB disk unplugged, a network share or mount not there, a drive letter not ready yet), Rookparcel does not download them again. The torrent stops with **files missing (the drive, share or folder is not available)** and keeps the pieces it had. Every 30 seconds Rookparcel looks again, and once the folder is back the torrent starts by itself and carries on without checking the files again. The same happens when the drive disappears while a torrent is downloading. Closing Rookparcel meanwhile changes nothing: the next start finds the torrent missing again, or back.
+*New in 1.2.76.* If none of a torrent's files can be found when it starts (a USB disk unplugged, a network share or mount not there, a drive letter not ready yet), Rookparcel does not download them again. The torrent stops with **files missing (the drive, share or folder is not available)** and keeps the pieces it had. Every 30 seconds Rookparcel looks again, and once the folder is back the torrent starts by itself and carries on without checking the files again. The same happens when the drive disappears while a torrent is downloading. Closing Rookparcel meanwhile changes nothing: the next start finds the torrent missing again, or back.
 
 If only some of a torrent's files are gone (deleted by hand or by a virus scanner), only their pieces are downloaded again. To give up on a held torrent's old data and download it anew, use **Force Re-Check**.
 
