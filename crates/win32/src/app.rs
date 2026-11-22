@@ -5562,7 +5562,13 @@ unsafe fn torrent_action(id: u16) {
                     actions::stop(&t);
                     set_paused(a, tid, false);
                 }
-                cmd::RECHECK => t.force_recheck(),
+                cmd::RECHECK => {
+                    let stopped = a.list.get(tid).is_some_and(|s| s.flags.contains(TorrentFlags::PAUSED));
+                    actions::recheck(&t, stopped);
+                    if stopped {
+                        set_paused(a, tid, false);
+                    }
+                }
                 cmd::REANNOUNCE => t.force_reannounce(),
                 cmd::UP => t.queue_position(QueueMove::Up),
                 cmd::DOWN => t.queue_position(QueueMove::Down),

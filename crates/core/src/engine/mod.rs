@@ -29,6 +29,7 @@ pub(crate) mod peer;
 pub(crate) mod peer_class;
 pub(crate) mod peer_list;
 mod pex;
+mod storage_hold;
 // `set_block_hash`, the block-hash requests of failed pieces and their helpers are ported with
 // their tests but unused: v2 blocks are verified on the disk thread (docs/PORTING.md).
 #[allow(dead_code)]
@@ -441,6 +442,10 @@ pub(crate) struct Engine {
     /// `.!ut` failed): the names are sent again at the next file completed, stop and save. Kept
     /// here, not in `Torrent`, which stays compact for 100,000 stopped ones.
     names_pending: HashSet<TorrentId>,
+    /// Torrents the user asked to recheck, until the check is done: as libtorrent's checking
+    /// torrents, they run without a queue slot, so a queued one is checked now rather than at
+    /// its turn ([`Engine::auto_manage`]).
+    rechecks: HashSet<TorrentId>,
 
     peers: Slab<PeerConn>,
     next_peer_gen: u32,
@@ -506,6 +511,8 @@ pub(crate) struct Engine {
     network: listen::NetworkState,
     /// "Use only this network" (D54).
     rules: network_rule::RuleState,
+    /// D79: torrents held while their storage is missing.
+    holds: storage_hold::StorageHolds,
     /// Web seed connections (BEP 19 / BEP 17).
     web: web_seed::WebConns,
     /// The proxy server and its SOCKS5 UDP associate.
@@ -663,6 +670,7 @@ impl Engine {
             deleting: HashMap::new(),
             names_jobs: HashMap::new(),
             names_pending: HashSet::new(),
+            rechecks: HashSet::new(),
             peers: Slab::default(),
             next_peer_gen: 1,
             listeners: Vec::new(),
@@ -714,6 +722,7 @@ impl Engine {
             disk_limit: disk_limit::DiskLimit::default(),
             network,
             rules: network_rule::RuleState::default(),
+            holds: storage_hold::StorageHolds::default(),
             web: web_seed::WebConns::default(),
             proxy: proxy::ProxyState::default(),
             label: None,
@@ -1632,7 +1641,7 @@ impl Engine {
             Command::Resume(id) => self.set_flags(id, TorrentFlags::empty(), TorrentFlags::PAUSED),
             Command::SetFlags { id, flags, mask } => self.set_flags(id, flags, mask),
             Command::Queue(id, m) => self.move_in_queue(id, m),
-            Command::ForceRecheck(id) => self.force_recheck(id),
+            Command::ForceRecheck(id) => self.user_recheck(id),
             Command::ForceReannounce(id) => {
                 if let Some(t) = self.torrent(id) {
                     // a hybrid announces both info-hashes
@@ -2284,6 +2293,8 @@ impl Engine {
         if self.torrent_ref(id).is_none() {
             return;
         }
+        self.release_storage_hold(id);
+        self.rechecks.remove(&id);
         // libtorrent `delete_files` / `delete_partfile`; deleting the files takes the part file.
         let delete = if flags.contains(RemoveFlags::DELETE_FILES) {
             Some(FenceAction::Delete)
@@ -2579,7 +2590,11 @@ impl Engine {
         }
         match (old.contains(TorrentFlags::PAUSED), new.contains(TorrentFlags::PAUSED)) {
             (false, true) => self.alert(Alert::TorrentPaused { id }),
-            (true, false) => self.alert(Alert::TorrentResumed { id }),
+            (true, false) => {
+                // the start checks again: still missing, it is held again (D79)
+                self.release_storage_hold(id);
+                self.alert(Alert::TorrentResumed { id });
+            }
             _ => {}
         }
         if old.contains(TorrentFlags::AUTO_MANAGED) != new.contains(TorrentFlags::AUTO_MANAGED) {
@@ -2851,6 +2866,22 @@ impl Engine {
         }
     }
 
+    /// The user's Recheck: as libtorrent's `force_recheck`, it clears the torrent's error (a
+    /// storage hold too, D79: the user takes what is on disk), so a torrent stopped only by an
+    /// error is checked now. One the user stopped is checked at its next start (the GUIs start
+    /// it with the recheck).
+    fn user_recheck(&mut self, id: TorrentId) {
+        let Some(t) = self.torrent(id) else { return };
+        if t.error.take().is_some() {
+            t.status_dirty = true;
+        }
+        self.release_storage_hold(id);
+        self.rechecks.insert(id);
+        self.needs_auto_manage = true;
+        self.force_recheck(id);
+        self.update_running(id);
+    }
+
     fn force_recheck(&mut self, id: TorrentId) {
         let Some(t) = self.torrent(id) else { return };
         t.seed_mode = None;
@@ -2869,15 +2900,26 @@ impl Engine {
     }
 
     fn on_checked(&mut self, id: TorrentId, result: Result<CheckResult, (String, Error)>) {
+        // a recheck asked for is done: the queue has its say again
+        if self.rechecks.remove(&id) {
+            self.needs_auto_manage = true;
+        }
         let Some(t) = self.torrent(id) else { return };
         t.checking = false;
         match result {
             Err((file, error)) => {
+                // D79: a file not there at all (the resume check found none of them, or one
+                // could not be made): the storage is missing, the torrent waits for it
+                let gone = matches!(error, Error::Io { kind: io::ErrorKind::NotFound, .. });
                 t.error = Some(format!("{file}: {error}"));
                 t.status_dirty = true;
-                self.alert(Alert::FileError { id, file, error: error.clone() });
+                self.alert(Alert::FileError { id, file: file.clone(), error: error.clone() });
                 self.alert(Alert::TorrentError { id, error });
-                self.update_running(id);
+                if gone {
+                    self.hold_for_storage(id, file);
+                } else {
+                    self.update_running(id);
+                }
             }
             Ok(res) if res.inconsistent.is_some() => {
                 self.inconsistent_hashes(id, res.inconsistent.expect("checked"));
@@ -3293,6 +3335,10 @@ impl Engine {
             if !t.flags.contains(TorrentFlags::AUTO_MANAGED) || t.error.is_some() {
                 continue;
             }
+            if self.rechecks.contains(&id) {
+                decisions.push((id, true));
+                continue;
+            }
             let inactive = t.is_inactive(&self.settings);
             let run = (inactive || active_dl < dl_limit) && active_total < total_limit;
             if run {
@@ -3309,6 +3355,10 @@ impl Engine {
                 || !t.flags.contains(TorrentFlags::AUTO_MANAGED)
                 || t.error.is_some()
             {
+                continue;
+            }
+            if self.rechecks.contains(&id) {
+                decisions.push((id, true));
                 continue;
             }
             let inactive = t.is_inactive(&self.settings);
@@ -3378,6 +3428,10 @@ impl Engine {
                         }
                     }
                     Some((file, error)) => {
+                        // D79: a file that cannot be made because its folder is not there (a
+                        // drive pulled while downloading): held until the save path is back
+                        let gone = matches!(error, Error::Io { kind: io::ErrorKind::NotFound, .. });
+                        let mut save_path = None;
                         if let Some(t) = self.torrent(id) {
                             if let Some(p) = t.picker.as_mut() {
                                 p.write_failed(piece, block);
@@ -3385,11 +3439,17 @@ impl Engine {
                             // libtorrent stops the torrent with the error (disk full and the like).
                             t.error = Some(format!("{file}: {error}"));
                             t.status_dirty = true;
+                            save_path = Some(t.save_path.to_string());
                         }
                         self.alert(Alert::FileError { id, file, error: error.clone() });
                         self.alert(Alert::TorrentError { id, error });
-                        self.update_running(id);
-                        self.needs_auto_manage = true;
+                        match save_path.filter(|_| gone) {
+                            Some(path) => self.hold_for_storage(id, path),
+                            None => {
+                                self.update_running(id);
+                                self.needs_auto_manage = true;
+                            }
+                        }
                     }
                 }
                 // Writes drained: peers held back by the disk queue may read again.
@@ -3479,6 +3539,7 @@ impl Engine {
                     }
                 }
             }
+            Completion::PathsProbed { present } => self.on_paths_probed(present),
             Completion::Checked { storage, result } => {
                 let Some(&id) = self.storages.get(&storage) else { return };
                 let current =
@@ -3790,6 +3851,7 @@ impl Engine {
         {
             self.save_resume(false);
         }
+        self.storage_hold_tick(now);
     }
 
     fn tick_torrent(&mut self, id: TorrentId, now: Instant, dt: f64) {
@@ -4701,6 +4763,9 @@ mod check_progress_tests;
 
 #[cfg(test)]
 mod stop_hash_tests;
+
+#[cfg(test)]
+mod storage_hold_tests;
 
 #[cfg(test)]
 mod slots_tests {

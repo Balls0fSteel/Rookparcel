@@ -65,6 +65,8 @@ With **Confirm when deleting torrents** on (Preferences > UI Settings, on by def
 
 **Force Re-Check** reads the torrent's files on disk piece by piece and counts only the pieces that are complete and correct. The status shows **Queued for checking**, then **Checking** with a percentage. Use it after you moved or restored files by hand, or when you suspect damaged data.
 
+A stopped or queued torrent starts for the check, so it runs at once; stop it again afterwards if you want it stopped. A torrent held with **files missing** (see [Disk and storage](Disk-and-storage#when-a-drive-or-share-is-missing)) is checked against what is there now, and whatever is missing is downloaded again.
+
 How gently checks use the disk is set in **Preferences > Advanced > Disk I/O**; see [Disk and storage](Disk-and-storage).
 
 ## Update Tracker

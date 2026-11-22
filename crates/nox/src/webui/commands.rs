@@ -219,9 +219,26 @@ fn set_paused_mark(shared: &Shared, ids: &[TorrentId], paused: bool) {
     }
 }
 
+/// The shim's recheck: qBittorrent's, a stopped torrent stays stopped (checked at its start).
 pub fn recheck(shared: &Shared, ids: &[TorrentId]) {
     for &id in ids {
         shared.handle.torrent(id).force_recheck();
+    }
+}
+
+/// The Web UI's Recheck, as the GUIs' ([`actions::recheck`]): a stopped torrent is started, so
+/// the check runs now.
+pub fn recheck_now(shared: &Shared, ids: &[TorrentId]) {
+    let stopped: Vec<TorrentId> = {
+        let st = shared.lock();
+        ids.iter()
+            .copied()
+            .filter(|id| st.torrents.get(id).is_some_and(|e| e.status.flags.contains(TorrentFlags::PAUSED)))
+            .collect()
+    };
+    set_paused_mark(shared, &stopped, false);
+    for &id in ids {
+        actions::recheck(&shared.handle.torrent(id), stopped.contains(&id));
     }
 }
 
@@ -1895,7 +1912,7 @@ fn torrent_command(shared: &Shared, cmd: &str, body: &Json) -> Result<(), CmdErr
         "force-start" => force_start(shared, &ids),
         "pause" => pause(shared, &ids),
         "stop" => stop(shared, &ids),
-        "recheck" => recheck(shared, &ids),
+        "recheck" => recheck_now(shared, &ids),
         "reannounce" => reannounce(shared, &ids),
         "remove" => remove(shared, &ids, flag("data")),
         "queue" => {

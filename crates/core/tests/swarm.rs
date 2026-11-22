@@ -793,6 +793,101 @@ fn a_seed_whose_file_cannot_be_read_stops_with_an_error_and_keeps_its_pieces() {
     let _ = std::fs::remove_dir_all(state);
 }
 
+/// D79: a seed whose files are all gone when it starts (its drive pulled, here its folder moved
+/// away) is held with a "files missing" error and keeps its pieces, across another restart
+/// too; before, every piece counted as lost and it downloaded everything again. With the
+/// folder back, a Start finds it seeding without hashing. A Recheck takes what is there.
+#[test]
+fn a_seed_whose_storage_is_gone_is_held_and_keeps_its_pieces() {
+    let f = fixture(None);
+    let dir = temp_dir("storage-gone-seed");
+    let state = temp_dir("state-storage-gone-seed");
+    write_files(&f, &dir);
+    let hash = {
+        let s = start(Some(state.clone()));
+        let mut w = Watch::new(s.handle());
+        let id = add(&mut w, &f, &dir);
+        let st = wait_state(&mut w, id, TorrentState::Seeding, 20);
+        s.shutdown();
+        st.info_hashes
+    };
+    let (folder, away) = (dir.join("swarm-test"), dir.join("swarm-test.away"));
+    std::fs::rename(&folder, &away).unwrap();
+    let held = |s: &Session, hashed: &mut bool| {
+        let mut w = Watch::new(s.handle());
+        wait(&mut w, 20, "the hold", |a| {
+            *hashed |= matches!(a, Alert::StateChanged { state: TorrentState::CheckingFiles, .. });
+            match a {
+                Alert::StateUpdate(v) => {
+                    v.iter().find(|s| s.info_hashes == hash && s.error.contains("files missing")).cloned()
+                }
+                _ => None,
+            }
+        })
+    };
+    let mut hashed = false;
+    {
+        let s = start(Some(state.clone()));
+        let st = held(&s, &mut hashed);
+        assert!(st.error.contains("swarm-test"), "{}", st.error);
+        assert!(st.state != TorrentState::Downloading, "{st:?}");
+        s.shutdown();
+    }
+    assert!(!folder.exists(), "nothing was made in its place");
+    let s = start(Some(state.clone()));
+    let st = held(&s, &mut hashed);
+    let mut w = Watch::new(s.handle());
+    std::fs::rename(&away, &folder).unwrap();
+    let t = s.handle().torrent(st.id);
+    t.pause();
+    wait(&mut w, 10, "paused", |a| status_of(a, st.id).filter(|s| s.flags.contains(TorrentFlags::PAUSED)));
+    t.resume();
+    let st = wait(&mut w, 20, "seeding again", |a| {
+        hashed |= matches!(a, Alert::StateChanged { state: TorrentState::CheckingFiles, .. });
+        status_of(a, st.id).filter(|s| s.state == TorrentState::Seeding && s.error.is_empty())
+    });
+    assert_eq!(st.total_done, st.total);
+    assert!(!hashed, "nothing was hashed, held or back");
+    s.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(state);
+}
+
+/// D79: Recheck of a torrent held for its missing storage clears the error and checks what is
+/// there, so the user can accept the loss and download again.
+#[test]
+fn a_recheck_of_a_held_torrent_takes_what_is_there() {
+    let f = fixture(None);
+    let dir = temp_dir("storage-gone-recheck");
+    let state = temp_dir("state-storage-gone-recheck");
+    write_files(&f, &dir);
+    let hash = {
+        let s = start(Some(state.clone()));
+        let mut w = Watch::new(s.handle());
+        let id = add(&mut w, &f, &dir);
+        let st = wait_state(&mut w, id, TorrentState::Seeding, 20);
+        s.shutdown();
+        st.info_hashes
+    };
+    std::fs::remove_dir_all(dir.join("swarm-test")).unwrap();
+    let s = start(Some(state.clone()));
+    let mut w = Watch::new(s.handle());
+    let st = wait(&mut w, 20, "the hold", |a| match a {
+        Alert::StateUpdate(v) => {
+            v.iter().find(|s| s.info_hashes == hash && s.error.contains("files missing")).cloned()
+        }
+        _ => None,
+    });
+    s.handle().torrent(st.id).force_recheck();
+    let st = wait(&mut w, 20, "downloading", |a| {
+        status_of(a, st.id).filter(|s| s.state == TorrentState::Downloading && s.error.is_empty())
+    });
+    assert_eq!(st.total_done, 0);
+    s.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+    let _ = std::fs::remove_dir_all(state);
+}
+
 /// A session closed while a torrent's resume check is still queued or running saves what the
 /// resume data said, not "pieces unknown": the next start does not hash the files. (The owner's
 /// client rechecked every torrent after a restart, 2026-11-10: checks run one at a time per

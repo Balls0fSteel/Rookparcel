@@ -36,6 +36,16 @@ pub fn force_start(t: &TorrentHandle) {
     t.resume();
 }
 
+/// Recheck. The engine checks a torrent only while it runs, so a stopped one is started as by
+/// Start, or the check would wait for a Start nobody guesses; the user may stop it after. The
+/// caller clears the Pause mark when `stopped`.
+pub fn recheck(t: &TorrentHandle, stopped: bool) {
+    t.force_recheck();
+    if stopped {
+        start(t);
+    }
+}
+
 /// Also used for Pause; the caller records the difference.
 pub fn stop(t: &TorrentHandle) {
     t.unset_flags(TorrentFlags::AUTO_MANAGED);

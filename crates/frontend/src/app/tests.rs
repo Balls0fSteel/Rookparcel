@@ -156,6 +156,24 @@ fn first_sight_takes_the_label_and_pause_mark_from_the_preferences() {
     assert!(core.prefs().get(&format!("torrent.{}.paused", hash(2).key_hex())).is_none());
 }
 
+/// Recheck of a paused torrent starts it (the engine checks only a running torrent), so its
+/// Pause mark goes as with Start; a running torrent's mark is not touched.
+#[test]
+fn recheck_starts_a_stopped_torrent() {
+    let mut core = Setup::new().start("recheck");
+    let mut paused = status(4, 4, "d", false);
+    paused.flags = TorrentFlags::PAUSED;
+    core.handle_alerts(vec![Alert::StateUpdate(vec![paused, status(5, 5, "e", false)])]);
+    let (d, e) = (TorrentId::from_raw(4), TorrentId::from_raw(5));
+    let key = |n| format!("torrent.{}.paused", hash(n).key_hex());
+    core.torrent_action(TorrentAction::Pause, &[d]);
+    assert!(core.prefs().get_bool(&key(4), false));
+    core.torrent_action(TorrentAction::Recheck, &[d, e]);
+    assert!(core.prefs().get(&key(4)).is_none(), "the stopped one was started");
+    assert!(!core.list().extra(d).user_paused);
+    assert!(!core.list().extra(e).user_paused);
+}
+
 #[test]
 fn a_removed_torrent_takes_its_preferences_along() {
     let mut s = Setup::new();

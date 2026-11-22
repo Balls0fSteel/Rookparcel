@@ -142,7 +142,13 @@ impl Core {
                 TorrentAction::QueueDown => t.queue_position(QueueMove::Down),
                 TorrentAction::QueueTop => t.queue_position(QueueMove::Top),
                 TorrentAction::QueueBottom => t.queue_position(QueueMove::Bottom),
-                TorrentAction::Recheck => t.force_recheck(),
+                TorrentAction::Recheck => {
+                    let stopped = self.list.get(id).is_some_and(|s| s.flags.contains(TorrentFlags::PAUSED));
+                    actions::recheck(&t, stopped);
+                    if stopped {
+                        self.set_paused(id, false);
+                    }
+                }
                 TorrentAction::Reannounce => t.force_reannounce(),
             }
         }

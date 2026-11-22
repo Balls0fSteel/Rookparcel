@@ -653,9 +653,13 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   read came out with nothing; now, as libtorrent's `on_piece_hashed`, only a missing or short
   file means that, and any other error stops the torrent with a file error (Start once the file
   is free). Still open: a restart reads nothing while the resume data matches, so this needs a
-  mismatch first; and a file not found at all (a drive not ready, perhaps an unreachable
-  share: which error Windows gives there is unchecked) still loses its pieces by 1.2.46's rule
-  and downloads again. The "saved with an empty set" half was closed earlier (the stored set is
+  mismatch first; and since 1.2.75 (D79) a torrent none of whose files is found (a drive pulled
+  or not ready, a share or mount not there) is held with a "files missing" error and starts
+  again by itself when its path is back; one file of several gone still loses its pieces.
+  Open: which error Windows gives for an unreachable share (a "not found" is held, another
+  error stops the torrent as 1.2.70's); a real USB disk and `subst` drive by hand; a download
+  running when a Linux mount is unmounted can still write into the empty mount point (the
+  folder exists, so `file_pool::open_file` makes the files there). The "saved with an empty set" half was closed earlier (the stored set is
   kept until the check is done).
   (b) Fixed in 1.2.70: a check waiting for its drive reads "Queued for checking". (c) A file a virus scanner removes is downloaded again at every
   start (cheap since 1.2.46); a line that names the loop, or not fetching a file that vanished

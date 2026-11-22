@@ -3158,7 +3158,13 @@ fn torrent_action(name: &str) {
                 "queue-down" => t.queue_position(QueueMove::Down),
                 "queue-top" => t.queue_position(QueueMove::Top),
                 "queue-bottom" => t.queue_position(QueueMove::Bottom),
-                "recheck" => t.force_recheck(),
+                "recheck" => {
+                    let stopped = a.list.get(id).is_some_and(|s| s.flags.contains(TorrentFlags::PAUSED));
+                    actions::recheck(&t, stopped);
+                    if stopped {
+                        set_paused(a, id, false);
+                    }
+                }
                 "reannounce" => t.force_reannounce(),
                 _ => {}
             }

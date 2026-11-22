@@ -897,6 +897,10 @@ pub(crate) enum Completion {
         storage: u64,
         result: Result<CheckResult, (String, Error)>,
     },
+    /// Answer to [`DiskIo::async_probe_paths`]: the paths that exist.
+    PathsProbed {
+        present: Vec<String>,
+    },
     Fenced {
         storage: u64,
         action: FenceAction,
@@ -958,6 +962,9 @@ pub(crate) struct DiskIo {
     moves: Arc<Moves>,
     config: Arc<Config>,
     drives: Arc<Drives>,
+    /// For the answers sent from outside the disk threads ([`DiskIo::async_probe_paths`]).
+    done: mpsc::Sender<Completion>,
+    wake: Arc<dyn Fn() + Send + Sync>,
     next_storage_id: u64,
     next_barrier: u64,
 }
@@ -1182,6 +1189,8 @@ impl DiskIo {
             moves,
             config,
             drives,
+            done,
+            wake,
             next_storage_id: 1,
             next_barrier: 1,
         }
@@ -1295,6 +1304,22 @@ impl DiskIo {
     /// hashed at once and answered by [`Completion::Hashed`].
     pub fn async_restore_partial(&self, storage: &Arc<Storage>, piece: u32, blocks: Vec<bool>) {
         let _ = self.thread_for(piece).send(Job::Restore { storage: storage.clone(), piece, blocks });
+    }
+
+    /// D79: which of `paths` exist now, answered by [`Completion::PathsProbed`]. On a thread
+    /// of its own: a look at a share that is not there can take tens of seconds, which no
+    /// disk thread's queue should wait for. False when the thread could not be started.
+    pub fn async_probe_paths(&self, paths: Vec<String>) -> bool {
+        let (done, wake) = (self.done.clone(), self.wake.clone());
+        std::thread::Builder::new()
+            .name("lt-probe".into())
+            .spawn(move || {
+                let present = paths.into_iter().filter(|p| std::path::Path::new(p).exists()).collect();
+                if done.send(Completion::PathsProbed { present }).is_ok() {
+                    wake();
+                }
+            })
+            .is_ok()
     }
 
     pub fn async_check(&self, storage: &Arc<Storage>, mode: CheckMode) {
@@ -2021,6 +2046,16 @@ fn check_files(
     let mut sizes = vec![None; fs.num_files()];
     let names = storage.probe(matches!(mode, CheckMode::Full), Some(&mut sizes));
 
+    // D79: a resume check that finds none of the files its pieces are in (a drive pulled, a
+    // share or mount not there, the save path gone) is a storage that is missing, not data
+    // that was lost: the torrent stops with an error and keeps its pieces until it is back.
+    // Before anything is created or exported, so an empty mount point gets nothing.
+    if let CheckMode::Resume(have) = &mode {
+        if let Some(path) = storage_gone(storage, have, &sizes) {
+            return Err((path, Error::Io { kind: io::ErrorKind::NotFound, message: STORAGE_GONE.into() }));
+        }
+    }
+
     // libtorrent `posix_storage::initialize`: a skipped file that exists keeps its blocks; the
     // others go to the part file.
     let skipped = {
@@ -2190,6 +2225,49 @@ fn pause(storage: &Storage, wait: Duration) {
         }
         std::thread::sleep(left.min(Duration::from_millis(100)));
     }
+}
+
+/// The error text of a resume check that found none of its files ([`storage_gone`]).
+pub(crate) const STORAGE_GONE: &str = "not found: the drive, share or folder is not available";
+
+/// D79: the path that is not there when none of the files holding pieces of `have` exists, or
+/// the save path itself is gone; `None` when one of them is found (only that file's pieces
+/// are lost then, [`ResumeFiles::Missing`]) or there are no pieces to lose. Files at priority
+/// 0 (their pieces may be in the part file) and pad files do not count. Stops at the first file
+/// found, so a torrent whose files are there costs one look.
+fn storage_gone(storage: &Storage, have: &Bitfield, sizes: &[Option<u64>]) -> Option<String> {
+    let num_pieces = storage.info.num_pieces() as usize;
+    if have.len() != num_pieces || have.none_set() {
+        return None;
+    }
+    let save = storage.save_path();
+    if is_not_found(std::fs::metadata(&save)) {
+        return Some(save);
+    }
+    let fs = storage.info.files();
+    let piece_len = storage.info.piece_length() as u64;
+    let priority = storage.lock_files().priority.clone();
+    let mut first = None;
+    for f in 0..fs.num_files() {
+        let size = fs.file_size(f);
+        if size == 0 || storage.skip_file(f) || priority.get(f).copied() == Some(0) {
+            continue;
+        }
+        let (start, end) = (fs.file_offset(f) / piece_len, (fs.file_offset(f) + size - 1) / piece_len);
+        if !(start..=end).any(|p| have.get(p as usize)) {
+            continue;
+        }
+        if aborted(storage) || sizes.get(f).copied().flatten().is_some() {
+            return None;
+        }
+        match std::fs::metadata(storage.file_path(f)) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                first.get_or_insert(f);
+            }
+            _ => return None,
+        }
+    }
+    first.map(|f| storage.file_path(f).to_string_lossy().into_owned())
 }
 
 /// libtorrent `posix_storage::verify_resume_data`, reduced to what pread storage needs: every
@@ -3108,6 +3186,77 @@ pub(crate) mod tests {
         let mut disk = DiskIo::new(3, 8, tx, Arc::new(|| {}));
         let storage = disk.new_storage(dir.to_string_lossy().into_owned(), info, priorities);
         Rig { disk, rx, storage, dir, contents }
+    }
+
+    /// D79: a resume check that finds none of its files (a drive pulled, the save path gone)
+    /// is an error that keeps the pieces, and makes nothing on disk; with nothing to lose, or
+    /// with one file there, it is not.
+    #[test]
+    fn a_resume_check_with_none_of_its_files_is_a_missing_storage() {
+        let r = rig("storage-gone", &[("one", 40_000), ("two", 40_000), ("empty", 0)], 32 * 1024);
+        std::fs::create_dir_all(r.dir.join("test")).unwrap();
+        std::fs::write(r.dir.join("test/one"), &r.contents[0]).unwrap();
+        std::fs::write(r.dir.join("test/two"), &r.contents[1]).unwrap();
+        let info = r.storage.info.clone();
+        let all = Bitfield::new(info.num_pieces() as usize, true);
+        let check = |id: u64, save: &Path, have: &Bitfield| {
+            let s = Arc::new(Storage::new(
+                id,
+                save.to_string_lossy().into_owned(),
+                info.clone(),
+                Vec::new(),
+                Arc::default(),
+            ));
+            r.disk.async_check(&s, CheckMode::Resume(have.clone()));
+            let result = loop {
+                if let Completion::Checked { result, .. } = next(&r.rx) {
+                    break result;
+                }
+            };
+            r.disk.async_fence(&s, FenceAction::Release);
+            assert!(matches!(next(&r.rx), Completion::Fenced { .. }));
+            result
+        };
+        assert!(check(90, &r.dir, &all).unwrap().have.all_set(), "the files are there");
+
+        // the torrent's folder gone: the first file it needs is named, nothing is made
+        std::fs::remove_dir_all(r.dir.join("test")).unwrap();
+        match check(91, &r.dir, &all) {
+            Err((path, Error::Io { kind: io::ErrorKind::NotFound, .. })) => {
+                assert!(path.ends_with("one"), "{path}")
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        assert!(!r.dir.join("test").exists(), "not even the empty file is made");
+        // no pieces to lose: an ordinary check
+        assert!(check(92, &r.dir, &Bitfield::new(all.len(), false)).is_ok());
+
+        // the save path gone (a drive letter or a share that is not there): it is named
+        let save = r.dir.join("drive");
+        match check(93, &save, &all) {
+            Err((path, Error::Io { kind: io::ErrorKind::NotFound, .. })) => {
+                assert_eq!(path, save.to_string_lossy())
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+
+        // one file of two there: only the other's pieces are lost (1.2.46's rule)
+        std::fs::create_dir_all(r.dir.join("test")).unwrap();
+        std::fs::write(r.dir.join("test/two"), &r.contents[1]).unwrap();
+        let res = check(94, &r.dir, &all).unwrap();
+        assert_eq!(res.missing.len(), 1);
+        assert!(!res.have.get(0) && res.have.get(2), "{:?}", res.have.iter().collect::<Vec<_>>());
+
+        // the probe of held torrents' paths answers which exist
+        let there = r.dir.to_string_lossy().into_owned();
+        assert!(r.disk.async_probe_paths(vec![there.clone(), save.to_string_lossy().into_owned()]));
+        match next(&r.rx) {
+            Completion::PathsProbed { present } => assert_eq!(present, [there]),
+            c => panic!("unexpected {c:?}"),
+        }
+        let dir = r.dir.clone();
+        drop(r);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// The next completion, past a check's start (which only the engine's status needs).

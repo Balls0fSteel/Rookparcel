@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-21_111517_1795256117
+Last updated: 2026-11-22_142957_1795354197
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D78](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -19,7 +19,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Current status
 
-- **1.2.71-1.2.74 (not released):** all 34 fixes of the 2026-11-21 bug hunt, its follow-ups, and the macOS swarm flake's cause (1.2.74). **1.2.70:** a check that cannot read a file stops with an error instead of finding no pieces (BACKLOG "Disk and storage" (a)); "Queued for checking" for a check waiting for its drive; round-robin connection attempts; the test flakes of BACKLOG "Validation". Remote `PROTOCOL` 21.
+- **1.2.75 (not released):** a torrent whose storage is gone is held and resumes when it is back (D79); Recheck starts a stopped or queued torrent. **1.2.71-1.2.74:** the 2026-11-21 bug hunt's 34 fixes and follow-ups, the macOS swarm flake's cause. **1.2.70:** unreadable files stop a check with an error, "Queued for checking", round-robin connection attempts, test flakes; remote `PROTOCOL` 21.
 - **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.

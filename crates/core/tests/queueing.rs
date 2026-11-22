@@ -40,6 +40,8 @@ struct Queue {
     backlog: VecDeque<Alert>,
     /// When each torrent was last resumed by the auto-manager, if it is running.
     running: HashMap<TorrentId, Instant>,
+    /// The torrents whose files were checked.
+    checked: Vec<TorrentId>,
 }
 
 impl Queue {
@@ -55,6 +57,7 @@ impl Queue {
                 Alert::TorrentPaused { id } => {
                     self.running.remove(&id);
                 }
+                Alert::TorrentChecked { id } => self.checked.push(id),
                 _ => {}
             }
         }
@@ -118,7 +121,8 @@ fn two_downloads(name: &str, settings: Settings) -> (Session, Queue, TorrentId, 
         ..Default::default()
     })
     .unwrap();
-    let mut q = Queue { h: session.handle(), backlog: VecDeque::new(), running: HashMap::new() };
+    let mut q =
+        Queue { h: session.handle(), backlog: VecDeque::new(), running: HashMap::new(), checked: Vec::new() };
     let save = dir.join("save");
     let a = q.add(&torrents[0], &save);
     let b = q.add(&torrents[1], &save);
@@ -158,6 +162,23 @@ fn inactive_downloads_still_count_against_active_limit() {
     let (session, mut q, _a, b, dir) = two_downloads("limit", settings);
     q.watch(4.0, |q| q.running.contains_key(&b));
     assert!(!q.running.contains_key(&b), "active_limit is full");
+    session.shutdown();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A queued download the user rechecks is checked now, without a slot (as libtorrent's
+/// checking torrents); then it waits for its turn again.
+#[test]
+fn a_recheck_of_a_queued_download_runs_at_once() {
+    let settings = Settings { dont_count_slow_torrents: false, ..Settings::default() };
+    let (session, mut q, a, b, dir) = two_downloads("recheck", settings);
+    assert!(!q.checked.contains(&b), "queued, not checked");
+    q.h.torrent(b).force_recheck();
+    q.watch(10.0, |q| q.checked.contains(&b));
+    assert!(q.checked.contains(&b), "checked while queued");
+    q.watch(3.0, |q| !q.running.contains_key(&b));
+    assert!(!q.running.contains_key(&b), "queued again after the check");
+    assert!(q.running.contains_key(&a), "the first keeps its slot");
     session.shutdown();
     let _ = std::fs::remove_dir_all(dir);
 }
