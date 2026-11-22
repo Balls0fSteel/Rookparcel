@@ -101,6 +101,6 @@ If you run Prowlarr or Jackett already (on this PC, a NAS, a server), add it as 
 2. **Name:** anything. **Torznab URL:** for Jackett, `http://host:9117/api/v2.0/indexers/all/results/torznab/`; for Prowlarr, an indexer's Torznab feed URL, `http://host:9696/1/api`, one source per indexer. **API key:** from Jackett's page, or Prowlarr's Settings > General.
 3. Click **Test**: it should say "OK" and a number of categories. Then **OK**.
 
-The API key is stored encrypted and never shown again. A source on your own computer or network is reached directly; a public one goes through your proxy, if you set one. The helper and your own sources can be used side by side: **All sources** in the arrow's menu asks them all.
+The API key is stored encrypted and never shown again. A source on your own computer or network is reached directly; a public one goes through your proxy, if you set one. (If the proxy looks host names up itself, a source given by a host name other than `localhost` goes through it too; give the source's IP address to keep it direct.) The helper and your own sources can be used side by side: **All sources** in the arrow's menu asks them all.
 
 For how the helper is built and what it does on the wire, see [SEARCH_HELPER.md](SEARCH_HELPER.md); for the Torznab search itself, part 2 of [INTEGRATIONS.md](INTEGRATIONS.md).

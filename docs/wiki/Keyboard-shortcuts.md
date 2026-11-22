@@ -32,6 +32,8 @@ Mouse shortcuts that go with them:
 - Double-clicking a torrent that has finished opens its folder; double-clicking one that has not opens **Properties**.
 - In the Files tab, double-clicking a file or pressing <kbd>Enter</kbd> on it opens it.
 
+In the Files tab's folder tree, <kbd>Right</kbd> or <kbd>+</kbd> opens the focused folder, and <kbd>Left</kbd> or <kbd>-</kbd> closes it; on a file or a closed folder, <kbd>Left</kbd> goes to the folder that holds it. In the torrent list and in the detail tabs, typing the first letters of a name selects the next row whose name starts with them, as in Explorer; pause for a second to start again. *The folder keys and the typing are new in 1.2.21.*
+
 ## The search box and the Files tab filter
 
 | Keys | In the toolbar's search box | In the Files tab's filter box |
@@ -53,6 +55,10 @@ In the file list of the Add New Torrent window:
 | <kbd>Right</kbd> or <kbd>+</kbd> | Opens the focused folder |
 | <kbd>Left</kbd> or <kbd>-</kbd> | Closes the focused folder; on a file or a closed folder, <kbd>Left</kbd> goes to its parent folder |
 | <kbd>Enter</kbd> | Opens or closes the focused folder |
+| Letters | Select the next row whose name starts with them |
+| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Moves to the **Filter files** box above the list, with its text selected |
+
+In the filter box, <kbd>Enter</kbd> moves to the list, and <kbd>Escape</kbd> empties the box; with the box empty, <kbd>Escape</kbd> closes the window like **Cancel**. *The filter box and the typing are new in 1.2.21.*
 
 See [Adding torrents](Adding-torrents).
 
@@ -84,18 +90,23 @@ The GTK version has these shortcuts:
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> | Moves to the search box |
 | <kbd>Ctrl</kbd>+<kbd>P</kbd> | **Preferences** |
 | <kbd>Ctrl</kbd>+<kbd>G</kbd> | **Setup Guide** |
-| <kbd>Ctrl</kbd>+<kbd>L</kbd> | **Lock Rookparcel** |
+| <kbd>Ctrl</kbd>+<kbd>L</kbd> | **Lock Rookparcel**. It works in every Rookparcel window (Preferences, Properties, Add New Torrent and the others), not only the main window. *New in 1.2.76; before, it did nothing while a dialog was open.* |
 | <kbd>Ctrl</kbd>+<kbd>Q</kbd> | **Exit**: quits Rookparcel, also when the window would close to the tray |
+| <kbd>Ctrl</kbd>+<kbd>S</kbd> | **Start** the selected torrents |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> | **Pause** the selected torrents |
+| <kbd>Ctrl</kbd>+<kbd>T</kbd> | **Stop** the selected torrents |
 | <kbd>Delete</kbd> | **Remove** |
 | <kbd>Shift</kbd>+<kbd>Delete</kbd> | Remove and delete the data |
-| <kbd>Ctrl</kbd>+<kbd>A</kbd> | Selects every torrent |
+| <kbd>Ctrl</kbd>+<kbd>A</kbd> | Selects every torrent; in the Files tab, the files its filter shows |
+| <kbd>Enter</kbd> in the torrent list | **Properties** |
 | <kbd>F1</kbd> in Preferences | Shows the focused setting's help |
 | <kbd>Escape</kbd> | Empties the search box or the Files tab's filter; closes dialogs |
 
 What differs from Windows:
 
-- There is no shortcut for Start, Pause, Stop or Properties. Use the toolbar or the right-click menu.
-- <kbd>Ctrl</kbd>+<kbd>A</kbd> does not select all files in the Files tab.
+- Start, Pause, Stop, Properties and Remove have the same keys as on Windows.
+- <kbd>Ctrl</kbd>+<kbd>F</kbd> moves to the Files tab's filter box when the focus is in the Files tab, as on Windows.
+- In the Files tab's folder tree, <kbd>Right</kbd> and <kbd>Left</kbd> open and close folders as on Windows.
 - <kbd>Ctrl</kbd>+<kbd>Q</kbd> quits; on Windows there is no quit shortcut.
 - The Add New Torrent window's keys are the same as on Windows.
 
@@ -157,12 +168,27 @@ Elsewhere in the Web UI:
 
 | Keys | What they do |
 |---|---|
-| <kbd>Ctrl</kbd>+<kbd>P</kbd> | Opens **Preferences** |
+| <kbd>Ctrl</kbd>+<kbd>P</kbd> | Opens **Preferences** (not while the Add or Properties window is open) |
 | <kbd>Escape</kbd> in the filter box | Empties it and moves to the list |
-| <kbd>Enter</kbd> in the filter box | Moves to the list |
+| <kbd>Enter</kbd> in the filter box | In the Add window: moves to the list |
 | <kbd>F1</kbd> in Preferences | Shows the focused setting's help |
 | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> in Preferences | **OK** |
 | <kbd>Enter</kbd> in the Advanced page's value field | Sets the value |
 | <kbd>Escape</kbd> in Preferences | Closes it like **Cancel** |
+| <kbd>Up</kbd>, <kbd>Down</kbd>, <kbd>Home</kbd>, <kbd>End</kbd> on the list of Preferences pages | Move between the pages |
+| <kbd>Ctrl</kbd>+<kbd>Enter</kbd> in Torrent Properties | **OK** (<kbd>Enter</kbd> alone adds a line in the trackers box) |
+
+In the Files tab and in the Add window's file list:
+
+| Keys | What they do |
+|---|---|
+| <kbd>Up</kbd>, <kbd>Down</kbd>, <kbd>Home</kbd>, <kbd>End</kbd> | Move the focus (with <kbd>Shift</kbd>, extend the selection) |
+| <kbd>Right</kbd>, <kbd>Left</kbd> | In the folder tree: open or close a folder; on a file or a closed folder, <kbd>Left</kbd> goes to the parent folder, and <kbd>Right</kbd> on an open folder goes to its first entry |
+| <kbd>Space</kbd> | In the Add window: ticks or unticks the selected files and folders |
+| Letters | Select the next row whose name starts with them |
+| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Moves to the filter box |
+| <kbd>Ctrl</kbd>+<kbd>A</kbd> | In the Files tab: selects the files in sight |
+| <kbd>Escape</kbd> in the filter box | Empties it (in the Add window, closes the window when it is already empty) |
+| <kbd>Enter</kbd> in the filter box | Moves to the list |
 
 On a Mac, <kbd>Command</kbd> works wherever the Web UI says <kbd>Ctrl</kbd>. Your browser's own shortcuts may take some keys first. See [Web UI](Web-UI).

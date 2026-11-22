@@ -20,7 +20,7 @@ The suggested file name is the source's name plus `.torrent`. When hashing is do
 
 **Select Source** is the file or folder the torrent is made from. A folder's name becomes the torrent's name.
 
-**Skip Files** leaves files and folders out of the torrent by name. Write wildcard patterns, `*` for any run of characters and `?` for one, separated by `|` or `;`. Case does not matter. For example, `*.nfo|Thumbs.db|*.tmp` skips NFO files, Windows thumbnail caches and temporary files.
+**Skip Files** leaves files and folders out of the torrent by name. Write wildcard patterns, `*` for any run of characters and `?` for one, separated by `|` or `;`. Case does not matter, and a pattern must match a file's or folder's whole name, not its path. For example, `*.nfo|Thumbs.db|*.tmp` skips NFO files, Windows thumbnail caches and temporary files.
 
 ### Torrent Properties
 
@@ -46,7 +46,7 @@ When in doubt, keep **Hybrid (v1 + v2)**.
 
 | Option | Meaning |
 |---|---|
-| **Start seeding** | adds the new torrent to your list as soon as it is made, with the folder that holds the source as its download folder. Rookparcel checks the files and then seeds. |
+| **Start seeding** | adds the new torrent to your list as soon as it is made, with the folder that holds the source as its download folder. Rookparcel checks the files and then seeds. The trackers from **Trackers for New Downloads** in Preferences are not added to it; it keeps the ones you typed. |
 | **Private torrent** | marks the torrent private: peers are found only through its trackers, never through the DHT, Peer Exchange or Local Peer Discovery. Private trackers ask for this. |
 | **Preserve file order** | keeps a folder's files in the order Windows lists them instead of sorting them by name. Available only for **v1**: v2 and hybrid torrents always sort their files. |
 
@@ -74,6 +74,10 @@ To help a brand new torrent spread, you can turn on **Initial Seeding** for it; 
 ## In the GTK version (Linux, BSD)
 
 The same window with the same options, under **File > Create New Torrent...** (<kbd>Ctrl</kbd>+<kbd>N</kbd>).
+
+## In the macOS app
+
+The same window with the same options, under **File > Create New Torrent...** (<kbd>⌘</kbd>+<kbd>N</kbd>).
 
 ## In the Web UI and rookparcel-nox
 

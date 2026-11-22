@@ -19,13 +19,13 @@ Each part except the menus and the torrent list can be hidden from the **Options
 
 ## The menus
 
-- **File:** **Add Torrent...**, **Add Torrent from URL...**, **Create New Torrent...**, **Import from qBittorrent...**, **Import from µTorrent...**, **Profiles**, **Connect to Remote...** and **Exit**.
+- **File:** **Add Torrent...**, **Add Torrent from URL...**, **Create New Torrent...**, **Import from qBittorrent...**, **Import from µTorrent...**, **Profiles**, **Connect to Remote...**, **Lock Rookparcel** (<kbd>Ctrl</kbd>+<kbd>L</kbd>; see [Locking Rookparcel](Locking-Rookparcel)) and **Exit**.
 - **Options:** **Preferences**, **Setup Guide**, **RSS Downloader...**, the four **Show** items above, **Auto Shutdown**, **Close to Tray** and **Minimize to Tray**.
 - **Help:** **Rookparcel Website**, **Check for Updates**, **Statistics**, **Donate**, **About Rookparcel** and **Third-Party Notices**. **Statistics** (new in 1.2.39) shows what Rookparcel uploaded and downloaded in all its sessions and in this one, the share ratio, the data thrown away, the connected peers and the disk queue and read cache; the all-time totals stay when torrents are removed. **Donate** (new in 1.2.34) shows a short note and a button that opens the website's donation page in your browser.
 
 *File > Profiles is new in 1.1.48 and Options > Setup Guide in 1.1.62.*
 
-Pages: [Adding torrents](Adding-torrents), [Creating torrents](Creating-torrents), [Importing from µTorrent and qBittorrent](Importing-from-uTorrent-and-qBittorrent), [Profiles](Profiles), [Remote control](Remote-control), [Preferences reference](Preferences-reference), [First start and the Setup Guide](First-start-and-the-Setup-Guide), [RSS Downloader](RSS-Downloader), [Auto Shutdown](Auto-shutdown), [Tray, notifications and startup](Tray-notifications-and-startup), [Updating Rookparcel](Updating-Rookparcel).
+Pages: [Locking Rookparcel](Locking-Rookparcel), [Adding torrents](Adding-torrents), [Creating torrents](Creating-torrents), [Importing from µTorrent and qBittorrent](Importing-from-uTorrent-and-qBittorrent), [Profiles](Profiles), [Remote control](Remote-control), [Preferences reference](Preferences-reference), [First start and the Setup Guide](First-start-and-the-Setup-Guide), [RSS Downloader](RSS-Downloader), [Auto Shutdown](Auto-shutdown), [Tray, notifications and startup](Tray-notifications-and-startup), [Updating Rookparcel](Updating-Rookparcel).
 
 ## The toolbar
 
@@ -123,10 +123,10 @@ Click a column header to sort by it. The first click sorts the way that is usual
 | **Stopped** | stopped by you before it finished |
 | **Finished** | stopped after it finished |
 | **Downloading metadata** | a magnet link fetching the torrent's file list |
-| **Checking 45.3 %**, **Queued for checking** | checking the files on disk |
+| **Checking 45.3 %**, **Queued for checking** | checking the files on disk. **Queued for checking** means the check waits for its drive, which checks one torrent at a time. *Queued for checking is new in 1.2.76.* |
 | **Moving** | moving its files to another folder |
 | **Waiting for the network** | **Use only this network** finds no matching network adapter (the VPN is down); it carries on by itself when it is back. *New in 1.1.58.* |
-| **Error: ...** | something went wrong; the message says what |
+| **Error: ...** | something went wrong; the message says what. When a drive, share or folder with the torrent's files is gone, the message says "files missing" and the torrent waits until the files are back (*new in 1.2.76*; see [Disk and storage](Disk-and-storage#when-a-drive-or-share-is-missing)). |
 
 See [Managing torrents](Managing-torrents) for the actions behind these states.
 
@@ -141,7 +141,7 @@ From left to right:
 | Part | Shows |
 |---|---|
 | Update notice | "Rookparcel ... is available - click here to download it", only when a newer version is out. See [Updating Rookparcel](Updating-Rookparcel). |
-| Network | **Network OK** when other peers can connect to you, **No incoming connections** when none has yet. **Port ... in use** means another program, often another Rookparcel profile, holds the listening port; click it to open Preferences > Connection. The scheduler's state follows when it limits the speed, for example "Scheduler: limited". |
+| Network | **Network OK** when other peers can connect to you, **No incoming connections** when none has yet. **Port ... in use** means another program, often another Rookparcel profile, holds the listening port; click it to open Preferences > Connection. The scheduler's state follows when it limits the speed, for example "Scheduler: limited". **Restoring torrents...** shows at the start until the saved torrents are back in the list. **Transfers held: confirm the settings** means Rookparcel could not trust the settings it read (a proxy, network rule or listen interface setting after an update, or a settings file it could not read), so nothing connects; check **Options > Preferences** and click **OK**. See [Updating Rookparcel](Updating-Rookparcel). |
 | **DHT: ... nodes** | how many DHT nodes Rookparcel knows |
 | **D: ... T: ...** | download speed, and total downloaded this session |
 | **U: ... T: ...** | upload speed, and total uploaded this session |
@@ -156,12 +156,12 @@ See [Connection, ports and firewall](Connection-ports-and-firewall), [Speed limi
 
 With **Show current speed in the title bar** on (Preferences > UI Settings), the window title starts with the download and upload speeds, which also show on the taskbar.
 
-Rookparcel puts an icon in the notification area. Hovering it shows the version and the speeds. A click shows or hides the window; a right-click opens a menu with **Hide Rookparcel** or **Show Rookparcel**, **Add Torrent...**, **Add Torrent from URL...**, **Start All Torrents**, **Stop All Torrents** and **Exit**. By default the close button hides the window to the tray and the torrents keep running; **Exit** quits. See [Tray, notifications and startup](Tray-notifications-and-startup).
+Rookparcel puts an icon in the notification area. Hovering it shows the version and the speeds. A click shows or hides the window; a right-click opens a menu with **Hide Rookparcel** or **Show Rookparcel**, **Add Torrent...**, **Add Torrent from URL...**, **Start All Torrents**, **Stop All Torrents**, **Lock Rookparcel** (only once a PIN is set) and **Exit**. By default the close button hides the window to the tray and the torrents keep running; **Exit** quits. See [Tray, notifications and startup](Tray-notifications-and-startup).
 
 ## In the GTK version (Linux, BSD)
 
 - The same layout: toolbar, category list, torrent list, detail tabs and status bar. The toolbar has no **Preferences** button; use **Options > Preferences** or <kbd>Ctrl</kbd>+<kbd>P</kbd>.
-- The **Options** menu has **Preferences**, **Setup Guide**, **RSS Downloader...** and **Auto Shutdown**. There are no **Show** items and no tray items in it.
+- The **Options** menu has **Preferences**, **Setup Guide**, **RSS Downloader...** and **Auto Shutdown**. There are no **Show** items and no tray items in it. **File** has **Lock Rookparcel** as on Windows.
 - **File > Exit** is also <kbd>Ctrl</kbd>+<kbd>Q</kbd>.
 - Right-clicking a column header shows or hides columns; headers can be dragged to reorder them.
 - Double-click works as on Windows: a finished torrent opens its folder, another one opens Properties.

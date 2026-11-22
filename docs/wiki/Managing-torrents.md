@@ -57,15 +57,15 @@ In the Add New Torrent window, **Add to top of queue** puts a new torrent first.
 ## Removing torrents
 
 - **Remove** (<kbd>Del</kbd>) takes the torrents out of the list. The downloaded data stays on disk.
-- **Remove And > Delete Data** (<kbd>Shift</kbd>+<kbd>Del</kbd>) takes them out and deletes their downloaded files. On Windows the files skip the Recycle Bin and cannot be recovered from it.
+- **Remove And > Delete Data** (<kbd>Shift</kbd>+<kbd>Del</kbd>) takes them out and deletes their downloaded files. On Windows the files skip the Recycle Bin and cannot be recovered from it. A partial file ending in `.!ut` or `.!qB` that Rookparcel cannot show to hold this torrent's data is kept; see [Disk and storage](Disk-and-storage#incomplete-files-and-ut).
 
 With **Confirm when deleting torrents** on (Preferences > UI Settings, on by default), Rookparcel asks first and says whether the files are deleted too. Turned off, Remove acts at once.
 
 ## Force Re-Check
 
-**Force Re-Check** reads the torrent's files on disk piece by piece and counts only the pieces that are complete and correct. The status shows **Queued for checking**, then **Checking** with a percentage. Use it after you moved or restored files by hand, or when you suspect damaged data.
+**Force Re-Check** reads the torrent's files on disk piece by piece and counts only the pieces that are complete and correct. The status shows **Queued for checking** while the check waits for its drive (checks run one torrent per drive; *new in 1.2.76*), then **Checking** with a percentage. Use it after you moved or restored files by hand, or when you suspect damaged data.
 
-*New in 1.2.76:* a stopped or queued torrent starts for the check, so it runs at once; stop it again afterwards if you want it stopped. A torrent held with **files missing** (see [Disk and storage](Disk-and-storage#when-a-drive-or-share-is-missing)) is checked against what is there now, and whatever is missing is downloaded again.
+*New in 1.2.76:* a stopped torrent starts with the check; stop it again afterwards if you want it stopped. A queued torrent is checked at once, without waiting for a queue slot, and is queued again after. A torrent held with **files missing** (see [Disk and storage](Disk-and-storage#when-a-drive-or-share-is-missing)) is checked against what is there now, and whatever is missing is downloaded again.
 
 How gently checks use the disk is set in **Preferences > Advanced > Disk I/O**; see [Disk and storage](Disk-and-storage).
 

@@ -40,3 +40,9 @@
 - [Tray and startup](Tray-notifications-and-startup)
 - [Locking Rookparcel](Locking-Rookparcel)
 - [Troubleshooting, FAQ](Troubleshooting-and-FAQ)
+
+**Languages**
+- [Français](Accueil)
+- [Español](Inicio)
+- [Deutsch](Startseite)
+- [Magyar](Kezdőlap)

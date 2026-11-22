@@ -12,7 +12,7 @@ When a newer version is out:
 - After that, a notice stays in the status bar until you click it: "Rookparcel 1.2.76 is available - click here to download it".
 - The Logger tab has a line with the link too.
 
-To check at once, choose **Help > Check for Updates**. It answers either way, with the newer version or with "You have the newest version".
+To check at once, choose **Help > Check for Updates** (on macOS **Rookparcel > Check for Updates**). It answers either way, with the newer version or with "You have the newest version".
 
 ## An installed copy on Windows updates itself
 

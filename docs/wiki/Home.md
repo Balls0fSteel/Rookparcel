@@ -15,6 +15,8 @@ Most pages describe the Windows window and then say what differs in the GTK wind
 
 **Version:** the wiki follows the current code (1.2.76), which is also the newest published release: [1.2.76](https://github.com/Balls0fSteel/Rookparcel/releases/latest). Pages say in which version a newer feature arrived.
 
+**Other languages:** [Français](Accueil) · [Español](Inicio) · [Deutsch](Startseite) · [Magyar](Kezdőlap). The translations follow this English wiki; where they differ, the English page is right.
+
 ## Getting started
 
 - [Installing Rookparcel](Installing-Rookparcel)
@@ -54,6 +56,7 @@ Most pages describe the Windows window and then say what differs in the GTK wind
 ## Reference
 
 - [Preferences reference](Preferences-reference)
+- [Dark mode](Dark-mode)
 - [Keyboard shortcuts](Keyboard-shortcuts)
 - [Tray, notifications and startup](Tray-notifications-and-startup)
 - [Locking Rookparcel](Locking-Rookparcel): hide the windows behind a PIN, and remove a forgotten one

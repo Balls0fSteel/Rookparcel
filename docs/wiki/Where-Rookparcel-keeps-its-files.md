@@ -4,7 +4,7 @@ This page says where Rookparcel keeps its settings and torrent list on each plat
 
 ## Finding the folder
 
-**Help > About Rookparcel** shows the path of the settings file at the bottom. **File > Profiles > Open Profile Folder** opens the folder (*new in 1.1.48*).
+**Help > About Rookparcel** (on macOS **Rookparcel > About Rookparcel**) shows the path of the settings file at the bottom. **File > Profiles > Open Profile Folder** opens the folder (*new in 1.1.48*).
 
 ## Windows
 
@@ -31,10 +31,12 @@ The GTK version follows the XDG folders:
 
 | What | Folder |
 |---|---|
-| settings: `rookparcel.ini`, `rss.dat`, `remote.ini`, `remote/` | `$XDG_CONFIG_HOME/rookparcel/gtk`, else `~/.config/rookparcel/gtk` |
-| torrent list: `resume.db`, `metadata.pack`, `dht_state.dat`, `stats.dat` (the all-time totals of Help > Statistics) | `$XDG_DATA_HOME/rookparcel/gtk`, else `~/.local/share/rookparcel/gtk` |
+| settings: `rookparcel.ini`, `rss.dat`, `remote.ini`, `remote/`, `ipfilter.dat` and the IP filter's downloaded list (`ipfilter-url.dat`, `ipfilter-url.txt`) if you use them | `$XDG_CONFIG_HOME/rookparcel/gtk`, else `~/.config/rookparcel/gtk` |
+| torrent list: `resume.db`, `resume.log`, `metadata.pack`, `dht_state.dat`, `stats.dat` (the all-time totals of Help > Statistics) | `$XDG_DATA_HOME/rookparcel/gtk`, else `~/.local/share/rookparcel/gtk` |
 
-`rookparcel-nox` uses `nox` in place of `gtk` in both paths. Under systemd its folders are the service's own; see [Running rookparcel-nox](Running-rookparcel-nox).
+`rookparcel.lock` in the torrent list's folder marks it as in use. `rookparcel-nox` uses `nox` in place of `gtk` in both paths.
+
+The Flatpak keeps its folders under `~/.var/app/io.github.balls0fsteel.Rookparcel/`. Under systemd its folders are the service's own; see [Running rookparcel-nox](Running-rookparcel-nox).
 
 ## macOS
 

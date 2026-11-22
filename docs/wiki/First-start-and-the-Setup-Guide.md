@@ -6,7 +6,7 @@ This page covers what happens the first time you start Rookparcel: the Setup Gui
 
 ## When the guide opens
 
-The Setup Guide opens by itself at the first start of Rookparcel: when its settings file has no settings in it yet. That is a new installation, a new portable folder, and every new [profile](Profiles). It opens before the main window, so nothing starts downloading before you have answered.
+The Setup Guide opens by itself at the first start of Rookparcel: when its settings file has no settings in it yet. That is a new installation, a new portable folder, and every new [profile](Profiles). It opens before the main window, so nothing starts downloading before you have answered. A settings file that is there but cannot be read does not count as a first start.
 
 It does not open by itself for someone who already used an older version: the settings are there. Open it from the menu instead (below).
 
@@ -76,6 +76,7 @@ Rookparcel can start when you sign in, and open `.torrent` files and `magnet:` l
 This page is left out where it does not apply:
 
 - **The Windows installer** already asked about the associations, so an installed copy shows three pages at its first start. The page is there when you open the guide from the menu.
+- **A window connected to a remote `rookparcel-nox`** shows three pages when you open the guide from the menu.
 - **The Flatpak** shows only the startup box: the desktop decides which program opens `.torrent` files and `magnet:` links. So does macOS where Rookparcel cannot set the associations itself (a named profile, or a bare binary outside `Rookparcel.app`).
 
 ## Opening the guide again

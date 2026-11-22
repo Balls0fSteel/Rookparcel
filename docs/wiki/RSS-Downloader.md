@@ -47,7 +47,7 @@ The **Feeds** list starts with **All Feeds**, then each feed. Under the list, a 
 
 Right-click a feed in the RSS Downloader's Feeds list, or in the main window's category list, for the same entries.
 
-Feeds are checked every 15 minutes. Feed downloads and the `.torrent` files they point to go through the proxy set in Preferences, if you set one.
+Feeds are checked every 15 minutes. Feed downloads and the `.torrent` files they point to go through the proxy set in Preferences, if you set one. The links in a feed's items may lead only to public addresses, unless the feed itself came from a server on this computer or your local network.
 
 ## Downloading items by hand
 
@@ -121,7 +121,7 @@ The **Episode number** field takes one or more ranges, separated by `,` or `;`:
 | `1-12`, `100-` | Episodes 1 to 12; episode 100 and later. |
 | `2026.10.19` | The episode that aired on that date (for daily shows). |
 
-Rookparcel reads episodes from titles written as `S01E02` (also `S01E02E03`, `S01E02-E03`), `1x02`, an air date (`2026.10.19`, `2026-10-19`), or an absolute number (`Show - 12`, `Episode 12`). A season pack such as `Show.S01.Complete` names no episode, so a filter with an episode number does not take it. A field Rookparcel cannot read matches nothing.
+Rookparcel reads episodes from titles written as `S01E02` (also `S01E02E03`, `S01E02-E03`), `1x02`, an air date (`2026.10.19`, `2026-10-19`), or an absolute number (`Show - 12`, `Episode 12`). A version number such as `Ubuntu - 22.04` or a recap such as `Show - 12.5` is not read as an episode. A season pack such as `Show.S01.Complete` names no episode, so a filter with an episode number does not take it. A field Rookparcel cannot read matches nothing.
 
 ### Qualities
 
@@ -145,6 +145,10 @@ The Logger tab of the main window also shows a line for each download ("RSS:" wi
 ## GTK
 
 The GTK window has the same RSS Downloader, opened from **Options > RSS Downloader...**, the toolbar's **RSS Downloader** button, or the right-click menu of **Feeds** in the sidebar. The fields, buttons and tabs are the same as above. The sidebar's **Feeds** branch shows a feed's items in the list, and **Download** in an item's right-click menu (or a double-click) downloads it. The Add RSS Feed window also offers a feed address from the clipboard.
+
+## macOS
+
+The macOS app has the same RSS Downloader, opened from **Options > RSS Downloader...**, the toolbar's **RSS Downloader** button, or the right-click menu of **Feeds** in the sidebar. The fields, buttons and tabs are the same as above. A feed's items show in the list when you pick the feed in the sidebar; double-click an item, press <kbd>Return</kbd> or choose **Download** in its right-click menu to download it.
 
 ## Web UI
 

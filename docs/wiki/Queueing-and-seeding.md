@@ -16,11 +16,13 @@ A torrent you start is handed to the queue. The queue runs as many torrents as i
 | **Queued** | Waiting for a download slot. |
 | **Queued Seed** | Finished, waiting for a seeding slot. |
 | **[F] Downloading**, **[F] Seeding** | Started with **Force Start**, outside the queue. |
+| **Queued for checking**, **Checking** | Waiting for its drive's turn to be checked, then being checked. See [Disk and storage](Disk-and-storage#checking). |
 | **Stopped**, **Paused**, **Finished** | Taken out of the queue by you (or, for Finished, by the seeding goal). |
 
 - **Start** hands the selected torrents to the queue.
 - **Force Start** runs them now, outside the queue, even when its limits are reached. Forced torrents never reach a seeding goal: they seed until you stop them.
 - **Stop** and **Pause** take torrents out of the queue until you start them again.
+- **Force Re-Check** also runs outside the queue: *new in 1.2.76.* A torrent you recheck is checked at once, even when the queue is full, and goes back to waiting its turn afterwards. On a stopped or paused torrent it starts the torrent too, which you can stop again.
 - **Move Up Queue**, **Move Down Queue**, **Move to Top of Queue** and **Move to Bottom of Queue** in the right-click menu change the order. The **#** column shows each torrent's place. Torrents higher up get a slot first.
 
 See [Managing torrents](Managing-torrents) for these commands and their keys. A new torrent can be added at the top of the queue with **Add to top of queue** in the Add New Torrent window ([Adding torrents](Adding-torrents)).
@@ -72,9 +74,9 @@ Until version 1.2.44 the goal was always in force and stopped every torrent at 1
 1. Select the torrent and choose **Properties** (<kbd>Enter</kbd>).
 2. Under **Seeding Goal**, tick **Override default settings**.
 3. Set **Minimum ratio (%): [0: no ratio goal]** and **Minimum seeding time (minutes): [0: no time goal]**. Both 0 makes this torrent seed for ever.
+4. Click **OK**.
 
 A torrent's own goal is always in force, also while the box in Preferences is off: the torrent is stopped when it reaches it (or its upload is limited, when the box is ticked with a rate).
-4. Click **OK**.
 
 ![The Torrent Properties dialog](images/properties.png)
 
@@ -93,7 +95,7 @@ Rookparcel can move a torrent's files to another folder when it finishes downloa
 
 1. Tick **Move completed downloads to:** and choose the folder below it.
 2. Optionally tick **Append the torrent's label**: a torrent with a label goes into a folder named after the label, inside that folder. The label it has when it finishes counts.
-3. Leave **Only move from the default download directory** ticked to move only torrents saved in the folder for new downloads (**Put new downloads in:**); torrents you saved elsewhere then stay where they are. Untick it to move every finished torrent.
+3. Leave **Only move from the default download directory** ticked to move only torrents saved in the folder for new downloads (**Put new downloads in:**) itself; torrents you saved elsewhere, even in a folder inside it, then stay where they are. Untick it to move every finished torrent.
 4. Click **OK**.
 
 It applies to torrents that finish from now on. More on folders and moving files: [Disk and storage](Disk-and-storage#moving-completed-downloads).
@@ -105,6 +107,7 @@ It applies to torrents that finish from now on. More on folders and moving files
 ## In the GTK window and the Web UI
 
 - **GTK window**: the same Queueing page, Properties and menus.
+- **macOS app**: the same Queueing page, Properties and menus; Preferences apply at once, with no **OK**.
 - **Web UI**: the same Queueing page. Its seeding goal box reads **Stop the torrent or limit its upload rate**, with the rate beside it; 0 stops the torrent. The torrent menu has the same queue and Initial Seeding items.
 - **rookparcel-nox**: the queue limits and the seeding goal are set in its Web UI's Preferences. `--move-on-complete DIR` moves each torrent that finishes into a folder.
 

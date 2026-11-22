@@ -11,7 +11,7 @@ By default the window follows Windows' **Settings > Personalization > Colors > C
 
 Everything follows: the window and its menus, the toolbar, the torrent list, the categories, the detail tabs, the status bar and every dialog, Preferences included. The icons come in a light and a dark set. Windows **High Contrast** always wins: with it on, Rookparcel keeps the system's colours.
 
-Dark needs **Windows 10 version 1809** or later. An older Windows, or one without the parts dark mode uses, shows a note under the Theme box and stays light. Two things stay the system's in dark: message boxes, and the progress bar of the update download while it has no size yet.
+Dark needs **Windows 10 version 1809** or later. An older Windows, or one without the parts dark mode uses, shows a note under the Theme box and stays light. Three things stay the system's: message boxes, the file picker (it follows Windows' own mode, not the Theme setting), and the progress bar of the update download while it has no size yet.
 
 ## Linux (GTK)
 

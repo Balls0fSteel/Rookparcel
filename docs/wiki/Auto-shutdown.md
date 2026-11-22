@@ -32,7 +32,7 @@ The choice lasts for this run only: every start of Rookparcel begins at **Disabl
 
 In both cases:
 
-- A stopped or paused torrent, or one with an error, does not count: it waits for you.
+- A stopped or paused torrent, or one with an error, does not count: it waits for you. A torrent held because its drive or folder is missing has an error too ([Disk and storage](Disk-and-storage#when-a-drive-or-share-is-missing)).
 - A torrent whose files are being moved counts as work until the move is done.
 - Auto Shutdown acts only after it has seen work while the item was chosen. Choosing it when nothing is left to do waits for the next download instead of acting at once.
 
@@ -44,6 +44,7 @@ When the work is done, a small **Auto Shutdown** window appears on top of all wi
 > The computer will shut down in 0:30.
 
 - Click **Cancel** (or press <kbd>Esc</kbd>) to call it off. Auto Shutdown is then **Disabled**.
+- With the windows locked by a PIN ([Locking Rookparcel](Locking-Rookparcel)), the countdown still shows, so you can cancel it.
 - If new work arrives during the countdown, such as an RSS download, the countdown closes and waits until that work is done too; then a full countdown starts again.
 - When the time is up, it acts.
 

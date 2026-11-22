@@ -68,7 +68,9 @@ Each [profile](Profiles) has its own PIN, or none. So does each window connected
 
 ## GTK version (Linux, BSD)
 
-The lock works as on Windows. On desktops without a tray (plain GNOME without the AppIndicator extension), there is nowhere to hide the windows, so the **Rookparcel is locked** window takes their place. It has no **Cancel** button, and closing it quits Rookparcel, as closing the main window does there.
+The lock works as on Windows. <kbd>Ctrl</kbd>+<kbd>L</kbd> locks from any Rookparcel window, not only the main one: Preferences, Properties, Create New Torrent, Add New Torrent, the RSS Downloader, the Search windows and the other dialogs (not the PIN windows). *New in 1.2.76; before, it did nothing while one of those dialogs was open.* If the tray goes away while Rookparcel is locked (the panel restarts, say), the **Rookparcel is locked** window comes up, so the windows are not left hidden with no way back. *New in 1.2.76.*
+
+On desktops without a tray (plain GNOME without the AppIndicator extension), there is nowhere to hide the windows, so the **Rookparcel is locked** window takes their place. It has no **Cancel** button, and closing it quits Rookparcel, as closing the main window does there.
 
 ## macOS
 

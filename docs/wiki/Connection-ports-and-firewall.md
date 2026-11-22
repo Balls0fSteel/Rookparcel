@@ -54,6 +54,8 @@ The left part of the status bar tells you:
 | **No incoming connections** | No peer has connected in yet. Normal for the first minutes after a start; if it stays, the port is not reachable. |
 | **Port 6881 in use** (with your port number) | Another program, often another Rookparcel profile, holds the port, and Rookparcel listens on a later port where nothing is forwarded. Click it to open Preferences at Connection and choose another port. |
 
+Two notices can come before these words. **Transfers held: confirm the settings** means Rookparcel holds all transfers until you confirm the settings after a version change: see [Updating Rookparcel](Updating-Rookparcel). **Waiting for the network** means "Use only this network" finds no matching adapter: see the section below.
+
 *"Port ... in use" is new in 1.1.45.*
 
 Hold the pointer over that part to see **Your address as trackers see it:**, the public address trackers report back. The **General** tab shows the same line. *New in 1.1.58.*
@@ -200,7 +202,7 @@ By default the filter also applies to the DHT and to trackers at blocked address
 ## In the GTK window and the Web UI
 
 - **GTK window**: the same pages and settings. The status bar's network part says the same things, and a click on "Port ... in use" opens Preferences at Connection.
-- **Web UI**: the same pages under **Preferences**; its status bar shows the network part with the same tooltip.
+- **macOS app**: the same pages, applying at once with no **OK** ([Preferences reference](Preferences-reference#differences-on-macos)).- **Web UI**: the same pages under **Preferences**; its status bar shows the network part with the same tooltip.
 - **rookparcel-nox**: `--port N` sets the listening port (default 6881), `--listen` sets the listen interfaces in full, `--proxy TYPE://[USER:PASS@]HOST:PORT` sets a proxy, `--ip-filter FILE` loads a block list file (the address is set in the Web UI's Preferences), and `--network` sets "Use only this network". A service on Windows needs a firewall rule for `rookparcel-nox.exe`: see [Running rookparcel-nox](Running-rookparcel-nox).
 
 ## Related pages

@@ -105,6 +105,7 @@ Prowlarr only adds torrents; it does not track or import them. Add Rookparcel in
 
 - Rookparcel reports itself as qBittorrent's API version 2.11.2.
 - Ignored when an app sends them: the content layout choice and Sonarr's inactive seeding time limit. "First and last piece first" is honoured since 1.2.63; before that it was ignored.
+- An app's recheck request keeps qBittorrent's behaviour: a stopped torrent stays stopped and is checked when it starts. **Force Re-Check** in the Web UI and the windows starts a stopped torrent since 1.2.76.
 - Adding a torrent that is already in the list is answered as a success; the app then tracks the existing one.
 - The API shows the IP filter's `ip_filter_enabled` and `ip_filter_path` but does not change them, and it has no setting for the block list's web address. Set those in Rookparcel's own Preferences.
 

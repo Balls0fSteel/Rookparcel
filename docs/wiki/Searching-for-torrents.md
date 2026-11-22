@@ -41,6 +41,10 @@ The choice is remembered between starts. If the chosen source is removed or swit
 
 The menu button beside the box has the same entries, except that the filter entry is called **Search torrent names**. With a source chosen, the hint changes to "Search with Prowlarr or Jackett".
 
+### macOS
+
+The search field's menu has the same entries as GTK's: **Search torrent names**, each source that is switched on, **All sources** and **Manage Sources...**.
+
 ### Web UI
 
 The Web UI's search box only filters the list. Searching has its own button, **Find**, beside it (on a phone, in the toolbar's **More** menu, as **Search Torrents**). Find opens the Search Torrents window with the text of the filter box already in it.
@@ -87,7 +91,7 @@ The URL must start with `http://` or `https://`.
 
 **The API key** is stored encrypted (on Windows) and never shown again. When you edit a source, the key box starts empty with the grey hint "Unchanged"; leave it empty to keep the stored key, or type a new one. The key is taken out of any address shown in an error or a status line.
 
-**Proxy.** A source on this computer or your local network is always reached directly. A source on a public address goes through the proxy set in Preferences, if you set one. See [Connection, ports and firewall](Connection-ports-and-firewall).
+**Proxy.** A source on this computer or your local network is reached directly: an IP address or `localhost` that is not public, or a host name whose addresses all are. A source on a public address goes through the proxy set in Preferences, if you set one. If the proxy looks host names up itself (a SOCKS proxy set to send host names, or an HTTP proxy for a plain `http://` address), Rookparcel does not look a name up on this computer first, so a source given by a host name other than `localhost` goes through the proxy too; give the source's IP address to keep it direct. See [Connection, ports and firewall](Connection-ports-and-firewall).
 
 ### In the Web UI
 
@@ -111,7 +115,7 @@ The search helper is [Jackett](https://github.com/Jackett/Jackett), a separate f
 | Flatpak | No |
 | FreeBSD | No (Jackett has no build for it) |
 | Builds made by a package manager with the update check left out | No |
-| Web UI and `rookparcel-nox` | No buttons for it |
+| Web UI and `rookparcel-nox` | Yes, when the server is Windows, Linux or macOS (not FreeBSD, not a Flatpak). *New in 1.1.67.* |
 
 Where it is not offered, the Search Sources window has no helper buttons, and **Add...** for your own Prowlarr or Jackett still works.
 
@@ -143,6 +147,10 @@ Once the helper is installed, the **Get** button is replaced by four others:
 - It needs no administrator rights.
 - If you set a proxy in Preferences, the helper uses it for the sites. "Use only this network" does not bind the helper, because it is a separate program: its requests take the computer's normal route.
 
+### In the Web UI and `rookparcel-nox`
+
+**Manage Sources** in the Web UI has the same buttons and the same site list. The helper is downloaded and runs on the server, not on the computer with the browser, and with `rookparcel-nox --no-state` it is not offered. Each step that takes time shows its progress, and the download has a **Cancel**. Downloading it needs the current Web UI password, as adding a source does. The helper's own page listens on the server's `127.0.0.1`, so **Open the Helper's Page** is shown only to a browser on the computer Rookparcel runs on; elsewhere the window says so. A window connected with **File > Connect to Remote...** uses its own helper, on this computer.
+
 ### Where it lives
 
 The `search-helper` folder in your profile's folder:
@@ -152,6 +160,7 @@ The `search-helper` folder in your profile's folder:
 | Windows | `%APPDATA%\Rookparcel\search-helper`; in portable mode, the folder with `rookparcel.exe`; with a profile, that profile's folder |
 | Linux (GTK) | `~/.local/share/rookparcel/gtk/search-helper` (with a profile, under `profiles/<name>/`) |
 | macOS | `~/Library/Application Support/Rookparcel/mac/search-helper` (with a profile, under `profiles/<name>/`) |
+| `rookparcel-nox` | `search-helper` in its state folder: `%APPDATA%\Rookparcel\nox\search-helper`, `~/.local/share/rookparcel/nox/search-helper`, or `/var/lib/rookparcel-nox/search-helper` under the shipped system service |
 
 Each profile has its own helper. See [Where Rookparcel keeps its files](Where-Rookparcel-keeps-its-files) and [Profiles](Profiles).
 

@@ -10,9 +10,9 @@ Look at the torrent's **Status** column and at the status bar at the bottom of t
 |---|---|
 | **Queued** | The queue is full: the number of active torrents or downloads set in **Preferences > Queueing** is reached. The torrent starts when another one finishes or stops. **Force Start** in the right-click menu runs it outside the queue. See [Queueing and seeding](Queueing-and-seeding). |
 | **Stopped** or **Paused** | Start it with **Start** (<kbd>Ctrl</kbd>+<kbd>S</kbd>). With **Don't start the download automatically** on in Preferences > UI Settings, new torrents are added stopped. |
-| **Queued for checking**, **Checking** | Rookparcel is checking the files already on disk. Torrents on the same drive are checked one after another; with **Check torrents gently** on, they give way to other programs and take longer while the disk is busy. See [Disk and storage](Disk-and-storage). |
+| **Queued for checking**, **Checking** | Rookparcel is checking the files already on disk. Torrents on the same drive are checked one after another: the ones waiting for their turn say **Queued for checking**. With **Check torrents gently** on, a check gives way to other programs and takes longer while the disk is busy. See [Disk and storage](Disk-and-storage). *Waiting checks say so since 1.2.76; before, they read **Checking** at 0 %.* |
 | **Waiting for the network** | **Use Only This Network** is on in Preferences > Connection and its network (usually your VPN) is not there. The torrent carries on by itself when it comes back. See [Connection, ports and firewall](Connection-ports-and-firewall). |
-| **Error: ...** | The message after "Error:" says what went wrong. |
+| **Error: ...** | The message after "Error:" says what went wrong. For "files missing (the drive, share or folder is not available)", see the next section. If a check stops with an error naming a file, another program holds that file open or you may not read it: close the program or fix the permission, then **Start** the torrent. *Since 1.2.76 such a check stops with the error; before, it counted the file's pieces as missing and downloaded them again.* |
 | "Scheduler: limited", "Scheduler: turned off" or "Scheduler: seeding only" in the status bar | The scheduler is holding speeds back this hour. See [Speed limits and scheduler](Speed-limits-and-scheduler). |
 | "(auto ...)" beside the speeds in the status bar | **Keep ping low** is capping the speed because the delay on your line grew. See [Keep ping low](Keep-ping-low). |
 
@@ -24,6 +24,22 @@ Other things to check:
 - **A busy disk.** With **Slow downloads down (disk writes)** on (Preferences > Advanced > Disk I/O), Rookparcel lowers the download speed while the disk answers slowly.
 - **A proxy for peer connections.** With **Use proxy for peer-to-peer connections** on, nobody can connect to you, which leaves fewer peers.
 - **No incoming connections** (below) also costs speed: you can reach only peers that accept connections themselves.
+
+## "Files missing (the drive, share or folder is not available)"
+
+When a torrent's save folder is not there (a USB or network drive that is unplugged, a share or mount that is not connected), Rookparcel stops the torrent with this error instead of downloading it again. The pieces it had stay recorded, and they stay so across restarts.
+
+1. Connect the drive or share again. Every 30 seconds Rookparcel looks for the folder; when it is back, the torrent starts by itself and finds its files as they were.
+2. To try at once, choose **Start**. If the folder is still missing, the torrent stops with the error again.
+3. If you moved or deleted the files for good, **Force Re-Check** takes what is in the folder now: pieces that are not there are downloaded again.
+
+A drive pulled while the torrent is downloading is held the same way. When only some of a torrent's files are gone, it downloads those again instead. See [Managing torrents](Managing-torrents). *New in 1.2.76; before, the torrent downloaded everything again.*
+
+**Force Re-Check** on a stopped torrent now starts it, as **Start** does, and the check runs at once even when the torrent was queued; stop it again if you want it stopped. *New in 1.2.76; before, the check waited for a Start.*
+
+## "Transfers held: confirm the settings"
+
+After an update, or when the settings file cannot be read, Rookparcel holds all transfers until you confirm that its proxy, network and listening settings are what you want. Open **Options > Preferences > Connection**, check them and click **OK**. The Logger tab lists what changed. See [Updating Rookparcel](Updating-Rookparcel#when-a-version-reads-your-settings-differently).
 
 ## "No incoming connections" or "Port ... in use"
 
@@ -71,6 +87,10 @@ Tick **Associate with .torrent files** and **Associate with magnet: links** in *
 - An app that reaches Rookparcel by a host name (as in Docker) fails with "unexpected Host header". Add the name in **Server domains**, or use the IP address.
 
 See [Web UI](Web-UI) and [Sonarr, Radarr and Prowlarr](Sonarr-Radarr-and-Prowlarr).
+
+## A remote window says "the server refused the connection (HTTP 426)"
+
+A window connected with **File > Connect to Remote...** and the `rookparcel-nox` it connects to must be the same version: the message ends with "this server speaks remote protocol ...". Some releases change the remote protocol (the last time in 1.2.70), so after you update one side to 1.2.76, update the other too: the desktop window, and the `rookparcel-nox` program or its Docker image. A browser using the Web UI does not have this limit. See [Remote control](Remote-control) and [Updating Rookparcel](Updating-Rookparcel).
 
 ## Closing Rookparcel takes a long time
 

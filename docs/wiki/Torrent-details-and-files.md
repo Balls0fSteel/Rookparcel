@@ -141,8 +141,8 @@ Select one or more files and right-click:
 | Item | Does |
 |---|---|
 | **Open** | opens the file in its default program, as a double-click in Explorer would; nothing happens while it is not on disk yet |
-| **Open Containing Folder** | opens its folder in Explorer, with the file selected once it exists |
-| **Prioritize by File Order** | gives the selected files falling priorities in their order in the torrent, so they finish one after another |
+| **Open Containing Folder** | opens its folder in Explorer, with the file selected once it exists; until then, the nearest folder of the torrent that exists |
+| **Prioritize by File Order** | gives the selected files falling priorities in their order in the torrent, so they finish one after another; files you had skipped are downloaded again |
 | **Priority > High Priority / Normal Priority / Low Priority** | sets the priority; higher-priority files get their pieces first |
 | **Don't Download** | skips the files |
 | **Relocate...** | picks a new place for one file and moves it there; for a file not on disk, tells the torrent to look for it there |
@@ -233,6 +233,10 @@ Select several torrents and open Properties to change them together. A field who
 
 - The same seven tabs with the same columns, the same Files tab menu and filter box, and the same Properties window.
 - **Open** and **Open Containing Folder** use your desktop's default programs and file manager.
+
+## In the macOS app
+
+- The same seven tabs and columns, the same Files tab menu (with **Open** and **Open Containing Folder** in Finder), **Tree View** and **Filter files** box, and the same Properties window.
 
 ## In the Web UI
 

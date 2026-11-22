@@ -8,7 +8,7 @@ The alternative is the [Web UI](Web-UI) in a browser, which needs nothing instal
 
 - A `rookparcel-nox` running with its Web UI on, for example `rookparcel-nox run --webui 0.0.0.0:8443 --webui-https` ([Running rookparcel-nox](Running-rookparcel-nox)). The remote window uses the Web UI's port and login.
 - The Web UI's user name and password.
-- The same Rookparcel version on both sides. A server that speaks another version refuses the connection with "the server refused the connection (HTTP 426): this server speaks remote protocol ...". Version 1.2.63 changed the remote protocol (for **Append .!ut to incomplete files**), so update the server and the computers with remote windows together.
+- The same Rookparcel version on both sides. A server that speaks another version refuses the connection with "the server refused the connection (HTTP 426): this server speaks remote protocol ...". The remote protocol changes from time to time (last in 1.2.70), and 1.2.76 does not connect to 1.2.63 to 1.2.69, so update the server and the computers with remote windows together. The Web UI and the qBittorrent-compatible API are not affected.
 
 A remote window connects to `rookparcel-nox`. The Windows program's own Web UI (**Preferences > Web UI**) is for browsers.
 
@@ -63,6 +63,8 @@ What is different:
 | **Open Containing Folder** | Off: the folder is on the server. |
 | Creating torrents | A torrent you create here cannot be seeded by the server, since the files are on this computer. |
 | IP filter | The server's own IP filter applies; the window's is not sent. |
+| Importing | **File > Import** does nothing (greyed in the Windows and macOS programs): the server does not take torrents from another client's saved state. |
+| Folder limits | A server started with `--webui-save-root` refuses an add or a move into a folder outside those roots, as it does for the Web UI. A rename that would leave the torrent's folder is refused too. |
 | **Preferences > Web UI** | A remote window cannot serve the Web UI: "A remote window cannot serve the Web UI; use the local window's Preferences." |
 | Labels, tags, RSS feeds, window settings | Kept on this computer, separately for each server (see below). |
 | Scheduler, RSS Downloader, seeding goal, `.torrent` folders | The window's own run while it is open and act on the server's torrents, in addition to anything nox does itself. |

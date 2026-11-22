@@ -121,7 +121,7 @@ flatpak install --user Rookparcel-1.2.76-x86_64.flatpak
 flatpak run io.github.balls0fsteel.Rookparcel
 ```
 
-After that it is in your applications menu. The Flatpak has no update check of its own and no portable mode. Its `.torrent` and `magnet:` associations are the desktop's choice: pick Rookparcel as the default program in your desktop's settings.
+After that it is in your applications menu. The Flatpak may write to your home folder; for a download folder on another disk, give it access once, for example `flatpak override --user --filesystem=/mnt/data io.github.balls0fsteel.Rookparcel` (with your folder). The Flatpak has no update check of its own and no portable mode. Its `.torrent` and `magnet:` associations are the desktop's choice: pick Rookparcel as the default program in your desktop's settings.
 
 ### Plain binaries (tar.gz)
 

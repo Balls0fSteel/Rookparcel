@@ -105,3 +105,68 @@ Existing page, do not edit: `Searching-for-torrents-on-Windows` (source `docs/SE
 | rss-downloader.png | the RSS Downloader window |
 | auto-shutdown.png | the Auto Shutdown window |
 | search-sources.png | the Search Sources window |
+
+## Translations (French, Spanish, German, Hungarian)
+
+*Added 2026-11-22_205639_1795377399.* Each language has a folder: `docs/wiki/fr/`, `es/`, `de/`,
+`hu/`. GitHub flattens folders, so every page name must be unique across the whole wiki; use
+exactly the names in the table below (file = name + `.md`). Each folder has its own
+`_Sidebar.md` and `_Footer.md` (GitHub uses the nearest one), translated from the English ones.
+
+- Translate the current English page in full: same sections, steps, tables, notes and
+  "*New in ...*" lines. Do not add, drop or "improve" facts; if the English looks wrong, report it.
+- UI names in **bold** use the app's own translation: look up the English string's key in
+  `crates/frontend/src/lang/en.rs` (or `en.lng`) and copy that key's text from
+  `crates/frontend/lang/<code>.lng`, dropping the `&` accelerator marks and the trailing `...`
+  only where the English page drops them. If a key is missing there, keep the English name.
+  Help texts (`help.<Key>=` lines) are in the same `.lng` files.
+- Keep code, commands, flags, paths, file names, keys (<kbd>Ctrl</kbd>), URLs, image links and
+  `#anchors` into English pages unchanged. Links between translated pages use the translated
+  page names; an anchor into a translated page uses that page's translated heading
+  (GitHub: lower case, spaces to `-`, punctuation dropped, accents kept).
+- Each translated page starts with one line in italics, in the language, saying it is a
+  translation of the English page (linked) and that the English page is authoritative.
+- Natural, plain, formal-polite register: French *vous*, Spanish *usted*-free neutral
+  imperative (*haga clic* style is fine, be consistent), German *Sie*, Hungarian magázó/neutral
+  ("kattintson"). Same calm style as the English.
+- The English `Home.md` and `_Sidebar.md` link each language's home page.
+
+| English page | fr | es | de | hu |
+|---|---|---|---|---|
+| Home | Accueil | Inicio | Startseite | Kezdőlap |
+| Installing-Rookparcel | Installer-Rookparcel | Instalar-Rookparcel | Rookparcel-installieren | A-Rookparcel-telepítése |
+| First-start-and-the-Setup-Guide | Premier-démarrage | Primer-inicio | Erster-Start | Első-indítás |
+| Where-Rookparcel-keeps-its-files | Emplacement-des-fichiers-de-Rookparcel | Dónde-guarda-Rookparcel-sus-archivos | Wo-Rookparcel-seine-Dateien-ablegt | Hol-tárolja-a-Rookparcel-a-fájljait |
+| Profiles | Profils | Perfiles | Profile | Profilok |
+| Updating-Rookparcel | Mettre-à-jour-Rookparcel | Actualizar-Rookparcel | Rookparcel-aktualisieren | A-Rookparcel-frissítése |
+| Adding-torrents | Ajouter-des-torrents | Añadir-torrents | Torrents-hinzufügen | Torrentek-hozzáadása |
+| The-main-window | La-fenêtre-principale | La-ventana-principal | Das-Hauptfenster | A-főablak |
+| Managing-torrents | Gérer-les-torrents | Gestionar-torrents | Torrents-verwalten | Torrentek-kezelése |
+| Torrent-details-and-files | Détails-et-fichiers-des-torrents | Detalles-y-archivos-del-torrent | Torrent-Details-und-Dateien | Torrent-részletek-és-fájlok |
+| Creating-torrents | Créer-des-torrents | Crear-torrents | Torrents-erstellen | Torrentek-készítése |
+| Importing-from-uTorrent-and-qBittorrent | Importer-depuis-uTorrent-et-qBittorrent | Importar-desde-uTorrent-y-qBittorrent | Import-aus-uTorrent-und-qBittorrent | Importálás-uTorrentből-és-qBittorrentből |
+| Searching-for-torrents | Rechercher-des-torrents | Buscar-torrents | Torrents-suchen | Torrentek-keresése |
+| Searching-for-torrents-on-Windows | Rechercher-des-torrents-sous-Windows | Buscar-torrents-en-Windows | Torrents-suchen-unter-Windows | Torrentek-keresése-Windowson |
+| RSS-Downloader | Téléchargeur-RSS | Descargador-RSS | Downloads-per-RSS | RSS-letöltő |
+| Speed-limits-and-scheduler | Limites-de-vitesse-et-planificateur | Límites-de-velocidad-y-programador | Geschwindigkeitsbegrenzung-und-Zeitplan | Sebességkorlátok-és-ütemező |
+| Keep-ping-low | Garder-un-ping-bas | Mantener-el-ping-bajo | Niedrigen-Ping-halten | Alacsony-ping |
+| Connection-ports-and-firewall | Connexion-ports-et-pare-feu | Conexión-puertos-y-cortafuegos | Verbindung-Ports-und-Firewall | Kapcsolat-portok-és-tűzfal |
+| Queueing-and-seeding | Mise-en-file-et-partage | Cola-y-siembra | Warteschlange-und-Seeding | Várólista-és-seedelés |
+| Disk-and-storage | Disque-et-stockage | Disco-y-almacenamiento | Datenträger-und-Speicher | Lemez-és-tárolás |
+| Auto-shutdown | Arrêt-automatique | Apagado-automático | Automatisches-Herunterfahren | Automatikus-leállítás |
+| Web-UI | Interface-Web | Interfaz-web | Weboberfläche | Webes-felület |
+| Remote-control | Contrôle-à-distance | Control-remoto | Fernsteuerung | Távvezérlés |
+| Running-rookparcel-nox | Utiliser-rookparcel-nox | Ejecutar-rookparcel-nox | rookparcel-nox-betreiben | A-rookparcel-nox-futtatása |
+| Docker | Rookparcel-avec-Docker | Rookparcel-en-Docker | Rookparcel-mit-Docker | Rookparcel-Dockerben |
+| Sonarr-Radarr-and-Prowlarr | Sonarr-Radarr-et-Prowlarr | Sonarr-Radarr-y-Prowlarr | Sonarr-Radarr-und-Prowlarr | Sonarr-Radarr-és-Prowlarr |
+| Preferences-reference | Référence-des-préférences | Referencia-de-preferencias | Einstellungen-im-Überblick | A-beállítások-leírása |
+| Dark-mode | Mode-sombre | Modo-oscuro | Dunkler-Modus | Sötét-mód |
+| Keyboard-shortcuts | Raccourcis-clavier | Atajos-de-teclado | Tastenkürzel | Billentyűparancsok |
+| Tray-notifications-and-startup | Zone-de-notification-et-démarrage | Bandeja-notificaciones-e-inicio | Infobereich-Benachrichtigungen-und-Autostart | Tálca-értesítések-és-indítás |
+| Locking-Rookparcel | Verrouiller-Rookparcel | Bloquear-Rookparcel | Rookparcel-sperren | A-Rookparcel-zárolása |
+| Troubleshooting-and-FAQ | Dépannage-et-FAQ | Solución-de-problemas-y-preguntas-frecuentes | Fehlerbehebung-und-FAQ | Hibaelhárítás-és-GYIK |
+
+The source of Searching-for-torrents-on-Windows is `docs/SEARCH_ON_WINDOWS.md`; its
+translations live in the language folders like the rest. Its images are in `docs/screenshots/`,
+not the wiki: write them as full URLs,
+`https://raw.githubusercontent.com/Balls0fSteel/Rookparcel/main/docs/screenshots/<name>.png`.

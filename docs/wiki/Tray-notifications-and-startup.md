@@ -76,7 +76,7 @@ Good to know on Windows:
 
 ## GTK version (Linux, BSD)
 
-**The tray.** Rookparcel shows a tray icon on desktops that keep one: KDE Plasma, Xfce, LXQt, Cinnamon, MATE, waybar, and GNOME with the AppIndicator extension. Its menu has the same items as on Windows. On plain GNOME without that extension there is no tray: the tray boxes do not appear in Preferences, and closing the window quits Rookparcel. <kbd>Ctrl</kbd>+<kbd>Q</kbd> quits from the window.
+**The tray.** Rookparcel shows a tray icon on desktops that keep one: KDE Plasma, Xfce, LXQt, Cinnamon, MATE, waybar, and GNOME with the AppIndicator extension. Its menu has the same items as on Windows. If the tray goes away (the panel restarts, say) while Rookparcel is hidden in it, Rookparcel shows the main window, or the PIN window when it is locked, so nothing is left with no way back. *New in 1.2.76.* On plain GNOME without that extension there is no tray: the tray boxes do not appear in Preferences, and closing the window quits Rookparcel. <kbd>Ctrl</kbd>+<kbd>Q</kbd> quits from the window.
 
 **Minimize to tray** needs the desktop to report that the window was minimized; where it does not (some Wayland desktops), minimizing stays a normal minimize.
 
@@ -88,7 +88,7 @@ Good to know on Windows:
 
 ## macOS
 
-**The menu bar.** Rookparcel puts its icon in the menu bar, where Windows has the tray. Pointing at it shows the speeds. A click hides the window or brings it back; a right-click or Control-click opens the menu: **Hide Rookparcel** / **Show Rookparcel**, **Add Torrent...**, **Add Torrent from URL...**, **Start All Torrents**, **Stop All Torrents** and **Quit Rookparcel**. The Dock icon's menu has the same items.
+**The menu bar.** Rookparcel puts its icon in the menu bar, where Windows has the tray. Pointing at it shows the speeds. A click hides the window or brings it back; a right-click or Control-click opens the menu: **Hide Rookparcel** / **Show Rookparcel**, **Lock Rookparcel** (once a lock PIN is set), **Add Torrent...**, **Add Torrent from URL...**, **Start All Torrents**, **Stop All Torrents** and **Quit Rookparcel**. The Dock icon's menu has the same items, without **Quit Rookparcel**, which the Dock adds itself. While Rookparcel is [locked](Locking-Rookparcel), the menus offer only **Show Rookparcel** (and **Quit Rookparcel** in the menu-bar icon's).
 
 **Closing the window.** With **Close to tray** on (the default), the window's close button (<kbd>⌘</kbd>+<kbd>W</kbd>) hides the window and Rookparcel keeps running. Click the Dock icon or the menu-bar icon to bring it back. To quit, choose **Rookparcel > Quit Rookparcel** (<kbd>⌘</kbd>+<kbd>Q</kbd>) or **Quit Rookparcel** in the menu-bar icon's menu. **Minimize to tray** hides a minimized window the same way.
 

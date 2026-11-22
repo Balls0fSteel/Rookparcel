@@ -20,6 +20,8 @@ The GTK program (Linux, BSD) and the macOS app do not serve a Web UI of their ow
 5. Click **Apply** or **OK**. The line at the bottom says "The Web UI is running: ..." with its address.
 6. Click **Open Web UI** to open it in your browser.
 
+If the Web UI cannot start (the port is in use, say), the page's status line says why. The settings on the other pages are applied all the same.
+
 The Web UI runs only while Rookparcel runs. Close the window to the tray to keep it up ([Tray, notifications and startup](Tray-notifications-and-startup)). It restarts when you apply changes on this page.
 
 The other settings on the page:
@@ -70,6 +72,7 @@ Open the address in a browser: `http://127.0.0.1:8080/` on the same computer, or
 - After five wrong logins in a row from one address, that address is locked out for an hour. Both numbers are in **Preferences > Web UI**.
 - A login ends after an hour without a request from that browser (**Session timeout (seconds):**).
 - Setting a new password logs out every other browser and remote window; the one that changed it stays logged in.
+- When the session ends (after the timeout, or **Log out**), the page closes its open dialogs and shows the login form. A `.torrent` file that was waiting to be added stays queued and opens its Add dialog after you log in again.
 - When the connection to Rookparcel drops, the status bar shows "Disconnected, reconnecting in ... s" and the page connects again by itself.
 
 ## HTTPS
@@ -90,12 +93,12 @@ The page follows the desktop window: the same columns, menus, words and order.
 - **Categories** on the left with their counts, including the labels, the tags and the RSS feeds. Right-click the **Tags** branch (a long press on a phone) for **New Tag...**, or a tag for **Delete Tag** (*tags are new in 1.2.63*).
 - **The torrent list:** click a header to sort, drag headers to reorder or resize, right-click a header to choose columns (**Reset Columns** puts them back).
 - **The detail tabs** under the list: General, Trackers, Peers, Pieces, Files, Speed and Logger ([Torrent details and files](Torrent-details-and-files)).
-- **The right-click menu** has what the window's menu has: **Force Start**, **Start**, **Pause**, **Stop**, the queue moves, **Remove** and **Remove And > Delete Data**, **Force Re-Check**, **Update Tracker**, **Copy Magnet Link**, **Export .torrent...**, **Advanced > Set Download Location...**, **Initial Seeding**, **Download in Sequential Order** and **Download First and Last Pieces First**, **Bandwidth Allocation**, **Label**, **Tags**, and **Properties** ([Managing torrents](Managing-torrents)). **Open Containing Folder** is grey: a browser cannot open a folder on the server. *Copy Magnet Link, Export .torrent and the two download order items are new in 1.2.63.* Export downloads the `.torrent` file through the browser. Where the browser gives the page no clipboard (plain `http://` from another computer), Copy Magnet Link shows the links for you to copy by hand.
+- **The right-click menu** has what the window's menu has: **Force Start**, **Start**, **Pause**, **Stop**, the queue moves, **Remove** and **Remove And > Delete Data**, **Force Re-Check** (it starts a stopped torrent, as in the desktop program; *new in 1.2.76*), **Update Tracker**, **Copy Magnet Link**, **Export .torrent...**, **Advanced > Set Download Location...**, **Initial Seeding**, **Download in Sequential Order** and **Download First and Last Pieces First**, **Bandwidth Allocation**, **Label**, **Tags**, and **Properties** ([Managing torrents](Managing-torrents)). **Open Containing Folder** is grey: a browser cannot open a folder on the server. *Copy Magnet Link, Export .torrent and the two download order items are new in 1.2.63.* Export downloads the `.torrent` file through the browser. Where the browser gives the page no clipboard (plain `http://` from another computer), Copy Magnet Link shows the links for you to copy by hand.
 - **Adding torrents:** **Add Torrent** uploads `.torrent` files from the computer the browser runs on. **Add URL** takes a magnet link, an info-hash or an `http://` link to a torrent. You can also drop `.torrent` files or a magnet link onto the page, or paste a magnet link anywhere outside a text box. With "Show a window that displays the files inside the torrent" on (**Preferences > UI Settings**, on by default), an Add dialog asks the same as the desktop one: save folder, name, label, which files, start or not. For a magnet link it opens once the torrent's file list has arrived. Files that **Do not download files named:** (**Preferences > UI Settings**) matches start unticked in it, and torrents added without it leave them out (*new in 1.2.63*). See [Adding torrents](Adding-torrents#files-left-out-by-name).
 - **Torrent Properties:** trackers, speed limits, upload slots, the seeding goal and the download order of the selected torrents.
 - **Preferences:** the pages General, UI Settings, Directories, Connection, Bandwidth, BitTorrent, Queueing, Scheduler, Web UI, Advanced, Disk Cache and Disk I/O. Hover over a setting for its help, or press <kbd>F1</kbd> (*the help texts are new in 1.1.57*). Folders are folders on the server, typed as text. The Web UI the Windows program serves has no IP filter address, **Update Now** or status line on its BitTorrent page: the window's own Preferences hold them. See [Preferences reference](Preferences-reference).
 - **RSS Downloader:** feeds, filters and history, as in the desktop program ([RSS Downloader](RSS-Downloader)).
-- **Find** opens Search Torrents, which searches your Prowlarr or Jackett; **Manage Sources...** there adds them ([Searching for torrents](Searching-for-torrents)). Adding a source, or changing its address or key, asks for the current Web UI password.
+- **Find** opens Search Torrents, which searches your Prowlarr or Jackett; **Manage Sources...** there adds them ([Searching for torrents](Searching-for-torrents)). Adding a source, or changing its address or key, asks for the current Web UI password (so does installing the search helper); a wrong one logs that browser out and counts as a failed login.
 
 Keys in the list: arrows, <kbd>Home</kbd>, <kbd>End</kbd>, <kbd>Page Up</kbd>, <kbd>Page Down</kbd> move; <kbd>Shift</kbd> and <kbd>Ctrl</kbd> with a click or a key extend the selection; <kbd>Ctrl</kbd>+<kbd>A</kbd> selects every torrent the filter shows; <kbd>Space</kbd> pauses; <kbd>Delete</kbd> removes; <kbd>Shift</kbd>+<kbd>Delete</kbd> removes and deletes the data; the <kbd>Menu</kbd> key or <kbd>Shift</kbd>+<kbd>F10</kbd> opens the right-click menu.
 
@@ -124,7 +127,7 @@ The Web UI controls your torrents and can write files wherever Rookparcel's acco
 - Changing the login, the API key, the subnets or the other security settings in the page needs the **Current password:**. A wrong one logs that browser out and counts as a failed login, so repeated guesses lock the address out like failed logins do. The same goes for addresses the server downloads from, such as the tracker list's address and the IP filter's block list address (Preferences > BitTorrent, *new in 1.2.63*; see [Connection, ports and firewall](Connection-ports-and-firewall#a-list-from-a-web-address)).
 - With nox, `--webui-save-root DIR` limits the folders the Web UI may save to, move to and read from ([Running rookparcel-nox](Running-rookparcel-nox#web-ui)).
 
-Behind a reverse proxy on the same computer, have the proxy set the `X-Forwarded-For` header, so that failed logins lock out the right client and not everyone.
+Behind a reverse proxy on the same computer, have the proxy set the `X-Forwarded-For` header, so that failed logins lock out the right client and not everyone. With **Accept an API key (Authorization: Bearer)** on, the proxy must not add an `Authorization` header of its own: before a browser has logged in, such a header counts as a wrong key.
 
 ## See also
 

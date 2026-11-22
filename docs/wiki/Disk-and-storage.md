@@ -53,9 +53,9 @@ If you quit while files are moving, the closing window waits for the moves, with
 
 ## When a drive or share is missing
 
-*New in 1.2.76.* If none of a torrent's files can be found when it starts (a USB disk unplugged, a network share or mount not there, a drive letter not ready yet), Rookparcel does not download them again. The torrent stops with **files missing (the drive, share or folder is not available)** and keeps the pieces it had. Every 30 seconds Rookparcel looks again, and once the folder is back the torrent starts by itself and carries on without checking the files again. The same happens when the drive disappears while a torrent is downloading. Closing Rookparcel meanwhile changes nothing: the next start finds the torrent missing again, or back.
+*New in 1.2.76.* If a torrent that had downloaded data finds none of its files when it starts, or its save folder is gone (a USB disk unplugged, a network share or mount not there, a drive letter not ready yet), Rookparcel does not download the data again. The torrent stops with an error that starts with the missing path and says **files missing (the drive, share or folder is not available)**, and it keeps the pieces it had. Every 30 seconds Rookparcel looks again, and once the folder is back the torrent starts by itself and carries on without checking the files again. The same happens when the drive disappears while a torrent is downloading. Closing Rookparcel meanwhile changes nothing: the next start finds the torrent missing again, or back. **Start** on a held torrent tries at once, and it is held again if the files are still missing. A held torrent has an error, so [Auto Shutdown](Auto-shutdown) does not wait for it.
 
-If only some of a torrent's files are gone (deleted by hand or by a virus scanner), only their pieces are downloaded again. To give up on a held torrent's old data and download it anew, use **Force Re-Check**.
+If only some of a torrent's files are gone (deleted by hand or by a virus scanner), only their pieces are downloaded again. If you delete a torrent's whole folder by hand, the torrent is held as well. To give up on a held torrent's old data and download it anew, or to take what is on the disk now, use **Force Re-Check**: it checks the files that are there and downloads the rest.
 
 ## Smart disk I/O
 
@@ -73,7 +73,9 @@ A check (for example after **Force Re-Check**) reads every piece from disk and c
 | **Limit checking to (MB/s):** | Caps each check's reading speed, for a disk that still lags during gentle checks. Here 1 MB is 1,000,000 bytes. | Off, 100 |
 | **Drives checked at once (one torrent per drive):** | How many drives are checked at the same time, one torrent per drive; torrents on the same drive wait their turn. From 1 to 8. | 4 |
 
-Checks of torrents on different drives run side by side; two torrents on one drive are checked one after the other, so the drive does not seek between them. The status shows **Queued for checking** for a torrent waiting its turn, then **Checking** with the percentage.
+Checks of torrents on different drives run side by side; two torrents on one drive are checked one after the other, so the drive does not seek between them. The status shows **Queued for checking** for a torrent waiting its turn, then **Checking** with the percentage. *The queued status is new in 1.2.76; before, a waiting check showed "Checking 0.0 %".* A check you ask for with **Force Re-Check** does not wait for a free slot in the torrent queue ([Queueing and seeding](Queueing-and-seeding)).
+
+*New in 1.2.76.* A file that exists but cannot be read (another program holds it, or you have no permission) stops the check with a file error, instead of counting its pieces as missing and downloading them again. A file that is not there at all still only loses its own pieces.
 
 ### Drives
 
@@ -123,11 +125,14 @@ Under **Disk Queue and Files**:
 | **Disk write queue (kB):** | How much downloaded data may wait to be written to disk; above it, Rookparcel stops reading from peers until the disk catches up. Values below 4 MB act as 4 MB. | 1024 |
 | **Maximum number of open files:** | The most files kept open at once; others are closed and opened again when needed. Raise it when many torrents or files are busy at once. | 40 |
 | **Disk I/O threads (used from the next start):** | The threads that read and write torrent data. | 10 |
-| **Hashing threads (used from the next start):** | Kept for compatibility; this version does not use it. Checks run one per drive, set on the Disk I/O page. | |
+| **Hashing threads (not used):** | Kept for compatibility; this version does not use it. Checks run one per drive, set on the Disk I/O page. | |
+
+Rookparcel has no setting to pre-allocate files. A file is created when the first data for it arrives, and on Windows it is marked sparse, so writing near its end does not make NTFS fill the part before it with zeros.
 
 ## In the GTK window and the Web UI
 
 - **GTK window** (Linux, BSD), **macOS** and the **Web UI**: **Append .!ut to incomplete files** is on the General page under **When Downloading** too.
+- **macOS app**: the same pages and settings; Preferences apply at once, with no **OK** ([Preferences reference](Preferences-reference#differences-on-macos)).
 - **GTK window** (Linux, BSD): the same Directories, Disk Cache and Disk I/O pages. Drive types are detected on Linux, macOS and FreeBSD too, each with the system's own methods.
 - **Web UI**: the same pages under **Preferences**, with **Disk Cache** and **Disk I/O** under **Advanced**. Folders there are folders on the computer running Rookparcel, not on the browser's.
 - **rookparcel-nox**: `--save DIR` sets the download folder and `--move-on-complete DIR` moves finished torrents; the other settings are in the Web UI's Preferences.
