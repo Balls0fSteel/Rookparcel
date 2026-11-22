@@ -92,7 +92,7 @@ Apps that set qBittorrent's "Excluded file names" through its API reach the same
 
 Two things to know:
 
-- With **Limit the upload rate instead of stopping the torrent** on, a torrent keeps seeding after its goal, so the app never sees it as finished and does not remove it.
+- With **Limit the upload rate to (kB/s): [0: stop]** ticked and a rate above 0, a torrent keeps seeding after its goal, so the app never sees it as finished and does not remove it.
 - Rookparcel's goal is reached when every target that is set is reached (ratio and time), as in µTorrent; qBittorrent stops at the first. So a torrent may seed a little longer than the app expects, but it is never removed before both are met.
 
 A torrent you start with **Force Start** never reaches its seeding goal.
@@ -116,7 +116,7 @@ Prowlarr only adds torrents; it does not track or import them. Add Rookparcel in
 | The Test fails, and Rookparcel's address is a name | The Host check refused the name. Use the IP address, or add the name to **Server domains** ([above](#host-names-and-docker)). |
 | The Test fails with an IP address | The Web UI is not on, listens on `127.0.0.1` only (nox's `--webui 8080`, or **Allow connections from other computers** off), a firewall blocks the port, or the login is wrong. Too many wrong logins lock the app's address out for an hour. |
 | The import fails: the file is not found | The app sees the download under another path. Use the same mount path, or a Remote Path Mapping ([above](#download-folders-and-paths)). |
-| Finished torrents stay in the app's queue | Rookparcel keeps seeding them: no seeding goal is set, the goal is not reached yet, or **Limit the upload rate instead of stopping the torrent** is on. |
+| Finished torrents stay in the app's queue | Rookparcel keeps seeding them: no seeding goal is set, the goal is not reached yet, or **Limit the upload rate to (kB/s): [0: stop]** has a rate above 0. |
 
 ## See also
 

@@ -1,0 +1,1 @@
+Rookparcel · [Startseite](Startseite) · [English](Home) · [Website](https://balls0fsteel.github.io/Rookparcel/) · [Releases](https://github.com/Balls0fSteel/Rookparcel/releases) · [Problem melden](https://github.com/Balls0fSteel/Rookparcel/issues) · Der Quelltext des Wikis liegt unter [docs/wiki](https://github.com/Balls0fSteel/Rookparcel/tree/main/docs/wiki) im Repository.

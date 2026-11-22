@@ -311,7 +311,7 @@ The PIN that locks Rookparcel's windows, and the switch that turns the lock off.
 
 | Setting | What it does |
 |---|---|
-| **Allow locking Rookparcel with a PIN** | On by default. Off, there is no **File > Lock Rookparcel**, no <kbd>Ctrl</kbd>+<kbd>L</kbd> and no **Lock** in the tray menu. Turning it off asks for the PIN, if one is set, and removes it. |
+| **Allow locking Rookparcel with a PIN** | On by default. Off, there is no **File > Lock Rookparcel**, no <kbd>Ctrl</kbd>+<kbd>L</kbd> and no **Lock Rookparcel** in the tray menu. Turning it off asks for the PIN, if one is set, and removes it. |
 | **Set PIN...** | Asks for a new PIN of 4 to 6 digits, twice. Only while no PIN is set. |
 | **Change PIN...** | Asks for the current PIN, then a new one twice. |
 | **Remove PIN...** | Asks for the current PIN, then removes it. **Lock Rookparcel** then asks for a new PIN before it locks. |

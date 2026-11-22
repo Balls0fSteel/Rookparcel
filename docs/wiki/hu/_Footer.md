@@ -1,0 +1,1 @@
+Rookparcel · [Kezdőlap](Kezdőlap) · [English (Home)](Home) · [Webhely](https://balls0fsteel.github.io/Rookparcel/) · [Kiadások](https://github.com/Balls0fSteel/Rookparcel/releases) · [Hibajelentés](https://github.com/Balls0fSteel/Rookparcel/issues) · A wiki forrása a tárhely [docs/wiki](https://github.com/Balls0fSteel/Rookparcel/tree/main/docs/wiki) mappája.

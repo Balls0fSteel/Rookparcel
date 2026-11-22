@@ -202,7 +202,8 @@ By default the filter also applies to the DHT and to trackers at blocked address
 ## In the GTK window and the Web UI
 
 - **GTK window**: the same pages and settings. The status bar's network part says the same things, and a click on "Port ... in use" opens Preferences at Connection.
-- **macOS app**: the same pages, applying at once with no **OK** ([Preferences reference](Preferences-reference#differences-on-macos)).- **Web UI**: the same pages under **Preferences**; its status bar shows the network part with the same tooltip.
+- **macOS app**: the same pages, applying at once with no **OK** ([Preferences reference](Preferences-reference#differences-on-macos)).
+- **Web UI**: the same pages under **Preferences**; its status bar shows the network part with the same tooltip.
 - **rookparcel-nox**: `--port N` sets the listening port (default 6881), `--listen` sets the listen interfaces in full, `--proxy TYPE://[USER:PASS@]HOST:PORT` sets a proxy, `--ip-filter FILE` loads a block list file (the address is set in the Web UI's Preferences), and `--network` sets "Use only this network". A service on Windows needs a firewall rule for `rookparcel-nox.exe`: see [Running rookparcel-nox](Running-rookparcel-nox).
 
 ## Related pages
