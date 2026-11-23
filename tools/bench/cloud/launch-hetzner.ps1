@@ -20,6 +20,10 @@ param(
     # measure published releases instead of building: this version (e.g. 1.2.76) against
     # -Controls given as versions (1.2.69 1.0.1 ...), downloaded and checked by fetch.sh
     [string]$Published,
+    # a shorter run: -Scenarios many (no transfer), -Clients rookparcel,qbittorrent (controls
+    # are always measured)
+    [string[]]$Scenarios = @('transfer', 'many'),
+    [string[]]$Clients = @(),
     [double]$DeadlineHours = 6,
     [string]$RunName = "$(Get-Date -Format yyyy-MM-dd-HHmm)-hetzner-$Type",
     [string]$WorkDir = (Join-Path $env:TEMP "rookparcel-bench-$RunName"),
@@ -108,7 +112,8 @@ SSH_KEY_ID='$keyId'
         ssh @ssh "root@$ip" '/usr/local/sbin/bench-finish fetch-failed'
         throw "fetch.sh failed; build.log uploaded to https://$sHost/$RunName/, server deleting itself"
     }
-    ssh @ssh "bench@$ip" "mkdir -p ~/bench; nohup setsid bash ~/run.sh $labels > ~/bench/run.log 2>&1 < /dev/null & sleep 5; head -3 ~/bench/run.log"
+    $envs = "BENCH_SCENARIOS='$($Scenarios -join ' ')' BENCH_CLIENTS='$($Clients -join ',')'"
+    ssh @ssh "bench@$ip" "mkdir -p ~/bench; $envs nohup setsid bash ~/run.sh $labels > ~/bench/run.log 2>&1 < /dev/null & sleep 5; head -3 ~/bench/run.log"
     "started on $ip; results go to https://$sHost/$RunName/ when it ends"
 } catch {
     if (-not $armed) {

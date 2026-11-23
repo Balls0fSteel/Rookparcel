@@ -24,6 +24,7 @@ The website's run: the published Linux releases 1.2.76 (the measured client), 1.
 | Empty session, memory (MB) | 9.6 (9.5–9.7) | 15.4 (15.4–15.8) | 15.8 (15.7–16.0) | 16.1 (15.6–16.1) | 16.1 (16.0–16.3) | 16.0 (15.9–16.1) |
 
 - **Adding is about three times slower since a release after 1.2.46** and before 1.2.69: 10,000 torrents in 5.3-5.4 s against 1.8 s, 1,000 in 0.55 s against 0.17-0.19 s; qBittorrent took 2.0 s for 10,000 here. The 2026-11-19 run's 1.2.69 (5.25 s) agrees. *Found 2026-11-23:* 1.2.57's flush (`sync_all`, D70) in every settings write, and nox wrote its `webui.json` after every added torrent even unchanged; 1.2.77 writes only a changed file. The published Windows builds on the owner's PC, 1,000 torrents in batches of 100: 1.2.46 0.61 s, 1.2.54 0.58 s, 1.2.57 1.59 s, 1.2.63-1.2.69 1.61-1.70 s, 1.2.77 0.25 s; 10,000: 1.2.46 6.4 s, 1.2.54 10.0 s, 1.2.69 28.6 s, 1.2.77 3.0 s.
+- **1.2.77 measured, 2026-11-23** (another CCX23, fsn1, 11:28-13:12 Budapest time, `many` only, three rounds, 1.2.77 / 1.2.76 / 1.2.46 published releases and qBittorrent; `2026-11-23-hetzner-ccx23-1.2.77-add.jsonl`): 10,000 torrents added in 1.59 s (1.49-1.76; 2.0 CPU s) / 16.2 s / 2.33 s, qBittorrent 2.16 s (5.0 CPU s); 1,000 in 0.48 / 1.58 / 0.38 s, qBittorrent 0.25 s. 1.2.76 took three times as long as on 2026-11-22's server: the flush waits for that server's disk. Start-up, memory and idle CPU match across the three.
 - **1.2.29's idle CPU at 10,000** (0.22 %, the metadata re-read and the local peer discovery walk) is gone from 1.2.30 on, as on the VM in 2026-11-10; everything else is flat across the six, apart from the 1.1.17 update check's ~6 MB.
 - **Against the other clients** Rookparcel 1.2.76 is the fastest and cheapest download (1,469 MiB/s, 1.80 CPU s per GiB; qBittorrent 1,080 and 2.46, Deluge 1,033 and 2.45, rTorrent 712 and 2.05, Transmission 62.4 and 4.06), the smallest after a restart with 10,000 (67.5 MB; qBittorrent 612) and the quietest idle (0.03 %).
 - The first download of the session was slow again (1.2.76, round 1: 1,007 MiB/s): the position effect described under 2026-11-11.
@@ -440,4 +441,6 @@ For the website, measure the published releases instead of builds: `-Published 1
 from GitHub, checks it against that release's `SHA256SUMS` (PaTorrent's names up to 1.2.0) and
 puts the first version where `run.sh` expects `main`. No Rust is needed. If the fetch fails, the
 server uploads its log and deletes itself at once. Every extra Rookparcel version adds roughly
-25 minutes, so give a long run a matching `-DeadlineHours`.
+25 minutes, so give a long run a matching `-DeadlineHours`. A check of one measure needs less:
+`-Scenarios many` leaves out the transfer and `-Clients rookparcel,qbittorrent` the other clients
+(the controls are always measured); `run.sh` reads them as `BENCH_SCENARIOS` and `BENCH_CLIENTS`.

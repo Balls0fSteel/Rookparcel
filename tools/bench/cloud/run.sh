@@ -25,9 +25,17 @@ A=(--rookparcel ~/bench/pa/main/rookparcel-nox)
 for label in "$@"; do A+=(--control "$label=$HOME/bench/pa/$label/rookparcel-nox"); done
 { lscpu; echo; free -m; echo; uname -a; cat /etc/os-release; echo; git log -1 --format='main at %H'
   for b in ~/bench/pa/*/rookparcel-nox; do "$b" --version; done; } > ~/bench/machine.txt 2>&1
+# a shorter run: BENCH_SCENARIOS="many" leaves out the transfer, BENCH_CLIENTS="rookparcel,qbittorrent"
+# the other clients (the controls are always measured)
+[ -n "${BENCH_CLIENTS:-}" ] && A+=(--clients "$BENCH_CLIENTS")
+S=" ${BENCH_SCENARIOS:-transfer many} "
 echo "START $(date -Is)"
-$P tools/bench/bench.py transfer --mib 2048 --runs 5 --out $OUT "${A[@]}"; echo "transfer exit $? $(date -Is)"
-$P tools/bench/bench.py many --count 1000 --runs 3 --out $OUT "${A[@]}"; echo "many 1000 exit $? $(date -Is)"
-$P tools/bench/bench.py many --count 10000 --runs 3 --out $OUT "${A[@]}"; echo "many 10000 exit $? $(date -Is)"
+if [[ $S == *" transfer "* ]]; then
+    $P tools/bench/bench.py transfer --mib 2048 --runs 5 --out $OUT "${A[@]}"; echo "transfer exit $? $(date -Is)"
+fi
+if [[ $S == *" many "* ]]; then
+    $P tools/bench/bench.py many --count 1000 --runs 3 --out $OUT "${A[@]}"; echo "many 1000 exit $? $(date -Is)"
+    $P tools/bench/bench.py many --count 10000 --runs 3 --out $OUT "${A[@]}"; echo "many 10000 exit $? $(date -Is)"
+fi
 echo "ALL DONE $(date -Is)"
 finish
