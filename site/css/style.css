@@ -855,8 +855,29 @@ pre.sums { font-size: .78rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 }
 .bars .who { font-size: .95rem; }
 .bars .pa .who { font-weight: 700; }
-.bars .track { display: block; height: 20px; }
+.bars .track { display: block; height: 20px; position: relative; }
 .bars .bar { display: block; height: 100%; background: var(--bar); border-radius: 0 4px 4px 0; }
+/* the range across runs: a whisker with end caps over the bar */
+.bars .rng {
+  position: absolute; top: 50%; height: 2px; margin-top: -1px; min-width: 2px;
+  background: var(--text); box-shadow: 0 0 0 1px var(--surface);
+}
+.bars .rng::before, .bars .rng::after {
+  content: ""; position: absolute; top: -4px; width: 2px; height: 10px; background: var(--text);
+}
+.bars .rng::before { left: -1px; }
+.bars .rng::after { right: -1px; }
+/* small charts beside a table, one per column or measure */
+.chart-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr));
+  gap: .4rem 2rem; margin: 1.2rem 0 1.4rem;
+}
+.chart.small { margin: .6rem 0; }
+.chart.small figcaption { margin-bottom: .4rem; font-size: .95rem; line-height: 1.35; }
+.chart.small figcaption span { display: block; font-size: .85rem; }
+.chart.small .bars li { grid-template-columns: 6.2rem minmax(0, 1fr) 4.8rem; gap: .5rem; }
+.chart.small .bars .who, .chart.small .bars .val { font-size: .88rem; }
+.chart.small .bars .track { height: 16px; }
 .bars .pa .bar { background: var(--bar-pa); }
 .bars .val { text-align: end; font-size: .95rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bars .pa .val { font-weight: 700; }
@@ -867,6 +888,7 @@ pre.sums { font-size: .78rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (forced-colors: active) {
   .bars .bar { background: CanvasText; }
   .bars .pa .bar { background: Highlight; }
+  .bars .rng, .bars .rng::before, .bars .rng::after { background: Mark; box-shadow: none; }
 }
 .table-scroll { overflow-x: auto; margin: 0 0 1.2rem; }
 .table-scroll .listview { margin: 0; }

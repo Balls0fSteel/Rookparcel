@@ -393,7 +393,12 @@ python3 -m venv ~/.venv-linux && ~/.venv-linux/bin/pip install deluge-client
 ~/.venv-linux/bin/python tools/bench/bench.py many --count 10000 --runs 3 --out results.jsonl $A
 python3 tools/bench/summarize.py results.jsonl
 python3 tools/bench/summarize.py results.jsonl --fill site/benchmarks.html
+python3 tools/bench/summarize.py add-only.jsonl --fill-add site/benchmarks.html charts-add-run2
 ```
+
+`--fill` writes the tables and, beside each, a grid of small bar charts (one per column or
+measure: the median from zero, a whisker for the range across runs); `--fill-add` puts an
+adding-only run (such as 2026-11-23's) into its own chart block.
 
 All of it took 4 h 17 min on 2026-11-09 (transfer 45 min, of which 20 were two Deluge timeouts;
 1,000 torrents 1.5 h; 10,000 torrents 2 h): most is the two 60 s settle and two 60 s idle

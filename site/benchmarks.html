@@ -66,11 +66,11 @@
 <figure class="chart">
 <figcaption><strong>Memory with 10,000 torrents, after a restart</strong> <span>RSS, median of 3, lower is better</span></figcaption>
 <ul class="bars">
-<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:3.1%"></span></span><span class="val">68 MB</span></li>
-<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:28.6%"></span></span><span class="val">612 MB</span></li>
-<li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:15.3%"></span></span><span class="val">328 MB</span></li>
-<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:32.7%"></span></span><span class="val">701 MB</span></li>
-<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">2,143 MB</span></li>
+<li class="pa" title="Rookparcel: 68 MB, range 67–69"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:3.1%"></span><span class="rng" style="left:3.1%;width:0.1%"></span></span><span class="val">68 MB</span></li>
+<li title="qBittorrent: 612 MB"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:28.6%"></span></span><span class="val">612 MB</span></li>
+<li title="Transmission: 328 MB"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:15.3%"></span></span><span class="val">328 MB</span></li>
+<li title="Deluge: 701 MB"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:32.7%"></span></span><span class="val">701 MB</span></li>
+<li title="rTorrent: 2,143 MB"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">2,143 MB</span></li>
 </ul>
 </figure>
 <!-- /bench:chart-0 -->
@@ -78,11 +78,11 @@
 <figure class="chart">
 <figcaption><strong>Memory right after adding 10,000 torrents</strong> <span>RSS, median of 3, lower is better</span></figcaption>
 <ul class="bars">
-<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:14.8%"></span></span><span class="val">310 MB</span></li>
-<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:30.2%"></span></span><span class="val">635 MB</span></li>
-<li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:15.7%"></span></span><span class="val">329 MB</span></li>
-<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:43.5%"></span></span><span class="val">913 MB</span></li>
-<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">2,099 MB</span></li>
+<li class="pa" title="Rookparcel: 310 MB, range 310–317"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:14.8%"></span><span class="rng" style="left:14.8%;width:0.3%"></span></span><span class="val">310 MB</span></li>
+<li title="qBittorrent: 635 MB, range 632–641"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:30.2%"></span><span class="rng" style="left:30.1%;width:0.5%"></span></span><span class="val">635 MB</span></li>
+<li title="Transmission: 329 MB, range 329–330"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:15.7%"></span><span class="rng" style="left:15.7%;width:0.0%"></span></span><span class="val">329 MB</span></li>
+<li title="Deluge: 913 MB, range 902–915"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:43.5%"></span><span class="rng" style="left:43.0%;width:0.6%"></span></span><span class="val">913 MB</span></li>
+<li title="rTorrent: 2,099 MB"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">2,099 MB</span></li>
 </ul>
 </figure>
 <!-- /bench:chart-1 -->
@@ -91,17 +91,81 @@
 <figure class="chart">
 <figcaption><strong>Start until all 10,000 are listed</strong> <span>seconds, median of 3, lower is better</span></figcaption>
 <ul class="bars">
-<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:0.7%"></span></span><span class="val">0.22 s</span></li>
-<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:5.3%"></span></span><span class="val">1.62 s</span></li>
-<li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:6.1%"></span></span><span class="val">1.88 s</span></li>
-<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:18.4%"></span></span><span class="val">5.68 s</span></li>
-<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">30.80 s</span></li>
+<li class="pa" title="Rookparcel: 0.22 s"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:0.7%"></span></span><span class="val">0.22 s</span></li>
+<li title="qBittorrent: 1.62 s, range 1.56–1.67"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:5.2%"></span><span class="rng" style="left:5.1%;width:0.4%"></span></span><span class="val">1.62 s</span></li>
+<li title="Transmission: 1.88 s, range 1.77–1.89"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:6.1%"></span><span class="rng" style="left:5.7%;width:0.4%"></span></span><span class="val">1.88 s</span></li>
+<li title="Deluge: 5.68 s, range 5.66–5.73"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:18.4%"></span><span class="rng" style="left:18.3%;width:0.2%"></span></span><span class="val">5.68 s</span></li>
+<li title="rTorrent: 30.80 s, range 29.81–30.88"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:99.7%"></span><span class="rng" style="left:96.5%;width:3.5%"></span></span><span class="val">30.80 s</span></li>
 </ul>
 </figure>
 <!-- /bench:chart-2 -->
       <h3>All the numbers</h3>
       <p><em>Add</em> is from the first add request until all are listed, through each client's own API (Deluge's daemon takes them in batches of 100 over its RPC). PSS divides shared libraries among the processes using them. <em>Idle CPU</em> is 60 seconds without any API call, as a percentage of one core. <em>Empty</em> is the client with no torrents.</p>
       <h4>10,000 torrents</h4>
+<!-- bench:charts-10000 -->
+<div class="chart-grid">
+<figure class="chart small">
+<figcaption><strong>Add</strong> <span>s, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 5.39 s, range 5.35–5.53"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:1.1%"></span><span class="rng" style="left:1.1%;width:0.0%"></span></span><span class="val">5.39 s</span></li>
+<li title="qBittorrent: 2.05 s, range 1.99–2.07"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:0.6%"></span><span class="rng" style="left:0.4%;width:0.0%"></span></span><span class="val">2.05 s</span></li>
+<li title="Transmission: 9.09 s, range 8.65–9.38"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:1.8%"></span><span class="rng" style="left:1.7%;width:0.1%"></span></span><span class="val">9.09 s</span></li>
+<li title="Deluge: 509 s"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">509 s</span></li>
+<li title="rTorrent: 41.77 s, range 41.40–42.08"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:8.2%"></span><span class="rng" style="left:8.1%;width:0.1%"></span></span><span class="val">41.77 s</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Start with all listed</strong> <span>s, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 0.22 s"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:0.7%"></span></span><span class="val">0.22 s</span></li>
+<li title="qBittorrent: 1.62 s, range 1.56–1.67"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:5.2%"></span><span class="rng" style="left:5.1%;width:0.4%"></span></span><span class="val">1.62 s</span></li>
+<li title="Transmission: 1.88 s, range 1.77–1.89"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:6.1%"></span><span class="rng" style="left:5.7%;width:0.4%"></span></span><span class="val">1.88 s</span></li>
+<li title="Deluge: 5.68 s, range 5.66–5.73"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:18.4%"></span><span class="rng" style="left:18.3%;width:0.2%"></span></span><span class="val">5.68 s</span></li>
+<li title="rTorrent: 30.80 s, range 29.81–30.88"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:99.7%"></span><span class="rng" style="left:96.5%;width:3.5%"></span></span><span class="val">30.80 s</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Memory after a restart (RSS)</strong> <span>MB, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 67.5 MB, range 67.4–69.4"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:3.1%"></span><span class="rng" style="left:3.1%;width:0.1%"></span></span><span class="val">67.5 MB</span></li>
+<li title="qBittorrent: 612 MB"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:28.6%"></span></span><span class="val">612 MB</span></li>
+<li title="Transmission: 328 MB"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:15.3%"></span></span><span class="val">328 MB</span></li>
+<li title="Deluge: 701 MB"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:32.7%"></span></span><span class="val">701 MB</span></li>
+<li title="rTorrent: 2,143 MB"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">2,143 MB</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Memory after a restart (PSS)</strong> <span>MB, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 60.9 MB, range 60.8–63.0"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:2.9%"></span><span class="rng" style="left:2.8%;width:0.1%"></span></span><span class="val">60.9 MB</span></li>
+<li title="qBittorrent: 602 MB, range 601–602"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:28.2%"></span><span class="rng" style="left:28.1%;width:0.0%"></span></span><span class="val">602 MB</span></li>
+<li title="Transmission: 319 MB"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:14.9%"></span></span><span class="val">319 MB</span></li>
+<li title="Deluge: 688 MB"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:32.2%"></span></span><span class="val">688 MB</span></li>
+<li title="rTorrent: 2,135 MB, range 2,134–2,135"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:100.0%"></span><span class="rng" style="left:100.0%;width:0.0%"></span></span><span class="val">2,135 MB</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Idle CPU</strong> <span>%, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 0.03 %"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:1.5%"></span></span><span class="val">0.03 %</span></li>
+<li title="qBittorrent: 0.05 %"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:2.3%"></span></span><span class="val">0.05 %</span></li>
+<li title="Transmission: 0.43 %, range 0.43–0.47"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:19.5%"></span><span class="rng" style="left:19.5%;width:1.5%"></span></span><span class="val">0.43 %</span></li>
+<li title="Deluge: 0.22 %"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:9.8%"></span></span><span class="val">0.22 %</span></li>
+<li title="rTorrent: 2.17 %, range 1.83–2.22"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:97.7%"></span><span class="rng" style="left:82.7%;width:17.3%"></span></span><span class="val">2.17 %</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Empty session, memory (RSS)</strong> <span>MB, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 16.0 MB, range 15.9–16.1"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:23.4%"></span><span class="rng" style="left:23.3%;width:0.3%"></span></span><span class="val">16.0 MB</span></li>
+<li title="qBittorrent: 53.5 MB, range 53.3–53.5"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:78.3%"></span><span class="rng" style="left:78.0%;width:0.3%"></span></span><span class="val">53.5 MB</span></li>
+<li title="Transmission: 21.8 MB, range 21.7–21.9"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:31.9%"></span><span class="rng" style="left:31.8%;width:0.3%"></span></span><span class="val">21.8 MB</span></li>
+<li title="Deluge: 68.2 MB, range 68.1–68.3"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:99.9%"></span><span class="rng" style="left:99.7%;width:0.3%"></span></span><span class="val">68.2 MB</span></li>
+<li title="rTorrent: 16.9 MB, range 16.8–16.9"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:24.7%"></span><span class="rng" style="left:24.6%;width:0.1%"></span></span><span class="val">16.9 MB</span></li>
+</ul>
+</figure>
+</div>
+<!-- /bench:charts-10000 -->
       <div class="table-scroll">
 <!-- bench:table-10000 -->
 <table class="listview bench">
@@ -117,6 +181,70 @@
 <!-- /bench:table-10000 -->
       </div>
       <h4>1,000 torrents</h4>
+<!-- bench:charts-1000 -->
+<div class="chart-grid">
+<figure class="chart small">
+<figcaption><strong>Add</strong> <span>s, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 0.55 s, range 0.53–0.56"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:1.1%"></span><span class="rng" style="left:1.0%;width:0.1%"></span></span><span class="val">0.55 s</span></li>
+<li title="qBittorrent: 0.20 s, range 0.20–0.21"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:0.6%"></span><span class="rng" style="left:0.4%;width:0.0%"></span></span><span class="val">0.20 s</span></li>
+<li title="Transmission: 0.92 s, range 0.84–0.96"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:1.8%"></span><span class="rng" style="left:1.7%;width:0.2%"></span></span><span class="val">0.92 s</span></li>
+<li title="Deluge: 50.79 s, range 50.74–50.84"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:99.9%"></span><span class="rng" style="left:99.8%;width:0.2%"></span></span><span class="val">50.79 s</span></li>
+<li title="rTorrent: 2.81 s, range 2.80–2.94"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:5.5%"></span><span class="rng" style="left:5.5%;width:0.3%"></span></span><span class="val">2.81 s</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Start with all listed</strong> <span>s, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 0.08 s"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:5.8%"></span></span><span class="val">0.08 s</span></li>
+<li title="qBittorrent: 0.26 s, range 0.25–0.26"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:18.7%"></span><span class="rng" style="left:18.0%;width:0.7%"></span></span><span class="val">0.26 s</span></li>
+<li title="Transmission: 0.20 s"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:14.4%"></span></span><span class="val">0.20 s</span></li>
+<li title="Deluge: 0.82 s, range 0.81–0.82"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:59.0%"></span><span class="rng" style="left:58.3%;width:0.7%"></span></span><span class="val">0.82 s</span></li>
+<li title="rTorrent: 1.38 s, range 1.37–1.39"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:99.3%"></span><span class="rng" style="left:98.6%;width:1.4%"></span></span><span class="val">1.38 s</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Memory after a restart (RSS)</strong> <span>MB, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 21.9 MB, range 21.7–21.9"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:9.5%"></span><span class="rng" style="left:9.4%;width:0.1%"></span></span><span class="val">21.9 MB</span></li>
+<li title="qBittorrent: 105 MB"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:45.7%"></span></span><span class="val">105 MB</span></li>
+<li title="Transmission: 53.3 MB, range 53.1–53.3"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:23.1%"></span><span class="rng" style="left:23.0%;width:0.1%"></span></span><span class="val">53.3 MB</span></li>
+<li title="Deluge: 135 MB"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:58.6%"></span></span><span class="val">135 MB</span></li>
+<li title="rTorrent: 230 MB"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:99.9%"></span></span><span class="val">230 MB</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Memory after a restart (PSS)</strong> <span>MB, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 15.3 MB, range 15.3–15.4"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:6.9%"></span><span class="rng" style="left:6.9%;width:0.0%"></span></span><span class="val">15.3 MB</span></li>
+<li title="qBittorrent: 94.4 MB, range 94.2–94.8"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:42.4%"></span><span class="rng" style="left:42.3%;width:0.3%"></span></span><span class="val">94.4 MB</span></li>
+<li title="Transmission: 43.6 MB, range 43.1–43.9"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:19.6%"></span><span class="rng" style="left:19.4%;width:0.4%"></span></span><span class="val">43.6 MB</span></li>
+<li title="Deluge: 122 MB"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:54.8%"></span></span><span class="val">122 MB</span></li>
+<li title="rTorrent: 222 MB"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:99.8%"></span></span><span class="val">222 MB</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Idle CPU</strong> <span>%, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 0.03 %"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:22.0%"></span></span><span class="val">0.03 %</span></li>
+<li title="qBittorrent: 0.03 %, range 0.03–0.07"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:22.0%"></span><span class="rng" style="left:22.0%;width:22.7%"></span></span><span class="val">0.03 %</span></li>
+<li title="Transmission: 0.10 %, range 0.10–0.12"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:66.7%"></span><span class="rng" style="left:66.7%;width:11.3%"></span></span><span class="val">0.10 %</span></li>
+<li title="Deluge: 0.15 %, range 0.13–0.15"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:100.0%"></span><span class="rng" style="left:88.7%;width:11.3%"></span></span><span class="val">0.15 %</span></li>
+<li title="rTorrent: 0.13 %, range 0.12–0.13"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:88.7%"></span><span class="rng" style="left:78.0%;width:10.7%"></span></span><span class="val">0.13 %</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Empty session, memory (RSS)</strong> <span>MB, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 16.3 MB, range 16.1–16.3"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:23.9%"></span><span class="rng" style="left:23.6%;width:0.3%"></span></span><span class="val">16.3 MB</span></li>
+<li title="qBittorrent: 53.1 MB, range 51.4–53.4"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:77.7%"></span><span class="rng" style="left:75.3%;width:2.9%"></span></span><span class="val">53.1 MB</span></li>
+<li title="Transmission: 21.8 MB, range 21.8–21.9"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:31.9%"></span><span class="rng" style="left:31.9%;width:0.1%"></span></span><span class="val">21.8 MB</span></li>
+<li title="Deluge: 68.3 MB, range 68.1–68.3"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:100.0%"></span><span class="rng" style="left:99.7%;width:0.3%"></span></span><span class="val">68.3 MB</span></li>
+<li title="rTorrent: 16.9 MB, range 16.7–17.0"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:24.7%"></span><span class="rng" style="left:24.5%;width:0.4%"></span></span><span class="val">16.9 MB</span></li>
+</ul>
+</figure>
+</div>
+<!-- /bench:charts-1000 -->
       <div class="table-scroll">
 <!-- bench:table-1000 -->
 <table class="listview bench">
@@ -140,11 +268,11 @@
 <figure class="chart">
 <figcaption><strong>Download speed from one peer</strong> <span>MiB/s, median, higher is better</span></figcaption>
 <ul class="bars">
-<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">1,469 MiB/s</span></li>
-<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:73.5%"></span></span><span class="val">1,080 MiB/s</span></li>
-<li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:4.2%"></span></span><span class="val">62 MiB/s</span></li>
-<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:70.4%"></span></span><span class="val">1,033 MiB/s</span></li>
-<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:48.5%"></span></span><span class="val">712 MiB/s</span></li>
+<li class="pa" title="Rookparcel: 1,469 MiB/s, range 1,007–1,576"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:93.2%"></span><span class="rng" style="left:63.9%;width:36.1%"></span></span><span class="val">1,469 MiB/s</span></li>
+<li title="qBittorrent: 1,080 MiB/s, range 973–1,102"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:68.6%"></span><span class="rng" style="left:61.8%;width:8.2%"></span></span><span class="val">1,080 MiB/s</span></li>
+<li title="Transmission: 62 MiB/s"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:4.0%"></span></span><span class="val">62 MiB/s</span></li>
+<li title="Deluge: 1,033 MiB/s, range 993–1,110"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:65.6%"></span><span class="rng" style="left:63.0%;width:7.5%"></span></span><span class="val">1,033 MiB/s</span></li>
+<li title="rTorrent: 712 MiB/s, range 701–728"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:45.2%"></span><span class="rng" style="left:44.5%;width:1.7%"></span></span><span class="val">712 MiB/s</span></li>
 </ul>
 </figure>
 <!-- /bench:chart-3 -->
@@ -152,15 +280,29 @@
 <figure class="chart">
 <figcaption><strong>CPU time per GiB downloaded</strong> <span>seconds, median, lower is better</span></figcaption>
 <ul class="bars">
-<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:44.3%"></span></span><span class="val">1.80 s</span></li>
-<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:60.6%"></span></span><span class="val">2.46 s</span></li>
-<li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">4.06 s</span></li>
-<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:60.3%"></span></span><span class="val">2.45 s</span></li>
-<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:50.5%"></span></span><span class="val">2.05 s</span></li>
+<li class="pa" title="Rookparcel: 1.80 s, range 1.67–1.87"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:42.8%"></span><span class="rng" style="left:39.7%;width:4.8%"></span></span><span class="val">1.80 s</span></li>
+<li title="qBittorrent: 2.46 s, range 2.40–2.56"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:58.4%"></span><span class="rng" style="left:57.0%;width:3.8%"></span></span><span class="val">2.46 s</span></li>
+<li title="Transmission: 4.06 s, range 4.03–4.21"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:96.4%"></span><span class="rng" style="left:95.7%;width:4.3%"></span></span><span class="val">4.06 s</span></li>
+<li title="Deluge: 2.45 s, range 2.36–2.63"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:58.2%"></span><span class="rng" style="left:56.1%;width:6.4%"></span></span><span class="val">2.45 s</span></li>
+<li title="rTorrent: 2.05 s, range 2.01–2.06"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:48.7%"></span><span class="rng" style="left:47.7%;width:1.2%"></span></span><span class="val">2.05 s</span></li>
 </ul>
 </figure>
 <!-- /bench:chart-4 -->
       <p>Transmission held 62.3 to 62.5 MiB/s in every run, which looks like the limit of how many requests it keeps open to a single peer rather than of its engine; with many peers it spreads out. rTorrent's downloads took about two minutes from the first byte to the last: in earlier runs it was fast until about 1.7 GiB and then flushed its memory-mapped pieces slowly. One of its five runs failed, because its API did not answer within 120 seconds, so its figures are from four.</p>
+<!-- bench:charts-transfer -->
+<div class="chart-grid">
+<figure class="chart small">
+<figcaption><strong>First byte to done</strong> <span>seconds, median, lower is better</span></figcaption>
+<ul class="bars">
+<li class="pa" title="Rookparcel: 2.6 s"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:1.6%"></span></span><span class="val">2.6 s</span></li>
+<li title="qBittorrent: 2.8 s, range 2.5–4.1"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:1.8%"></span><span class="rng" style="left:1.6%;width:1.0%"></span></span><span class="val">2.8 s</span></li>
+<li title="Transmission: 41.5 s, range 41.5–41.9"><span class="who">Transmission</span><span class="track"><span class="bar" style="width:26.5%"></span><span class="rng" style="left:26.5%;width:0.3%"></span></span><span class="val">41.5 s</span></li>
+<li title="Deluge: 2.2 s, range 2.2–2.5"><span class="who">Deluge</span><span class="track"><span class="bar" style="width:1.4%"></span><span class="rng" style="left:1.4%;width:0.2%"></span></span><span class="val">2.2 s</span></li>
+<li title="rTorrent: 128 s, range 128–157"><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:82.0%"></span><span class="rng" style="left:81.8%;width:18.2%"></span></span><span class="val">128 s</span></li>
+</ul>
+</figure>
+</div>
+<!-- /bench:charts-transfer -->
       <div class="table-scroll">
 <!-- bench:table-transfer -->
 <table class="listview bench">
@@ -180,6 +322,153 @@
     <section class="section" id="versions" aria-labelledby="versions-h">
       <h2 id="versions-h">Since 1.0.1</h2>
       <p>Six published releases, from 1.0.1 (released as PaTorrent) to 1.2.76, ran in the same rounds on the same server, so they can be compared directly: medians, with the range across runs in brackets.</p>
+<!-- bench:charts-versions -->
+<div class="chart-grid">
+<figure class="chart small">
+<figcaption><strong>Download speed</strong> <span>MiB/s, median of 5, higher is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 1,425 MiB/s, range 1,333–1,455"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:90.4%"></span><span class="rng" style="left:84.6%;width:7.7%"></span></span><span class="val">1,425 MiB/s</span></li>
+<li title="1.1.40: 1,401 MiB/s, range 1,233–1,468"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:88.9%"></span><span class="rng" style="left:78.2%;width:14.9%"></span></span><span class="val">1,401 MiB/s</span></li>
+<li title="1.2.29: 1,459 MiB/s, range 1,386–1,534"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:92.6%"></span><span class="rng" style="left:87.9%;width:9.4%"></span></span><span class="val">1,459 MiB/s</span></li>
+<li title="1.2.46: 1,425 MiB/s, range 1,375–1,507"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:90.4%"></span><span class="rng" style="left:87.3%;width:8.4%"></span></span><span class="val">1,425 MiB/s</span></li>
+<li title="1.2.69: 1,439 MiB/s, range 1,310–1,470"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:91.3%"></span><span class="rng" style="left:83.2%;width:10.1%"></span></span><span class="val">1,439 MiB/s</span></li>
+<li class="pa" title="1.2.76: 1,469 MiB/s, range 1,007–1,576"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:93.2%"></span><span class="rng" style="left:63.9%;width:36.1%"></span></span><span class="val">1,469 MiB/s</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Download, CPU per GiB</strong> <span>seconds, median of 5, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 1.81 s, range 1.79–1.85"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:94.8%"></span><span class="rng" style="left:93.7%;width:3.1%"></span></span><span class="val">1.81 s</span></li>
+<li title="1.1.40: 1.81 s, range 1.79–1.91"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:94.8%"></span><span class="rng" style="left:93.7%;width:6.3%"></span></span><span class="val">1.81 s</span></li>
+<li title="1.2.29: 1.82 s, range 1.69–1.86"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:95.3%"></span><span class="rng" style="left:88.5%;width:8.9%"></span></span><span class="val">1.82 s</span></li>
+<li title="1.2.46: 1.83 s, range 1.72–1.91"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:95.8%"></span><span class="rng" style="left:90.1%;width:9.9%"></span></span><span class="val">1.83 s</span></li>
+<li title="1.2.69: 1.85 s, range 1.79–1.90"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:96.9%"></span><span class="rng" style="left:93.7%;width:5.8%"></span></span><span class="val">1.85 s</span></li>
+<li class="pa" title="1.2.76: 1.80 s, range 1.67–1.87"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:94.2%"></span><span class="rng" style="left:87.4%;width:10.5%"></span></span><span class="val">1.80 s</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>1,000 torrents: add</strong> <span>s, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 0.17 s, range 0.16–0.20"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:29.8%"></span><span class="rng" style="left:28.1%;width:7.0%"></span></span><span class="val">0.17 s</span></li>
+<li title="1.1.40: 0.16 s, range 0.16–0.19"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:28.1%"></span><span class="rng" style="left:28.1%;width:5.3%"></span></span><span class="val">0.16 s</span></li>
+<li title="1.2.29: 0.18 s, range 0.16–0.19"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:31.6%"></span><span class="rng" style="left:28.1%;width:5.3%"></span></span><span class="val">0.18 s</span></li>
+<li title="1.2.46: 0.19 s, range 0.18–0.20"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:33.3%"></span><span class="rng" style="left:31.6%;width:3.5%"></span></span><span class="val">0.19 s</span></li>
+<li title="1.2.69: 0.56 s, range 0.54–0.57"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:98.2%"></span><span class="rng" style="left:94.7%;width:5.3%"></span></span><span class="val">0.56 s</span></li>
+<li class="pa" title="1.2.76: 0.55 s, range 0.53–0.56"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:96.5%"></span><span class="rng" style="left:93.0%;width:5.3%"></span></span><span class="val">0.55 s</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>1,000 torrents: start with all listed</strong> <span>s, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 0.08 s"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">0.08 s</span></li>
+<li title="1.1.40: 0.08 s"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">0.08 s</span></li>
+<li title="1.2.29: 0.08 s"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">0.08 s</span></li>
+<li title="1.2.46: 0.08 s"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">0.08 s</span></li>
+<li title="1.2.69: 0.08 s"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">0.08 s</span></li>
+<li class="pa" title="1.2.76: 0.08 s"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">0.08 s</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>1,000 torrents: memory after a restart</strong> <span>MB, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 15.1 MB, range 15.1–15.2"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:68.9%"></span><span class="rng" style="left:68.9%;width:0.5%"></span></span><span class="val">15.1 MB</span></li>
+<li title="1.1.40: 21.0 MB, range 20.9–21.1"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:95.9%"></span><span class="rng" style="left:95.4%;width:0.9%"></span></span><span class="val">21.0 MB</span></li>
+<li title="1.2.29: 21.4 MB, range 21.4–21.6"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:97.7%"></span><span class="rng" style="left:97.7%;width:0.9%"></span></span><span class="val">21.4 MB</span></li>
+<li title="1.2.46: 21.4 MB, range 21.3–21.6"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:97.7%"></span><span class="rng" style="left:97.3%;width:1.4%"></span></span><span class="val">21.4 MB</span></li>
+<li title="1.2.69: 21.7 MB, range 21.7–21.9"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:99.1%"></span><span class="rng" style="left:99.1%;width:0.9%"></span></span><span class="val">21.7 MB</span></li>
+<li class="pa" title="1.2.76: 21.9 MB, range 21.7–21.9"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:100.0%"></span><span class="rng" style="left:99.1%;width:0.9%"></span></span><span class="val">21.9 MB</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>1,000 torrents: memory right after adding</strong> <span>MB, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 50 MB"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:87.8%"></span></span><span class="val">50 MB</span></li>
+<li title="1.1.40: 56 MB"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:97.7%"></span></span><span class="val">56 MB</span></li>
+<li title="1.2.29: 57 MB"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:98.8%"></span></span><span class="val">57 MB</span></li>
+<li title="1.2.46: 57 MB, range 56–57"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:99.1%"></span><span class="rng" style="left:98.4%;width:0.7%"></span></span><span class="val">57 MB</span></li>
+<li title="1.2.69: 57 MB"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:99.7%"></span></span><span class="val">57 MB</span></li>
+<li class="pa" title="1.2.76: 57 MB"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:99.7%"></span></span><span class="val">57 MB</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>1,000 torrents: idle CPU</strong> <span>%, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 0.05 %, range 0.03–0.05"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:100.0%"></span><span class="rng" style="left:66.0%;width:34.0%"></span></span><span class="val">0.05 %</span></li>
+<li title="1.1.40: 0.03 %, range 0.03–0.05"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:66.0%"></span><span class="rng" style="left:66.0%;width:34.0%"></span></span><span class="val">0.03 %</span></li>
+<li title="1.2.29: 0.03 %, range 0.03–0.05"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:66.0%"></span><span class="rng" style="left:66.0%;width:34.0%"></span></span><span class="val">0.03 %</span></li>
+<li title="1.2.46: 0.03 %"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:66.0%"></span></span><span class="val">0.03 %</span></li>
+<li title="1.2.69: 0.03 %, range 0.02–0.03"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:66.0%"></span><span class="rng" style="left:34.0%;width:32.0%"></span></span><span class="val">0.03 %</span></li>
+<li class="pa" title="1.2.76: 0.03 %"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:66.0%"></span></span><span class="val">0.03 %</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>10,000 torrents: add</strong> <span>s, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 1.76 s, range 1.60–1.78"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:16.2%"></span><span class="rng" style="left:14.7%;width:1.7%"></span></span><span class="val">1.76 s</span></li>
+<li title="1.1.40: 1.81 s, range 1.74–1.86"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:16.7%"></span><span class="rng" style="left:16.0%;width:1.1%"></span></span><span class="val">1.81 s</span></li>
+<li title="1.2.29: 1.82 s, range 1.80–1.83"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:16.8%"></span><span class="rng" style="left:16.6%;width:0.3%"></span></span><span class="val">1.82 s</span></li>
+<li title="1.2.46: 1.85 s, range 1.80–1.95"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:17.0%"></span><span class="rng" style="left:16.6%;width:1.4%"></span></span><span class="val">1.85 s</span></li>
+<li title="1.2.69: 5.26 s, range 5.10–10.86"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:48.4%"></span><span class="rng" style="left:47.0%;width:53.0%"></span></span><span class="val">5.26 s</span></li>
+<li class="pa" title="1.2.76: 5.39 s, range 5.35–5.53"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:49.6%"></span><span class="rng" style="left:49.3%;width:1.7%"></span></span><span class="val">5.39 s</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>10,000 torrents: start with all listed</strong> <span>s, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 0.22 s"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:88.0%"></span></span><span class="val">0.22 s</span></li>
+<li title="1.1.40: 0.23 s, range 0.22–0.23"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:92.0%"></span><span class="rng" style="left:88.0%;width:4.0%"></span></span><span class="val">0.23 s</span></li>
+<li title="1.2.29: 0.22 s, range 0.22–0.23"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:88.0%"></span><span class="rng" style="left:88.0%;width:4.0%"></span></span><span class="val">0.22 s</span></li>
+<li title="1.2.46: 0.22 s, range 0.22–0.25"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:88.0%"></span><span class="rng" style="left:88.0%;width:12.0%"></span></span><span class="val">0.22 s</span></li>
+<li title="1.2.69: 0.22 s"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:88.0%"></span></span><span class="val">0.22 s</span></li>
+<li class="pa" title="1.2.76: 0.22 s"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:88.0%"></span></span><span class="val">0.22 s</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>10,000 torrents: memory after a restart</strong> <span>MB, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 60.3 MB, range 60.3–60.4"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:86.9%"></span><span class="rng" style="left:86.9%;width:0.1%"></span></span><span class="val">60.3 MB</span></li>
+<li title="1.1.40: 66.3 MB, range 66.1–66.4"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:95.5%"></span><span class="rng" style="left:95.2%;width:0.4%"></span></span><span class="val">66.3 MB</span></li>
+<li title="1.2.29: 66.9 MB, range 66.8–67.0"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:96.4%"></span><span class="rng" style="left:96.3%;width:0.3%"></span></span><span class="val">66.9 MB</span></li>
+<li title="1.2.46: 67.2 MB, range 67.2–67.9"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:96.8%"></span><span class="rng" style="left:96.8%;width:1.0%"></span></span><span class="val">67.2 MB</span></li>
+<li title="1.2.69: 67.3 MB, range 67.2–69.4"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:97.0%"></span><span class="rng" style="left:96.8%;width:3.2%"></span></span><span class="val">67.3 MB</span></li>
+<li class="pa" title="1.2.76: 67.5 MB, range 67.4–69.4"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:97.3%"></span><span class="rng" style="left:97.1%;width:2.9%"></span></span><span class="val">67.5 MB</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>10,000 torrents: memory right after adding</strong> <span>MB, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 326 MB, range 326–329"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:99.0%"></span><span class="rng" style="left:98.9%;width:1.1%"></span></span><span class="val">326 MB</span></li>
+<li title="1.1.40: 316 MB"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:96.1%"></span></span><span class="val">316 MB</span></li>
+<li title="1.2.29: 306 MB, range 306–316"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:92.9%"></span><span class="rng" style="left:92.8%;width:3.2%"></span></span><span class="val">306 MB</span></li>
+<li title="1.2.46: 317 MB, range 316–317"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:96.2%"></span><span class="rng" style="left:96.1%;width:0.2%"></span></span><span class="val">317 MB</span></li>
+<li title="1.2.69: 324 MB, range 320–325"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:98.3%"></span><span class="rng" style="left:97.1%;width:1.7%"></span></span><span class="val">324 MB</span></li>
+<li class="pa" title="1.2.76: 310 MB, range 310–317"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:94.2%"></span><span class="rng" style="left:94.1%;width:2.1%"></span></span><span class="val">310 MB</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>10,000 torrents: idle CPU</strong> <span>%, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 0.05 %, range 0.03–0.05"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:23.0%"></span><span class="rng" style="left:15.2%;width:7.8%"></span></span><span class="val">0.05 %</span></li>
+<li title="1.1.40: 0.07 %, range 0.05–0.07"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:30.9%"></span><span class="rng" style="left:23.0%;width:7.8%"></span></span><span class="val">0.07 %</span></li>
+<li title="1.2.29: 0.22 %"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">0.22 %</span></li>
+<li title="1.2.46: 0.03 %, range 0.02–0.03"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:15.2%"></span><span class="rng" style="left:7.8%;width:7.4%"></span></span><span class="val">0.03 %</span></li>
+<li title="1.2.69: 0.03 %, range 0.02–0.05"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:15.2%"></span><span class="rng" style="left:7.8%;width:15.2%"></span></span><span class="val">0.03 %</span></li>
+<li class="pa" title="1.2.76: 0.03 %"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:15.2%"></span></span><span class="val">0.03 %</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Empty session, memory</strong> <span>MB, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.0.1: 9.6 MB, range 9.5–9.7"><span class="who">1.0.1</span><span class="track"><span class="bar" style="width:58.9%"></span><span class="rng" style="left:58.3%;width:1.2%"></span></span><span class="val">9.6 MB</span></li>
+<li title="1.1.40: 15.4 MB, range 15.4–15.8"><span class="who">1.1.40</span><span class="track"><span class="bar" style="width:94.5%"></span><span class="rng" style="left:94.5%;width:2.5%"></span></span><span class="val">15.4 MB</span></li>
+<li title="1.2.29: 15.8 MB, range 15.7–16.0"><span class="who">1.2.29</span><span class="track"><span class="bar" style="width:96.9%"></span><span class="rng" style="left:96.3%;width:1.8%"></span></span><span class="val">15.8 MB</span></li>
+<li title="1.2.46: 16.1 MB, range 15.6–16.1"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:98.8%"></span><span class="rng" style="left:95.7%;width:3.1%"></span></span><span class="val">16.1 MB</span></li>
+<li title="1.2.69: 16.1 MB, range 16.0–16.3"><span class="who">1.2.69</span><span class="track"><span class="bar" style="width:98.8%"></span><span class="rng" style="left:98.2%;width:1.8%"></span></span><span class="val">16.1 MB</span></li>
+<li class="pa" title="1.2.76: 16.0 MB, range 15.9–16.1"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:98.2%"></span><span class="rng" style="left:97.5%;width:1.2%"></span></span><span class="val">16.0 MB</span></li>
+</ul>
+</figure>
+</div>
+<!-- /bench:charts-versions -->
       <div class="table-scroll">
 <!-- bench:table-versions -->
 <table class="listview bench">
@@ -205,6 +494,28 @@
       <p>Downloading and starting are unchanged across all six. Memory grew by about 6 MB with the update check that <code>rookparcel-nox</code> has made since 1.1.17 (one HTTPS request shortly after it starts). Idle CPU with 10,000 torrents had risen to 0.22% of one core in 1.2.29: after every start the daemon read each torrent's metadata once more, and local peer discovery walked the whole list on every tick. 1.2.30 removed both, and every release since uses 0.03%.</p>
       <p>Adding got slower between 1.2.46 and 1.2.69: 10,000 torrents went from 1.85 s to 5.26 s, and 1,000 from 0.19 s to 0.56 s. 1.2.76 is the same as 1.2.69. Timing the releases in between found the step in 1.2.57. That release made every settings save wait until the file is on the disk, so a crash or power cut leaves the old settings or the new ones, never an empty file. Adding a torrent saves the settings, and the file was written again each time even when it had not changed, so a batch of torrents waited for the disk once per torrent. 1.2.77 keeps the protection and writes the file only when something in it changed. On a Windows PC, adding 10,000 torrents took 6.4 s in 1.2.46, 28.6 s in 1.2.69 and 3.0 s in 1.2.77.</p>
       <p>A second run on 23 November, on another CCX23 server, measured only adding, for 1.2.77, 1.2.76 and 1.2.46 beside qBittorrent (three rounds each). 10,000 torrents: 1.2.77 1.59 s (1.49–1.76), 1.2.46 2.33 s, 1.2.76 16.2 s, qBittorrent 2.16 s; 1.2.77 used 2.0 s of CPU for it, qBittorrent 5.0 s. 1,000 torrents: 1.2.77 0.48 s, 1.2.46 0.38 s, 1.2.76 1.58 s, qBittorrent 0.25 s. 1.2.76 was three times slower here than in the first run: how long a flush waits depends on the server's disk, which is why the fix matters more than any one figure. Memory, idle CPU and start-up were the same for the three releases.</p>
+<!-- bench:charts-add-run2 -->
+<div class="chart-grid">
+<figure class="chart small">
+<figcaption><strong>Adding 1,000 torrents</strong> <span>seconds, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.2.46: 0.38 s, range 0.31–0.43"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:20.5%"></span><span class="rng" style="left:16.8%;width:6.5%"></span></span><span class="val">0.38 s</span></li>
+<li title="1.2.76: 1.58 s, range 1.56–1.85"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:85.4%"></span><span class="rng" style="left:84.3%;width:15.7%"></span></span><span class="val">1.58 s</span></li>
+<li class="pa" title="1.2.77: 0.48 s, range 0.46–0.52"><span class="who">1.2.77</span><span class="track"><span class="bar" style="width:25.9%"></span><span class="rng" style="left:24.9%;width:3.2%"></span></span><span class="val">0.48 s</span></li>
+<li title="qBittorrent: 0.25 s, range 0.24–0.29"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:13.5%"></span><span class="rng" style="left:13.0%;width:2.7%"></span></span><span class="val">0.25 s</span></li>
+</ul>
+</figure>
+<figure class="chart small">
+<figcaption><strong>Adding 10,000 torrents</strong> <span>seconds, median of 3, lower is better</span></figcaption>
+<ul class="bars">
+<li title="1.2.46: 2.33 s, range 2.15–2.37"><span class="who">1.2.46</span><span class="track"><span class="bar" style="width:14.2%"></span><span class="rng" style="left:13.1%;width:1.3%"></span></span><span class="val">2.33 s</span></li>
+<li title="1.2.76: 16.17 s, range 13.90–16.45"><span class="who">1.2.76</span><span class="track"><span class="bar" style="width:98.3%"></span><span class="rng" style="left:84.5%;width:15.5%"></span></span><span class="val">16.17 s</span></li>
+<li class="pa" title="1.2.77: 1.59 s, range 1.49–1.76"><span class="who">1.2.77</span><span class="track"><span class="bar" style="width:9.7%"></span><span class="rng" style="left:9.1%;width:1.6%"></span></span><span class="val">1.59 s</span></li>
+<li title="qBittorrent: 2.16 s, range 2.14–2.21"><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:13.1%"></span><span class="rng" style="left:13.0%;width:0.4%"></span></span><span class="val">2.16 s</span></li>
+</ul>
+</figure>
+</div>
+<!-- /bench:charts-add-run2 -->
     </section>
 
     <section class="section" id="method" aria-labelledby="method-h">

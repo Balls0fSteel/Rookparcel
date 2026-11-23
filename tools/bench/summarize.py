@@ -4,6 +4,10 @@
     summarize.py results.jsonl [--html | --bars]
     summarize.py results.jsonl --versions [--html]            # Rookparcel's versions side by side
     summarize.py results.jsonl --fill site/benchmarks.html   # the charts and tables in place
+    summarize.py add-only.jsonl --fill-add site/benchmarks.html BLOCK   # an adding-only run
+
+Every table on the page gets a grid of small bar charts (`bench:charts-NAME`), one per column or
+measure: median bars from zero, a whisker for the range across runs, plain HTML and CSS.
 """
 
 import json
@@ -153,22 +157,130 @@ def html(table):
             + "\n".join(body) + "\n</tbody>\n</table>")
 
 
-def bars(caption, note, values, unit, digits=0):
-    """A bar chart in plain HTML: one bar per client, Rookparcel's in the accent colour."""
+def bars(caption, note, values, unit, digits=0, names=NAMES, accent=("rookparcel",), small=False):
+    """A bar chart in plain HTML: one bar per client (or version), the `accent` ones in the
+    accent colour. `values` holds (key, median) or (key, median, low, high); a low-high pair
+    draws a whisker over the bar for the range across runs. Bars start at zero."""
     import html as h
-    values = [(c, v) for c, v in values if v is not None]
-    top = max(v for _, v in values)
+    values = [v if len(v) == 4 else (*v, None, None) for v in values]
+    values = [v for v in values if v[1] is not None]
+    top = max(max(m, hi or 0) for _, m, _, hi in values) or 1
     items = []
-    for c, v in values:
+    for c, v, lo, hi in values:
         width = max(100 * v / top, 0.6)
-        cls = ' class="pa"' if c == "rookparcel" else ""
-        text = f"{v:,.{digits}f} {unit}".strip()
-        items.append(f'<li{cls}><span class="who">{NAMES[c]}</span><span class="track">'
-                     f'<span class="bar" style="width:{width:.1f}%"></span></span>'
+        cls = ' class="pa"' if c in accent else ""
+        text = f"{fmt(v, digits)} {unit}".strip()
+        rng, tip = "", text
+        if lo is not None and hi is not None and fmt(lo, digits) != fmt(hi, digits):
+            rng = (f'<span class="rng" style="left:{100 * lo / top:.1f}%;'
+                   f'width:{100 * (hi - lo) / top:.1f}%"></span>')
+            tip = f"{text}, range {fmt(lo, digits)}–{fmt(hi, digits)}"
+        items.append(f'<li{cls} title="{h.escape(names.get(c, c))}: {h.escape(tip)}">'
+                     f'<span class="who">{h.escape(names.get(c, c))}</span><span class="track">'
+                     f'<span class="bar" style="width:{width:.1f}%"></span>{rng}</span>'
                      f'<span class="val">{h.escape(text)}</span></li>')
-    return (f'<figure class="chart">\n<figcaption><strong>{h.escape(caption)}</strong> '
+    cls = "chart small" if small else "chart"
+    return (f'<figure class="{cls}">\n<figcaption><strong>{h.escape(caption)}</strong> '
             f'<span>{h.escape(note)}</span></figcaption>\n<ul class="bars">\n'
             + "\n".join(items) + "\n</ul>\n</figure>")
+
+
+def grid(figures):
+    return '<div class="chart-grid">\n' + "\n".join(figures) + "\n</div>"
+
+
+def stat(rs, key):
+    """(median, low, high) of `key` over runs `rs`, or Nones."""
+    lo, hi = spread(rs, key)
+    return (med(rs, key), lo, hi) if lo is not None else (None, None, None)
+
+
+# the columns of many_table, as charts: key, caption, unit, digits, which way is better
+MANY_MEASURES = [
+    ("add_s", "Add", "s", 2, "lower"),
+    ("restart_s", "Start with all listed", "s", 2, "lower"),
+    ("restarted_rss_mb", "Memory after a restart (RSS)", "MB", 1, "lower"),
+    ("restarted_pss_mb", "Memory after a restart (PSS)", "MB", 1, "lower"),
+    ("restarted_idle_cpu_pct", "Idle CPU", "%", 2, "lower"),
+    ("empty_rss_mb", "Empty session, memory (RSS)", "MB", 1, "lower"),
+]
+
+
+def many_charts(rows, count):
+    """Small charts beside many_table: one per column, one bar per client."""
+    m = {c: many_ok(rows, c, count) for c in ORDER}
+    note = runs_note(map(len, m.values()))
+    return grid([bars(cap, f"{unit}, {note}{better} is better",
+                      [(c, *stat(m[c], key)) for c in ORDER if m[c]], unit, digits, small=True)
+                 for key, cap, unit, digits, better in MANY_MEASURES])
+
+
+def transfer_charts(rows):
+    t = {c: transfer_ok(rows, c) for c in ORDER}
+    for rs in t.values():
+        for r in rs:
+            r["done_s"] = r["seconds"] - r["first_byte_s"]
+    note = runs_note(map(len, t.values()))
+    return grid([bars("First byte to done", f"seconds, {note}lower is better",
+                      [(c, *stat(t[c], "done_s")) for c in ORDER if t[c]], "s", 1, small=True)])
+
+
+def version_clients(rows, others=()):
+    """Rookparcel's versions in a run, oldest first and `rookparcel` (the newest) last, then
+    `others` that ran; with their labels."""
+    clients = []
+    for r in rows:
+        if r["client"].split("@")[0] == "rookparcel" and r["client"] not in clients:
+            clients.append(r["client"])
+    clients.sort(key=lambda c: (c == "rookparcel", [int(p) if p.isdigit() else 0
+                                                     for p in c.partition("@")[2].split(".")]))
+    clients += [c for c in others if any(r["client"] == c for r in rows)]
+    names = {c: next((r["version"] for r in rows if r["client"] == c and "version" in r), c).split()[-1]
+             if c.startswith("rookparcel") else NAMES.get(c, c) for c in clients}
+    return clients, names
+
+
+def versions_charts(rows):
+    """Small charts beside versions_table: one per measure, one bar per version, the newest
+    in the accent colour."""
+    clients, names = version_clients(rows)
+    figs = []
+    t = {c: transfer_ok(rows, c) for c in clients}
+    if any(t.values()):
+        note = runs_note(map(len, t.values()))
+        figs.append(bars("Download speed", f"MiB/s, {note}higher is better",
+                         [(c, *stat(t[c], "mib_per_s")) for c in clients], "MiB/s", 0, names, small=True))
+        figs.append(bars("Download, CPU per GiB", f"seconds, {note}lower is better",
+                         [(c, *stat(t[c], "cpu_s_per_gib")) for c in clients], "s", 2, names, small=True))
+    counts = sorted({r["count"] for r in rows if r["scenario"] == "many"})
+    for count in counts:
+        m = {c: many_ok(rows, c, count) for c in clients}
+        if not any(m.values()):
+            continue
+        note = runs_note(map(len, m.values()))
+        for key, cap, unit, digits in (("add_s", "add", "s", 2), ("restart_s", "start with all listed", "s", 2),
+                                       ("restarted_rss_mb", "memory after a restart", "MB", 1),
+                                       ("added_rss_mb", "memory right after adding", "MB", 0),
+                                       ("restarted_idle_cpu_pct", "idle CPU", "%", 2)):
+            figs.append(bars(f"{count:,} torrents: {cap}", f"{unit}, {note}lower is better",
+                             [(c, *stat(m[c], key)) for c in clients], unit, digits, names, small=True))
+        if count == counts[-1]:
+            figs.append(bars("Empty session, memory", f"MB, {note}lower is better",
+                             [(c, *stat(m[c], "empty_rss_mb")) for c in clients], "MB", 1, names,
+                             small=True))
+    return grid(figs)
+
+
+def add_charts(rows):
+    """A run that measured only adding (versions and other clients): one chart per count."""
+    clients, names = version_clients(rows, others=ORDER[1:])
+    figs = []
+    for count in sorted({r["count"] for r in rows if r["scenario"] == "many"}):
+        m = {c: many_ok(rows, c, count) for c in clients}
+        note = runs_note(map(len, m.values()))
+        figs.append(bars(f"Adding {count:,} torrents", f"seconds, {note}lower is better",
+                         [(c, *stat(m[c], "add_s")) for c in clients], "s", 2, names, small=True))
+    return grid(figs)
 
 
 def fill(page, rows):
@@ -176,10 +288,18 @@ def fill(page, rows):
     import re
     blocks = {f"chart-{i}": c for i, c in enumerate(charts(rows).split("\n\n"))}
     blocks["table-transfer"] = html(transfer_table(rows))
+    blocks["charts-transfer"] = transfer_charts(rows)
     if any(r["client"].startswith("rookparcel@") for r in rows):
         blocks["table-versions"] = html(versions_table(rows))
+        blocks["charts-versions"] = versions_charts(rows)
     for count in {r["count"] for r in rows if r["scenario"] == "many"}:
         blocks[f"table-{count}"] = html(many_table(rows, count))
+        blocks[f"charts-{count}"] = many_charts(rows, count)
+    fill_blocks(page, blocks)
+
+
+def fill_blocks(page, blocks):
+    import re
     with open(page, encoding="utf-8") as f:
         text = f.read()
     for name, block in blocks.items():
@@ -197,10 +317,10 @@ def charts(rows):
     tn, mn = runs_note(map(len, t.values())), runs_note(map(len, m.values()))
 
     def tm(key):
-        return [(c, med(t[c], key)) for c in ORDER]
+        return [(c, *stat(t[c], key)) for c in ORDER]
 
     def mm(key):
-        return [(c, med(m[c], key)) for c in ORDER]
+        return [(c, *stat(m[c], key)) for c in ORDER]
     return "\n\n".join([
         bars("Memory with 10,000 torrents, after a restart", f"RSS, {mn}lower is better",
              mm("restarted_rss_mb"), "MB"),
@@ -213,6 +333,11 @@ def charts(rows):
 
 def main():
     rows = load(sys.argv[1])
+    if "--fill-add" in sys.argv:
+        # a run that measured only adding, into its own block: --fill-add PAGE BLOCK
+        i = sys.argv.index("--fill-add")
+        fill_blocks(sys.argv[i + 1], {sys.argv[i + 2]: add_charts(rows)})
+        return
     if "--fill" in sys.argv:
         fill(sys.argv[sys.argv.index("--fill") + 1], rows)
         return

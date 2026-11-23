@@ -4,6 +4,10 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-23_133237_1795437157: charts beside every benchmark table
+
+- `summarize.py --fill` puts a grid of small bar charts beside each table on the benchmarks page (one per column or measure; median from zero, a whisker for the range across runs, the hover title gives both) and range whiskers on the existing charts; `--fill-add` charts the adding-only run of 2026-11-23. Plain HTML and CSS, no script; checked in the preview in dark and light themes and at phone width (no sideways scroll).
+
 ## 2026-11-23_131433_1795436073: 1.2.77's adding measured on a Hetzner server
 
 - Published releases 1.2.77, 1.2.76 and 1.2.46 beside qBittorrent, `many` only, three rounds, on a CCX23 (fsn1), 1 h 44 min, about €0.35; the server uploaded and deleted itself (0 servers, 0 keys left). 10,000 torrents added in 1.59 s by 1.2.77, 16.2 s by 1.2.76, 2.33 s by 1.2.46, 2.16 s by qBittorrent; 1,000 in 0.48 / 1.58 / 0.38 / 0.25 s. 1.2.76 was 3x slower than in the 2026-11-22 run: the flush's cost depends on the server's disk. Raw: `docs/benchmarks/2026-11-23-hetzner-ccx23-1.2.77-add.jsonl`; the website shows it.
