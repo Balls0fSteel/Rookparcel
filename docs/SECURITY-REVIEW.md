@@ -287,6 +287,34 @@ only show a lower round trip, with the same effect as a zero delay.
   `qbittorrent_flags` are private behind a file-based entry. The new runs are one short local
   run each.
 
+## Release 1.2.77 (since v1.2.76)
+
+Date: 2026-11-23_071655_1795414615. Scope: `git diff v1.2.76..HEAD -- crates`: settings and
+the nox state file are written only when they change (`private_file::write_if_changed`,
+`Prefs::save`, nox `Shared::save`). One read-only reviewer (a fresh agent given the areas, not
+the change's reasoning), its findings checked at the cited lines here. Nothing high.
+
+### Found and fixed
+
+| Severity | Where | Problem | Fix | Test |
+|---|---|---|---|---|
+| Medium | nox `Shared::save` | The first version skipped a save when the text equalled what this process had last written, without looking at the file: a `webui.json` deleted, replaced or widened to 0644 (`chmod -R`) while nox ran stayed so until a setting changed, where every add used to restore it at 0600. | nox compares with the file on disk too (`write_if_changed`), so a changed, deleted or wider file is written again at the next save. | `unchanged_state_file_not_written_again` (an edited and a deleted file are written again) |
+| Low | `private_file::same_file_as` | `symlink_metadata` then a `read` that follows links: a file swapped for a link to a FIFO in between could hang the saving thread (needs write access to the user's own config folder). | Opened with `O_NOFOLLOW` and `O_NONBLOCK` on Unix, the metadata taken from that handle, at most `len + 1` bytes read. | `same_bytes_are_not_written_again` (a link with the same bytes is replaced by a file) |
+
+### Reviewed and judged fine
+
+- D70: the stamp is part of the compared text, so a new version or a confirmed reading writes;
+  a held (Kept) stamp leaves the file alone as intended; `may_save` still refuses first; a
+  damaged, UTF-16 or BOM file never compares equal. Hosted nox hands changes to the host.
+- Nothing persisted is left out of the comparison (BTreeMaps, sorted lists); a failed read or a
+  different length or mode falls back to the full write. Crash safety unchanged: a skipped
+  write leaves a file already written through a flushed temporary file.
+
+### Open
+
+- Accepted: on Windows a skipped file keeps its ACL (a new file inherits the folder's); the
+  secrets in it are sealed with DPAPI there.
+
 ## Release 1.2.76 (since v1.2.69)
 
 Date: 2026-11-22_184404_1795369444. Scope: `git diff 13d405d0..HEAD -- crates` (1.2.71-1.2.75); the code up to

@@ -60,7 +60,10 @@ pub fn write(path: &Path, data: &[u8]) -> io::Result<()> {
 /// [`write`], unless `path` already is a plain file holding exactly `data` (and, on Unix, of
 /// mode 0600, which [`write`] would give it): then nothing is written or flushed. Settings are
 /// saved after every added torrent; a batch of adds that changes nothing in them would
-/// otherwise wait for the disk once per torrent. Whether it wrote.
+/// otherwise wait for the disk once per torrent. The file on disk is compared, not a copy in
+/// memory, so one deleted, edited or widened by another program is written again at the next
+/// save. On Windows a skipped file keeps its ACL (a new one inherits the folder's); the
+/// secrets in it are sealed with DPAPI there. Whether it wrote.
 pub fn write_if_changed(path: &Path, data: &[u8]) -> io::Result<bool> {
     if same_file_as(path, data) {
         return Ok(false);
@@ -68,8 +71,20 @@ pub fn write_if_changed(path: &Path, data: &[u8]) -> io::Result<bool> {
     write(path, data).map(|()| true)
 }
 
+/// Whether `path` is a plain file (no link followed: `O_NOFOLLOW` on Unix, the handle's own
+/// metadata) holding exactly `data`; at most `data.len() + 1` bytes are read.
 fn same_file_as(path: &Path, data: &[u8]) -> bool {
-    let Ok(meta) = std::fs::symlink_metadata(path) else { return false };
+    use std::io::Read;
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // O_NONBLOCK too, so a FIFO planted under the name cannot hang the save
+        options.custom_flags(O_NOFOLLOW | O_NONBLOCK);
+    }
+    let Ok(f) = options.open(path) else { return false };
+    let Ok(meta) = f.metadata() else { return false };
     if !meta.file_type().is_file() || meta.len() != data.len() as u64 {
         return false;
     }
@@ -80,8 +95,14 @@ fn same_file_as(path: &Path, data: &[u8]) -> bool {
             return false;
         }
     }
-    std::fs::read(path).is_ok_and(|old| old == data)
+    let mut old = Vec::with_capacity(data.len());
+    f.take(data.len() as u64 + 1).read_to_end(&mut old).is_ok() && old == data
 }
+
+/// `open`'s `O_NONBLOCK`: 0x4 on macOS and the BSDs, 0o4000 on Linux (every architecture this
+/// builds for).
+#[cfg(unix)]
+const O_NONBLOCK: i32 = if cfg!(not(any(target_os = "linux", target_os = "android"))) { 0x4 } else { 0o4000 };
 
 /// `open`'s `O_NOFOLLOW` (fail on a symbolic link), without the `libc` crate: Linux has the
 /// ARM value on ARM and PowerPC and the x86 one elsewhere; macOS and the BSDs share theirs.
@@ -134,6 +155,12 @@ mod tests {
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
             assert!(write_if_changed(&path, b"two and more").unwrap());
             assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+            // a link to a file with the same bytes is not followed: the file is written in its place
+            let elsewhere = dir.join("elsewhere");
+            std::fs::rename(&path, &elsewhere).unwrap();
+            std::os::unix::fs::symlink(&elsewhere, &path).unwrap();
+            assert!(write_if_changed(&path, b"two and more").unwrap());
+            assert!(std::fs::symlink_metadata(&path).unwrap().file_type().is_file());
         }
         std::fs::remove_dir_all(&dir).unwrap();
     }
