@@ -173,7 +173,9 @@ impl Prefs {
     /// Writes the file (through a temporary file, so a crash never leaves half of it), readable
     /// by its owner only on Unix, where the proxy password is plain ([`private_file`]). Nothing
     /// is written when [`Prefs::may_save`] says no: an error then, so the caller's "could not
-    /// save" line tells the user that the settings of this run are not kept.
+    /// save" line tells the user that the settings of this run are not kept. A file that already
+    /// holds these settings is left as it is ([`private_file::write_if_changed`]): each added
+    /// torrent saves, and most change nothing.
     pub fn save(&self) -> std::io::Result<()> {
         let Some(path) = &self.path else { return Ok(()) };
         if !self.may_save() {
@@ -186,13 +188,13 @@ impl Prefs {
         }
         let stamp = crate::guard::stamp_lines(self);
         if stamp.is_empty() {
-            return private_file::write(path, self.to_text().as_bytes());
+            return private_file::write_if_changed(path, self.to_text().as_bytes()).map(drop);
         }
         let mut stamped = self.clone();
         for (k, v) in stamp {
             stamped.set(k, v);
         }
-        private_file::write(path, stamped.to_text().as_bytes())
+        private_file::write_if_changed(path, stamped.to_text().as_bytes()).map(drop)
     }
 
     pub(crate) fn stamp(&self) -> Stamp {

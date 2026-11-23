@@ -57,6 +57,32 @@ pub fn write(path: &Path, data: &[u8]) -> io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
+/// [`write`], unless `path` already is a plain file holding exactly `data` (and, on Unix, of
+/// mode 0600, which [`write`] would give it): then nothing is written or flushed. Settings are
+/// saved after every added torrent; a batch of adds that changes nothing in them would
+/// otherwise wait for the disk once per torrent. Whether it wrote.
+pub fn write_if_changed(path: &Path, data: &[u8]) -> io::Result<bool> {
+    if same_file_as(path, data) {
+        return Ok(false);
+    }
+    write(path, data).map(|()| true)
+}
+
+fn same_file_as(path: &Path, data: &[u8]) -> bool {
+    let Ok(meta) = std::fs::symlink_metadata(path) else { return false };
+    if !meta.file_type().is_file() || meta.len() != data.len() as u64 {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if meta.permissions().mode() & 0o777 != 0o600 {
+            return false;
+        }
+    }
+    std::fs::read(path).is_ok_and(|old| old == data)
+}
+
 /// `open`'s `O_NOFOLLOW` (fail on a symbolic link), without the `libc` crate: Linux has the
 /// ARM value on ARM and PowerPC and the x86 one elsewhere; macOS and the BSDs share theirs.
 #[cfg(unix)]
@@ -89,6 +115,26 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), b"two");
         assert!(!tmp_path(&path).exists());
         assert_eq!(tmp_path(&path), dir.join("a").join("b").join("webui.json.tmp"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn same_bytes_are_not_written_again() {
+        let dir = crate::disk::tests::temp_dir("private-unchanged");
+        let path = dir.join("rookparcel.ini");
+        assert!(write_if_changed(&path, b"one").unwrap(), "no file yet");
+        assert!(!write_if_changed(&path, b"one").unwrap());
+        assert!(write_if_changed(&path, b"two").unwrap());
+        assert!(write_if_changed(&path, b"two and more").unwrap(), "a longer file");
+        assert_eq!(std::fs::read(&path).unwrap(), b"two and more");
+        #[cfg(unix)]
+        {
+            // a file of a wider mode is written again, so it ends up the owner's only
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+            assert!(write_if_changed(&path, b"two and more").unwrap());
+            assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

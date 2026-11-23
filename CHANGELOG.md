@@ -4,6 +4,12 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-23_071655_1795414615: 1.2.77, adding no longer waits for a settings flush per torrent
+
+- **Cause of the 3x slower add (1.2.57-1.2.76):** found by timing the published Windows builds of every release between 1.2.46 and 1.2.69 (1,000 torrents in batches of 100: 1.2.54 0.58 s, 1.2.57 1.59 s). 1.2.57 (D70) flushes every settings write to the disk (`sync_all` in `private_file::write`), and nox's `Shared::save` rewrote `webui.json` after every added torrent although usually nothing in it changed, so each torrent waited for the disk. The earlier note ruling out that `sync_all` was wrong.
+- **Fix:** nox keeps the text it last wrote (`State::saved`) and skips a save that would write the same file; the desktop programs' `Prefs::save` (also one save per add) goes through the new `private_file::write_if_changed`, which compares with the file on disk (copies of the settings may share a file; on Unix only a 0600 regular file counts as unchanged). D70's crash safety stays as it was.
+- **Measured** on the owner's PC: 10,000 torrents 3.0 s (1.2.46 6.4 s, 1.2.69 28.6 s), 1,000 0.25 s. Tests added for both paths; core, frontend and nox suites and clippy pass. The website says what it was and that 1.2.77 fixes it; the server figures follow once 1.2.77 is published (BACKLOG).
+
 ## 2026-11-23_023517_1795397717: the website's benchmarks show six published releases; adding is 3x slower since 1.2.46
 
 - **On the owner's word** ("queue the tests on Hetzner with old versions too ... like an evolution"): `launch-hetzner.ps1 -Published` with the new `fetch.sh` downloads the published Linux releases and checks each against its `SHA256SUMS` (tested from Git Bash for 1.2.76 and 1.0.1; WSL is off and the Xubuntu VM was down). One CCX23 run, 5 h 15 min, about €0.95, self-deleted (0 servers, 0 keys): 1.2.76 against 1.2.69, 1.2.46, 1.2.29, 1.1.40 and 1.0.1; 109 of 110 runs (one rTorrent API timeout). BENCHMARKS.md "Version history, 2026-11-22".
@@ -71,7 +77,3 @@ Earlier history: [archive index](docs/archive/README.md), including all 148 orig
 - **Data:** a failed `resume.log` write is cut back and rewritten at its intact length (10); an RSS smart filter's failed episode is tried again (8).
 - **Problem:** worktree isolation kept an agent from SECURITY-AUDIT.md (locally excluded); its SEC-26 update was added here. nox `the_kept_block_list_is_in_force_at_start` failed now and then: its "nothing fetched" check looked for `127.0.0.1:9`, which a random listen port such as `127.0.0.1:9862` also contains; it now looks for `127.0.0.1:9/`.
 - **Validation:** after the merge, core (986 lib tests and every integration binary), frontend, nox and Win32 (one thread) all pass; `cargo check` of the four with tests clean. GTK and macOS were not built (no call site of theirs changed).
-
-## 2026-11-21_002110_1795216870: bug hunt of 1.2.70
-
-- Read-only review of `13d405d0` by eighteen parallel reviewers, one per area; the high and medium findings and about half the low ones re-read at the cited lines, the high and medium ones searched for in SECURITY-REVIEW, SECURITY-AUDIT, PORTING and DECISIONS (none listed); nothing built, run or fixed. 34 defects in [BUGHUNT-2026-11-21.md](docs/BUGHUNT-2026-11-21.md): 2 high, 9 medium, 23 low, plus inherited and minor notes. uTP, the DHT node, the disk write paths and Web UI escaping came out clean. BACKLOG's live DHT toggle check fails (item 3).

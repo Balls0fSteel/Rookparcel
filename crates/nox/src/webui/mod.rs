@@ -681,6 +681,10 @@ pub(crate) struct State {
     /// The newer Rookparcel nox's update check found (`update.rs`), for the page's status bar;
     /// never set hosted (the host checks).
     pub update: Option<rookparcel_frontend::update::Version>,
+    /// The state file as [`Shared::save`] last wrote it, so an unchanged one is not written
+    /// (and flushed to the disk, D70) again: every add saves, and a batch of adds that only
+    /// remembers the same folder would otherwise wait for the disk once per torrent.
+    pub saved: Option<String>,
 }
 
 pub(crate) struct Shared {
@@ -901,9 +905,14 @@ impl Shared {
         if let Some(dir) = path.parent() {
             let _ = private_file::create_dir_all(dir);
         }
+        let text = doc.to_json();
+        if st.saved.as_deref() == Some(text.as_str()) {
+            return;
+        }
         // Write then rename, so a crash never leaves half a file; owner-only on Unix (the
-        // password hash, and the proxy password, which is plain there).
-        let _ = private_file::write(path, doc.to_json().as_bytes());
+        // password hash, and the proxy password, which is plain there). A failed write is
+        // tried again at the next save.
+        st.saved = private_file::write(path, text.as_bytes()).is_ok().then_some(text);
     }
 
     pub(crate) fn trackers(&self) -> Option<MutexGuard<'_, TrackerList>> {
@@ -1275,6 +1284,7 @@ impl WebUi {
                 adds_version: 1,
                 excluded: Pending::new(),
                 update: None,
+                saved: None,
             }),
             replied: Condvar::new(),
             limits: config.limits,
@@ -2472,6 +2482,7 @@ impl State {
             adds_version: 1,
             excluded: Pending::new(),
             update: None,
+            saved: None,
         }
     }
 }
@@ -2489,6 +2500,31 @@ mod tests {
             name: format!("t{id}"),
             ..TorrentStatus::default()
         }
+    }
+
+    /// A save that would write the same state file again writes nothing (each add saves, and a
+    /// write is flushed to the disk); a changed state is written, and so is the first save.
+    #[test]
+    fn unchanged_state_file_not_written_again() {
+        let dir = std::env::temp_dir().join(format!("nox-save-unchanged-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let session = rookparcel_core::Session::start_mock(Default::default(), Default::default());
+        let mut shared = State::shared_for_tests(session.handle(), dir.clone());
+        let path = dir.join("webui.json");
+        shared.state_file = Some(path.clone());
+        let mut st = shared.lock();
+        shared.save(&mut st);
+        let first = std::fs::read_to_string(&path).unwrap();
+        // a stand-in the next save would overwrite if it wrote
+        std::fs::write(&path, "marker").unwrap();
+        shared.save(&mut st);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "marker");
+        st.options.set("dir.download", "/somewhere/else");
+        shared.save(&mut st);
+        let changed = std::fs::read_to_string(&path).unwrap();
+        assert!(changed != first && changed.contains("somewhere"), "{changed}");
+        drop(st);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// N4: a `.torrent` the engine reports is cached only while an export waits for it (the

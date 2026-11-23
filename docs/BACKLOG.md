@@ -676,15 +676,11 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   (qBittorrent 2.56, rTorrent 2.11); against qBittorrent in the same run 0.74 times its CPU,
   against 1.86 times on the Xeon. Stronger suspicion, but different CPUs: the direct measurement
   is still open.
-- **Adding got about 3x slower between 1.2.46 and 1.2.69** (BENCHMARKS.md "Version history,
-  2026-11-22", published releases in the same rounds on a Hetzner CCX23): 10,000 torrents
-  1.76-1.85 s for 1.0.1-1.2.46, 5.26 s for 1.2.69 and 5.39 s for 1.2.76; 1,000 torrents 0.16-0.19
-  s against 0.55-0.56 s. qBittorrent adds 10,000 in 2.0 s there. Listing after a restart,
-  memory and idle CPU are unchanged. The website says it is being looked into. Next: bisect with
-  the published 1.2.54, 1.2.57, 1.2.63, 1.2.65 and 1.2.67 (`fetch.sh` takes any of them;
-  `bench.py many --count 10000 --runs 3` with only Rookparcel clients is about 15 minutes per
-  version), then profile the add path. Not the cause by a first look: 1.2.57's `sync_all` in
-  `private_file::write` (settings files, not per torrent).
+- **Re-measure adding on a server once 1.2.77 is published** (the 3x slower add of 1.2.57-1.2.76
+  is fixed there, CHANGELOG 2026-11-23_071655): a `-Published` run of 1.2.77 against 1.2.76 and
+  1.2.46, `many` only, then the website's "Adding was slower" lines get the server's figures.
+  Still saved after every change that does alter the file: an add with a label or tags (an *arr
+  grab with a category) writes and flushes once per torrent, as qBittorrent does.
 - **10,000 torrents listed 0.04 s later after a restart in 1.2.70** than 1.2.69 (0.66-0.70 s
   against 0.63-0.65 s, three rounds each, under the harness's 0.1 s poll step; BENCHMARKS.md
   2026-11-18). Candidate: the per-torrent `CheckStarted` message of the resume check. Not
