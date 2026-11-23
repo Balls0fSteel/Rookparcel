@@ -48,6 +48,16 @@
     <!-- Newest first. site/build.py makes news.atom and the home page's latest-news line from
          these articles: keep the id, data-date, news-title and news-lede (docs/WEBSITE.md). -->
 
+    <article class="news-entry" id="v1.2.77" data-date="2026-11-23" aria-labelledby="v1.2.77-h">
+      <h2 id="v1.2.77-h"><a href="#v1.2.77"><time datetime="2026-11-23">Mon 23 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.77</span></a></h2>
+      <p class="news-lede">Adding many torrents is fast again. Since 1.2.57 every added torrent waited for the settings file to be written to the disk, even when nothing in it had changed.</p>
+      <ul class="changes">
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>The settings are written only when they change, in <code>rookparcel-nox</code> and in the Windows, Linux and Mac programs, and stay as safe against a crash or power cut as before.</span></li>
+        <li><span class="tag tag-fix">Fix</span><span class="vh">:</span> <span>On a Windows PC, adding 10,000 torrents through the qBittorrent-compatible API took 6.4 s in 1.2.46, 28.6 s in 1.2.69 and takes 3.0 s now. The <a href="benchmarks.html#versions">benchmarks page</a> has the history and what happened.</span></li>
+      </ul>
+      <p class="news-note">Nothing else changes from 1.2.76: the same settings, torrent list and remote protocol.</p>
+      <p class="news-links"><a href="https://github.com/Balls0fSteel/Rookparcel/releases/tag/v1.2.77">Download 1.2.77 on GitHub</a> · <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/releases/1.2.77.md">Full release notes</a></p>
+    </article>
     <article class="news-entry" id="v1.2.76" data-date="2026-11-22" aria-labelledby="v1.2.76-h">
       <h2 id="v1.2.76-h"><a href="#v1.2.76"><time datetime="2026-11-22">Sun 22 Nov 2026</time> — <span class="news-title">Rookparcel 1.2.76</span></a></h2>
       <p class="news-lede">A torrent whose drive or share has gone keeps its pieces and starts again by itself when the storage is back, instead of downloading everything again. Force Re-Check now starts a stopped torrent.</p>

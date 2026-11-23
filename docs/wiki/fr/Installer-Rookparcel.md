@@ -6,7 +6,7 @@ Cette page liste les téléchargements pour chaque plateforme, explique comment 
 
 ## Où télécharger
 
-Chaque version se trouve sur la [page des versions](https://github.com/Balls0fSteel/Rookparcel/releases). La dernière version publiée est la 1.2.76. Chaque version a des notes avec les étapes du premier lancement pour chaque plateforme, et un fichier `SHA256SUMS` avec la somme de contrôle de chaque téléchargement.
+Chaque version se trouve sur la [page des versions](https://github.com/Balls0fSteel/Rookparcel/releases). La dernière version publiée est la 1.2.77. Chaque version a des notes avec les étapes du premier lancement pour chaque plateforme, et un fichier `SHA256SUMS` avec la somme de contrôle de chaque téléchargement.
 
 | Plateforme | Fichier | Contenu |
 |---|---|---|
@@ -75,7 +75,7 @@ L'installeur accepte ces options, pour les scripts et les administrateurs :
 Par exemple, depuis une invite de commandes d'administrateur :
 
 ```
-rookparcel-1.2.76-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
+rookparcel-1.2.77-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
 ```
 
 ### Le zip
@@ -92,7 +92,7 @@ Pour ouvrir les fichiers `.torrent` et les liens `magnet:` avec la copie du zip,
 Le `SHA256SUMS` de chaque version donne le SHA-256 de chaque fichier. Dans PowerShell :
 
 ```
-Get-FileHash .\rookparcel-1.2.76-windows-x64-setup.exe -Algorithm SHA256
+Get-FileHash .\rookparcel-1.2.77-windows-x64-setup.exe -Algorithm SHA256
 ```
 
 Le hash doit correspondre à la ligne du fichier dans `SHA256SUMS`.
@@ -105,8 +105,8 @@ Le hash doit correspondre à la ligne du fichier dans `SHA256SUMS`.
 2. Rendez-le exécutable et lancez-le :
 
    ```bash
-   chmod +x Rookparcel-1.2.76-x86_64.AppImage
-   ./Rookparcel-1.2.76-x86_64.AppImage
+   chmod +x Rookparcel-1.2.77-x86_64.AppImage
+   ./Rookparcel-1.2.77-x86_64.AppImage
    ```
 
 3. Sans FUSE 2 sur le système, lancez-le avec `--appimage-extract-and-run` en plus.
@@ -119,7 +119,7 @@ Le paquet contient l'application ; l'environnement d'exécution vient de Flathu
 
 ```bash
 flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak install --user Rookparcel-1.2.76-x86_64.flatpak
+flatpak install --user Rookparcel-1.2.77-x86_64.flatpak
 flatpak run io.github.balls0fsteel.Rookparcel
 ```
 
