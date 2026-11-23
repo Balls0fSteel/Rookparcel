@@ -6,6 +6,28 @@ Deluge and rTorrent, on the same machine with the same torrents. The website sho
 The harness is `tools/bench/bench.py` (Python 3, standard library; Deluge's RPC needs
 `pip install deluge-client`) and `tools/bench/summarize.py` turns its JSON lines into tables.
 
+## Version history, 2026-11-22 (published 1.0.1 to 1.2.76, on a Hetzner CCX23)
+
+The website's run: the published Linux releases 1.2.76 (the measured client), 1.2.69, 1.2.46, 1.2.29, 1.1.40 and 1.0.1 (the last two as PaTorrent), each checked against its release's `SHA256SUMS` by `fetch.sh`, beside the four other clients, on a Hetzner CCX23 (4 dedicated AMD EPYC Milan vCPUs with SHA extensions, 16 GB, Ubuntu 26.04.1, fsn1). 2026-11-22 21:11 to 2026-11-23 02:27 Budapest time, 5 h 15 min (transfer 24 min, 1,000 torrents 2 h 11 min, 10,000 torrents 2 h 40 min), about €0.95; the server uploaded and deleted itself, 0 servers and 0 keys left. 109 of 110 runs finished: one rTorrent transfer timed out at its API (120 s). Raw results: `docs/benchmarks/2026-11-22-hetzner-ccx23-1.2.76-history.jsonl`. The table is `summarize.py FILE --versions`.
+
+| Measure | 1.0.1 | 1.1.40 | 1.2.29 | 1.2.46 | 1.2.69 | 1.2.76 |
+|---|---|---|---|---|---|---|
+| Download, MiB/s (median of 5, range) | 1,425 (1,333–1,455) | 1,401 (1,233–1,468) | 1,459 (1,386–1,534) | 1,425 (1,375–1,507) | 1,439 (1,310–1,470) | 1,469 (1,007–1,576) |
+| Download, CPU s per GiB | 1.81 (1.79–1.85) | 1.81 (1.79–1.91) | 1.82 (1.69–1.86) | 1.83 (1.72–1.91) | 1.85 (1.79–1.90) | 1.80 (1.67–1.87) |
+| 1,000 torrents: add (s) | 0.17 (0.16–0.20) | 0.16 (0.16–0.19) | 0.18 (0.16–0.19) | 0.19 (0.18–0.20) | 0.56 (0.54–0.57) | 0.55 (0.53–0.56) |
+| 1,000 torrents: memory after a restart (MB) | 15.1 (15.1–15.2) | 21.0 (20.9–21.1) | 21.4 (21.4–21.6) | 21.4 (21.3–21.6) | 21.7 (21.7–21.9) | 21.9 (21.7–21.9) |
+| 1,000 torrents: idle CPU (%) | 0.05 (0.03–0.05) | 0.03 (0.03–0.05) | 0.03 (0.03–0.05) | 0.03 (0.03–0.03) | 0.03 (0.02–0.03) | 0.03 (0.03–0.03) |
+| 10,000 torrents: add (s) | 1.76 (1.60–1.78) | 1.81 (1.74–1.86) | 1.82 (1.80–1.83) | 1.85 (1.80–1.95) | 5.26 (5.10–10.86) | 5.39 (5.35–5.53) |
+| 10,000 torrents: start with all listed (s) | 0.22 (0.22–0.22) | 0.23 (0.22–0.23) | 0.22 (0.22–0.23) | 0.22 (0.22–0.25) | 0.22 (0.22–0.22) | 0.22 (0.22–0.22) |
+| 10,000 torrents: memory after a restart (MB) | 60.3 (60.3–60.4) | 66.3 (66.1–66.4) | 66.9 (66.8–67.0) | 67.2 (67.2–67.9) | 67.3 (67.2–69.4) | 67.5 (67.4–69.4) |
+| 10,000 torrents: idle CPU (%) | 0.05 (0.03–0.05) | 0.07 (0.05–0.07) | 0.22 (0.22–0.22) | 0.03 (0.02–0.03) | 0.03 (0.02–0.05) | 0.03 (0.03–0.03) |
+| Empty session, memory (MB) | 9.6 (9.5–9.7) | 15.4 (15.4–15.8) | 15.8 (15.7–16.0) | 16.1 (15.6–16.1) | 16.1 (16.0–16.3) | 16.0 (15.9–16.1) |
+
+- **Adding is about three times slower since a release after 1.2.46** and before 1.2.69: 10,000 torrents in 5.3-5.4 s against 1.8 s, 1,000 in 0.55 s against 0.17-0.19 s; qBittorrent took 2.0 s for 10,000 here. The 2026-11-19 run's 1.2.69 (5.25 s) agrees. Cause unknown; bisecting is in BACKLOG "Disk and storage".
+- **1.2.29's idle CPU at 10,000** (0.22 %, the metadata re-read and the local peer discovery walk) is gone from 1.2.30 on, as on the VM in 2026-11-10; everything else is flat across the six, apart from the 1.1.17 update check's ~6 MB.
+- **Against the other clients** Rookparcel 1.2.76 is the fastest and cheapest download (1,469 MiB/s, 1.80 CPU s per GiB; qBittorrent 1,080 and 2.46, Deluge 1,033 and 2.45, rTorrent 712 and 2.05, Transmission 62.4 and 4.06), the smallest after a restart with 10,000 (67.5 MB; qBittorrent 612) and the quietest idle (0.03 %).
+- The first download of the session was slow again (1.2.76, round 1: 1,007 MiB/s): the position effect described under 2026-11-11.
+
 ## Release check again, 2026-11-19 (1.2.70, on a Hetzner CCX23)
 
 The same check on a rented Hetzner Cloud server (CCX23: 4 dedicated vCPUs of an AMD EPYC "Milan" under KVM, with SHA extensions, 16 GB, Hetzner's Ubuntu 26.04 image, Falkenstein), 2026-11-19 from 10:04 to 13:34 Budapest time, 3 h 30 min (transfer 21 min, 1,000 torrents 80 min, 10,000 torrents 109 min); all 66 runs finished. Started with `launch-hetzner.ps1` (see "Running it on a rented machine"). Rookparcel was built on the server from `main` at `d28b2220` (it reports `1.2.70-dev.d28b222`; the engine is that of `52f0eda3`, only benchmark files changed) and from the `v1.2.69` tag as the control, Rust 1.100.0. Raw results: `docs/benchmarks/2026-11-19-hetzner-ccx23-1.2.70.jsonl`. These figures compare with each other only, not with the DigitalOcean run below or the VM. Since 2026-11-22 the website shows this run (the owner's request), with the source-built Rookparcel named as such.

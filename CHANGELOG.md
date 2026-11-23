@@ -4,6 +4,12 @@ Recent completed changes, issues and decisions. Timestamps: `YYYY-MM-DD_HHMMSS_<
 
 Earlier history: [archive index](docs/archive/README.md), including all 148 original entries from 2026-10-15 through 2026-10-23. Open archived entries only for a specific historical question. Current work: [PLAN.md](PLAN.md).
 
+## 2026-11-23_023517_1795397717: the website's benchmarks show six published releases; adding is 3x slower since 1.2.46
+
+- **On the owner's word** ("queue the tests on Hetzner with old versions too ... like an evolution"): `launch-hetzner.ps1 -Published` with the new `fetch.sh` downloads the published Linux releases and checks each against its `SHA256SUMS` (tested from Git Bash for 1.2.76 and 1.0.1; WSL is off and the Xubuntu VM was down). One CCX23 run, 5 h 15 min, about €0.95, self-deleted (0 servers, 0 keys): 1.2.76 against 1.2.69, 1.2.46, 1.2.29, 1.1.40 and 1.0.1; 109 of 110 runs (one rTorrent API timeout). BENCHMARKS.md "Version history, 2026-11-22".
+- **Website:** filled from that run; "Since 1.0.1" is back with six columns, the clients are published releases again, and the page says plainly that adding got slower and is being looked into.
+- **Found:** adding 10,000 torrents takes 5.3-5.4 s in 1.2.69 and 1.2.76 against 1.8 s up to 1.2.46 (1,000: 0.55 s against 0.17-0.19 s); qBittorrent 2.0 s. Not yet explained; bisecting plan in BACKLOG "Disk and storage".
+
 ## 2026-11-22_210021_1795377621: the website's benchmarks now show the Hetzner run
 
 - **On the owner's word** ("update the benchmark on the site if you still have the VPS run results"): `site/benchmarks.html` filled with `summarize.py --fill` from the 2026-11-19 Hetzner CCX23 run, which replaces the 2026-11-11 VM run. The Rookparcel there was built from source (a 1.2.70 pre-release and the 1.2.69 tag), not a published tarball, and the page says so; 1.2.76 is not measured yet. Prose rechecked against the numbers: "Since 1.0.1" became "Against the previous release" (the older history points at BENCHMARKS.md), the method names the server, and a new limit says Rookparcel's download CPU depends on SHA extensions (about twice the others' on the Xeon run). Site tests pass.

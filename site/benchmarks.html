@@ -46,14 +46,15 @@
     <section class="section" aria-labelledby="short-h">
       <h2 id="short-h">In short</h2>
       <ul class="findings">
-        <li><strong>A big library stays small.</strong> With 10,000 torrents Rookparcel used 68 MB after a restart, a ninth of qBittorrent's 612 MB, and listed all of them 0.22 s after it started (qBittorrent 1.60 s). Right after adding them it used 322 MB, about as much as Transmission: Rookparcel keeps a torrent's metadata in memory only while the torrent is active, and the next start leaves out the rest.</li>
-        <li><strong>Fast and frugal with one peer.</strong> Downloading 2 GiB from one peer on the same machine, Rookparcel reached a median 1,371 MiB/s, the fastest of the five, and used 1.89 seconds of CPU per GiB, the least: about three quarters of qBittorrent's 2.56 s and Deluge's 2.62 s. rTorrent (2.11 s) slowed down near the end of every download.</li>
-        <li><strong>Quiet when idle.</strong> Every client stayed under 2% of one core with 10,000 torrents; Rookparcel and qBittorrent used the least (0.05% each). With 1,000 torrents every client was at 0.13% or less, Rookparcel at 0.02%.</li>
+        <li><strong>A big library stays small.</strong> With 10,000 torrents Rookparcel used 68 MB after a restart, a ninth of qBittorrent's 612 MB, and listed all of them 0.22 s after it started (qBittorrent 1.62 s). Right after adding them it used 310 MB, about as much as Transmission: Rookparcel keeps a torrent's metadata in memory only while the torrent is active, and the next start leaves out the rest.</li>
+        <li><strong>Fast and frugal with one peer.</strong> Downloading 2 GiB from one peer on the same machine, Rookparcel reached a median 1,469 MiB/s, the fastest of the five, and used 1.80 seconds of CPU per GiB, the least: about three quarters of qBittorrent's 2.46 s and Deluge's 2.45 s. rTorrent (2.05 s) slowed down near the end of every download.</li>
+        <li><strong>Quiet when idle.</strong> Every client stayed under 2.2% of one core with 10,000 torrents; Rookparcel used the least (0.03%), then qBittorrent (0.05%). With 1,000 torrents every client was at 0.15% or less.</li>
+        <li><strong>Adding is slower than it was.</strong> Adding 10,000 torrents took Rookparcel 5.4 s, against qBittorrent's 2.0 s. Releases up to 1.2.46 needed 1.85 s on the same server; <a href="#versions">the history below</a> shows where it changed, and we are looking into it.</li>
       </ul>
       <aside class="callout" aria-label="How to read these numbers">
         <svg class="ico ico-blue" aria-hidden="true" focusable="false"><use href="img/icons.svg#i-general"/></svg>
         <div>
-          <p><strong>One rented server, measured on 19 November 2026.</strong> These numbers come from one cloud server and one kind of test each. They show what each program's code costs, not how fast your downloads will be: on the internet your connection and the swarm decide that. Read <a href="#method">how they were measured</a> and <a href="#limits">their limits</a> before quoting them.</p>
+          <p><strong>One rented server, measured on 22 and 23 November 2026.</strong> These numbers come from one cloud server and one kind of test each. They show what each program's code costs, not how fast your downloads will be: on the internet your connection and the swarm decide that. Read <a href="#method">how they were measured</a> and <a href="#limits">their limits</a> before quoting them.</p>
         </div>
       </aside>
     </section>
@@ -65,7 +66,7 @@
 <figure class="chart">
 <figcaption><strong>Memory with 10,000 torrents, after a restart</strong> <span>RSS, median of 3, lower is better</span></figcaption>
 <ul class="bars">
-<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:3.2%"></span></span><span class="val">68 MB</span></li>
+<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:3.1%"></span></span><span class="val">68 MB</span></li>
 <li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:28.6%"></span></span><span class="val">612 MB</span></li>
 <li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:15.3%"></span></span><span class="val">328 MB</span></li>
 <li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:32.7%"></span></span><span class="val">701 MB</span></li>
@@ -77,11 +78,11 @@
 <figure class="chart">
 <figcaption><strong>Memory right after adding 10,000 torrents</strong> <span>RSS, median of 3, lower is better</span></figcaption>
 <ul class="bars">
-<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:15.3%"></span></span><span class="val">322 MB</span></li>
-<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:30.3%"></span></span><span class="val">636 MB</span></li>
+<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:14.8%"></span></span><span class="val">310 MB</span></li>
+<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:30.2%"></span></span><span class="val">635 MB</span></li>
 <li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:15.7%"></span></span><span class="val">329 MB</span></li>
-<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:43.3%"></span></span><span class="val">908 MB</span></li>
-<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">2,098 MB</span></li>
+<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:43.5%"></span></span><span class="val">913 MB</span></li>
+<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">2,099 MB</span></li>
 </ul>
 </figure>
 <!-- /bench:chart-1 -->
@@ -91,10 +92,10 @@
 <figcaption><strong>Start until all 10,000 are listed</strong> <span>seconds, median of 3, lower is better</span></figcaption>
 <ul class="bars">
 <li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:0.7%"></span></span><span class="val">0.22 s</span></li>
-<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:5.3%"></span></span><span class="val">1.60 s</span></li>
-<li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:6.1%"></span></span><span class="val">1.84 s</span></li>
-<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:18.8%"></span></span><span class="val">5.63 s</span></li>
-<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">29.95 s</span></li>
+<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:5.3%"></span></span><span class="val">1.62 s</span></li>
+<li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:6.1%"></span></span><span class="val">1.88 s</span></li>
+<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:18.4%"></span></span><span class="val">5.68 s</span></li>
+<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">30.80 s</span></li>
 </ul>
 </figure>
 <!-- /bench:chart-2 -->
@@ -106,11 +107,11 @@
 <table class="listview bench">
 <thead><tr><th scope="col">Client</th><th scope="col">Add (s)</th><th scope="col">Start with all listed (s)</th><th scope="col">Memory, RSS (MB)</th><th scope="col">PSS (MB)</th><th scope="col">Idle CPU (%)</th><th scope="col">Empty RSS (MB)</th></tr></thead>
 <tbody>
-<tr><td class="client">Rookparcel</td><td class="num">5.3</td><td class="num">0.22</td><td class="num">67.6</td><td class="num">61.2</td><td class="num">0.05</td><td class="num">16.3</td></tr>
-<tr><td class="client">qBittorrent</td><td class="num">2.0</td><td class="num">1.60</td><td class="num">612</td><td class="num">602</td><td class="num">0.05</td><td class="num">53.6</td></tr>
-<tr><td class="client">Transmission</td><td class="num">8.8</td><td class="num">1.84</td><td class="num">328</td><td class="num">319</td><td class="num">0.45</td><td class="num">22.0</td></tr>
-<tr><td class="client">Deluge</td><td class="num">510</td><td class="num">5.63</td><td class="num">701</td><td class="num">690</td><td class="num">0.20</td><td class="num">68.5</td></tr>
-<tr><td class="client">rTorrent</td><td class="num">43.7</td><td class="num">29.95</td><td class="num">2,143</td><td class="num">2,135</td><td class="num">1.93</td><td class="num">16.8</td></tr>
+<tr><td class="client">Rookparcel</td><td class="num">5.4</td><td class="num">0.22</td><td class="num">67.5</td><td class="num">60.9</td><td class="num">0.03</td><td class="num">16.0</td></tr>
+<tr><td class="client">qBittorrent</td><td class="num">2.0</td><td class="num">1.62</td><td class="num">612</td><td class="num">602</td><td class="num">0.05</td><td class="num">53.5</td></tr>
+<tr><td class="client">Transmission</td><td class="num">9.1</td><td class="num">1.88</td><td class="num">328</td><td class="num">319</td><td class="num">0.43</td><td class="num">21.8</td></tr>
+<tr><td class="client">Deluge</td><td class="num">509</td><td class="num">5.68</td><td class="num">701</td><td class="num">688</td><td class="num">0.22</td><td class="num">68.2</td></tr>
+<tr><td class="client">rTorrent</td><td class="num">41.8</td><td class="num">30.80</td><td class="num">2,143</td><td class="num">2,135</td><td class="num">2.17</td><td class="num">16.9</td></tr>
 </tbody>
 </table>
 <!-- /bench:table-10000 -->
@@ -121,11 +122,11 @@
 <table class="listview bench">
 <thead><tr><th scope="col">Client</th><th scope="col">Add (s)</th><th scope="col">Start with all listed (s)</th><th scope="col">Memory, RSS (MB)</th><th scope="col">PSS (MB)</th><th scope="col">Idle CPU (%)</th><th scope="col">Empty RSS (MB)</th></tr></thead>
 <tbody>
-<tr><td class="client">Rookparcel</td><td class="num">0.5</td><td class="num">0.08</td><td class="num">22.0</td><td class="num">15.4</td><td class="num">0.02</td><td class="num">16.2</td></tr>
-<tr><td class="client">qBittorrent</td><td class="num">0.2</td><td class="num">0.25</td><td class="num">105</td><td class="num">95.0</td><td class="num">0.05</td><td class="num">53.7</td></tr>
-<tr><td class="client">Transmission</td><td class="num">0.9</td><td class="num">0.20</td><td class="num">53.4</td><td class="num">44.0</td><td class="num">0.10</td><td class="num">21.9</td></tr>
-<tr><td class="client">Deluge</td><td class="num">50.7</td><td class="num">0.82</td><td class="num">135</td><td class="num">124</td><td class="num">0.13</td><td class="num">68.5</td></tr>
-<tr><td class="client">rTorrent</td><td class="num">2.9</td><td class="num">1.38</td><td class="num">230</td><td class="num">222</td><td class="num">0.13</td><td class="num">16.8</td></tr>
+<tr><td class="client">Rookparcel</td><td class="num">0.6</td><td class="num">0.08</td><td class="num">21.9</td><td class="num">15.3</td><td class="num">0.03</td><td class="num">16.3</td></tr>
+<tr><td class="client">qBittorrent</td><td class="num">0.2</td><td class="num">0.26</td><td class="num">105</td><td class="num">94.4</td><td class="num">0.03</td><td class="num">53.1</td></tr>
+<tr><td class="client">Transmission</td><td class="num">0.9</td><td class="num">0.20</td><td class="num">53.3</td><td class="num">43.6</td><td class="num">0.10</td><td class="num">21.8</td></tr>
+<tr><td class="client">Deluge</td><td class="num">50.8</td><td class="num">0.82</td><td class="num">135</td><td class="num">122</td><td class="num">0.15</td><td class="num">68.3</td></tr>
+<tr><td class="client">rTorrent</td><td class="num">2.8</td><td class="num">1.38</td><td class="num">230</td><td class="num">222</td><td class="num">0.13</td><td class="num">16.9</td></tr>
 </tbody>
 </table>
 <!-- /bench:table-1000 -->
@@ -137,39 +138,39 @@
       <p>One 2 GiB file of random data, seeded by a reference qBittorrent on the same machine, downloaded five times by each client with a fresh profile. Speed and CPU time are taken between 10% and 80% of the file, from the kernel's own byte counts; every downloaded file was checked against the original.</p>
 <!-- bench:chart-3 -->
 <figure class="chart">
-<figcaption><strong>Download speed from one peer</strong> <span>MiB/s, median of 5, higher is better</span></figcaption>
+<figcaption><strong>Download speed from one peer</strong> <span>MiB/s, median, higher is better</span></figcaption>
 <ul class="bars">
-<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">1,371 MiB/s</span></li>
-<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:74.0%"></span></span><span class="val">1,015 MiB/s</span></li>
-<li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:4.6%"></span></span><span class="val">62 MiB/s</span></li>
-<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:72.6%"></span></span><span class="val">996 MiB/s</span></li>
-<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:50.2%"></span></span><span class="val">689 MiB/s</span></li>
+<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">1,469 MiB/s</span></li>
+<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:73.5%"></span></span><span class="val">1,080 MiB/s</span></li>
+<li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:4.2%"></span></span><span class="val">62 MiB/s</span></li>
+<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:70.4%"></span></span><span class="val">1,033 MiB/s</span></li>
+<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:48.5%"></span></span><span class="val">712 MiB/s</span></li>
 </ul>
 </figure>
 <!-- /bench:chart-3 -->
 <!-- bench:chart-4 -->
 <figure class="chart">
-<figcaption><strong>CPU time per GiB downloaded</strong> <span>seconds, median of 5, lower is better</span></figcaption>
+<figcaption><strong>CPU time per GiB downloaded</strong> <span>seconds, median, lower is better</span></figcaption>
 <ul class="bars">
-<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:46.2%"></span></span><span class="val">1.89 s</span></li>
-<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:62.6%"></span></span><span class="val">2.56 s</span></li>
-<li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">4.09 s</span></li>
-<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:64.1%"></span></span><span class="val">2.62 s</span></li>
-<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:51.6%"></span></span><span class="val">2.11 s</span></li>
+<li class="pa"><span class="who">Rookparcel</span><span class="track"><span class="bar" style="width:44.3%"></span></span><span class="val">1.80 s</span></li>
+<li><span class="who">qBittorrent</span><span class="track"><span class="bar" style="width:60.6%"></span></span><span class="val">2.46 s</span></li>
+<li><span class="who">Transmission</span><span class="track"><span class="bar" style="width:100.0%"></span></span><span class="val">4.06 s</span></li>
+<li><span class="who">Deluge</span><span class="track"><span class="bar" style="width:60.3%"></span></span><span class="val">2.45 s</span></li>
+<li><span class="who">rTorrent</span><span class="track"><span class="bar" style="width:50.5%"></span></span><span class="val">2.05 s</span></li>
 </ul>
 </figure>
 <!-- /bench:chart-4 -->
-      <p>Transmission held 62.3 to 62.5 MiB/s in every run, which looks like the limit of how many requests it keeps open to a single peer rather than of its engine; with many peers it spreads out. rTorrent's downloads took about two minutes from the first byte to the last: in earlier runs it was fast until about 1.7 GiB and then flushed its memory-mapped pieces slowly.</p>
+      <p>Transmission held 62.3 to 62.5 MiB/s in every run, which looks like the limit of how many requests it keeps open to a single peer rather than of its engine; with many peers it spreads out. rTorrent's downloads took about two minutes from the first byte to the last: in earlier runs it was fast until about 1.7 GiB and then flushed its memory-mapped pieces slowly. One of its five runs failed, because its API did not answer within 120 seconds, so its figures are from four.</p>
       <div class="table-scroll">
 <!-- bench:table-transfer -->
 <table class="listview bench">
 <thead><tr><th scope="col">Client</th><th scope="col">Version</th><th scope="col">Runs</th><th scope="col">Throughput (MiB/s)</th><th scope="col">range</th><th scope="col">CPU s per GiB</th><th scope="col">range</th><th scope="col">First byte to done (s)</th></tr></thead>
 <tbody>
-<tr><td class="client">Rookparcel</td><td>rookparcel-nox 1.2.70-dev.d28b222</td><td class="num">5 of 5</td><td class="num">1,371</td><td class="num">980–1,470</td><td class="num">1.89</td><td class="num">1.79–1.98</td><td class="num">2.6</td></tr>
-<tr><td class="client">qBittorrent</td><td>v5.1.4</td><td class="num">5 of 5</td><td class="num">1,015</td><td class="num">1,001–1,107</td><td class="num">2.56</td><td class="num">2.45–2.60</td><td class="num">2.8</td></tr>
-<tr><td class="client">Transmission</td><td>Transmission 4.1.1 (56442e2929)</td><td class="num">5 of 5</td><td class="num">62.5</td><td class="num">62.3–62.5</td><td class="num">4.09</td><td class="num">4.08–4.13</td><td class="num">41.8</td></tr>
-<tr><td class="client">Deluge</td><td>Deluge 2.2.1.dev0+20250824 (libtorrent 2.0.12.0)</td><td class="num">5 of 5</td><td class="num">996</td><td class="num">916–1,073</td><td class="num">2.62</td><td class="num">2.44–2.67</td><td class="num">2.3</td></tr>
-<tr><td class="client">rTorrent</td><td>rTorrent 0.9.8 (libtorrent 0.13.8)</td><td class="num">5 of 5</td><td class="num">689</td><td class="num">669–698</td><td class="num">2.11</td><td class="num">2.08–2.16</td><td class="num">128</td></tr>
+<tr><td class="client">Rookparcel</td><td>rookparcel-nox 1.2.76</td><td class="num">5 of 5</td><td class="num">1,469</td><td class="num">1,007–1,576</td><td class="num">1.80</td><td class="num">1.67–1.87</td><td class="num">2.6</td></tr>
+<tr><td class="client">qBittorrent</td><td>v5.1.4</td><td class="num">5 of 5</td><td class="num">1,080</td><td class="num">973–1,102</td><td class="num">2.46</td><td class="num">2.40–2.56</td><td class="num">2.8</td></tr>
+<tr><td class="client">Transmission</td><td>Transmission 4.1.1 (56442e2929)</td><td class="num">5 of 5</td><td class="num">62.4</td><td class="num">62.3–62.5</td><td class="num">4.06</td><td class="num">4.03–4.21</td><td class="num">41.5</td></tr>
+<tr><td class="client">Deluge</td><td>Deluge 2.2.1.dev0+20250824 (libtorrent 2.0.12.0)</td><td class="num">5 of 5</td><td class="num">1,033</td><td class="num">993–1,110</td><td class="num">2.45</td><td class="num">2.36–2.63</td><td class="num">2.2</td></tr>
+<tr><td class="client">rTorrent</td><td>rTorrent 0.9.8 (libtorrent 0.13.8)</td><td class="num">4 of 5</td><td class="num">712</td><td class="num">701–728</td><td class="num">2.05</td><td class="num">2.01–2.06</td><td class="num">128</td></tr>
 </tbody>
 </table>
 <!-- /bench:table-transfer -->
@@ -177,38 +178,39 @@
     </section>
 
     <section class="section" id="versions" aria-labelledby="versions-h">
-      <h2 id="versions-h">Against the previous release</h2>
-      <p>Rookparcel 1.2.69 ran in the same rounds as a build of 1.2.70 made before its release, so the two can be compared directly: medians, with the range across runs in brackets.</p>
+      <h2 id="versions-h">Since 1.0.1</h2>
+      <p>Six published releases, from 1.0.1 (released as PaTorrent) to 1.2.76, ran in the same rounds on the same server, so they can be compared directly: medians, with the range across runs in brackets.</p>
       <div class="table-scroll">
 <!-- bench:table-versions -->
 <table class="listview bench">
-<thead><tr><th scope="col">Measure</th><th scope="col">1.2.69</th><th scope="col">1.2.70-dev.d28b222</th></tr></thead>
+<thead><tr><th scope="col">Measure</th><th scope="col">1.0.1</th><th scope="col">1.1.40</th><th scope="col">1.2.29</th><th scope="col">1.2.46</th><th scope="col">1.2.69</th><th scope="col">1.2.76</th></tr></thead>
 <tbody>
-<tr><td class="client">Download, MiB/s (median of 5, range)</td><td class="num">1,413 (1,235–1,491)</td><td class="num">1,371 (980–1,470)</td></tr>
-<tr><td class="client">Download, CPU s per GiB</td><td class="num">1.87 (1.78–1.97)</td><td class="num">1.89 (1.79–1.98)</td></tr>
-<tr><td class="client">1,000 torrents: add (s)</td><td class="num">0.52 (0.47–0.57)</td><td class="num">0.52 (0.51–0.56)</td></tr>
-<tr><td class="client">1,000 torrents: start with all listed (s)</td><td class="num">0.08 (0.08–0.08)</td><td class="num">0.08 (0.08–0.08)</td></tr>
-<tr><td class="client">1,000 torrents: memory after a restart (MB)</td><td class="num">21.9 (21.7–22.0)</td><td class="num">22.0 (21.9–22.0)</td></tr>
-<tr><td class="client">1,000 torrents: memory right after adding (MB)</td><td class="num">57.2 (57.1–57.3)</td><td class="num">57.1 (56.9–57.2)</td></tr>
-<tr><td class="client">1,000 torrents: idle CPU (%)</td><td class="num">0.02 (0.02–0.03)</td><td class="num">0.02 (0.02–0.03)</td></tr>
-<tr><td class="client">10,000 torrents: add (s)</td><td class="num">5.25 (5.12–5.30)</td><td class="num">5.29 (5.20–5.57)</td></tr>
-<tr><td class="client">10,000 torrents: start with all listed (s)</td><td class="num">0.22 (0.22–0.23)</td><td class="num">0.22 (0.22–0.23)</td></tr>
-<tr><td class="client">10,000 torrents: memory after a restart (MB)</td><td class="num">67.6 (67.6–67.7)</td><td class="num">67.6 (67.5–69.4)</td></tr>
-<tr><td class="client">10,000 torrents: memory right after adding (MB)</td><td class="num">322 (321–332)</td><td class="num">322 (310–337)</td></tr>
-<tr><td class="client">10,000 torrents: idle CPU (%)</td><td class="num">0.03 (0.03–0.03)</td><td class="num">0.05 (0.03–0.05)</td></tr>
-<tr><td class="client">Empty session, memory (MB)</td><td class="num">16.3 (16.3–16.4)</td><td class="num">16.3 (16.2–16.4)</td></tr>
+<tr><td class="client">Download, MiB/s (median of 5, range)</td><td class="num">1,425 (1,333–1,455)</td><td class="num">1,401 (1,233–1,468)</td><td class="num">1,459 (1,386–1,534)</td><td class="num">1,425 (1,375–1,507)</td><td class="num">1,439 (1,310–1,470)</td><td class="num">1,469 (1,007–1,576)</td></tr>
+<tr><td class="client">Download, CPU s per GiB</td><td class="num">1.81 (1.79–1.85)</td><td class="num">1.81 (1.79–1.91)</td><td class="num">1.82 (1.69–1.86)</td><td class="num">1.83 (1.72–1.91)</td><td class="num">1.85 (1.79–1.90)</td><td class="num">1.80 (1.67–1.87)</td></tr>
+<tr><td class="client">1,000 torrents: add (s)</td><td class="num">0.17 (0.16–0.20)</td><td class="num">0.16 (0.16–0.19)</td><td class="num">0.18 (0.16–0.19)</td><td class="num">0.19 (0.18–0.20)</td><td class="num">0.56 (0.54–0.57)</td><td class="num">0.55 (0.53–0.56)</td></tr>
+<tr><td class="client">1,000 torrents: start with all listed (s)</td><td class="num">0.08 (0.08–0.08)</td><td class="num">0.08 (0.08–0.08)</td><td class="num">0.08 (0.08–0.08)</td><td class="num">0.08 (0.08–0.08)</td><td class="num">0.08 (0.08–0.08)</td><td class="num">0.08 (0.08–0.08)</td></tr>
+<tr><td class="client">1,000 torrents: memory after a restart (MB)</td><td class="num">15.1 (15.1–15.2)</td><td class="num">21.0 (20.9–21.1)</td><td class="num">21.4 (21.4–21.6)</td><td class="num">21.4 (21.3–21.6)</td><td class="num">21.7 (21.7–21.9)</td><td class="num">21.9 (21.7–21.9)</td></tr>
+<tr><td class="client">1,000 torrents: memory right after adding (MB)</td><td class="num">50.3 (50.2–50.3)</td><td class="num">56.0 (56.0–56.0)</td><td class="num">56.6 (56.6–56.6)</td><td class="num">56.8 (56.4–56.8)</td><td class="num">57.1 (57.1–57.3)</td><td class="num">57.1 (56.8–57.1)</td></tr>
+<tr><td class="client">1,000 torrents: idle CPU (%)</td><td class="num">0.05 (0.03–0.05)</td><td class="num">0.03 (0.03–0.05)</td><td class="num">0.03 (0.03–0.05)</td><td class="num">0.03 (0.03–0.03)</td><td class="num">0.03 (0.02–0.03)</td><td class="num">0.03 (0.03–0.03)</td></tr>
+<tr><td class="client">10,000 torrents: add (s)</td><td class="num">1.76 (1.60–1.78)</td><td class="num">1.81 (1.74–1.86)</td><td class="num">1.82 (1.80–1.83)</td><td class="num">1.85 (1.80–1.95)</td><td class="num">5.26 (5.10–10.86)</td><td class="num">5.39 (5.35–5.53)</td></tr>
+<tr><td class="client">10,000 torrents: start with all listed (s)</td><td class="num">0.22 (0.22–0.22)</td><td class="num">0.23 (0.22–0.23)</td><td class="num">0.22 (0.22–0.23)</td><td class="num">0.22 (0.22–0.25)</td><td class="num">0.22 (0.22–0.22)</td><td class="num">0.22 (0.22–0.22)</td></tr>
+<tr><td class="client">10,000 torrents: memory after a restart (MB)</td><td class="num">60.3 (60.3–60.4)</td><td class="num">66.3 (66.1–66.4)</td><td class="num">66.9 (66.8–67.0)</td><td class="num">67.2 (67.2–67.9)</td><td class="num">67.3 (67.2–69.4)</td><td class="num">67.5 (67.4–69.4)</td></tr>
+<tr><td class="client">10,000 torrents: memory right after adding (MB)</td><td class="num">326 (326–329)</td><td class="num">316 (316–316)</td><td class="num">306 (306–316)</td><td class="num">317 (316–317)</td><td class="num">324 (320–325)</td><td class="num">310 (310–317)</td></tr>
+<tr><td class="client">10,000 torrents: idle CPU (%)</td><td class="num">0.05 (0.03–0.05)</td><td class="num">0.07 (0.05–0.07)</td><td class="num">0.22 (0.22–0.22)</td><td class="num">0.03 (0.02–0.03)</td><td class="num">0.03 (0.02–0.05)</td><td class="num">0.03 (0.03–0.03)</td></tr>
+<tr><td class="client">Empty session, memory (MB)</td><td class="num">9.6 (9.5–9.7)</td><td class="num">15.4 (15.4–15.8)</td><td class="num">15.8 (15.7–16.0)</td><td class="num">16.1 (15.6–16.1)</td><td class="num">16.1 (16.0–16.3)</td><td class="num">16.0 (15.9–16.1)</td></tr>
 </tbody>
 </table>
 <!-- /bench:table-versions -->
       </div>
-      <p>Nothing changed beyond the harness's resolution. Idle CPU with 10,000 torrents is one 10 ms clock tick higher in the minute after the restart, but lower in the minute right after adding; over both minutes the two builds are a tick apart. The longer history, 1.0.1 to 1.2.46 measured on a virtual machine, is in <a href="https://github.com/Balls0fSteel/Rookparcel/blob/main/docs/BENCHMARKS.md">BENCHMARKS.md</a>.</p>
+      <p>Downloading and starting are unchanged across all six. Memory grew by about 6 MB with the update check that <code>rookparcel-nox</code> has made since 1.1.17 (one HTTPS request shortly after it starts). Idle CPU with 10,000 torrents had risen to 0.22% of one core in 1.2.29: after every start the daemon read each torrent's metadata once more, and local peer discovery walked the whole list on every tick. 1.2.30 removed both, and every release since uses 0.03%.</p>
+      <p>Adding got slower between 1.2.46 and 1.2.69: 10,000 torrents went from 1.85 s to 5.26 s, and 1,000 from 0.19 s to 0.56 s. 1.2.76 is the same as 1.2.69. We have not found the cause yet; the releases in between will narrow it down, and this page will say when it is fixed.</p>
     </section>
 
     <section class="section" id="method" aria-labelledby="method-h">
       <h2 id="method-h">How it was measured</h2>
       <ul>
-        <li><strong>Machine:</strong> a rented Hetzner Cloud CCX23 server: 4 dedicated vCPUs of an AMD EPYC (Milan) with SHA extensions and 16 GB of RAM, running Hetzner's Ubuntu 26.04 image. The run took 3 hours 30 minutes.</li>
-        <li><strong>Clients:</strong> Rookparcel built on the server from source with the release build command: a build of 1.2.70 before its release (<code>main</code> at <code>d28b2220</code>) and the 1.2.69 tag; later releases have not been measured yet. qBittorrent 5.1.4, Transmission 4.1.1, Deluge 2.2.1 (libtorrent 2.0.12) and rTorrent 0.9.8 (libtorrent 0.13.8), Ubuntu's own packages. All ran as headless daemons.</li>
+        <li><strong>Machine:</strong> a rented Hetzner Cloud CCX23 server: 4 dedicated vCPUs of an AMD EPYC (Milan) with SHA extensions and 16 GB of RAM, running Hetzner's Ubuntu 26.04.1 image. The run took 5 hours 15 minutes.</li>
+        <li><strong>Clients:</strong> Rookparcel 1.2.76 and the earlier releases 1.2.69, 1.2.46, 1.2.29, 1.1.40 and 1.0.1, the published Linux releases, each checked against its <code>SHA256SUMS</code>; qBittorrent 5.1.4, Transmission 4.1.1, Deluge 2.2.1 (libtorrent 2.0.12) and rTorrent 0.9.8 (libtorrent 0.13.8), Ubuntu's own packages. All ran as headless daemons.</li>
         <li><strong>Settings:</strong> a fresh profile each time, DHT, local peer discovery, peer exchange and port mapping off so no outside peer takes part, everything else at each client's defaults (queueing, caches, connection limits, encryption). Nothing was tuned for Rookparcel.</li>
         <li><strong>CPU time</strong> is user plus system time of all the client's threads, from <code>/proc</code>. <strong>Data</strong> for the downloads lived on a RAM disk, so no hard disk was measured.</li>
         <li><strong>Transmission</strong> is confined by Ubuntu's AppArmor profile to its service user's folders, so it ran as that user, as the packaged service does.</li>
@@ -219,8 +221,8 @@
     <section class="section" id="limits" aria-labelledby="limits-h">
       <h2 id="limits-h">Limits</h2>
       <ul>
-        <li>A cloud server is a virtual machine on shared hardware: its vCPUs are its own, but memory and caches are not. The downloads were repeated five times in a changing order and the medians are shown; single runs varied. The first download of a session is slow for whichever client makes it: Rookparcel's ran at 980 MiB/s against a median of 1,371, as on earlier machines. The median is not moved by that run.</li>
-        <li>Rookparcel hashes pieces with the CPU's SHA extensions when it has them. On a server without them (an Intel Xeon Platinum 8280, the day before) its download used about twice the CPU per GiB of the other clients, so on older CPUs expect the reverse of the chart above.</li>
+        <li>A cloud server is a virtual machine on shared hardware: its vCPUs are its own, but memory and caches are not. The downloads were repeated five times in a changing order and the medians are shown; single runs varied. The first download of a session is slow for whichever client makes it: Rookparcel 1.2.76's ran at 1,007 MiB/s against a median of 1,469, as on earlier machines. The median is not moved by that run.</li>
+        <li>Rookparcel hashes pieces with the CPU's SHA extensions when it has them. On a server without them (an Intel Xeon Platinum 8280, on 18 November) its download used about twice the CPU per GiB of the other clients, so on older CPUs expect the reverse of the chart above.</li>
         <li>Two programs on one machine have no latency, no packet loss and no swarm. The downloads show the cost of each client's code, not internet speeds.</li>
         <li>The seed took TCP only, so that every client used the same transport. Clients that try uTP first waited for that attempt to fail before they connected; that wait is left out of the comparison.</li>
         <li>The 10,000 torrents had no data and no reachable tracker, so the clients held them without transferring anything. Each client's defaults decide how many of them are active at once.</li>
