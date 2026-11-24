@@ -797,6 +797,10 @@ strings! {
     PageQueueing = "Queueing";
     PageScheduler = "Scheduler";
     PageWebUi = "Web UI";
+    /// Preferences > Gaming (a Rookparcel page above Advanced): what keeps games, calls and
+    /// the computer responsive while torrents run (Keep ping low, how checking and the disk
+    /// threads treat the drives).
+    PageGaming = "Gaming";
     PageAdvanced = "Advanced";
     PageDiskCache = "Disk Cache";
     PrefLanguage = "Language";
@@ -987,9 +991,9 @@ strings! {
     PrefKeepPingLow = "Keep ping low (limit speeds automatically)";
     /// auto_limit_probe_hosts is a setting's name: keep it. SQM and QoS are router features.
     PrefKeepPingLowNote = "Keep ping low pings the first router past your line, or else the hosts in auto_limit_probe_hosts on the Advanced page, whose operators see those pings. A router with SQM or gaming QoS does this better, for every device.";
-    /// Preferences > Advanced > Disk I/O (a Rookparcel page beside Disk Cache): how checking
-    /// (hashing a torrent's files) and the disk threads treat the drives. I/O is input/output.
-    PageDiskIo = "Disk I/O";
+    /// Group title on Preferences > Gaming: Keep ping low (ping: the delay a game or call sees
+    /// on the internet line).
+    PrefPingGroup = "Ping";
     /// Group title: checking a torrent's files against their hashes (Force Re-Check).
     PrefChecking = "Checking";
     /// Preferences > Advanced > Trackers (a Rookparcel page): trackers that every new download
@@ -1601,7 +1605,7 @@ strings! {
     GuidePageDisks = "Your disks";
     GuideDisksText = "Smart disk I/O keeps the computer responsive while Rookparcel reads and writes: checks run at the system's background priority, each drive is tuned for its type, and transfers slow down while a disk answers slowly. Checks take longer while something else uses the disk.";
     GuideSmartDisk = "Use smart disk I/O";
-    GuideDisksNote = "Gentle checks and per-drive tuning are on from the start; the box adds the slow-down while a disk is busy. Preferences > Advanced > Disk I/O sets each one.";
+    GuideDisksNote = "Per-drive tuning is on from the start; the box adds gentle checks and the slow-down while a disk is busy. Preferences > Gaming sets each one.";
     /// Page 4: starting with the system and opening .torrent files and magnet: links.
     GuidePageComputer = "This computer";
     GuideComputerText = "Rookparcel can start when you sign in, and open .torrent files and magnet: links from your browser and file manager. Preferences > General changes this later.";

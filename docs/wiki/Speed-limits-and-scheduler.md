@@ -19,13 +19,12 @@ Both are unlimited by default. A limited upload is the usual reason to set one: 
 
 ### Global Rate Limit Options
 
-The same page has three boxes that change what the limits count:
+The same page has two boxes that change what the limits count:
 
 | Option | What it does | Default |
 |---|---|---|
 | **Apply rate limit to transport overhead** | Counts the TCP/IP headers of peer traffic, estimated per packet, against the global limits, so the limits match what the line carries. | Off |
 | **Apply rate limit to uTP connections** | Applies the global limits to uTP peers too. Off, uTP peers are slowed only by uTP's own delay control, which gives way to other traffic. | On |
-| **Keep ping low (limit speeds automatically)** | Caps uploads and downloads automatically while the delay on your line grows. See [Keep ping low](Keep-ping-low). | Off |
 
 ### Connections and upload slots
 

@@ -166,6 +166,8 @@ small_icons! {
     WebUi => "web-ui",
     Advanced => "advanced",
     DiskCache => "disk",
+    /// Preferences > Gaming (D80).
+    Gaming => "gaming",
     // menu items (with Labels, Feeds, Bandwidth and Advanced above)
     AddTorrent => "add-torrent",
     AddUrl => "add-url",
@@ -256,9 +258,9 @@ pub fn page_icon(title: S) -> Option<UiIcon> {
         S::PageQueueing => UiIcon::Queueing,
         S::PageScheduler => UiIcon::Scheduler,
         S::PageWebUi => UiIcon::WebUi,
+        S::PageGaming => UiIcon::Gaming,
         S::PageAdvanced => UiIcon::Advanced,
-        // both disk pages show the disk
-        S::PageDiskCache | S::PageDiskIo => UiIcon::DiskCache,
+        S::PageDiskCache => UiIcon::DiskCache,
         S::PageTrackers => UiIcon::Trackers,
         S::PageRunProgram => UiIcon::Advanced,
         S::PageUiLock => UiIcon::Lock,

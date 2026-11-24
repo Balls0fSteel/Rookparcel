@@ -51,7 +51,7 @@ A peerekkel létesített minden kapcsolat egy helyet foglal a router kapcsolati 
 
 A régebbi routerre vonatkozó válasz kiindulópont. Ezeket a számokat később módosíthatja a **Beállítások > Tulajdonságok > Sávszélesség** és a **Haladó** oldalon. Ha később a modern választ adja, a szokásos számok visszakerülnek.
 
-Ugyanezen az oldalon található az **Alacsony ping megtartása (a sebességek automatikus korlátozása)** beállítás. Jelölje be, ha játszik vagy hívásokat bonyolít, miközben a Rookparcel fut: lent tartja a sebességeket, amíg a vonala foglalt. Lásd: [Alacsony ping](Alacsony-ping).
+Ugyanezen az oldalon található az **Alacsony ping megtartása (a sebességek automatikus korlátozása)** beállítás. Jelölje be, ha játszik vagy hívásokat bonyolít, miközben a Rookparcel fut: lent tartja a sebességeket, amíg a vonala foglalt. Lásd: [Alacsony ping](Alacsony-ping). A **Beállítások > Tulajdonságok > Játék** oldalon is megtalálható.
 
 ## 3. oldal: Az Ön lemezei
 
@@ -61,7 +61,7 @@ Az **Okos lemez I/O használata** reszponzívan tartja a számítógépet, mikö
 - minden meghajtó a típusához van hangolva (SSD, merevlemez, hálózati megosztás);
 - az átvitelek lelassulnak, amíg egy lemez lassan válaszol.
 
-A kíméletes ellenőrzések és a meghajtónkénti hangolás kezdettől be van kapcsolva. A jelölőnégyzet a lassítást adja hozzá, amíg egy lemez foglalt. Az ellenőrzések tovább tartanak, amíg valami más is használja a lemezt. A **Beállítások > Tulajdonságok > Haladó > Lemez I/O** oldal mindegyik részt külön állítja. Lásd: [Lemez és tárolás](Lemez-és-tárolás).
+A meghajtónkénti hangolás kezdettől be van kapcsolva. A jelölőnégyzet a kíméletes ellenőrzéseket és a lassítást adja hozzá, amíg egy lemez foglalt. Az ellenőrzések tovább tartanak, amíg valami más is használja a lemezt. A **Beállítások > Tulajdonságok > Játék** oldal mindegyik részt külön állítja. Lásd: [Lemez és tárolás](Lemez-és-tárolás).
 
 ## 4. oldal: Ez a számítógép
 

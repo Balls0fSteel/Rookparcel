@@ -21,13 +21,12 @@ Alapértelmezés szerint mindkettő korlátlan. Általában a feltöltés korlá
 
 ### Általános sebességkorlát-beállítások
 
-Ugyanezen az oldalon három négyzet módosítja, mit számolnak a korlátok:
+Ugyanezen az oldalon két négyzet módosítja, mit számolnak a korlátok:
 
 | Beállítás | Mit tesz | Alapértelmezés |
 |---|---|---|
 | **Sebességkorlát alkalmazása az átviteli többletforgalomra** | A peerforgalom TCP/IP-fejléceit, csomagonként becsülve, beszámítja az általános korlátokba, így a korlátok megfelelnek annak, amit a vonal szállít. | Ki |
 | **Sebességkorlát alkalmazása az uTP-kapcsolatokra** | Az általános korlátokat az uTP-peerekre is alkalmazza. Kikapcsolva az uTP-peereket csak az uTP saját késleltetés-szabályozása lassítja, amely ad utat a többi forgalomnak. | Be |
-| **Alacsony ping megtartása (a sebességek automatikus korlátozása)** | Automatikusan korlátozza a feltöltést és a letöltést, amíg a vonal késleltetése nő. Lásd az [Alacsony ping](Alacsony-ping) oldalt. | Ki |
 
 ### Kapcsolatok és feltöltési helyek
 

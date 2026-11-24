@@ -51,7 +51,7 @@ Chaque connexion à un pair occupe une place dans la table de connexions de votr
 
 La réponse « Ancien » est un point de départ. Vous pouvez changer ces nombres plus tard dans **Options > Préférences > Bande passante** et **Avancé**. Répondre « Récent » plus tard remet les nombres habituels.
 
-La même page propose **Garder un ping bas (limiter les vitesses automatiquement)**. Cochez-la si vous jouez ou téléphonez pendant que Rookparcel tourne : elle freine les vitesses tant que votre ligne est chargée. Voir [Garder un ping bas](Garder-un-ping-bas).
+La même page propose **Garder un ping bas (limiter les vitesses automatiquement)**. Cochez-la si vous jouez ou téléphonez pendant que Rookparcel tourne : elle freine les vitesses tant que votre ligne est chargée. Voir [Garder un ping bas](Garder-un-ping-bas). Elle se trouve aussi dans **Options > Préférences > Jeux**.
 
 ## Page 3 : vos disques
 
@@ -61,7 +61,7 @@ La même page propose **Garder un ping bas (limiter les vitesses automatiquement
 - chaque lecteur est réglé selon son type (SSD, disque dur, partage réseau) ;
 - les transferts ralentissent tant qu'un disque répond lentement.
 
-Les vérifications en douceur et le réglage par lecteur sont actifs dès le départ. La case ajoute le ralentissement quand un disque est occupé. Les vérifications durent plus longtemps quand autre chose utilise le disque. **Options > Préférences > Avancé > E/S disque** règle chaque élément séparément. Voir [Disque et stockage](Disque-et-stockage).
+Le réglage par lecteur est actif dès le départ. La case ajoute les vérifications en douceur et le ralentissement quand un disque est occupé. Les vérifications durent plus longtemps quand autre chose utilise le disque. **Options > Préférences > Jeux** règle chaque élément séparément. Voir [Disque et stockage](Disque-et-stockage).
 
 ## Page 4 : cet ordinateur
 

@@ -49,7 +49,7 @@ Every connection to a peer takes a place in your router's connection table. Olde
 
 The older answer is a starting point. You can change these numbers later in **Options > Preferences > Bandwidth** and **Advanced**. Answering modern later puts the normal numbers back.
 
-The same page has **Keep ping low (limit speeds automatically)**. Tick it if you play games or make calls while Rookparcel runs: it holds the speeds down while your line is busy. See [Keep ping low](Keep-ping-low).
+The same page has **Keep ping low (limit speeds automatically)**. Tick it if you play games or make calls while Rookparcel runs: it holds the speeds down while your line is busy. It is also on **Options > Preferences > Gaming**. See [Keep ping low](Keep-ping-low).
 
 ## Page 3: Your disks
 
@@ -59,7 +59,7 @@ The same page has **Keep ping low (limit speeds automatically)**. Tick it if you
 - each drive is tuned for its type (SSD, hard disk, network share);
 - transfers slow down while a disk answers slowly.
 
-Gentle checks and the tuning per drive are on from the start. The box adds the slow-down while a disk is busy. Checks take longer while something else uses the disk. **Options > Preferences > Advanced > Disk I/O** sets each part on its own. See [Disk and storage](Disk-and-storage).
+The tuning per drive is on from the start. The box adds gentle checks and the slow-down while a disk is busy. Checks take longer while something else uses the disk. **Options > Preferences > Gaming** sets each part on its own. See [Disk and storage](Disk-and-storage).
 
 ## Page 4: This computer
 

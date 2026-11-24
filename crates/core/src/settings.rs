@@ -567,7 +567,7 @@ impl Default for Settings {
             cache_size: -1,
             read_cache_line_size: 32,
             cache_expiry: 300,
-            check_gently: true,
+            check_gently: false,
             check_rate_limit: false,
             check_rate_mb: 100,
             tune_for_drive: true,

@@ -12,11 +12,11 @@ Az Alacsony ping megtartásának nem kell tudnia, melyik játék fut. Magát a s
 
 ## Bekapcsolása
 
-1. Nyissa meg a **Beállítások > Tulajdonságok** ablakot (<kbd>Ctrl</kbd>+<kbd>P</kbd>), és válassza a **Sávszélesség** oldalt.
-2. Az **Általános sebességkorlát-beállítások** alatt jelölje be az **Alacsony ping megtartása (a sebességek automatikus korlátozása)** négyzetet.
+1. Nyissa meg a **Beállítások > Tulajdonságok** ablakot (<kbd>Ctrl</kbd>+<kbd>P</kbd>), és válassza a **Játék** oldalt.
+2. A **Ping** alatt jelölje be az **Alacsony ping megtartása (a sebességek automatikus korlátozása)** négyzetet.
 3. Kattintson az **OK** vagy az **Alkalmaz** gombra.
 
-![A Tulajdonságok Sávszélesség oldala](images/prefs-bandwidth.png)
+![A Tulajdonságok Játék oldala](images/prefs-gaming.png)
 
 Alapértelmezés szerint ki van kapcsolva. A kikapcsolásához szüntesse meg a négyzet jelölését: a saját korlátai azonnal visszatérnek.
 
@@ -68,10 +68,10 @@ Az SQM-et (például CAKE) vagy működő játékos QoS-t tudó router ezt jobba
 
 ## Kapcsolódó funkciók
 
-- A foglalt lemez miatti lassítás a **Haladó > Lemez I/O** oldalon ugyanilyen automatikus korlátot használ, lassú vonal helyett lassú lemezre; a két korlát közül a kisebb érvényesül. Lásd a [Lemez és tárolás](Lemez-és-tárolás#ha-a-lemez-foglalt) oldalt.
+- A foglalt lemez miatti lassítás ugyanazon a **Játék** oldalon ugyanilyen automatikus korlátot használ, lassú vonal helyett lassú lemezre; a két korlát közül a kisebb érvényesül. Lásd a [Lemez és tárolás](Lemez-és-tárolás#ha-a-lemez-foglalt) oldalt.
 - A Beállítási útmutató router-oldala megemlíti az Alacsony ping megtartását játékokhoz és hívásokhoz: lásd az [Első indítás](Első-indítás) oldalt.
 - Rögzített korlátok és a heti ütemező: [Sebességkorlátok és az ütemező](Sebességkorlátok-és-ütemező).
 
 ## A GTK-ablakban és a webes felületen
 
-A GTK-ablakban (Linux, BSD) és a macOS-alkalmazásban ugyanez a négyzet a **Tulajdonságok > Sávszélesség** oldalon van (Macen a bejelölésekor azonnal érvénybe lép), a webes felületen pedig a **Tulajdonságok > Sávszélesség** oldalán, ugyanazzal a megjegyzéssel. A [rookparcel-noxban](A-rookparcel-nox-futtatása) ez ugyanaz a beállítás, az `auto_rate_limit`, amelyet a webes felület Tulajdonságai közt állíthat.
+A GTK-ablakban (Linux, BSD) és a macOS-alkalmazásban ugyanez a négyzet a **Tulajdonságok > Játék** oldalon van (Macen a bejelölésekor azonnal érvénybe lép), a webes felületen pedig a **Tulajdonságok > Játék** oldalán, ugyanazzal a megjegyzéssel. A [rookparcel-noxban](A-rookparcel-nox-futtatása) ez ugyanaz a beállítás, az `auto_rate_limit`, amelyet a webes felület Tulajdonságai közt állíthat.

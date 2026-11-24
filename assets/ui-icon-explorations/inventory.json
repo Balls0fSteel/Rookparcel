@@ -265,6 +265,11 @@
     "group": "Settings"
   },
   {
+    "id": "gaming",
+    "label": "Gaming",
+    "group": "Settings"
+  },
+  {
     "id": "notifications",
     "label": "Notifications",
     "group": "Settings"

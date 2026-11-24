@@ -909,13 +909,6 @@ pub fn pages(features: Features) -> Vec<Page> {
                     |o| o.settings.rate_limit_utp,
                     |o, v| o.settings.rate_limit_utp = v,
                 )),
-                F(checkbox(
-                    "auto_rate_limit",
-                    S::PrefKeepPingLow,
-                    |o| o.settings.auto_rate_limit,
-                    |o, v| o.settings.auto_rate_limit = v,
-                )),
-                Note(|| tr_owned(S::PrefKeepPingLowNote)),
                 Group(S::PrefConnections),
                 F(number(
                     "connections_limit",
@@ -1162,6 +1155,78 @@ pub fn pages(features: Features) -> Vec<Page> {
                 .needs(&[SCHED_ENABLE])),
             ],
         },
+        // what keeps games, calls and the computer responsive while torrents run (D80): keep
+        // ping low (D49) and smart disk I/O (D48, docs/DISKIO.md); per-drive types
+        // (drive_overrides) are on Advanced only
+        Page {
+            key: "gaming",
+            title: S::PageGaming,
+            parent: None,
+            items: vec![
+                Group(S::PrefPingGroup),
+                F(checkbox(
+                    "auto_rate_limit",
+                    S::PrefKeepPingLow,
+                    |o| o.settings.auto_rate_limit,
+                    |o, v| o.settings.auto_rate_limit = v,
+                )),
+                Note(|| tr_owned(S::PrefKeepPingLowNote)),
+                Group(S::PrefChecking),
+                F(checkbox(
+                    "check_gently",
+                    S::PrefCheckGently,
+                    |o| o.settings.check_gently,
+                    |o, v| o.settings.check_gently = v,
+                )),
+                F(checkbox(
+                    "check_rate_limit",
+                    S::PrefCheckRateLimit,
+                    |o| o.settings.check_rate_limit,
+                    |o, v| o.settings.check_rate_limit = v,
+                )),
+                F(number(
+                    "check_rate_mb",
+                    None,
+                    1,
+                    100_000,
+                    |o| Some(o.settings.check_rate_mb.into()),
+                    |o, v| o.settings.check_rate_mb = v as i32,
+                )
+                .help(H::PrefCheckRateLimit)
+                .beside()
+                .needs(&["check_rate_limit"])),
+                // the engine checks with at most 8 threads; -1 (no limit) stays on Advanced
+                F(number(
+                    "active_checking",
+                    Some(S::PrefActiveChecking),
+                    1,
+                    8,
+                    |o| Some(o.settings.active_checking.into()),
+                    |o, v| o.settings.active_checking = v as i32,
+                )),
+                Group(S::PrefDrives),
+                F(checkbox(
+                    "tune_for_drive",
+                    S::PrefTuneForDrive,
+                    |o| o.settings.tune_for_drive,
+                    |o, v| o.settings.tune_for_drive = v,
+                )),
+                Group(S::PrefDiskBusy),
+                F(checkbox(
+                    "disk_slow_downloads",
+                    S::PrefDiskSlowDownloads,
+                    |o| o.settings.disk_slow_downloads,
+                    |o, v| o.settings.disk_slow_downloads = v,
+                )),
+                F(checkbox(
+                    "disk_slow_uploads",
+                    S::PrefDiskSlowUploads,
+                    |o| o.settings.disk_slow_uploads,
+                    |o, v| o.settings.disk_slow_uploads = v,
+                )),
+                Note(|| tr_owned(S::PrefDiskIoNote)),
+            ],
+        },
         Page {
             key: "advanced",
             title: S::PageAdvanced,
@@ -1263,69 +1328,6 @@ pub fn pages(features: Features) -> Vec<Page> {
                     |o, v| o.settings.hashing_threads = v as u32,
                 )),
                 Note(|| crate::tr!(PrefReadCacheNote, mb = settings::AUTO_CACHE_MB)),
-            ],
-        },
-        // smart disk I/O (D48, docs/DISKIO.md); per-drive types (drive_overrides) are on
-        // Advanced only
-        Page {
-            key: "disk_io",
-            title: S::PageDiskIo,
-            parent: Some("advanced"),
-            items: vec![
-                Group(S::PrefChecking),
-                F(checkbox(
-                    "check_gently",
-                    S::PrefCheckGently,
-                    |o| o.settings.check_gently,
-                    |o, v| o.settings.check_gently = v,
-                )),
-                F(checkbox(
-                    "check_rate_limit",
-                    S::PrefCheckRateLimit,
-                    |o| o.settings.check_rate_limit,
-                    |o, v| o.settings.check_rate_limit = v,
-                )),
-                F(number(
-                    "check_rate_mb",
-                    None,
-                    1,
-                    100_000,
-                    |o| Some(o.settings.check_rate_mb.into()),
-                    |o, v| o.settings.check_rate_mb = v as i32,
-                )
-                .help(H::PrefCheckRateLimit)
-                .beside()
-                .needs(&["check_rate_limit"])),
-                // the engine checks with at most 8 threads; -1 (no limit) stays on Advanced
-                F(number(
-                    "active_checking",
-                    Some(S::PrefActiveChecking),
-                    1,
-                    8,
-                    |o| Some(o.settings.active_checking.into()),
-                    |o, v| o.settings.active_checking = v as i32,
-                )),
-                Group(S::PrefDrives),
-                F(checkbox(
-                    "tune_for_drive",
-                    S::PrefTuneForDrive,
-                    |o| o.settings.tune_for_drive,
-                    |o, v| o.settings.tune_for_drive = v,
-                )),
-                Group(S::PrefDiskBusy),
-                F(checkbox(
-                    "disk_slow_downloads",
-                    S::PrefDiskSlowDownloads,
-                    |o| o.settings.disk_slow_downloads,
-                    |o, v| o.settings.disk_slow_downloads = v,
-                )),
-                F(checkbox(
-                    "disk_slow_uploads",
-                    S::PrefDiskSlowUploads,
-                    |o| o.settings.disk_slow_uploads,
-                    |o, v| o.settings.disk_slow_uploads = v,
-                )),
-                Note(|| tr_owned(S::PrefDiskIoNote)),
             ],
         },
         // trackers added to new downloads (D66, `tracker_list`)
@@ -1656,9 +1658,9 @@ mod tests {
             [
                 "queueing",
                 "scheduler",
+                "gaming",
                 "advanced",
                 "disk_cache",
-                "disk_io",
                 "trackers",
                 "run_program",
                 "ui_lock"
@@ -1666,18 +1668,23 @@ mod tests {
         );
         assert_eq!(without.iter().find(|p| p.key == "ui_lock").unwrap().parent, Some("advanced"));
         assert_eq!(without.iter().find(|p| p.key == "trackers").unwrap().parent, Some("advanced"));
-        assert_eq!(page_of(&without, "check_gently").map(|p| p.key), Some("disk_io"));
-        assert_eq!(without.iter().find(|p| p.key == "disk_io").unwrap().parent, Some("advanced"));
+        // D80: keep ping low and smart disk I/O on their own page above Advanced
+        assert_eq!(page_of(&without, "check_gently").map(|p| p.key), Some("gaming"));
+        assert_eq!(page_of(&without, "auto_rate_limit").map(|p| p.key), Some("gaming"));
+        assert_eq!(without.iter().find(|p| p.key == "gaming").unwrap().parent, None);
+        assert!(without.iter().all(|p| p.key != "disk_io"));
     }
 
     #[test]
-    fn the_disk_io_page_edits_the_disk_settings() {
+    fn the_gaming_page_edits_the_disk_settings() {
         let pages = pages(Features::default());
         let o = opts();
         let mut form = Form::default();
         let shown: HashMap<_, _> = form.write(&pages, &o).into_iter().collect();
-        // the defaults: gentle checks and drive tuning on, the cap and the busy-disk throttle off
-        assert_eq!((shown["check_gently"].as_str(), shown["tune_for_drive"].as_str()), ("true", "true"));
+        // the defaults: drive tuning on; gentle checks (D80), the cap, the busy-disk throttle and
+        // keep ping low off
+        assert_eq!((shown["check_gently"].as_str(), shown["tune_for_drive"].as_str()), ("false", "true"));
+        assert_eq!(shown["auto_rate_limit"], "false");
         assert_eq!((shown["check_rate_limit"].as_str(), shown["check_rate_mb"].as_str()), ("false", "100"));
         assert_eq!(shown["active_checking"], "4");
         assert_eq!(
@@ -1689,7 +1696,7 @@ mod tests {
         assert!(mb.beside && !mb.enabled(|_| false) && mb.enabled(|k| k == "check_rate_limit"));
         // a box and its number changed together both count
         let edited = |k: &str| match k {
-            "check_gently" => "false".to_owned(),
+            "check_gently" => "true".to_owned(),
             "check_rate_limit" => "true".to_owned(),
             "check_rate_mb" => "250".to_owned(),
             "active_checking" => "2".to_owned(),
@@ -1699,7 +1706,7 @@ mod tests {
             _ => shown[k].clone(),
         };
         let s = form.read(&pages, &o, edited).unwrap().settings;
-        assert!(!s.check_gently && s.check_rate_limit && !s.tune_for_drive);
+        assert!(s.check_gently && s.check_rate_limit && !s.tune_for_drive);
         assert_eq!((s.check_rate_mb, s.active_checking), (250, 2));
         assert!(s.disk_slow_downloads && s.disk_slow_uploads);
         // up to 8 drives on the page; a value set on Advanced (-1: no limit) survives untouched

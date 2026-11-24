@@ -289,7 +289,7 @@ helps! {
     /// engine: crates/core/src/engine/mod.rs (Engine::new: DiskIo::new with aio_threads, not resized by apply_settings)
     PrefAioThreads = "The threads that read and write torrent data; the read cache is shared among them. Read only when Rookparcel starts.";
     /// engine: not read by the engine (crates/core/src/disk/mod.rs checks with lt-check threads, one per drive; create_torrent picks its own threads)
-    PrefHashThreads = "Kept for libtorrent compatibility; this version does not use it. Checks run one per drive, set by Drives checked at once on the Disk I/O page.";
+    PrefHashThreads = "Kept for libtorrent compatibility; this version does not use it. Checks run one per drive, set by Drives checked at once on the Gaming page.";
 
     // ---- Preferences > Disk I/O
     /// frontend tracker_list::TrackerList::tiers -> SessionHandle::set_extra_trackers -> engine add_torrent / got_metadata (append_trackers)

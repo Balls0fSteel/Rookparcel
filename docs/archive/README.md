@@ -1,6 +1,6 @@
 # Planning and changelog history
 
-Last updated: 2026-11-22_142957_1795354197
+Last updated: 2026-11-24_235917_1795561157
 
 Start with [PLAN.md](../../PLAN.md) and [CHANGELOG.md](../../CHANGELOG.md). Active decision rationale is in [DECISIONS.md](../DECISIONS.md); detailed unfinished work is in [BACKLOG.md](../BACKLOG.md).
 
@@ -104,3 +104,4 @@ Keep archives as plain Markdown so Git diffs, repository browsing and targeted s
 | [Changelog, 2026-11-19 (1.2.70's benchmarks)](CHANGELOG-2026-11-19-v1.2.70-benchmarks-2026-11-22_205639_1795377399.md) | `2026-11-19_093640_1795077400` through `2026-11-19_161259_1795101179` | 2 entries moved verbatim from the root changelog on 2026-11-22_205639_1795377399: 1.2.70's benchmark on a rented server, and again on a self-deleting Hetzner server. |
 | [Changelog, 2026-11-21 (bug hunt of 1.2.70)](CHANGELOG-2026-11-21-v1.2.70-bughunt-2026-11-23_071655_1795414615.md) | `2026-11-21_002110_1795216870` | 1 entry moved verbatim from the root changelog on 2026-11-23_071655_1795414615: the read-only bug hunt of 1.2.70 (34 defects in BUGHUNT-2026-11-21.md). |
 | [Changelog, 2026-11-21 (1.2.71)](CHANGELOG-2026-11-21-v1.2.71-2026-11-23_131433_1795436073.md) | `2026-11-21_093211_1795249931` | 1 entry moved verbatim from the root changelog on 2026-11-23_131433_1795436073: 1.2.71, the bug hunt's high and medium fixes |
+| [Changelog, 2026-11-21 (1.2.72 and 1.2.73)](CHANGELOG-2026-11-21-v1.2.72-v1.2.73-2026-11-24_235917_1795561157.md) | `2026-11-21_111517_1795256117` through `2026-11-21_235809_1795301889` | 3 entries moved verbatim from the root changelog on 2026-11-24_235917_1795561157: 1.2.72's low fixes and its GTK and macOS checks on the VMs, 1.2.73's bug-hunt follow-ups |

@@ -433,6 +433,14 @@
       "largeDrawing": false
     },
     {
+      "id": "gaming",
+      "label": "Gaming",
+      "group": "Settings",
+      "color": "purple",
+      "revised": true,
+      "largeDrawing": false
+    },
+    {
       "id": "notifications",
       "label": "Notifications",
       "group": "Settings",

@@ -59,9 +59,9 @@ If only some of a torrent's files are gone (deleted by hand or by a virus scanne
 
 ## Smart disk I/O
 
-Smart disk I/O keeps the computer responsive while Rookparcel reads and writes. Its settings are on **Options > Preferences > Advanced > Disk I/O** (a page under Advanced in the page list).
+Smart disk I/O keeps the computer responsive while Rookparcel reads and writes. Its settings are on **Options > Preferences > Gaming** (a page just above Advanced in the page list).
 
-The Setup Guide's **Use smart disk I/O** box turns all four parts on or off together. Gentle checks and per-drive tuning are on from the start; the box adds the slow-down while a disk is busy. *The Setup Guide is new in 1.1.62. The Disk I/O page itself is in 1.1.40.*
+The Setup Guide's **Use smart disk I/O** box turns all four parts on or off together. Per-drive tuning is on from the start; the box adds gentle checks and the slow-down while a disk is busy. *The Setup Guide is new in 1.1.62. The settings are in 1.1.40; they moved from Advanced > Disk I/O to the Gaming page in 1.2.78, and gentle checks have been off at first since then.*
 
 ### Checking
 
@@ -69,7 +69,7 @@ A check (for example after **Force Re-Check**) reads every piece from disk and c
 
 | Setting | Meaning | Default |
 |---|---|---|
-| **Check torrents gently (low priority, give way to other programs)** | Checks at the system's background disk priority, leaves other programs' cached files alone and pauses while reads are slower than usual, so the computer stays responsive. Checks take longer while the disk is busy. | On |
+| **Check torrents gently (low priority, give way to other programs)** | Checks at the system's background disk priority, leaves other programs' cached files alone and pauses while reads are slower than usual, so the computer stays responsive. Checks take longer while the disk is busy. | Off |
 | **Limit checking to (MB/s):** | Caps each check's reading speed, for a disk that still lags during gentle checks. Here 1 MB is 1,000,000 bytes. | Off, 100 |
 | **Drives checked at once (one torrent per drive):** | How many drives are checked at the same time, one torrent per drive; torrents on the same drive wait their turn. From 1 to 8. | 4 |
 
@@ -125,7 +125,7 @@ Under **Disk Queue and Files**:
 | **Disk write queue (kB):** | How much downloaded data may wait to be written to disk; above it, Rookparcel stops reading from peers until the disk catches up. Values below 4 MB act as 4 MB. | 1024 |
 | **Maximum number of open files:** | The most files kept open at once; others are closed and opened again when needed. Raise it when many torrents or files are busy at once. | 40 |
 | **Disk I/O threads (used from the next start):** | The threads that read and write torrent data. | 10 |
-| **Hashing threads (not used):** | Kept for compatibility; this version does not use it. Checks run one per drive, set on the Disk I/O page. | |
+| **Hashing threads (not used):** | Kept for compatibility; this version does not use it. Checks run one per drive, set on the Gaming page. | |
 
 Rookparcel has no setting to pre-allocate files. A file is created when the first data for it arrives, and on Windows it is marked sparse, so writing near its end does not make NTFS fill the part before it with zeros.
 
@@ -133,8 +133,8 @@ Rookparcel has no setting to pre-allocate files. A file is created when the firs
 
 - **GTK window** (Linux, BSD), **macOS** and the **Web UI**: **Append .!ut to incomplete files** is on the General page under **When Downloading** too.
 - **macOS app**: the same pages and settings; Preferences apply at once, with no **OK** ([Preferences reference](Preferences-reference#differences-on-macos)).
-- **GTK window** (Linux, BSD): the same Directories, Disk Cache and Disk I/O pages. Drive types are detected on Linux, macOS and FreeBSD too, each with the system's own methods.
-- **Web UI**: the same pages under **Preferences**, with **Disk Cache** and **Disk I/O** under **Advanced**. Folders there are folders on the computer running Rookparcel, not on the browser's.
+- **GTK window** (Linux, BSD): the same Directories, Disk Cache and Gaming pages. Drive types are detected on Linux, macOS and FreeBSD too, each with the system's own methods.
+- **Web UI**: the same pages under **Preferences**, with **Disk Cache** under **Advanced** and the disk settings on **Gaming**. Folders there are folders on the computer running Rookparcel, not on the browser's.
 - **rookparcel-nox**: `--save DIR` sets the download folder and `--move-on-complete DIR` moves finished torrents; the other settings are in the Web UI's Preferences.
 
 ## Related pages

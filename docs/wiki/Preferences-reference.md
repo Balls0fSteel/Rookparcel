@@ -4,7 +4,7 @@ This page lists every page of the Preferences window and what each setting on it
 
 ## Opening Preferences
 
-Open **Options > Preferences**, press <kbd>Ctrl</kbd>+<kbd>P</kbd>, or click **Preferences** on the toolbar. The pages are listed on the left; **Disk Cache**, **Disk I/O**, **Trackers**, **Run Program** and **UI Lock** sit under **Advanced**. **OK** saves and closes, **Apply** saves and keeps the window open, **Cancel** forgets the changes.
+Open **Options > Preferences**, press <kbd>Ctrl</kbd>+<kbd>P</kbd>, or click **Preferences** on the toolbar. The pages are listed on the left; **Disk Cache**, **Trackers**, **Run Program** and **UI Lock** sit under **Advanced**. **OK** saves and closes, **Apply** saves and keeps the window open, **Cancel** forgets the changes.
 
 Help is built in:
 
@@ -106,17 +106,16 @@ More: [Connection, ports and firewall](Connection-ports-and-firewall).
 
 | Setting | What it does |
 |---|---|
-| **Maximum upload rate (kB/s)** | The most all torrents together upload per second. 0 means unlimited. The scheduler's Limited hours and Keep ping low can lower it for a while. |
+| **Maximum upload rate (kB/s)** | The most all torrents together upload per second. 0 means unlimited. The scheduler's Limited hours and [Keep ping low](Keep-ping-low) (on the Gaming page) can lower it for a while. |
 | **Maximum download rate (kB/s)** | The same for downloads. |
 | **Apply rate limit to transport overhead** | Counts the TCP/IP headers of peer traffic against the limits, so they match what the line carries. Off by default. |
 | **Apply rate limit to uTP connections** | Applies the limits to uTP peers too. Off, uTP peers are slowed only by uTP's own delay control. On by default. |
-| **Keep ping low (limit speeds automatically)** | Measures the delay on your line and caps uploads and downloads automatically while it grows, for games and calls. It never raises your own limits; the status bar shows the cap as "auto". |
 | **Global maximum number of connections:** | The most peer connections open at once across all torrents. Lower it if the router struggles. |
 | **Maximum number of connected peers per torrent** | The most peers one torrent connects to; 0 means no limit. Applies to torrents added from now on. |
 | **Number of upload slots per torrent** | How many peers one torrent uploads to at once; 0 means no limit. Applies to torrents added from now on. |
 | **Global number of upload slots** | How many peers all torrents together upload to at once; -1 means no limit. Fewer slots give each peer more speed. |
 
-More: [Speed limits and scheduler](Speed-limits-and-scheduler), [Keep ping low](Keep-ping-low).
+More: [Speed limits and scheduler](Speed-limits-and-scheduler).
 
 ## BitTorrent
 
@@ -189,6 +188,41 @@ This page is in the Windows version only. It lets a browser control the torrents
 
 More: [Web UI](Web-UI), [Sonarr, Radarr and Prowlarr](Sonarr-Radarr-and-Prowlarr).
 
+## Gaming
+
+*New in 1.2.78.* Settings that keep the computer and the line responsive while Rookparcel works. **Keep ping low** moved here from Bandwidth, and the Disk I/O page moved here from Advanced.
+
+**Ping**
+
+| Setting | What it does |
+|---|---|
+| **Keep ping low (limit speeds automatically)** | Measures the delay on your line and caps uploads and downloads automatically while it grows, for games and calls. It never raises your own limits; the status bar shows the cap as "auto". |
+
+**Checking**
+
+| Setting | What it does |
+|---|---|
+| **Check torrents gently (low priority, give way to other programs)** | Checks torrents at the system's background disk priority and pauses while reads are slower than usual, so the computer stays responsive. Checks take longer while the disk is busy. |
+| **Limit checking to (MB/s):** | Caps each check's reading speed, for a disk that still lags during gentle checks. Off by default. |
+| **Drives checked at once (one torrent per drive):** | How many drives are checked at the same time; torrents on the same drive wait their turn. -1 means no limit. |
+
+**Drives**
+
+| Setting | What it does |
+|---|---|
+| **Tune for the drive type (SSD, hard disk, network)** | Detects whether each save folder is on an SSD, a hard disk, a removable drive or a network share, and adjusts how many disk jobs run at once. |
+
+**When the Disk Is Busy**
+
+| Setting | What it does |
+|---|---|
+| **Slow downloads down (disk writes)** | While a drive answers writes clearly slower than usual, halves the download rate step by step, never below 50 kB/s, and lets it grow again once the disk is quiet. |
+| **Slow uploads down (disk reads)** | The same for uploads while a drive answers reads slowly. |
+
+A drive whose type is detected wrongly can be corrected with `drive_overrides` on the Advanced page. Only **Tune for the drive type** is on at first; the other boxes are off.
+
+More: [Keep ping low](Keep-ping-low), [Disk and storage](Disk-and-storage).
+
 ## Advanced
 
 ![Preferences, Advanced page](images/prefs-advanced.png)
@@ -237,20 +271,7 @@ Each row's full help shows in the pane under the table when you select it.
 | **Disk write queue (kB):** | How much downloaded data may wait to be written; above it, Rookparcel stops reading from peers until the disk catches up. Values below 4 MB act as 4 MB. |
 | **Maximum number of open files:** | The most files kept open at once. Raise it when many torrents or files are busy at the same time. |
 | **Disk I/O threads (used from the next start):** | The threads that read and write torrent data. |
-| **Hashing threads (not used):** | Kept for compatibility; this version does not use it. Checks run one per drive, set on the Disk I/O page. |
-
-More: [Disk and storage](Disk-and-storage).
-
-## Disk I/O
-
-| Setting | What it does |
-|---|---|
-| **Check torrents gently (low priority, give way to other programs)** | Checks torrents at the system's background disk priority and pauses while reads are slower than usual, so the computer stays responsive. Checks take longer while the disk is busy. |
-| **Limit checking to (MB/s):** | Caps each check's reading speed, for a disk that still lags during gentle checks. Off by default. |
-| **Drives checked at once (one torrent per drive):** | How many drives are checked at the same time; torrents on the same drive wait their turn. -1 means no limit. |
-| **Tune for the drive type (SSD, hard disk, network)** | Detects whether each save folder is on an SSD, a hard disk, a removable drive or a network share, and adjusts how many disk jobs run at once. |
-| **Slow downloads down (disk writes)** | While a drive answers writes clearly slower than usual, halves the download rate step by step, never below 50 kB/s, and lets it grow again once the disk is quiet. |
-| **Slow uploads down (disk reads)** | The same for uploads while a drive answers reads slowly. |
+| **Hashing threads (not used):** | Kept for compatibility; this version does not use it. Checks run one per drive, set on the Gaming page. |
 
 More: [Disk and storage](Disk-and-storage).
 

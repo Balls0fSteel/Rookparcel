@@ -12,11 +12,11 @@ Der Upload ist meist der engste Teil Ihrer Leitung. Sendet Rookparcel schneller,
 
 ## Einschalten
 
-1. Öffnen Sie **Optionen > Einstellungen** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) und wählen Sie **Bandbreite**.
-2. Haken Sie unter **Optionen für die globale Ratenbegrenzung** **Ping niedrig halten (Geschwindigkeiten automatisch begrenzen)** an.
+1. Öffnen Sie **Optionen > Einstellungen** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) und wählen Sie **Gaming**.
+2. Haken Sie unter **Ping** **Ping niedrig halten (Geschwindigkeiten automatisch begrenzen)** an.
 3. Klicken Sie auf **OK** oder **Übernehmen**.
 
-![Einstellungen, Seite „Bandbreite“](images/prefs-bandwidth.png)
+![Einstellungen, Seite „Gaming“](images/prefs-gaming.png)
 
 Standardmäßig ist es aus. Um es wieder auszuschalten, nehmen Sie das Häkchen weg: Ihre eigenen Begrenzungen gelten sofort wieder.
 
@@ -68,10 +68,10 @@ Ein Router mit SQM (etwa CAKE) oder einem funktionierenden Gaming-QoS leistet da
 
 ## Verwandte Funktionen
 
-- Die Verlangsamung bei ausgelastetem Datenträger unter **Erweitert > Festplatten-E/A** verwendet dieselbe Art automatischen Deckel, für einen langsamen Datenträger statt einer langsamen Leitung; der niedrigere der beiden Deckel gilt. Siehe [Datenträger und Speicher](Datenträger-und-Speicher#wenn-die-festplatte-ausgelastet-ist).
+- Die Verlangsamung bei ausgelastetem Datenträger auf derselben Seite „Gaming“ verwendet dieselbe Art automatischen Deckel, für einen langsamen Datenträger statt einer langsamen Leitung; der niedrigere der beiden Deckel gilt. Siehe [Datenträger und Speicher](Datenträger-und-Speicher#wenn-die-festplatte-ausgelastet-ist).
 - Die Router-Seite des Einrichtungsassistenten erwähnt „Ping niedrig halten“ für Spiele und Anrufe: siehe [Erster Start](Erster-Start).
 - Feste Begrenzungen und der wöchentliche Zeitplaner: [Geschwindigkeitsbegrenzung und Zeitplaner](Geschwindigkeitsbegrenzung-und-Zeitplan).
 
 ## Im GTK-Fenster und in der Web-UI
 
-Das GTK-Fenster (Linux, BSD) und die macOS-App haben dasselbe Kästchen unter **Einstellungen > Bandbreite** (auf dem Mac gilt es, sobald Sie es anhaken), und die Web-UI hat es auf ihrer Seite **Einstellungen > Bandbreite**, mit demselben Hinweis. In [rookparcel-nox](rookparcel-nox-betreiben) ist es dieselbe Einstellung, `auto_rate_limit`, gesetzt über die Einstellungen der Web-UI.
+Das GTK-Fenster (Linux, BSD) und die macOS-App haben dasselbe Kästchen unter **Einstellungen > Gaming** (auf dem Mac gilt es, sobald Sie es anhaken), und die Web-UI hat es auf ihrer Seite **Einstellungen > Gaming**, mit demselben Hinweis. In [rookparcel-nox](rookparcel-nox-betreiben) ist es dieselbe Einstellung, `auto_rate_limit`, gesetzt über die Einstellungen der Web-UI.

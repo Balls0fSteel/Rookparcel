@@ -69,7 +69,7 @@ Si **Confirmer la suppression des torrents** est activé (Préférences > Interf
 
 *Nouveau dans la 1.2.76 :* un torrent arrêté démarre avec la vérification ; arrêtez-le de nouveau ensuite si vous voulez qu'il reste arrêté. Un torrent en attente est vérifié tout de suite, sans attendre une place dans la file, puis remis en attente. Un torrent suspendu avec l'état **fichiers manquants** (voir [Disque et stockage](Disque-et-stockage#lecteur-ou-partage-absent)) est vérifié par rapport à ce qui est présent maintenant, et tout ce qui manque est téléchargé à nouveau.
 
-La douceur avec laquelle les vérifications sollicitent le disque se règle dans **Préférences > Avancé > E/S disque** ; voir [Disque et stockage](Disque-et-stockage).
+La douceur avec laquelle les vérifications sollicitent le disque se règle dans **Préférences > Jeux** (désactivé au départ) ; voir [Disque et stockage](Disque-et-stockage).
 
 ## Mettre à jour le tracker
 

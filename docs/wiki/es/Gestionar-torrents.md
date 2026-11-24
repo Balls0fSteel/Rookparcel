@@ -69,7 +69,7 @@ Con **Confirmar al borrar torrents** activado (Preferencias > Interfaz, activado
 
 *Nuevo en 1.2.76:* un torrent detenido se inicia con la comprobación; vuelva a detenerlo después si lo desea detenido. Un torrent en cola se comprueba de inmediato, sin esperar un puesto en la cola, y después vuelve a la cola. Un torrent retenido con **archivos ausentes** (consulte [Disco y almacenamiento](Disco-y-almacenamiento#cuando-falta-una-unidad-o-un-recurso-compartido)) se comprueba con lo que hay ahora, y lo que falte se descarga de nuevo.
 
-Lo suave que es el uso del disco en las comprobaciones se define en **Preferencias > Avanzado > E/S de disco**; consulte [Disco y almacenamiento](Disco-y-almacenamiento).
+Lo suave que es el uso del disco en las comprobaciones se define en **Preferencias > Juegos** (desactivado al principio); consulte [Disco y almacenamiento](Disco-y-almacenamiento).
 
 ## Actualizar tracker
 

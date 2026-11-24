@@ -61,9 +61,9 @@ Ha egy torrentnek csak néhány fájlja tűnt el (kézzel vagy vírusirtó tör�
 
 ## Okos lemez I/O
 
-Az okos lemez I/O reagálóképesen tartja a számítógépet, amíg a Rookparcel olvas és ír. A beállításai a **Beállítások > Tulajdonságok > Haladó > Lemez I/O** oldalon vannak (a Haladó alatti oldal az oldallistában).
+Az okos lemez I/O reagálóképesen tartja a számítógépet, amíg a Rookparcel olvas és ír. A beállításai a **Beállítások > Tulajdonságok > Játék** oldalon vannak (a Haladó fölötti oldal az oldallistában).
 
-A Beállítási útmutató **Okos lemez I/O használata** négyzete mind a négy részt együtt kapcsolja be vagy ki. A kíméletes ellenőrzések és a meghajtónkénti hangolás kezdettől be van kapcsolva; a négyzet hozzáadja a lassítást, amíg a lemez foglalt. *A Beállítási útmutató az 1.1.62-ben új. Maga a Lemez I/O oldal az 1.1.40-ben van.*
+A Beállítási útmutató **Okos lemez I/O használata** négyzete mind a négy részt együtt kapcsolja be vagy ki. A meghajtónkénti hangolás kezdettől be van kapcsolva; a négyzet hozzáadja a kíméletes ellenőrzéseket és a lassítást, amíg a lemez foglalt. *A Beállítási útmutató az 1.1.62-ben új. A beállítások az 1.1.40 óta megvannak; az 1.2.78 óta a Játék oldalon vannak, és a kíméletes ellenőrzés kezdetben ki van kapcsolva.*
 
 ### Ellenőrzés
 
@@ -71,7 +71,7 @@ Az ellenőrzés (például a **Kényszerített ellenőrzés** után) minden dara
 
 | Beállítás | Jelentés | Alapérték |
 |---|---|---|
-| **Kíméletes torrentellenőrzés (alacsony prioritás, elsőbbség a többi programnak)** | A rendszer háttérlemez-prioritásán ellenőriz, békén hagyja a többi program gyorsítótárazott fájljait, és szünetel, amíg az olvasás a szokásosnál lassabb, így a számítógép reagálóképes marad. Az ellenőrzések tovább tartanak, amíg a lemez foglalt. | Be |
+| **Kíméletes torrentellenőrzés (alacsony prioritás, elsőbbség a többi programnak)** | A rendszer háttérlemez-prioritásán ellenőriz, békén hagyja a többi program gyorsítótárazott fájljait, és szünetel, amíg az olvasás a szokásosnál lassabb, így a számítógép reagálóképes marad. Az ellenőrzések tovább tartanak, amíg a lemez foglalt. | Ki |
 | **Ellenőrzés korlátozása (MB/s):** | Korlátozza az egyes ellenőrzések olvasási sebességét, olyan lemezhez, amely a kíméletes ellenőrzés mellett is lemarad. Itt 1 MB 1 000 000 bájt. | Ki, 100 |
 | **Egyszerre ellenőrzött meghajtók (meghajtónként egy torrent):** | Hány meghajtót ellenőriz egyszerre, meghajtónként egy torrentet; az ugyanazon a meghajtón lévő torrentek a sorukra várnak. 1-től 8-ig. | 4 |
 
@@ -127,7 +127,7 @@ A **Lemezsor és fájlok** alatt:
 | **Lemezírási sor (kB):** | Mennyi letöltött adat várakozhat a lemezre íráshoz; efölött a Rookparcel nem olvas a peerektől, amíg a lemez fel nem zárkózik. A 4 MB alatti értékek 4 MB-nak számítanak. | 1024 |
 | **Megnyitott fájlok legnagyobb száma:** | Legfeljebb ennyi fájlt tart egyszerre nyitva; a többit bezárja, és szükség esetén újra megnyitja. Emelje meg, ha sok torrent vagy fájl dolgozik egyszerre. | 40 |
 | **Lemez I/O szálak (a következő indítástól):** | A torrentadatokat író és olvasó szálak. | 10 |
-| **Hash-szálak (nincs használatban):** | Kompatibilitás miatt marad meg; ez a verzió nem használja. Az ellenőrzések meghajtónként egyesével futnak, a Lemez I/O oldalon beállítva. | |
+| **Hash-szálak (nincs használatban):** | Kompatibilitás miatt marad meg; ez a verzió nem használja. Az ellenőrzések meghajtónként egyesével futnak, a Játék oldalon beállítva. | |
 
 A Rookparcelben nincs beállítás a fájlok előre lefoglalására. A fájl akkor jön létre, amikor az első adat megérkezik hozzá, Windowson pedig ritka (sparse) fájlként van megjelölve, így a vége közelébe írás nem készteti az NTFS-t arra, hogy az előtte lévő részt nullákkal töltse ki.
 
@@ -135,8 +135,8 @@ A Rookparcelben nincs beállítás a fájlok előre lefoglalására. A fájl akk
 
 - **GTK ablak** (Linux, BSD), **macOS** és a **webes felület**: a **.!ut hozzáfűzése a befejezetlen fájlokhoz** az Általános oldalon is megtalálható, a **Letöltéskor** alatt.
 - **macOS-alkalmazás**: ugyanazok az oldalak és beállítások; a Tulajdonságok azonnal érvénybe lépnek, **OK** nélkül ([A beállítások leírása](A-beállítások-leírása#különbségek-macos-en)).
-- **GTK ablak** (Linux, BSD): ugyanaz a Mappák, Lemezgyorsítótár és Lemez I/O oldal. A meghajtótípusokat Linuxon, macOS-en és FreeBSD-n is felismeri, mindegyiken a rendszer saját módszereivel.
-- **Webes felület**: ugyanezek az oldalak a **Tulajdonságok** alatt, a **Lemezgyorsítótár** és a **Lemez I/O** a **Haladó** alatt. Az ottani mappák a Rookparcelt futtató számítógép mappái, nem a böngészőé.
+- **GTK ablak** (Linux, BSD): ugyanaz a Mappák, Lemezgyorsítótár és Játék oldal. A meghajtótípusokat Linuxon, macOS-en és FreeBSD-n is felismeri, mindegyiken a rendszer saját módszereivel.
+- **Webes felület**: ugyanezek az oldalak a **Tulajdonságok** alatt, a **Lemezgyorsítótár** a **Haladó** alatt, a lemezbeállítások a **Játék** alatt. Az ottani mappák a Rookparcelt futtató számítógép mappái, nem a böngészőé.
 - **rookparcel-nox**: a `--save DIR` a letöltési mappát adja meg, a `--move-on-complete DIR` pedig áthelyezi a kész torrenteket; a többi beállítás a webes felület Tulajdonságok ablakában van.
 
 ## Kapcsolódó oldalak

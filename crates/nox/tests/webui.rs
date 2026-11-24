@@ -3074,9 +3074,9 @@ fn native_prefs_model_and_partial_post() {
             "queueing",
             "scheduler",
             "webui",
+            "gaming",
             "advanced",
             "diskcache",
-            "diskio",
             "trackers",
             "run_program"
         ]

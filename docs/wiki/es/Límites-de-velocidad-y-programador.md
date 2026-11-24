@@ -21,13 +21,12 @@ Ambos son ilimitados de forma predeterminada. Un límite de subida es el motivo 
 
 ### Opciones del límite global de velocidad
 
-La misma página tiene tres casillas que cambian lo que cuentan los límites:
+La misma página tiene dos casillas que cambian lo que cuentan los límites:
 
 | Opción | Qué hace | Valor predeterminado |
 |---|---|---|
 | **Aplicar el límite de velocidad a la sobrecarga del transporte** | Cuenta los encabezados TCP/IP del tráfico de pares, estimados por paquete, dentro de los límites globales, de modo que los límites coincidan con lo que transporta la línea. | Desactivada |
 | **Aplicar el límite de velocidad a las conexiones uTP** | Aplica los límites globales también a los pares uTP. Si está desactivada, los pares uTP solo se ralentizan por el control de retardo propio de uTP, que cede ante otro tráfico. | Activada |
-| **Mantener el ping bajo (limitar las velocidades automáticamente)** | Limita automáticamente las subidas y las bajadas mientras crece el retardo de su línea. Consulte [Mantener el ping bajo](Mantener-el-ping-bajo). | Desactivada |
 
 ### Conexiones y ranuras de subida
 

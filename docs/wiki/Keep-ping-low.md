@@ -10,11 +10,11 @@ Keep ping low does not need to know which game runs. It measures the queue itsel
 
 ## Turning it on
 
-1. Open **Options > Preferences** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) and choose **Bandwidth**.
-2. Under **Global Rate Limit Options**, tick **Keep ping low (limit speeds automatically)**.
+1. Open **Options > Preferences** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) and choose **Gaming**.
+2. Under **Ping**, tick **Keep ping low (limit speeds automatically)**.
 3. Click **OK** or **Apply**.
 
-![Preferences, Bandwidth page](images/prefs-bandwidth.png)
+![Preferences, Gaming page](images/prefs-gaming.png)
 
 It is off by default. To turn it off again, untick the box: your own limits are back at once.
 
@@ -66,10 +66,10 @@ A router with SQM (such as CAKE) or a working gaming QoS does this better, for e
 
 ## Related features
 
-- The busy-disk slow-down on **Advanced > Disk I/O** uses the same kind of automatic cap, for a slow disk instead of a slow line; the lower of the two caps wins. See [Disk and storage](Disk-and-storage#when-the-disk-is-busy).
+- The busy-disk slow-down, on the same **Gaming** page, uses the same kind of automatic cap, for a slow disk instead of a slow line; the lower of the two caps wins. See [Disk and storage](Disk-and-storage#when-the-disk-is-busy).
 - The Setup Guide's router page mentions Keep ping low for games and calls: see [First start and the Setup Guide](First-start-and-the-Setup-Guide).
 - Fixed limits and the weekly scheduler: [Speed limits and the scheduler](Speed-limits-and-scheduler).
 
 ## In the GTK window and the Web UI
 
-The GTK window (Linux, BSD) and the macOS app have the same box on **Preferences > Bandwidth** (on the Mac it applies as soon as you tick it), and the Web UI has it on its **Preferences > Bandwidth** page, with the same note. In [rookparcel-nox](Running-rookparcel-nox) it is the same setting, `auto_rate_limit`, set from the Web UI's Preferences.
+The GTK window (Linux, BSD) and the macOS app have the same box on **Preferences > Gaming** (on the Mac it applies as soon as you tick it), and the Web UI has it on its **Preferences > Gaming** page, with the same note. In [rookparcel-nox](Running-rookparcel-nox) it is the same setting, `auto_rate_limit`, set from the Web UI's Preferences.

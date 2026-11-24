@@ -6,7 +6,7 @@ Diese Seite listet jede Seite des Einstellungsfensters auf und sagt, was jede Ei
 
 ## Die Einstellungen öffnen
 
-Öffnen Sie **Optionen > Einstellungen**, drücken Sie <kbd>Ctrl</kbd>+<kbd>P</kbd> oder klicken Sie in der Symbolleiste auf **Einstellungen**. Die Seiten stehen links; **Festplatten-Cache**, **Festplatten-E/A**, **Tracker**, **Programm ausführen** und **UI-Sperre** liegen unter **Erweitert**. **OK** speichert und schließt, **Übernehmen** speichert und lässt das Fenster offen, **Abbrechen** verwirft die Änderungen.
+Öffnen Sie **Optionen > Einstellungen**, drücken Sie <kbd>Ctrl</kbd>+<kbd>P</kbd> oder klicken Sie in der Symbolleiste auf **Einstellungen**. Die Seiten stehen links; **Festplatten-Cache**, **Tracker**, **Programm ausführen** und **UI-Sperre** liegen unter **Erweitert**. **OK** speichert und schließt, **Übernehmen** speichert und lässt das Fenster offen, **Abbrechen** verwirft die Änderungen.
 
 Eine Hilfe ist eingebaut:
 
@@ -108,17 +108,16 @@ Mehr: [Verbindung, Ports und Firewall](Verbindung-Ports-und-Firewall).
 
 | Einstellung | Was sie bewirkt |
 |---|---|
-| **Maximale Upload-Rate (kB/s)** | Das meiste, was alle Torrents zusammen pro Sekunde hochladen. 0 bedeutet unbegrenzt. Die begrenzten Stunden des Zeitplaners und Ping niedrig halten können sie eine Weile senken. |
+| **Maximale Upload-Rate (kB/s)** | Das meiste, was alle Torrents zusammen pro Sekunde hochladen. 0 bedeutet unbegrenzt. Die begrenzten Stunden des Zeitplaners und Ping niedrig halten (Seite „Gaming“) können sie eine Weile senken. |
 | **Maximale Download-Rate (kB/s)** | Dasselbe für Downloads. |
 | **Ratenbegrenzung auf Transport-Overhead anwenden** | Rechnet die TCP/IP-Header des Peer-Verkehrs auf die Grenzen an, sodass sie dem entsprechen, was die Leitung trägt. Standardmäßig aus. |
 | **Ratenbegrenzung auf uTP-Verbindungen anwenden** | Wendet die Grenzen auch auf uTP-Peers an. Ist es aus, werden uTP-Peers nur von der eigenen Verzögerungssteuerung von uTP gebremst. Standardmäßig ein. |
-| **Ping niedrig halten (Geschwindigkeiten automatisch begrenzen)** | Misst die Verzögerung auf Ihrer Leitung und begrenzt Uploads und Downloads automatisch, solange sie wächst, für Spiele und Anrufe. Es hebt nie Ihre eigenen Grenzen an; die Statusleiste zeigt die Begrenzung als „auto“. |
 | **Globale Höchstzahl an Verbindungen:** | Die meisten Peer-Verbindungen, die über alle Torrents hinweg gleichzeitig offen sind. Senken Sie sie, wenn der Router Mühe hat. |
 | **Höchstzahl verbundener Peers pro Torrent** | Die meisten Peers, mit denen sich ein Torrent verbindet; 0 bedeutet keine Grenze. Gilt für Torrents, die ab jetzt hinzugefügt werden. |
 | **Anzahl der Upload-Slots pro Torrent** | An wie viele Peers ein Torrent gleichzeitig hochlädt; 0 bedeutet keine Grenze. Gilt für Torrents, die ab jetzt hinzugefügt werden. |
 | **Globale Anzahl der Upload-Slots** | An wie viele Peers alle Torrents zusammen gleichzeitig hochladen; -1 bedeutet keine Grenze. Weniger Slots geben jedem Peer mehr Geschwindigkeit. |
 
-Mehr: [Geschwindigkeitsbegrenzung und Zeitplan](Geschwindigkeitsbegrenzung-und-Zeitplan), [Niedrigen Ping halten](Niedrigen-Ping-halten).
+Mehr: [Geschwindigkeitsbegrenzung und Zeitplan](Geschwindigkeitsbegrenzung-und-Zeitplan).
 
 ## BitTorrent
 
@@ -191,6 +190,41 @@ Diese Seite gibt es nur in der Windows-Version. Sie lässt einen Browser die Tor
 
 Mehr: [Weboberfläche](Weboberfläche), [Sonarr, Radarr und Prowlarr](Sonarr-Radarr-und-Prowlarr).
 
+## Gaming
+
+*Neu in 1.2.78.* Einstellungen, die den Computer und die Leitung reaktionsschnell halten, solange Rookparcel arbeitet. **Ping niedrig halten** ist von der Seite „Bandbreite“ hierher gezogen, die frühere Seite „Festplatten-E/A“ von „Erweitert“.
+
+**Ping**
+
+| Einstellung | Was sie bewirkt |
+|---|---|
+| **Ping niedrig halten (Geschwindigkeiten automatisch begrenzen)** | Misst die Verzögerung auf Ihrer Leitung und begrenzt Uploads und Downloads automatisch, solange sie wächst, für Spiele und Anrufe. Es hebt nie Ihre eigenen Grenzen an; die Statusleiste zeigt die Begrenzung als „auto“. |
+
+**Prüfung**
+
+| Einstellung | Was sie bewirkt |
+|---|---|
+| **Torrents schonend prüfen (niedrige Priorität, anderen Programmen den Vortritt lassen)** | Prüft Torrents mit der Hintergrund-Datenträgerpriorität des Systems und pausiert, solange Lesezugriffe langsamer als üblich sind, sodass der Computer reaktionsfähig bleibt. Prüfungen dauern länger, solange der Datenträger beschäftigt ist. |
+| **Prüfung begrenzen auf (MB/s):** | Begrenzt die Lesegeschwindigkeit jeder Prüfung, für einen Datenträger, der auch bei schonenden Prüfungen noch hinterherhinkt. Standardmäßig aus. |
+| **Gleichzeitig geprüfte Laufwerke (ein Torrent je Laufwerk):** | Wie viele Laufwerke gleichzeitig geprüft werden; Torrents auf demselben Laufwerk warten auf ihre Reihe. -1 bedeutet keine Grenze. |
+
+**Laufwerke**
+
+| Einstellung | Was sie bewirkt |
+|---|---|
+| **An den Laufwerkstyp anpassen (SSD, Festplatte, Netzwerk)** | Erkennt, ob jeder Speicherordner auf einer SSD, einer Festplatte, einem Wechsellaufwerk oder einer Netzwerkfreigabe liegt, und passt an, wie viele Datenträgeraufgaben gleichzeitig laufen. |
+
+**Wenn die Festplatte ausgelastet ist**
+
+| Einstellung | Was sie bewirkt |
+|---|---|
+| **Downloads verlangsamen (Schreibzugriffe)** | Solange ein Laufwerk Schreibzugriffe deutlich langsamer als üblich beantwortet, halbiert es die Download-Rate Schritt für Schritt, nie unter 50 kB/s, und lässt sie wieder wachsen, sobald der Datenträger ruhig ist. |
+| **Uploads verlangsamen (Lesezugriffe)** | Dasselbe für Uploads, solange ein Laufwerk Lesezugriffe langsam beantwortet. |
+
+Ein falsch erkannter Laufwerkstyp lässt sich mit `drive_overrides` auf der Seite „Erweitert“ korrigieren. Zunächst ist nur **An den Laufwerkstyp anpassen (SSD, Festplatte, Netzwerk)** an; die anderen Kästchen sind aus.
+
+Mehr: [Niedrigen Ping halten](Niedrigen-Ping-halten), [Datenträger und Speicher](Datenträger-und-Speicher).
+
 ## Erweitert
 
 ![Einstellungen, Seite „Erweitert“](images/prefs-advanced.png)
@@ -239,20 +273,7 @@ Die vollständige Hilfe jeder Zeile erscheint im Bereich unter der Tabelle, wenn
 | **Schreibwarteschlange (kB):** | Wie viele heruntergeladene Daten auf das Schreiben warten dürfen; darüber hört Rookparcel auf, von Peers zu lesen, bis der Datenträger aufgeholt hat. Werte unter 4 MB wirken wie 4 MB. |
 | **Höchstzahl offener Dateien:** | Die meisten Dateien, die gleichzeitig offen gehalten werden. Erhöhen Sie sie, wenn viele Torrents oder Dateien gleichzeitig beschäftigt sind. |
 | **Festplatten-E/A-Threads (ab dem nächsten Start):** | Die Threads, die Torrent-Daten lesen und schreiben. |
-| **Hash-Threads (nicht verwendet):** | Aus Kompatibilitätsgründen beibehalten; diese Version verwendet sie nicht. Prüfungen laufen eine je Laufwerk, eingestellt auf der Seite „Festplatten-E/A“. |
-
-Mehr: [Datenträger und Speicher](Datenträger-und-Speicher).
-
-## Festplatten-E/A
-
-| Einstellung | Was sie bewirkt |
-|---|---|
-| **Torrents schonend prüfen (niedrige Priorität, anderen Programmen den Vortritt lassen)** | Prüft Torrents mit der Hintergrund-Datenträgerpriorität des Systems und pausiert, solange Lesezugriffe langsamer als üblich sind, sodass der Computer reaktionsfähig bleibt. Prüfungen dauern länger, solange der Datenträger beschäftigt ist. |
-| **Prüfung begrenzen auf (MB/s):** | Begrenzt die Lesegeschwindigkeit jeder Prüfung, für einen Datenträger, der auch bei schonenden Prüfungen noch hinterherhinkt. Standardmäßig aus. |
-| **Gleichzeitig geprüfte Laufwerke (ein Torrent je Laufwerk):** | Wie viele Laufwerke gleichzeitig geprüft werden; Torrents auf demselben Laufwerk warten auf ihre Reihe. -1 bedeutet keine Grenze. |
-| **An den Laufwerkstyp anpassen (SSD, Festplatte, Netzwerk)** | Erkennt, ob jeder Speicherordner auf einer SSD, einer Festplatte, einem Wechsellaufwerk oder einer Netzwerkfreigabe liegt, und passt an, wie viele Datenträgeraufgaben gleichzeitig laufen. |
-| **Downloads verlangsamen (Schreibzugriffe)** | Solange ein Laufwerk Schreibzugriffe deutlich langsamer als üblich beantwortet, halbiert es die Download-Rate Schritt für Schritt, nie unter 50 kB/s, und lässt sie wieder wachsen, sobald der Datenträger ruhig ist. |
-| **Uploads verlangsamen (Lesezugriffe)** | Dasselbe für Uploads, solange ein Laufwerk Lesezugriffe langsam beantwortet. |
+| **Hash-Threads (nicht verwendet):** | Aus Kompatibilitätsgründen beibehalten; diese Version verwendet sie nicht. Prüfungen laufen eine je Laufwerk, eingestellt auf der Seite „Gaming“. |
 
 Mehr: [Datenträger und Speicher](Datenträger-und-Speicher).
 

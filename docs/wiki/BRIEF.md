@@ -97,6 +97,7 @@ Existing page, do not edit: `Searching-for-torrents-on-Windows` (source `docs/SE
 | prefs-general.png | Preferences > General |
 | prefs-connection.png | Preferences > Connection |
 | prefs-bandwidth.png | Preferences > Bandwidth |
+| prefs-gaming.png | Preferences > Gaming |
 | prefs-bittorrent.png | Preferences > BitTorrent |
 | prefs-queueing.png | Preferences > Queueing |
 | prefs-scheduler.png | Preferences > Scheduler |

@@ -1,5 +1,7 @@
 # Smart disk I/O (proposed D48)
 
+Since 1.2.78 (D80) these settings are on Preferences > Gaming (no longer Advanced > Disk I/O), and gentle checks are off by default.
+
 Written 2026-11-02_110639_1793613999; the owner answered Q3 and Q8 on 2026-11-02_111330_1793614410. The owner answered the rest and approved it on 2026-11-03_084209_1793691729 (answers under the questions); built in 1.1.36-1.1.40, see "Implementation status" at the end. The owner's idea: "Smart recheck. Throttle write and/or read speeds upon high disk IO detection. Same for download speed/upload speed. We could also check if the storage is SSD, HDD or NAS." It goes beyond 2.2.1, so it gets its own Preferences page.
 
 ## What the engine does today

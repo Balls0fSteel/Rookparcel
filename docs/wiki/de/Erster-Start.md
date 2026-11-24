@@ -51,7 +51,7 @@ Jede Verbindung zu einem Peer belegt einen Platz in der Verbindungstabelle Ihres
 
 Die ältere Antwort ist ein Ausgangspunkt. Sie können diese Zahlen später unter **Optionen > Einstellungen > Bandbreite** und **Erweitert** ändern. Wählen Sie später „modern“, werden die normalen Zahlen wiederhergestellt.
 
-Auf derselben Seite steht **Ping niedrig halten (Geschwindigkeiten automatisch begrenzen)**. Haken Sie es an, wenn Sie spielen oder telefonieren, während Rookparcel läuft: Es hält die Geschwindigkeiten niedrig, solange Ihre Leitung ausgelastet ist. Siehe [Niedrigen Ping halten](Niedrigen-Ping-halten).
+Auf derselben Seite steht **Ping niedrig halten (Geschwindigkeiten automatisch begrenzen)**. Haken Sie es an, wenn Sie spielen oder telefonieren, während Rookparcel läuft: Es hält die Geschwindigkeiten niedrig, solange Ihre Leitung ausgelastet ist. Siehe [Niedrigen Ping halten](Niedrigen-Ping-halten). Sie steht auch unter **Optionen > Einstellungen > Gaming**.
 
 ## Seite 3: Ihre Festplatten
 
@@ -61,7 +61,7 @@ Auf derselben Seite steht **Ping niedrig halten (Geschwindigkeiten automatisch b
 - jedes Laufwerk wird auf seinen Typ abgestimmt (SSD, Festplatte, Netzwerkfreigabe);
 - Übertragungen werden langsamer, solange eine Festplatte langsam antwortet.
 
-Schonende Prüfungen und die Abstimmung pro Laufwerk sind von Anfang an aktiv. Das Kästchen fügt das Abbremsen hinzu, solange eine Festplatte ausgelastet ist. Prüfungen dauern länger, solange etwas anderes die Festplatte benutzt. Unter **Optionen > Einstellungen > Erweitert > Festplatten-E/A** stellen Sie jeden Teil einzeln ein. Siehe [Datenträger und Speicher](Datenträger-und-Speicher).
+Die Abstimmung pro Laufwerk ist von Anfang an aktiv. Das Kästchen fügt schonende Prüfungen und das Abbremsen hinzu, solange eine Festplatte ausgelastet ist. Prüfungen dauern länger, solange etwas anderes die Festplatte benutzt. Unter **Optionen > Einstellungen > Gaming** stellen Sie jeden Teil einzeln ein. Siehe [Datenträger und Speicher](Datenträger-und-Speicher).
 
 ## Seite 4: Dieser Computer
 

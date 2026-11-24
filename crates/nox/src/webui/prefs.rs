@@ -1078,15 +1078,7 @@ fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
     let mut bandwidth = vec![
         group(Some(tr!(PrefUpLimiting)), vec![kb("upload_rate_limit")]),
         group(Some(tr!(PrefDownLimiting)), vec![kb("download_rate_limit")]),
-        group(
-            Some(tr!(PrefRateOptions)),
-            vec![
-                f("rate_limit_ip_overhead"),
-                f("rate_limit_utp"),
-                f("auto_rate_limit"),
-                note(tr!(PrefKeepPingLowNote)),
-            ],
-        ),
+        group(Some(tr!(PrefRateOptions)), vec![f("rate_limit_ip_overhead"), f("rate_limit_utp")]),
         group(
             Some(tr!(PrefConnections)),
             vec![
@@ -1312,6 +1304,27 @@ fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
                 ),
             ],
         ),
+        // what keeps games, calls and the computer responsive (D80): keep ping low (D49) and
+        // smart disk I/O (D48); the per-drive types (drive_overrides) are on Advanced only
+        page(
+            "gaming",
+            tr!(PageGaming),
+            vec![
+                group(Some(tr!(PrefPingGroup)), vec![f("auto_rate_limit"), note(tr!(PrefKeepPingLowNote))]),
+                group(
+                    Some(tr!(PrefChecking)),
+                    vec![
+                        f("check_gently"),
+                        row(vec![f("check_rate_limit"), enabled_by(f("check_rate_mb"), "check_rate_limit")]),
+                        // the engine checks with at most 8 threads; -1 (no limit) is Advanced's
+                        ranged("active_checking", 1, 8),
+                    ],
+                ),
+                group(Some(tr!(PrefDrives)), vec![f("tune_for_drive")]),
+                group(Some(tr!(PrefDiskBusy)), vec![f("disk_slow_downloads"), f("disk_slow_uploads")]),
+                group(None, vec![note(tr!(PrefDiskIoNote))]),
+            ],
+        ),
         page("advanced", tr!(PageAdvanced), vec![group(None, vec![note(tr!(PrefAdvancedNoteWeb))])])
             .with("advanced", true),
         page(
@@ -1342,26 +1355,6 @@ fn pages(settings_dir: &Path, hosted: bool, run_open: bool) -> Vec<Json> {
                     ],
                 ),
                 group(None, vec![note(tr!(PrefReadCacheNote, mb = settings::AUTO_CACHE_MB))]),
-            ],
-        )
-        .with("under", "advanced"),
-        // smart disk I/O (D48); the per-drive types (drive_overrides) are on Advanced only
-        page(
-            "diskio",
-            tr!(PageDiskIo),
-            vec![
-                group(
-                    Some(tr!(PrefChecking)),
-                    vec![
-                        f("check_gently"),
-                        row(vec![f("check_rate_limit"), enabled_by(f("check_rate_mb"), "check_rate_limit")]),
-                        // the engine checks with at most 8 threads; -1 (no limit) is Advanced's
-                        ranged("active_checking", 1, 8),
-                    ],
-                ),
-                group(Some(tr!(PrefDrives)), vec![f("tune_for_drive")]),
-                group(Some(tr!(PrefDiskBusy)), vec![f("disk_slow_downloads"), f("disk_slow_uploads")]),
-                group(None, vec![note(tr!(PrefDiskIoNote))]),
             ],
         )
         .with("under", "advanced"),
@@ -2730,9 +2723,9 @@ mod tests {
                 "queueing",
                 "scheduler",
                 "webui",
+                "gaming",
                 "advanced",
                 "diskcache",
-                "diskio",
                 "trackers",
                 "run_program"
             ]
@@ -2740,14 +2733,15 @@ mod tests {
         let titles: Vec<&str> =
             pages_json.iter().map(|p| p.get("title").and_then(Json::as_str).unwrap()).collect();
         assert_eq!(titles[1], "UI Settings");
-        assert_eq!(titles[11], "Disk I/O");
+        assert_eq!(titles[9], "Gaming");
+        assert_eq!(pages_json[9].get("under"), None, "a page of its own above Advanced (D80)");
+        assert_eq!(titles[11], "Disk Cache");
         assert_eq!(titles[12], "Trackers");
-        assert_eq!(pages_json[10].get("under").and_then(Json::as_str), Some("advanced"));
         assert_eq!(pages_json[11].get("under").and_then(Json::as_str), Some("advanced"));
         assert_eq!(pages_json[12].get("under").and_then(Json::as_str), Some("advanced"));
         assert_eq!(titles[13], "Run Program");
         assert_eq!(pages_json[13].get("under").and_then(Json::as_str), Some("advanced"));
-        assert_eq!(pages_json[9].get("advanced"), Some(&Json::Bool(true)));
+        assert_eq!(pages_json[10].get("advanced"), Some(&Json::Bool(true)));
         let mut placed = Vec::new();
         fn walk(items: &[Json], placed: &mut Vec<String>) {
             for it in items {
@@ -2879,10 +2873,11 @@ mod tests {
         assert_eq!(find("download_rate_limit").unwrap().get(&w), Value::Int(4096));
     }
 
-    /// Preferences > Advanced > Disk I/O: the engine's rows under 2.2.1-style captions, the MB/s
-    /// number beside its box, stored as `lt.*` keys like any setting.
+    /// Preferences > Gaming (D80): keep ping low and smart disk I/O, the engine's rows under
+    /// 2.2.1-style captions, the MB/s number beside its box, stored as `lt.*` keys like any
+    /// setting; gentle checks are off by default.
     #[test]
-    fn the_disk_io_page_edits_the_disk_settings() {
+    fn the_gaming_page_edits_the_disk_settings() {
         let label = |id: &str| find(id).unwrap().label();
         assert_eq!(label("check_gently"), tr!(PrefCheckGently));
         assert_eq!(label("check_rate_limit"), tr!(PrefCheckRateLimit));
@@ -2894,14 +2889,15 @@ mod tests {
         let mut st = state();
         let w = Working::from_state(&st);
         let get = |w: &Working, id: &str| find(id).unwrap().get(w);
-        assert_eq!(get(&w, "check_gently"), Value::Bool(true));
+        assert_eq!(get(&w, "check_gently"), Value::Bool(false));
+        assert_eq!(get(&w, "auto_rate_limit"), Value::Bool(false));
         assert_eq!(get(&w, "check_rate_mb"), Value::Int(100));
         assert_eq!(get(&w, "active_checking"), Value::Int(4));
-        let body = r#"{"check_gently":false,"check_rate_limit":true,"check_rate_mb":250,"active_checking":2,
+        let body = r#"{"check_gently":true,"check_rate_limit":true,"check_rate_mb":250,"active_checking":2,
             "tune_for_drive":false,"disk_slow_downloads":true,"disk_slow_uploads":true}"#;
         let w = edited(&st, body).unwrap();
         let s = &w.settings;
-        assert!(!s.check_gently && s.check_rate_limit && !s.tune_for_drive);
+        assert!(s.check_gently && s.check_rate_limit && !s.tune_for_drive);
         assert_eq!((s.check_rate_mb, s.active_checking), (250, 2));
         assert!(s.disk_slow_downloads && s.disk_slow_uploads);
         assert!(edited(&st, r#"{"check_rate_mb":0}"#).err().unwrap().1.contains("outside"));
@@ -2909,7 +2905,15 @@ mod tests {
         store(&mut st, &[]);
         assert_eq!(st.options.get("lt.check_rate_mb"), Some("250"));
         assert_eq!(st.options.get("lt.disk_slow_uploads"), Some("true"));
-        assert_eq!(st.options.get("lt.check_gently"), Some("false"));
+        assert_eq!(st.options.get("lt.check_gently"), Some("true"));
+        // the page above Advanced holds keep ping low too, Bandwidth no longer
+        let pages = pages(Path::new("."), false, true);
+        let page = |id: &str| {
+            pages.iter().find(|p| p.get("id").and_then(Json::as_str) == Some(id)).unwrap().to_json()
+        };
+        assert!(page("gaming").contains(r#"{"f":"auto_rate_limit"}"#), "{}", page("gaming"));
+        assert!(page("gaming").contains(r#"{"f":"check_gently"}"#));
+        assert!(!page("bandwidth").contains("auto_rate_limit"), "{}", page("bandwidth"));
     }
 
     /// Preferences > General > When Downloading (D77): µTorrent's caption without its mnemonic,

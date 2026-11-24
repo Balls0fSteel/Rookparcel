@@ -21,13 +21,12 @@ Beide sind standardmäßig unbegrenzt. Ein begrenzter Upload ist der übliche Gr
 
 ### Optionen für die globale Ratenbegrenzung
 
-Dieselbe Seite hat drei Kästchen, die ändern, was die Begrenzungen zählen:
+Dieselbe Seite hat zwei Kästchen, die ändern, was die Begrenzungen zählen:
 
 | Option | Was sie tut | Standard |
 |---|---|---|
 | **Ratenbegrenzung auf Transport-Overhead anwenden** | Rechnet die TCP/IP-Header des Peer-Verkehrs, pro Paket geschätzt, auf die globalen Begrenzungen an, sodass die Begrenzungen dem entsprechen, was die Leitung trägt. | Aus |
 | **Ratenbegrenzung auf uTP-Verbindungen anwenden** | Wendet die globalen Begrenzungen auch auf uTP-Peers an. Aus werden uTP-Peers nur von der eigenen Verzögerungssteuerung von uTP gebremst, die anderem Verkehr den Vortritt lässt. | An |
-| **Ping niedrig halten (Geschwindigkeiten automatisch begrenzen)** | Deckelt Uploads und Downloads automatisch, solange die Verzögerung auf Ihrer Leitung wächst. Siehe [Niedrigen Ping halten](Niedrigen-Ping-halten). | Aus |
 
 ### Verbindungen und Upload-Slots
 

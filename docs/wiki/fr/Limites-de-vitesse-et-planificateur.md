@@ -21,13 +21,12 @@ Les deux sont illimitées par défaut. Limiter l'envoi est la raison habituelle 
 
 ### Options de limitation globale de la vitesse
 
-La même page a trois cases qui changent ce que les limites comptent :
+La même page a deux cases qui changent ce que les limites comptent :
 
 | Option | Ce qu'elle fait | Par défaut |
 |---|---|---|
 | **Appliquer la limitation de vitesse au surdébit de transport** | Compte les en-têtes TCP/IP du trafic des pairs, estimés par paquet, dans les limites globales, de sorte que les limites correspondent à ce que la ligne transporte. | Désactivée |
 | **Appliquer la limitation de vitesse aux connexions uTP** | Applique aussi les limites globales aux pairs uTP. Désactivée, les pairs uTP ne sont ralentis que par le contrôle de délai propre à uTP, qui cède la place aux autres trafics. | Activée |
-| **Garder un ping bas (limiter les vitesses automatiquement)** | Plafonne automatiquement les envois et les réceptions tant que le délai sur votre ligne augmente. Voir [Garder un ping bas](Garder-un-ping-bas). | Désactivée |
 
 ### Connexions et emplacements d'envoi
 

@@ -169,5 +169,19 @@ module.exports = (H) => {
   add('feed-disabled',compactRss+H.crossBadge,'orange');
   // No Label: the compact tag of new/remove label, with the cross badge.
   add('no-label',even('M1 1h5l4 4-5 5-4-4Z M3 3v2h2V3Z')+H.crossBadge);
+  // Preferences > Gaming (D80): a solid gamepad with a cut-out D-pad and two buttons, its
+  // grips split by the notch under the middle.
+  add('gaming',H.px(0,0,['','','',
+    '....########',
+    '..############',
+    '.####.####..###',
+    '.####.####..###',
+    '.##.....#######',
+    '.####.#####..##',
+    '.####.#####..##',
+    '.######..######',
+    '.#####....#####',
+    '.####......####',
+    '..##........##']),'purple');
   return result;
 };

@@ -69,7 +69,7 @@ A **Kényszerített ellenőrzés** darabonként beolvassa a torrent fájljait a 
 
 *Új az 1.2.76-ban:* a leállított torrent az ellenőrzéssel együtt elindul; ha utána is leállítva szeretné tartani, állítsa le újra. A sorban álló torrentet azonnal ellenőrzi, a várólistán lévő helyre várás nélkül, utána pedig újra sorba állítja. A **hiányzó fájlok** miatt visszatartott torrentet (lásd a [Lemez és tárolás](Lemez-és-tárolás#ha-egy-meghajtó-vagy-megosztás-hiányzik) oldalt) azzal vetíti össze, ami most megvan, és ami hiányzik, azt újra letölti.
 
-Hogy az ellenőrzések mennyire kímélik a lemezt, azt a **Tulajdonságok > Haladó > Lemez I/O** részben állíthatja be; lásd a [Lemez és tárolás](Lemez-és-tárolás) oldalt.
+Hogy az ellenőrzések mennyire kímélik a lemezt, azt a **Tulajdonságok > Játék** részben (kezdetben ki van kapcsolva) állíthatja be; lásd a [Lemez és tárolás](Lemez-és-tárolás) oldalt.
 
 ## Tracker frissítése
 

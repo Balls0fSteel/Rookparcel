@@ -61,9 +61,9 @@ Si seuls certains fichiers d'un torrent ont disparu (supprimés à la main ou pa
 
 ## E/S disque intelligentes
 
-Les E/S disque intelligentes gardent l'ordinateur réactif pendant que Rookparcel lit et écrit. Leurs paramètres se trouvent dans **Options > Préférences > Avancé > E/S disque** (une page sous Avancé dans la liste des pages).
+Les E/S disque intelligentes gardent l'ordinateur réactif pendant que Rookparcel lit et écrit. Leurs paramètres se trouvent dans **Options > Préférences > Jeux** (une page juste au-dessus d'Avancé dans la liste des pages).
 
-La case **Utiliser les E/S disque intelligentes** de l'Assistant de configuration active ou désactive d'un coup les quatre parties. Les vérifications en douceur et le réglage par lecteur sont actifs dès le départ ; la case ajoute le ralentissement quand un disque est occupé. *L'Assistant de configuration est nouveau dans la version 1.1.62. La page E/S disque elle-même existe dans la version 1.1.40.*
+La case **Utiliser les E/S disque intelligentes** de l'Assistant de configuration active ou désactive d'un coup les quatre parties. Le réglage par lecteur est actif dès le départ ; la case ajoute les vérifications en douceur et le ralentissement quand un disque est occupé. *L'Assistant de configuration est nouveau dans la version 1.1.62. Les paramètres existent depuis la version 1.1.40 ; depuis la 1.2.78 ils sont sur la page Jeux, et les vérifications en douceur sont désactivées au départ.*
 
 ### Vérification
 
@@ -71,7 +71,7 @@ Une vérification (par exemple après **Forcer la vérification**) lit chaque mo
 
 | Paramètre | Signification | Par défaut |
 |---|---|---|
-| **Vérifier les torrents en douceur (basse priorité, laisser la place aux autres programmes)** | Vérifie avec la priorité disque d'arrière-plan du système, laisse tranquilles les fichiers en cache des autres programmes et s'interrompt tant que les lectures sont plus lentes que d'habitude, pour que l'ordinateur reste réactif. Les vérifications durent plus longtemps quand le disque est occupé. | Activé |
+| **Vérifier les torrents en douceur (basse priorité, laisser la place aux autres programmes)** | Vérifie avec la priorité disque d'arrière-plan du système, laisse tranquilles les fichiers en cache des autres programmes et s'interrompt tant que les lectures sont plus lentes que d'habitude, pour que l'ordinateur reste réactif. Les vérifications durent plus longtemps quand le disque est occupé. | Désactivé |
 | **Limiter la vérification à (Mo/s) :** | Plafonne la vitesse de lecture de chaque vérification, pour un disque qui ralentit encore pendant les vérifications en douceur. Ici, 1 Mo vaut 1 000 000 d'octets. | Désactivé, 100 |
 | **Lecteurs vérifiés en même temps (un torrent par lecteur) :** | Combien de lecteurs sont vérifiés en même temps, un torrent par lecteur ; les torrents du même lecteur attendent leur tour. De 1 à 8. | 4 |
 
@@ -127,7 +127,7 @@ Sous **File disque et fichiers** :
 | **File d'écriture disque (ko) :** | Quelle quantité de données téléchargées peut attendre d'être écrite sur le disque ; au-delà, Rookparcel cesse de lire depuis les pairs jusqu'à ce que le disque rattrape son retard. Les valeurs inférieures à 4 Mo valent 4 Mo. | 1024 |
 | **Nombre maximum de fichiers ouverts :** | Le plus grand nombre de fichiers gardés ouverts en même temps ; les autres sont fermés et rouverts au besoin. Augmentez-le quand de nombreux torrents ou fichiers sont actifs en même temps. | 40 |
 | **Threads d'E/S disque (au prochain démarrage) :** | Les threads qui lisent et écrivent les données des torrents. | 10 |
-| **Threads de hachage (non utilisé) :** | Conservé pour la compatibilité ; cette version ne l'utilise pas. Les vérifications s'exécutent une par lecteur, réglage sur la page E/S disque. | |
+| **Threads de hachage (non utilisé) :** | Conservé pour la compatibilité ; cette version ne l'utilise pas. Les vérifications s'exécutent une par lecteur, réglage sur la page Jeux. | |
 
 Rookparcel n'a pas de paramètre pour préallouer les fichiers. Un fichier est créé quand les premières données qui lui sont destinées arrivent, et sous Windows il est marqué comme fichier fragmenté (sparse), si bien qu'écrire près de sa fin n'amène pas NTFS à remplir de zéros la partie qui précède.
 
@@ -135,8 +135,8 @@ Rookparcel n'a pas de paramètre pour préallouer les fichiers. Un fichier est c
 
 - **Fenêtre GTK** (Linux, BSD), **macOS** et **interface Web** : **Ajouter .!ut aux fichiers incomplets** se trouve aussi sur la page Général, sous **Pendant le téléchargement**.
 - **Application macOS** : les mêmes pages et paramètres ; les Préférences s'appliquent immédiatement, sans **OK** ([Référence des préférences](Référence-des-préférences#différences-sous-macos)).
-- **Fenêtre GTK** (Linux, BSD) : les mêmes pages Dossiers, Cache disque et E/S disque. Les types de lecteur sont aussi détectés sous Linux, macOS et FreeBSD, chacun avec les méthodes propres au système.
-- **Interface Web** : les mêmes pages sous **Préférences**, avec **Cache disque** et **E/S disque** sous **Avancé**. Les dossiers y sont ceux de l'ordinateur qui exécute Rookparcel, pas ceux du navigateur.
+- **Fenêtre GTK** (Linux, BSD) : les mêmes pages Dossiers, Cache disque et Jeux. Les types de lecteur sont aussi détectés sous Linux, macOS et FreeBSD, chacun avec les méthodes propres au système.
+- **Interface Web** : les mêmes pages sous **Préférences**, avec **Cache disque** sous **Avancé** et les paramètres de disque sur **Jeux**. Les dossiers y sont ceux de l'ordinateur qui exécute Rookparcel, pas ceux du navigateur.
 - **rookparcel-nox** : `--save DIR` définit le dossier de téléchargement et `--move-on-complete DIR` déplace les torrents terminés ; les autres paramètres se trouvent dans les Préférences de l'interface Web.
 
 ## Pages connexes

@@ -6,7 +6,7 @@ Ez az oldal felsorolja a Tulajdonságok ablak minden oldalát, és azt, hogy az 
 
 ## A Tulajdonságok megnyitása
 
-Nyissa meg a **Beállítások > Tulajdonságok** ablakot, nyomja meg a <kbd>Ctrl</kbd>+<kbd>P</kbd> billentyűket, vagy kattintson az eszköztár **Tulajdonságok** gombjára. Az oldalak a bal oldalon vannak felsorolva; a **Lemezgyorsítótár**, a **Lemez I/O**, a **Trackerek**, a **Program futtatása** és a **Felület zárolása** a **Haladó** alatt található. Az **OK** ment és bezár, az **Alkalmaz** ment, és nyitva hagyja az ablakot, a **Mégse** elveti a módosításokat.
+Nyissa meg a **Beállítások > Tulajdonságok** ablakot, nyomja meg a <kbd>Ctrl</kbd>+<kbd>P</kbd> billentyűket, vagy kattintson az eszköztár **Tulajdonságok** gombjára. Az oldalak a bal oldalon vannak felsorolva; a **Lemezgyorsítótár**, a **Trackerek**, a **Program futtatása** és a **Felület zárolása** a **Haladó** alatt található. Az **OK** ment és bezár, az **Alkalmaz** ment, és nyitva hagyja az ablakot, a **Mégse** elveti a módosításokat.
 
 A súgó be van építve:
 
@@ -108,17 +108,16 @@ További információ: [Kapcsolat, portok és tűzfal](Kapcsolat-portok-és-tűz
 
 | Beállítás | Mit csinál |
 |---|---|
-| **Legnagyobb feltöltési sebesség (kB/s)** | A legtöbb, amennyit az összes torrent együtt feltölt másodpercenként. A 0 korlátlant jelent. Az ütemező Korlátozva óráiban és az Alacsony ping megtartása időlegesen csökkentheti. |
+| **Legnagyobb feltöltési sebesség (kB/s)** | A legtöbb, amennyit az összes torrent együtt feltölt másodpercenként. A 0 korlátlant jelent. Az ütemező Korlátozva óráiban és az Alacsony ping megtartása (a Játék oldalon) időlegesen csökkentheti. |
 | **Legnagyobb letöltési sebesség (kB/s)** | Ugyanez a letöltésekre. |
 | **Sebességkorlát alkalmazása az átviteli többletforgalomra** | A peerforgalom TCP/IP-fejléceit is beleszámolja a korlátokba, így azok megegyeznek azzal, amit a vonal szállít. Alapból ki van kapcsolva. |
 | **Sebességkorlát alkalmazása az uTP-kapcsolatokra** | A korlátokat az uTP-peerekre is alkalmazza. Kikapcsolva az uTP-peereket csak az uTP saját késleltetésvezérlése lassítja. Alapból be van kapcsolva. |
-| **Alacsony ping megtartása (a sebességek automatikus korlátozása)** | Méri a vonal késleltetését, és automatikusan korlátozza a feltöltést és a letöltést, amíg az nő, játékokhoz és hívásokhoz. Sosem emeli meg az Ön saját korlátait; az állapotsor „auto”-ként mutatja a korlátot. |
 | **Kapcsolatok legnagyobb száma összesen:** | A legtöbb egyszerre nyitott peerkapcsolat az összes torrentben. Csökkentse, ha a router nem bírja. |
 | **Csatlakozott peerek legnagyobb száma torrentenként** | A legtöbb peer, amelyhez egy torrent csatlakozik; a 0 azt jelenti: nincs korlát. A mostantól hozzáadott torrentekre vonatkozik. |
 | **Feltöltési helyek száma torrentenként** | Hány peernek tölt fel egy torrent egyszerre; a 0 azt jelenti: nincs korlát. A mostantól hozzáadott torrentekre vonatkozik. |
 | **Feltöltési helyek száma összesen** | Hány peernek tölt fel az összes torrent együtt egyszerre; a -1 azt jelenti: nincs korlát. Kevesebb hely nagyobb sebességet ad az egyes peereknek. |
 
-További információ: [Sebességkorlátok és ütemező](Sebességkorlátok-és-ütemező), [Alacsony ping](Alacsony-ping).
+További információ: [Sebességkorlátok és ütemező](Sebességkorlátok-és-ütemező).
 
 ## BitTorrent
 
@@ -191,6 +190,41 @@ Ez az oldal csak a Windowsos változatban van meg. Lehetővé teszi, hogy egy b�
 
 További információ: [Webes felület](Webes-felület), [Sonarr, Radarr és Prowlarr](Sonarr-Radarr-és-Prowlarr).
 
+## Játék
+
+*Az 1.2.78-ban jelent meg.* Olyan beállítások, amelyek reagálóképesen tartják a számítógépet és a vonalat, amíg a Rookparcel dolgozik. Az **Alacsony ping megtartása** a Sávszélesség oldalról, a korábbi Lemez I/O oldal pedig a Haladó alól került ide.
+
+**Ping**
+
+| Beállítás | Mit csinál |
+|---|---|
+| **Alacsony ping megtartása (a sebességek automatikus korlátozása)** | Méri a vonal késleltetését, és automatikusan korlátozza a feltöltést és a letöltést, amíg az nő, játékokhoz és hívásokhoz. Sosem emeli meg az Ön saját korlátait; az állapotsor „auto”-ként mutatja a korlátot. |
+
+**Ellenőrzés**
+
+| Beállítás | Mit csinál |
+|---|---|
+| **Kíméletes torrentellenőrzés (alacsony prioritás, elsőbbség a többi programnak)** | A torrenteket a rendszer háttérlemez-prioritásán ellenőrzi, és szünetel, amíg az olvasások a szokásosnál lassabbak, így a számítógép reszponzív marad. Az ellenőrzések tovább tartanak, amíg a lemez foglalt. |
+| **Ellenőrzés korlátozása (MB/s):** | Korlátozza az egyes ellenőrzések olvasási sebességét, olyan lemezhez, amely a kíméletes ellenőrzések alatt is lemarad. Alapból ki van kapcsolva. |
+| **Egyszerre ellenőrzött meghajtók (meghajtónként egy torrent):** | Hány meghajtót ellenőriz egyszerre; az ugyanazon a meghajtón lévő torrentek a sorukra várnak. A -1 azt jelenti: nincs korlát. |
+
+**Meghajtók**
+
+| Beállítás | Mit csinál |
+|---|---|
+| **Hangolás a meghajtó típusához (SSD, merevlemez, hálózat)** | Felismeri, hogy az egyes mentési mappák SSD-n, merevlemezen, cserélhető meghajtón vagy hálózati megosztáson vannak-e, és ehhez igazítja, hány lemezművelet fut egyszerre. |
+
+**Ha a lemez foglalt**
+
+| Beállítás | Mit csinál |
+|---|---|
+| **Letöltések lassítása (lemezírások)** | Amíg egy meghajtó az írásokra érezhetően lassabban válaszol a szokásosnál, lépésenként felezi a letöltési sebességet, de 50 kB/s alá soha, és újra engedi nőni, ha a lemez elcsendesedett. |
+| **Feltöltések lassítása (lemezolvasások)** | Ugyanez a feltöltésekre, amíg egy meghajtó lassan válaszol az olvasásokra. |
+
+A rosszul felismert meghajtótípust a Haladó oldalon a `drive_overrides` javítja. Kezdetben csak a **Hangolás a meghajtó típusához (SSD, merevlemez, hálózat)** négyzet van bejelölve; a többi nincs.
+
+További információ: [Alacsony ping](Alacsony-ping), [Lemez és tárolás](Lemez-és-tárolás).
+
 ## Haladó
 
 ![Tulajdonságok, Haladó oldal](images/prefs-advanced.png)
@@ -239,20 +273,7 @@ Az egyes sorok teljes súgója a táblázat alatti panelen jelenik meg, ha kijel
 | **Lemezírási sor (kB):** | Mennyi letöltött adat várhat a kiírásra; efölött a Rookparcel nem olvas a peerektől, amíg a lemez utol nem éri magát. A 4 MB alatti értékek 4 MB-ként hatnak. |
 | **Megnyitott fájlok legnagyobb száma:** | A legtöbb egyszerre nyitva tartott fájl. Emelje meg, ha sok torrent vagy fájl dolgozik egyszerre. |
 | **Lemez I/O szálak (a következő indítástól):** | A torrentadatokat író és olvasó szálak. |
-| **Hash-szálak (nincs használatban):** | Kompatibilitási okból megmaradt; ez a verzió nem használja. Az ellenőrzések meghajtónként egyesével futnak, ezt a Lemez I/O oldalon lehet beállítani. |
-
-További információ: [Lemez és tárolás](Lemez-és-tárolás).
-
-## Lemez I/O
-
-| Beállítás | Mit csinál |
-|---|---|
-| **Kíméletes torrentellenőrzés (alacsony prioritás, elsőbbség a többi programnak)** | A torrenteket a rendszer háttérlemez-prioritásán ellenőrzi, és szünetel, amíg az olvasások a szokásosnál lassabbak, így a számítógép reszponzív marad. Az ellenőrzések tovább tartanak, amíg a lemez foglalt. |
-| **Ellenőrzés korlátozása (MB/s):** | Korlátozza az egyes ellenőrzések olvasási sebességét, olyan lemezhez, amely a kíméletes ellenőrzések alatt is lemarad. Alapból ki van kapcsolva. |
-| **Egyszerre ellenőrzött meghajtók (meghajtónként egy torrent):** | Hány meghajtót ellenőriz egyszerre; az ugyanazon a meghajtón lévő torrentek a sorukra várnak. A -1 azt jelenti: nincs korlát. |
-| **Hangolás a meghajtó típusához (SSD, merevlemez, hálózat)** | Felismeri, hogy az egyes mentési mappák SSD-n, merevlemezen, cserélhető meghajtón vagy hálózati megosztáson vannak-e, és ehhez igazítja, hány lemezművelet fut egyszerre. |
-| **Letöltések lassítása (lemezírások)** | Amíg egy meghajtó az írásokra érezhetően lassabban válaszol a szokásosnál, lépésenként felezi a letöltési sebességet, de 50 kB/s alá soha, és újra engedi nőni, ha a lemez elcsendesedett. |
-| **Feltöltések lassítása (lemezolvasások)** | Ugyanez a feltöltésekre, amíg egy meghajtó lassan válaszol az olvasásokra. |
+| **Hash-szálak (nincs használatban):** | Kompatibilitási okból megmaradt; ez a verzió nem használja. Az ellenőrzések meghajtónként egyesével futnak, ezt a Játék oldalon lehet beállítani. |
 
 További információ: [Lemez és tárolás](Lemez-és-tárolás).
 

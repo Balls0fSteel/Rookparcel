@@ -6,7 +6,7 @@ Cette page liste chaque page de la fenêtre Préférences et ce que fait chaque 
 
 ## Ouvrir les Préférences
 
-Ouvrez **Options > Préférences**, appuyez sur <kbd>Ctrl</kbd>+<kbd>P</kbd>, ou cliquez sur **Préférences** dans la barre d'outils. Les pages sont listées à gauche ; **Cache disque**, **E/S disque**, **Trackers**, **Exécuter un programme** et **Verrouillage de l'interface** se trouvent sous **Avancé**. **OK** enregistre et ferme, **Appliquer** enregistre et laisse la fenêtre ouverte, **Annuler** oublie les changements.
+Ouvrez **Options > Préférences**, appuyez sur <kbd>Ctrl</kbd>+<kbd>P</kbd>, ou cliquez sur **Préférences** dans la barre d'outils. Les pages sont listées à gauche ; **Cache disque**, **Trackers**, **Exécuter un programme** et **Verrouillage de l'interface** se trouvent sous **Avancé**. **OK** enregistre et ferme, **Appliquer** enregistre et laisse la fenêtre ouverte, **Annuler** oublie les changements.
 
 L'aide est intégrée :
 
@@ -108,17 +108,16 @@ Voir aussi : [Connexion, ports et pare-feu](Connexion-ports-et-pare-feu).
 
 | Réglage | Ce qu'il fait |
 |---|---|
-| **Vitesse d'envoi maximale (ko/s)** | Le maximum que tous les torrents réunis envoient par seconde. 0 signifie illimité. Les heures Limité du planificateur et Garder un ping bas peuvent l'abaisser pour un temps. |
+| **Vitesse d'envoi maximale (ko/s)** | Le maximum que tous les torrents réunis envoient par seconde. 0 signifie illimité. Les heures Limité du planificateur et Garder un ping bas (page Jeux) peuvent l'abaisser pour un temps. |
 | **Vitesse de réception maximale (ko/s)** | La même chose pour les téléchargements. |
 | **Appliquer la limitation de vitesse au surdébit de transport** | Compte les en-têtes TCP/IP du trafic des pairs dans les limites, pour qu'elles correspondent à ce que transporte la ligne. Désactivé par défaut. |
 | **Appliquer la limitation de vitesse aux connexions uTP** | Applique aussi les limites aux pairs uTP. Désactivé, les pairs uTP ne sont ralentis que par le contrôle de délai propre à uTP. Activé par défaut. |
-| **Garder un ping bas (limiter les vitesses automatiquement)** | Mesure le délai sur votre ligne et plafonne automatiquement les envois et les téléchargements tant qu'il augmente, pour les jeux et les appels. Il n'élève jamais vos propres limites ; la barre d'état montre le plafond sous la forme « auto ». |
 | **Nombre maximum global de connexions :** | Le maximum de connexions de pairs ouvertes en même temps pour tous les torrents. Abaissez-le si le routeur peine. |
 | **Nombre maximum de pairs connectés par torrent** | Le maximum de pairs auxquels un torrent se connecte ; 0 signifie sans limite. S'applique aux torrents ajoutés à partir de maintenant. |
 | **Nombre d'emplacements d'envoi par torrent** | Le nombre de pairs auxquels un torrent envoie en même temps ; 0 signifie sans limite. S'applique aux torrents ajoutés à partir de maintenant. |
 | **Nombre global d'emplacements d'envoi** | Le nombre de pairs auxquels tous les torrents réunis envoient en même temps ; -1 signifie sans limite. Moins d'emplacements donnent plus de vitesse à chaque pair. |
 
-Voir aussi : [Limites de vitesse et planificateur](Limites-de-vitesse-et-planificateur), [Garder un ping bas](Garder-un-ping-bas).
+Voir aussi : [Limites de vitesse et planificateur](Limites-de-vitesse-et-planificateur).
 
 ## BitTorrent
 
@@ -191,6 +190,41 @@ Cette page n'existe que dans la version Windows. Elle permet à un navigateur de
 
 Voir aussi : [Interface web](Interface-Web), [Sonarr, Radarr et Prowlarr](Sonarr-Radarr-et-Prowlarr).
 
+## Jeux
+
+*Nouveauté de la 1.2.78.* Paramètres qui gardent l'ordinateur et la ligne réactifs pendant que Rookparcel travaille. **Garder un ping bas** est passé ici depuis Bande passante, et l'ancienne page E/S disque depuis Avancé.
+
+**Ping**
+
+| Réglage | Ce qu'il fait |
+|---|---|
+| **Garder un ping bas (limiter les vitesses automatiquement)** | Mesure le délai sur votre ligne et plafonne automatiquement les envois et les téléchargements tant qu'il augmente, pour les jeux et les appels. Il n'élève jamais vos propres limites ; la barre d'état montre le plafond sous la forme « auto ». |
+
+**Vérification**
+
+| Réglage | Ce qu'il fait |
+|---|---|
+| **Vérifier les torrents en douceur (basse priorité, laisser la place aux autres programmes)** | Vérifie les torrents à la priorité disque d'arrière-plan du système et fait une pause tant que les lectures sont plus lentes que d'habitude, pour que l'ordinateur reste réactif. Les vérifications durent plus longtemps tant que le disque est occupé. |
+| **Limiter la vérification à (Mo/s) :** | Plafonne la vitesse de lecture de chaque vérification, pour un disque qui rame encore pendant les vérifications en douceur. Désactivé par défaut. |
+| **Lecteurs vérifiés en même temps (un torrent par lecteur) :** | Le nombre de lecteurs vérifiés en même temps ; les torrents d'un même lecteur attendent leur tour. -1 signifie sans limite. |
+
+**Lecteurs**
+
+| Réglage | Ce qu'il fait |
+|---|---|
+| **Adapter au type de lecteur (SSD, disque dur, réseau)** | Détecte si chaque dossier d'enregistrement se trouve sur un SSD, un disque dur, un lecteur amovible ou un partage réseau, et ajuste le nombre de tâches disque exécutées en même temps. |
+
+**Quand le disque est occupé**
+
+| Réglage | Ce qu'il fait |
+|---|---|
+| **Ralentir les téléchargements (écritures sur le disque)** | Tant qu'un lecteur répond aux écritures nettement plus lentement que d'habitude, réduit de moitié la vitesse de réception par étapes, jamais en dessous de 50 ko/s, et la laisse remonter une fois le disque au calme. |
+| **Ralentir les envois (lectures sur le disque)** | La même chose pour les envois tant qu'un lecteur répond lentement aux lectures. |
+
+Un type de lecteur mal détecté se corrige avec `drive_overrides` sur la page Avancé. Au départ, seule la case **Adapter au type de lecteur (SSD, disque dur, réseau)** est cochée ; les autres sont décochées.
+
+Voir aussi : [Garder un ping bas](Garder-un-ping-bas), [Disque et stockage](Disque-et-stockage).
+
 ## Avancé
 
 ![Préférences, page Avancé](images/prefs-advanced.png)
@@ -239,20 +273,7 @@ L'aide complète de chaque ligne s'affiche dans le volet sous le tableau quand v
 | **File d'écriture disque (ko) :** | La quantité de données téléchargées qui peut attendre d'être écrite ; au-delà, Rookparcel cesse de lire les pairs jusqu'à ce que le disque rattrape son retard. Les valeurs inférieures à 4 Mo comptent pour 4 Mo. |
 | **Nombre maximum de fichiers ouverts :** | Le maximum de fichiers gardés ouverts en même temps. Augmentez-le quand beaucoup de torrents ou de fichiers sont actifs en même temps. |
 | **Threads d'E/S disque (au prochain démarrage) :** | Les threads qui lisent et écrivent les données des torrents. |
-| **Threads de hachage (non utilisé) :** | Conservé pour la compatibilité ; cette version ne l'utilise pas. Les vérifications s'exécutent une par lecteur, réglées sur la page E/S disque. |
-
-Voir aussi : [Disque et stockage](Disque-et-stockage).
-
-## E/S disque
-
-| Réglage | Ce qu'il fait |
-|---|---|
-| **Vérifier les torrents en douceur (basse priorité, laisser la place aux autres programmes)** | Vérifie les torrents à la priorité disque d'arrière-plan du système et fait une pause tant que les lectures sont plus lentes que d'habitude, pour que l'ordinateur reste réactif. Les vérifications durent plus longtemps tant que le disque est occupé. |
-| **Limiter la vérification à (Mo/s) :** | Plafonne la vitesse de lecture de chaque vérification, pour un disque qui rame encore pendant les vérifications en douceur. Désactivé par défaut. |
-| **Lecteurs vérifiés en même temps (un torrent par lecteur) :** | Le nombre de lecteurs vérifiés en même temps ; les torrents d'un même lecteur attendent leur tour. -1 signifie sans limite. |
-| **Adapter au type de lecteur (SSD, disque dur, réseau)** | Détecte si chaque dossier d'enregistrement se trouve sur un SSD, un disque dur, un lecteur amovible ou un partage réseau, et ajuste le nombre de tâches disque exécutées en même temps. |
-| **Ralentir les téléchargements (écritures sur le disque)** | Tant qu'un lecteur répond aux écritures nettement plus lentement que d'habitude, réduit de moitié la vitesse de réception par étapes, jamais en dessous de 50 ko/s, et la laisse remonter une fois le disque au calme. |
-| **Ralentir les envois (lectures sur le disque)** | La même chose pour les envois tant qu'un lecteur répond lentement aux lectures. |
+| **Threads de hachage (non utilisé) :** | Conservé pour la compatibilité ; cette version ne l'utilise pas. Les vérifications s'exécutent une par lecteur, réglées sur la page Jeux. |
 
 Voir aussi : [Disque et stockage](Disque-et-stockage).
 

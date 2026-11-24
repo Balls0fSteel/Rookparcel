@@ -67,7 +67,7 @@ With **Confirm when deleting torrents** on (Preferences > UI Settings, on by def
 
 *New in 1.2.76:* a stopped torrent starts with the check; stop it again afterwards if you want it stopped. A queued torrent is checked at once, without waiting for a queue slot, and is queued again after. A torrent held with **files missing** (see [Disk and storage](Disk-and-storage#when-a-drive-or-share-is-missing)) is checked against what is there now, and whatever is missing is downloaded again.
 
-How gently checks use the disk is set in **Preferences > Advanced > Disk I/O**; see [Disk and storage](Disk-and-storage).
+How gently checks use the disk is set in **Preferences > Gaming** (off at first); see [Disk and storage](Disk-and-storage).
 
 ## Update Tracker
 

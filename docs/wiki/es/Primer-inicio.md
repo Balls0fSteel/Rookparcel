@@ -51,7 +51,7 @@ Cada conexión con un par ocupa un lugar en la tabla de conexiones de su router.
 
 La opción de un router más antiguo es un punto de partida. Puede cambiar estos números más adelante en **Opciones > Preferencias > Ancho de banda** y **Avanzado**. Si más adelante responde «moderno», se restablecen los números normales.
 
-La misma página tiene **Mantener el ping bajo (limitar las velocidades automáticamente)**. Márquela si juega o hace llamadas mientras Rookparcel se ejecuta: mantiene las velocidades bajas mientras su línea está ocupada. Consulte [Mantener el ping bajo](Mantener-el-ping-bajo).
+La misma página tiene **Mantener el ping bajo (limitar las velocidades automáticamente)**. Márquela si juega o hace llamadas mientras Rookparcel se ejecuta: mantiene las velocidades bajas mientras su línea está ocupada. Consulte [Mantener el ping bajo](Mantener-el-ping-bajo). También está en **Opciones > Preferencias > Juegos**.
 
 ## Página 3: Sus discos
 
@@ -61,7 +61,7 @@ La misma página tiene **Mantener el ping bajo (limitar las velocidades automát
 - cada unidad se ajusta a su tipo (SSD, disco duro, recurso de red);
 - las transferencias se ralentizan mientras un disco responde despacio.
 
-Las comprobaciones suaves y el ajuste por unidad están activos desde el principio. La casilla añade la ralentización mientras un disco está ocupado. Las comprobaciones tardan más mientras otra cosa usa el disco. **Opciones > Preferencias > Avanzado > E/S de disco** configura cada parte por separado. Consulte [Disco y almacenamiento](Disco-y-almacenamiento).
+El ajuste por unidad está activo desde el principio. La casilla añade las comprobaciones suaves y la ralentización mientras un disco está ocupado. Las comprobaciones tardan más mientras otra cosa usa el disco. **Opciones > Preferencias > Juegos** configura cada parte por separado. Consulte [Disco y almacenamiento](Disco-y-almacenamiento).
 
 ## Página 4: Este equipo
 

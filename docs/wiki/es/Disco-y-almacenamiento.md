@@ -61,9 +61,9 @@ Si solo faltan algunos archivos de un torrent (borrados a mano o por un antiviru
 
 ## E/S de disco inteligente
 
-La E/S de disco inteligente mantiene el equipo con buena respuesta mientras Rookparcel lee y escribe. Sus ajustes están en **Opciones > Preferencias > Avanzado > E/S de disco** (una página dentro de Avanzado en la lista de páginas).
+La E/S de disco inteligente mantiene el equipo con buena respuesta mientras Rookparcel lee y escribe. Sus ajustes están en **Opciones > Preferencias > Juegos** (una página justo encima de Avanzado en la lista de páginas).
 
-La casilla **Usar E/S de disco inteligente** de la Guía de configuración activa o desactiva las cuatro partes a la vez. Las comprobaciones suaves y el ajuste por unidad están activados desde el principio; la casilla añade la ralentización mientras un disco está ocupado. *La Guía de configuración es nueva en 1.1.62. La propia página E/S de disco está en 1.1.40.*
+La casilla **Usar E/S de disco inteligente** de la Guía de configuración activa o desactiva las cuatro partes a la vez. El ajuste por unidad está activado desde el principio; la casilla añade las comprobaciones suaves y la ralentización mientras un disco está ocupado. *La Guía de configuración es nueva en 1.1.62. Los ajustes existen desde la 1.1.40; desde la 1.2.78 están en la página Juegos, y las comprobaciones suaves están desactivadas al principio.*
 
 ### Comprobación
 
@@ -71,7 +71,7 @@ Una comprobación (por ejemplo, tras **Forzar comprobación**) lee cada pieza de
 
 | Ajuste | Significado | Valor predeterminado |
 |---|---|---|
-| **Comprobar los torrents con suavidad (prioridad baja, ceder el paso a otros programas)** | Comprueba con la prioridad de disco en segundo plano del sistema, deja en paz los archivos en caché de otros programas y hace pausas mientras las lecturas son más lentas de lo normal, para que el equipo siga respondiendo. Las comprobaciones tardan más mientras el disco está ocupado. | Activado |
+| **Comprobar los torrents con suavidad (prioridad baja, ceder el paso a otros programas)** | Comprueba con la prioridad de disco en segundo plano del sistema, deja en paz los archivos en caché de otros programas y hace pausas mientras las lecturas son más lentas de lo normal, para que el equipo siga respondiendo. Las comprobaciones tardan más mientras el disco está ocupado. | Desactivado |
 | **Limitar la comprobación a (MB/s):** | Limita la velocidad de lectura de cada comprobación, para un disco que aún se retrasa durante las comprobaciones suaves. Aquí 1 MB son 1.000.000 de bytes. | Desactivado, 100 |
 | **Unidades comprobadas a la vez (un torrent por unidad):** | Cuántas unidades se comprueban al mismo tiempo, un torrent por unidad; los torrents de la misma unidad esperan su turno. De 1 a 8. | 4 |
 
@@ -127,7 +127,7 @@ En **Cola de disco y archivos**:
 | **Cola de escritura en disco (kB):** | Cuántos datos descargados pueden esperar a escribirse en el disco; por encima de ese valor, Rookparcel deja de leer de los pares hasta que el disco se pone al día. Los valores por debajo de 4 MB actúan como 4 MB. | 1024 |
 | **Número máximo de archivos abiertos:** | La mayor cantidad de archivos abiertos a la vez; los demás se cierran y se vuelven a abrir cuando hace falta. Auméntelo cuando muchos torrents o archivos están activos a la vez. | 40 |
 | **Hilos de E/S de disco (desde el próximo inicio):** | Los hilos que leen y escriben los datos de los torrents. | 10 |
-| **Hilos de hash (no se usa):** | Se conserva por compatibilidad; esta versión no lo usa. Las comprobaciones se ejecutan una por unidad, como se define en la página E/S de disco. | |
+| **Hilos de hash (no se usa):** | Se conserva por compatibilidad; esta versión no lo usa. Las comprobaciones se ejecutan una por unidad, como se define en la página Juegos. | |
 
 Rookparcel no tiene ningún ajuste para preasignar archivos. Un archivo se crea cuando llegan los primeros datos para él y, en Windows, se marca como disperso, de modo que escribir cerca de su final no hace que NTFS rellene de ceros la parte anterior.
 
@@ -135,8 +135,8 @@ Rookparcel no tiene ningún ajuste para preasignar archivos. Un archivo se crea 
 
 - **Ventana GTK** (Linux, BSD), **macOS** y la **interfaz web**: **Añadir .!ut a los archivos incompletos** también está en la página General, en **Al descargar**.
 - **Aplicación de macOS**: las mismas páginas y ajustes; las Preferencias se aplican de inmediato, sin **Aceptar** ([Referencia de preferencias](Referencia-de-preferencias#diferencias-en-macos)).
-- **Ventana GTK** (Linux, BSD): las mismas páginas Carpetas, Caché de disco y E/S de disco. Los tipos de unidad también se detectan en Linux, macOS y FreeBSD, cada uno con los métodos propios del sistema.
-- **Interfaz web**: las mismas páginas en **Preferencias**, con **Caché de disco** y **E/S de disco** dentro de **Avanzado**. Las carpetas allí son carpetas del equipo donde se ejecuta Rookparcel, no del navegador.
+- **Ventana GTK** (Linux, BSD): las mismas páginas Carpetas, Caché de disco y Juegos. Los tipos de unidad también se detectan en Linux, macOS y FreeBSD, cada uno con los métodos propios del sistema.
+- **Interfaz web**: las mismas páginas en **Preferencias**, con **Caché de disco** dentro de **Avanzado** y los ajustes de disco en **Juegos**. Las carpetas allí son carpetas del equipo donde se ejecuta Rookparcel, no del navegador.
 - **rookparcel-nox**: `--save DIR` define la carpeta de descargas y `--move-on-complete DIR` mueve los torrents terminados; los demás ajustes están en las Preferencias de la interfaz web.
 
 ## Páginas relacionadas

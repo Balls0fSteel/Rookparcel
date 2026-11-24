@@ -12,11 +12,11 @@ Garder un ping bas n'a pas besoin de savoir quel jeu s'exécute. Il mesure la fi
 
 ## L'activer
 
-1. Ouvrez **Options > Préférences** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) et choisissez **Bande passante**.
-2. Sous **Options de limitation globale de la vitesse**, cochez **Garder un ping bas (limiter les vitesses automatiquement)**.
+1. Ouvrez **Options > Préférences** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) et choisissez **Jeux**.
+2. Sous **Ping**, cochez **Garder un ping bas (limiter les vitesses automatiquement)**.
 3. Cliquez sur **OK** ou **Appliquer**.
 
-![Préférences, page Bande passante](images/prefs-bandwidth.png)
+![Préférences, page Jeux](images/prefs-gaming.png)
 
 Il est désactivé par défaut. Pour le désactiver de nouveau, décochez la case : vos propres limites reviennent immédiatement.
 
@@ -68,10 +68,10 @@ Un routeur avec SQM (comme CAKE) ou une QoS de jeu qui fonctionne bien fait cela
 
 ## Fonctions apparentées
 
-- Le ralentissement dû à un disque occupé, dans **Avancé > E/S disque**, utilise le même genre de plafond automatique, pour un disque lent au lieu d'une ligne lente ; le plus bas des deux plafonds l'emporte. Voir [Disque et stockage](Disque-et-stockage#quand-le-disque-est-occupé).
+- Le ralentissement dû à un disque occupé, sur la même page **Jeux**, utilise le même genre de plafond automatique, pour un disque lent au lieu d'une ligne lente ; le plus bas des deux plafonds l'emporte. Voir [Disque et stockage](Disque-et-stockage#quand-le-disque-est-occupé).
 - La page du routeur de l'Assistant de configuration mentionne Garder un ping bas pour les jeux et les appels : voir [Premier démarrage](Premier-démarrage).
 - Limites fixes et planificateur hebdomadaire : [Limites de vitesse et planificateur](Limites-de-vitesse-et-planificateur).
 
 ## Dans la fenêtre GTK et l'interface web
 
-La fenêtre GTK (Linux, BSD) et l'application macOS ont la même case dans **Préférences > Bande passante** (sur le Mac, elle s'applique dès que vous la cochez), et l'interface web l'a sur sa page **Préférences > Bande passante**, avec la même note. Dans [rookparcel-nox](Utiliser-rookparcel-nox), c'est le même paramètre, `auto_rate_limit`, réglé depuis les Préférences de l'interface web.
+La fenêtre GTK (Linux, BSD) et l'application macOS ont la même case dans **Préférences > Jeux** (sur le Mac, elle s'applique dès que vous la cochez), et l'interface web l'a sur sa page **Préférences > Jeux**, avec la même note. Dans [rookparcel-nox](Utiliser-rookparcel-nox), c'est le même paramètre, `auto_rate_limit`, réglé depuis les Préférences de l'interface web.

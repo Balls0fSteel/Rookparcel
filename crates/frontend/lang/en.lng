@@ -879,6 +879,11 @@ PageBitTorrent=BitTorrent
 PageQueueing=Queueing
 PageScheduler=Scheduler
 PageWebUi=Web UI
+
+# Preferences > Gaming (a Rookparcel page above Advanced): what keeps games, calls and
+# the computer responsive while torrents run (Keep ping low, how checking and the disk
+# threads treat the drives).
+PageGaming=Gaming
 PageAdvanced=Advanced
 PageDiskCache=Disk Cache
 PrefLanguage=Language
@@ -1099,9 +1104,9 @@ PrefKeepPingLow=Keep ping low (limit speeds automatically)
 # auto_limit_probe_hosts is a setting's name: keep it. SQM and QoS are router features.
 PrefKeepPingLowNote=Keep ping low pings the first router past your line, or else the hosts in auto_limit_probe_hosts on the Advanced page, whose operators see those pings. A router with SQM or gaming QoS does this better, for every device.
 
-# Preferences > Advanced > Disk I/O (a Rookparcel page beside Disk Cache): how checking
-# (hashing a torrent's files) and the disk threads treat the drives. I/O is input/output.
-PageDiskIo=Disk I/O
+# Group title on Preferences > Gaming: Keep ping low (ping: the delay a game or call sees
+# on the internet line).
+PrefPingGroup=Ping
 
 # Group title: checking a torrent's files against their hashes (Force Re-Check).
 PrefChecking=Checking
@@ -1827,7 +1832,7 @@ GuideRouterNote=The older choice lowers the connections to {total} in all, {per_
 GuidePageDisks=Your disks
 GuideDisksText=Smart disk I/O keeps the computer responsive while Rookparcel reads and writes: checks run at the system's background priority, each drive is tuned for its type, and transfers slow down while a disk answers slowly. Checks take longer while something else uses the disk.
 GuideSmartDisk=Use smart disk I/O
-GuideDisksNote=Gentle checks and per-drive tuning are on from the start; the box adds the slow-down while a disk is busy. Preferences > Advanced > Disk I/O sets each one.
+GuideDisksNote=Per-drive tuning is on from the start; the box adds gentle checks and the slow-down while a disk is busy. Preferences > Gaming sets each one.
 
 # Page 4: starting with the system and opening .torrent files and magnet: links.
 GuidePageComputer=This computer
@@ -2072,7 +2077,7 @@ help.PrefCacheExpire=Drops cached blocks no peer has asked for in the number of 
 help.PrefDiskWriteQueue=How much downloaded data may wait to be written to disk; above it, Rookparcel stops reading from peers until the disk catches up. Values below 4 MB act as 4 MB.
 help.PrefOpenFiles=The most files Rookparcel keeps open at once; others are closed and opened again when needed. Raise it when many torrents or files are busy at the same time.
 help.PrefAioThreads=The threads that read and write torrent data; the read cache is shared among them. Read only when Rookparcel starts.
-help.PrefHashThreads=Kept for libtorrent compatibility; this version does not use it. Checks run one per drive, set by Drives checked at once on the Disk I/O page.
+help.PrefHashThreads=Kept for libtorrent compatibility; this version does not use it. Checks run one per drive, set by Drives checked at once on the Gaming page.
 help.PrefTrackersAppend=Adds the trackers in the box to every torrent you add from now on, after the torrent's own trackers. One address per line; a blank line starts a new tier. Private torrents never get them, and torrents already in the list are not changed.
 help.PrefTrackersFromUrl=Reads a list of trackers from the https address below, at the start and then once a day, and adds them to every torrent you add, after the box's trackers. Only lines that are tracker addresses are used, and a file that is not such a list is ignored: the last good list stays in use. Whoever runs the address decides which trackers you announce to, so use a list you trust.
 help.PrefRunAdded=Starts the program on the line below each time a new torrent is added, with the torrent's details in place of the % codes. Not for torrents that were already in the list, nor for the ones loaded at the start. The program runs without a command shell and without a window of its own; at most four run at once.

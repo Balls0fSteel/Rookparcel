@@ -1,6 +1,6 @@
 {
   "revision": 3,
-  "checked": 834,
+  "checked": 840,
   "criterion": "No significant alpha outside canvas or on outermost pixel; silhouette comparisons threshold alpha at 128/255",
   "overflow": [],
   "margin": [],
@@ -505,6 +505,13 @@
       "id": "disk",
       "ink": 108,
       "opaque": 108,
+      "partial": 0,
+      "partialFraction": 0
+    },
+    {
+      "id": "gaming",
+      "ink": 107,
+      "opaque": 107,
       "partial": 0,
       "partialFraction": 0
     },

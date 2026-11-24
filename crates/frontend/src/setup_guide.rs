@@ -8,7 +8,7 @@
 //!    small connection table wants fewer connections ([`OLDER_CONNECTIONS`] and the rest);
 //!    Keep ping low (D49) beside it for games;
 //! 3. the disks: smart disk I/O (D48: `check_gently`, `tune_for_drive`, the busy-disk
-//!    throttles) in one box;
+//!    throttles) in one box; Preferences > Gaming (D80) sets each one;
 //! 4. this computer: starting with the system and the `.torrent` and `magnet:` associations,
 //!    only where the toolkit offers them ([`Features::desktop`]; a package's associations are
 //!    its own, [`Features::packaged`]).
@@ -419,7 +419,7 @@ mod tests {
     #[test]
     fn smart_disk_io() {
         let o = opts();
-        assert!(!smart_get(&o), "the busy-disk throttles are off by default");
+        assert!(!smart_get(&o), "gentle checks (D80) and the busy-disk throttles are off by default");
         let on = finish(&o, &[(SMART_DISK, "true")]).unwrap();
         let s = &on.settings;
         assert!(s.check_gently && s.tune_for_drive && s.disk_slow_downloads && s.disk_slow_uploads);
@@ -427,9 +427,9 @@ mod tests {
         let off = finish(&on, &[(SMART_DISK, "false")]).unwrap();
         let s = &off.settings;
         assert!(!s.check_gently && !s.tune_for_drive && !s.disk_slow_downloads && !s.disk_slow_uploads);
-        // untouched: gentle checks and tuning stay on as they are by default
+        // untouched: tuning stays on and gentle checks off, as they are by default
         let same = finish(&o, &[(SMART_DISK, "false")]).unwrap();
-        assert!(same.settings.check_gently && same.settings.tune_for_drive);
+        assert!(!same.settings.check_gently && same.settings.tune_for_drive);
     }
 
     #[test]

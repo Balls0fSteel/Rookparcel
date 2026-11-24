@@ -69,7 +69,7 @@ Ist **Löschen von Torrents bestätigen** eingeschaltet (Einstellungen > Oberfl�
 
 *Neu in 1.2.76:* Ein gestoppter Torrent startet mit der Prüfung; stoppen Sie ihn danach erneut, wenn er gestoppt sein soll. Ein eingereihter Torrent wird sofort geprüft, ohne auf einen Platz in der Warteschlange zu warten, und danach wieder eingereiht. Ein Torrent, der mit **fehlenden Dateien** angehalten ist (siehe [Datenträger und Speicher](Datenträger-und-Speicher#wenn-ein-laufwerk-oder-eine-freigabe-fehlt)), wird gegen das geprüft, was jetzt vorhanden ist, und was fehlt, wird erneut heruntergeladen.
 
-Wie schonend Prüfungen den Datenträger nutzen, stellen Sie unter **Einstellungen > Erweitert > Festplatten-E/A** ein; siehe [Datenträger und Speicher](Datenträger-und-Speicher).
+Wie schonend Prüfungen den Datenträger nutzen, stellen Sie unter **Einstellungen > Gaming** (zunächst aus) ein; siehe [Datenträger und Speicher](Datenträger-und-Speicher).
 
 ## Tracker aktualisieren
 

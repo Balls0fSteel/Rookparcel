@@ -61,9 +61,9 @@ Fehlen nur einige Dateien eines Torrents (von Hand oder von einem Virenscanner g
 
 ## Intelligente Festplatten-E/A
 
-Die intelligente Festplatten-E/A hält den Computer reaktionsschnell, während Rookparcel liest und schreibt. Ihre Einstellungen finden Sie unter **Optionen > Einstellungen > Erweitert > Festplatten-E/A** (eine Seite unter „Erweitert“ in der Seitenliste).
+Die intelligente Festplatten-E/A hält den Computer reaktionsschnell, während Rookparcel liest und schreibt. Ihre Einstellungen finden Sie unter **Optionen > Einstellungen > Gaming** (eine Seite direkt über „Erweitert“ in der Seitenliste).
 
-Das Kästchen **Intelligente Festplatten-E/A verwenden** im Einrichtungsassistenten schaltet alle vier Teile gemeinsam ein oder aus. Schonende Prüfungen und die Abstimmung je Laufwerk sind von Anfang an an; das Kästchen fügt das Abbremsen hinzu, solange eine Festplatte ausgelastet ist. *Der Einrichtungsassistent ist neu in 1.1.62. Die Seite „Festplatten-E/A“ selbst gibt es seit 1.1.40.*
+Das Kästchen **Intelligente Festplatten-E/A verwenden** im Einrichtungsassistenten schaltet alle vier Teile gemeinsam ein oder aus. Die Abstimmung je Laufwerk ist von Anfang an an; das Kästchen fügt schonende Prüfungen und das Abbremsen hinzu, solange eine Festplatte ausgelastet ist. *Der Einrichtungsassistent ist neu in 1.1.62. Die Einstellungen gibt es seit 1.1.40; seit 1.2.78 stehen sie auf der Seite „Gaming“, und schonende Prüfungen sind zunächst aus.*
 
 ### Prüfung
 
@@ -71,7 +71,7 @@ Eine Prüfung (zum Beispiel nach **Erneut prüfen**) liest jedes Teil von der Fe
 
 | Einstellung | Bedeutung | Standard |
 |---|---|---|
-| **Torrents schonend prüfen (niedrige Priorität, anderen Programmen den Vortritt lassen)** | Prüft mit der Hintergrund-Festplattenpriorität des Systems, lässt die zwischengespeicherten Dateien anderer Programme in Ruhe und pausiert, solange Lesezugriffe langsamer als gewöhnlich sind, damit der Computer reaktionsschnell bleibt. Prüfungen dauern länger, solange die Festplatte ausgelastet ist. | An |
+| **Torrents schonend prüfen (niedrige Priorität, anderen Programmen den Vortritt lassen)** | Prüft mit der Hintergrund-Festplattenpriorität des Systems, lässt die zwischengespeicherten Dateien anderer Programme in Ruhe und pausiert, solange Lesezugriffe langsamer als gewöhnlich sind, damit der Computer reaktionsschnell bleibt. Prüfungen dauern länger, solange die Festplatte ausgelastet ist. | Aus |
 | **Prüfung begrenzen auf (MB/s):** | Begrenzt die Lesegeschwindigkeit jeder Prüfung, für eine Festplatte, die selbst bei schonenden Prüfungen noch hinterherhinkt. Hier sind 1 MB 1.000.000 Bytes. | Aus, 100 |
 | **Gleichzeitig geprüfte Laufwerke (ein Torrent je Laufwerk):** | Wie viele Laufwerke gleichzeitig geprüft werden, ein Torrent je Laufwerk; Torrents auf demselben Laufwerk warten, bis sie an der Reihe sind. Von 1 bis 8. | 4 |
 
@@ -127,7 +127,7 @@ Unter **Festplatten-Warteschlange und Dateien**:
 | **Schreibwarteschlange (kB):** | Wie viele heruntergeladene Daten auf das Schreiben auf die Festplatte warten dürfen; darüber hört Rookparcel auf, von Peers zu lesen, bis die Festplatte aufgeholt hat. Werte unter 4 MB gelten als 4 MB. | 1024 |
 | **Höchstzahl offener Dateien:** | Die höchste Zahl gleichzeitig offen gehaltener Dateien; andere werden geschlossen und bei Bedarf wieder geöffnet. Erhöhen Sie sie, wenn viele Torrents oder Dateien gleichzeitig beschäftigt sind. | 40 |
 | **Festplatten-E/A-Threads (ab dem nächsten Start):** | Die Threads, die Torrent-Daten lesen und schreiben. | 10 |
-| **Hash-Threads (nicht verwendet):** | Aus Kompatibilitätsgründen beibehalten; diese Version nutzt es nicht. Prüfungen laufen eine je Laufwerk, eingestellt auf der Seite „Festplatten-E/A“. | |
+| **Hash-Threads (nicht verwendet):** | Aus Kompatibilitätsgründen beibehalten; diese Version nutzt es nicht. Prüfungen laufen eine je Laufwerk, eingestellt auf der Seite „Gaming“. | |
 
 Rookparcel hat keine Einstellung, um Dateien vorab zu reservieren. Eine Datei wird angelegt, wenn die ersten Daten für sie eintreffen, und unter Windows wird sie als Sparse-Datei (dünn besetzt) markiert, sodass ein Schreiben nahe ihrem Ende NTFS nicht dazu bringt, den Teil davor mit Nullen zu füllen.
 
@@ -135,8 +135,8 @@ Rookparcel hat keine Einstellung, um Dateien vorab zu reservieren. Eine Datei wi
 
 - **GTK-Fenster** (Linux, BSD), **macOS** und die **Web-UI**: **An unvollständige Dateien .!ut anhängen** steht auch auf der Seite „Allgemein“ unter **Beim Herunterladen**.
 - **macOS-App**: dieselben Seiten und Einstellungen; Einstellungen gelten sofort, ohne **OK** ([Einstellungen im Überblick](Einstellungen-im-Überblick#unterschiede-unter-macos)).
-- **GTK-Fenster** (Linux, BSD): dieselben Seiten „Ordner“, „Festplatten-Cache“ und „Festplatten-E/A“. Laufwerkstypen werden auch unter Linux, macOS und FreeBSD erkannt, jeweils mit den Methoden des Systems.
-- **Web-UI**: dieselben Seiten unter **Einstellungen**, mit **Festplatten-Cache** und **Festplatten-E/A** unter **Erweitert**. Ordner sind dort Ordner auf dem Computer, auf dem Rookparcel läuft, nicht die des Browsers.
+- **GTK-Fenster** (Linux, BSD): dieselben Seiten „Ordner“, „Festplatten-Cache“ und „Gaming“. Laufwerkstypen werden auch unter Linux, macOS und FreeBSD erkannt, jeweils mit den Methoden des Systems.
+- **Web-UI**: dieselben Seiten unter **Einstellungen**, mit **Festplatten-Cache** unter **Erweitert** und den Festplatteneinstellungen auf **Gaming**. Ordner sind dort Ordner auf dem Computer, auf dem Rookparcel läuft, nicht die des Browsers.
 - **rookparcel-nox**: `--save DIR` legt den Download-Ordner fest und `--move-on-complete DIR` verschiebt fertige Torrents; die übrigen Einstellungen finden Sie in den Einstellungen der Web-UI.
 
 ## Verwandte Seiten

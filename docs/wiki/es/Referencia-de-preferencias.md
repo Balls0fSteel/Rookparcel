@@ -6,7 +6,7 @@ Esta página enumera todas las páginas de la ventana Preferencias y explica qu�
 
 ## Abrir Preferencias
 
-Abra **Opciones > Preferencias**, pulse <kbd>Ctrl</kbd>+<kbd>P</kbd> o haga clic en **Preferencias** en la barra de herramientas. Las páginas aparecen a la izquierda; **Caché de disco**, **E/S de disco**, **Trackers**, **Ejecutar programa** y **Bloqueo de la interfaz** están dentro de **Avanzado**. **Aceptar** guarda y cierra, **Aplicar** guarda y deja la ventana abierta, **Cancelar** descarta los cambios.
+Abra **Opciones > Preferencias**, pulse <kbd>Ctrl</kbd>+<kbd>P</kbd> o haga clic en **Preferencias** en la barra de herramientas. Las páginas aparecen a la izquierda; **Caché de disco**, **Trackers**, **Ejecutar programa** y **Bloqueo de la interfaz** están dentro de **Avanzado**. **Aceptar** guarda y cierra, **Aplicar** guarda y deja la ventana abierta, **Cancelar** descarta los cambios.
 
 La ayuda está integrada:
 
@@ -108,17 +108,16 @@ Más información: [Conexión, puertos y cortafuegos](Conexión-puertos-y-cortaf
 
 | Ajuste | Qué hace |
 |---|---|
-| **Velocidad máxima de subida (kB/s)** | Lo máximo que suben por segundo todos los torrents juntos. 0 significa sin límite. Las horas Limitado del programador y Mantener el ping bajo pueden reducirla durante un tiempo. |
+| **Velocidad máxima de subida (kB/s)** | Lo máximo que suben por segundo todos los torrents juntos. 0 significa sin límite. Las horas Limitado del programador y Mantener el ping bajo (página Juegos) pueden reducirla durante un tiempo. |
 | **Velocidad máxima de bajada (kB/s)** | Lo mismo para las bajadas. |
 | **Aplicar el límite de velocidad a la sobrecarga del transporte** | Cuenta las cabeceras TCP/IP del tráfico con pares dentro de los límites, de modo que coincidan con lo que lleva la línea. Desactivado de forma predeterminada. |
 | **Aplicar el límite de velocidad a las conexiones uTP** | Aplica los límites también a los pares uTP. Desactivado, a los pares uTP solo los frena el control de retardo propio de uTP. Activado de forma predeterminada. |
-| **Mantener el ping bajo (limitar las velocidades automáticamente)** | Mide el retardo de su línea y limita automáticamente las subidas y las bajadas mientras crece, para juegos y llamadas. Nunca sube sus propios límites; la barra de estado muestra el tope como "auto". |
 | **Número máximo global de conexiones** | Lo máximo de conexiones con pares abiertas a la vez entre todos los torrents. Redúzcalo si el router tiene dificultades. |
 | **Número máximo de pares conectados por torrent** | Lo máximo de pares a los que se conecta un torrent; 0 significa sin límite. Se aplica a los torrents añadidos a partir de ahora. |
 | **Número de ranuras de subida por torrent** | A cuántos pares sube a la vez un torrent; 0 significa sin límite. Se aplica a los torrents añadidos a partir de ahora. |
 | **Número global de ranuras de subida** | A cuántos pares suben a la vez todos los torrents juntos; -1 significa sin límite. Menos ranuras dan más velocidad a cada par. |
 
-Más información: [Límites de velocidad y programador](Límites-de-velocidad-y-programador), [Mantener el ping bajo](Mantener-el-ping-bajo).
+Más información: [Límites de velocidad y programador](Límites-de-velocidad-y-programador).
 
 ## BitTorrent
 
@@ -191,6 +190,41 @@ Esta página existe solo en la versión de Windows. Permite que un navegador con
 
 Más información: [Interfaz web](Interfaz-web), [Sonarr, Radarr y Prowlarr](Sonarr-Radarr-y-Prowlarr).
 
+## Juegos
+
+*Novedad de la 1.2.78.* Ajustes que mantienen el equipo y la línea con buena respuesta mientras Rookparcel trabaja. **Mantener el ping bajo** pasó aquí desde Ancho de banda, y la antigua página E/S de disco, desde Avanzado.
+
+**Ping**
+
+| Ajuste | Qué hace |
+|---|---|
+| **Mantener el ping bajo (limitar las velocidades automáticamente)** | Mide el retardo de su línea y limita automáticamente las subidas y las bajadas mientras crece, para juegos y llamadas. Nunca sube sus propios límites; la barra de estado muestra el tope como "auto". |
+
+**Comprobación**
+
+| Ajuste | Qué hace |
+|---|---|
+| **Comprobar los torrents con suavidad (prioridad baja, ceder el paso a otros programas)** | Comprueba los torrents con la prioridad de disco en segundo plano del sistema y hace una pausa mientras las lecturas son más lentas de lo habitual, para que el equipo siga respondiendo. Las comprobaciones tardan más mientras el disco está ocupado. |
+| **Limitar la comprobación a (MB/s):** | Limita la velocidad de lectura de cada comprobación, para un disco que aún se ralentiza durante las comprobaciones suaves. Desactivado de forma predeterminada. |
+| **Unidades comprobadas a la vez (un torrent por unidad):** | Cuántas unidades se comprueban al mismo tiempo; los torrents de la misma unidad esperan su turno. -1 significa sin límite. |
+
+**Unidades**
+
+| Ajuste | Qué hace |
+|---|---|
+| **Ajustar según el tipo de unidad (SSD, disco duro, red)** | Detecta si cada carpeta de destino está en un SSD, un disco duro, una unidad extraíble o un recurso compartido de red, y ajusta cuántas tareas de disco se ejecutan a la vez. |
+
+**Cuando el disco está ocupado**
+
+| Ajuste | Qué hace |
+|---|---|
+| **Ralentizar las bajadas (escrituras en disco)** | Mientras una unidad responde a las escrituras con claridad más despacio de lo habitual, reduce a la mitad la velocidad de bajada paso a paso, sin bajar nunca de 50 kB/s, y la deja crecer de nuevo cuando el disco se calma. |
+| **Ralentizar las subidas (lecturas de disco)** | Lo mismo para las subidas mientras una unidad responde despacio a las lecturas. |
+
+Un tipo de unidad detectado mal se corrige con `drive_overrides` en la página Avanzado. Al principio solo está activada la casilla **Ajustar según el tipo de unidad (SSD, disco duro, red)**; las demás están desactivadas.
+
+Más información: [Mantener el ping bajo](Mantener-el-ping-bajo), [Disco y almacenamiento](Disco-y-almacenamiento).
+
 ## Avanzado
 
 ![Preferencias, página Avanzado](images/prefs-advanced.png)
@@ -239,20 +273,7 @@ La ayuda completa de cada fila aparece en el panel bajo la tabla cuando la selec
 | **Cola de escritura en disco (kB):** | Cuántos datos descargados pueden esperar para escribirse; por encima de eso, Rookparcel deja de leer de los pares hasta que el disco se pone al día. Los valores inferiores a 4 MB actúan como 4 MB. |
 | **Número máximo de archivos abiertos:** | Lo máximo de archivos que se mantienen abiertos a la vez. Auméntelo cuando muchos torrents o archivos estén activos al mismo tiempo. |
 | **Hilos de E/S de disco (desde el próximo inicio):** | Los hilos que leen y escriben los datos de los torrents. |
-| **Hilos de hash (no se usa):** | Se conserva por compatibilidad; esta versión no lo usa. Las comprobaciones se hacen una por unidad, como se establece en la página E/S de disco. |
-
-Más información: [Disco y almacenamiento](Disco-y-almacenamiento).
-
-## E/S de disco
-
-| Ajuste | Qué hace |
-|---|---|
-| **Comprobar los torrents con suavidad (prioridad baja, ceder el paso a otros programas)** | Comprueba los torrents con la prioridad de disco en segundo plano del sistema y hace una pausa mientras las lecturas son más lentas de lo habitual, para que el equipo siga respondiendo. Las comprobaciones tardan más mientras el disco está ocupado. |
-| **Limitar la comprobación a (MB/s):** | Limita la velocidad de lectura de cada comprobación, para un disco que aún se ralentiza durante las comprobaciones suaves. Desactivado de forma predeterminada. |
-| **Unidades comprobadas a la vez (un torrent por unidad):** | Cuántas unidades se comprueban al mismo tiempo; los torrents de la misma unidad esperan su turno. -1 significa sin límite. |
-| **Ajustar según el tipo de unidad (SSD, disco duro, red)** | Detecta si cada carpeta de destino está en un SSD, un disco duro, una unidad extraíble o un recurso compartido de red, y ajusta cuántas tareas de disco se ejecutan a la vez. |
-| **Ralentizar las bajadas (escrituras en disco)** | Mientras una unidad responde a las escrituras con claridad más despacio de lo habitual, reduce a la mitad la velocidad de bajada paso a paso, sin bajar nunca de 50 kB/s, y la deja crecer de nuevo cuando el disco se calma. |
-| **Ralentizar las subidas (lecturas de disco)** | Lo mismo para las subidas mientras una unidad responde despacio a las lecturas. |
+| **Hilos de hash (no se usa):** | Se conserva por compatibilidad; esta versión no lo usa. Las comprobaciones se hacen una por unidad, como se establece en la página Juegos. |
 
 Más información: [Disco y almacenamiento](Disco-y-almacenamiento).
 

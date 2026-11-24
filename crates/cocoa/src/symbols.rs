@@ -74,8 +74,10 @@ pub fn page(title: S) -> &'static str {
         S::PageQueueing => "list.number",
         S::PageScheduler => "calendar",
         S::PageWebUi => "globe",
+        // D80
+        S::PageGaming => "gamecontroller",
         S::PageAdvanced => "slider.horizontal.3",
-        S::PageDiskCache | S::PageDiskIo => "internaldrive",
+        S::PageDiskCache => "internaldrive",
         S::PageTrackers => "antenna.radiowaves.left.and.right",
         S::PageRunProgram => "terminal",
         // D71: Advanced > UI Lock
@@ -97,6 +99,7 @@ mod tests {
             .chain(Tab::ALL.iter().map(|&t| tab(t)))
             .chain([
                 page(S::PageGeneral),
+                page(S::PageGaming),
                 page(S::PageAdvanced),
                 page(S::PageTrackers),
                 page(S::PageRunProgram),

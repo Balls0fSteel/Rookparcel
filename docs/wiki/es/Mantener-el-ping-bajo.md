@@ -12,11 +12,11 @@ Mantener el ping bajo no necesita saber qué juego se está ejecutando. Mide la 
 
 ## Activarlo
 
-1. Abra **Opciones > Preferencias** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) y elija **Ancho de banda**.
-2. En **Opciones del límite global de velocidad**, marque **Mantener el ping bajo (limitar las velocidades automáticamente)**.
+1. Abra **Opciones > Preferencias** (<kbd>Ctrl</kbd>+<kbd>P</kbd>) y elija **Juegos**.
+2. En **Ping**, marque **Mantener el ping bajo (limitar las velocidades automáticamente)**.
 3. Haga clic en **Aceptar** o **Aplicar**.
 
-![Preferencias, página Ancho de banda](images/prefs-bandwidth.png)
+![Preferencias, página Juegos](images/prefs-gaming.png)
 
 Está desactivado de forma predeterminada. Para desactivarlo de nuevo, desmarque la casilla: sus propios límites vuelven de inmediato.
 
@@ -68,10 +68,10 @@ Un router con SQM (como CAKE) o un QoS para juegos que funcione bien hace esto m
 
 ## Funciones relacionadas
 
-- La ralentización por disco ocupado de **Avanzado > E/S de disco** usa el mismo tipo de límite automático, para un disco lento en lugar de una línea lenta; gana el menor de los dos límites. Consulte [Disco y almacenamiento](Disco-y-almacenamiento#cuando-el-disco-está-ocupado).
+- La ralentización por disco ocupado de la misma página **Juegos** usa el mismo tipo de límite automático, para un disco lento en lugar de una línea lenta; gana el menor de los dos límites. Consulte [Disco y almacenamiento](Disco-y-almacenamiento#cuando-el-disco-está-ocupado).
 - La página del router de la Guía de configuración menciona Mantener el ping bajo para juegos y llamadas: consulte [Primer inicio](Primer-inicio).
 - Límites fijos y el programador semanal: [Límites de velocidad y programador](Límites-de-velocidad-y-programador).
 
 ## En la ventana GTK y en la interfaz web
 
-La ventana GTK (Linux, BSD) y la aplicación de macOS tienen la misma casilla en **Preferencias > Ancho de banda** (en el Mac se aplica en cuanto la marca), y la interfaz web la tiene en su página **Preferencias > Ancho de banda**, con la misma nota. En [rookparcel-nox](Ejecutar-rookparcel-nox) es el mismo ajuste, `auto_rate_limit`, que se define en las Preferencias de la interfaz web.
+La ventana GTK (Linux, BSD) y la aplicación de macOS tienen la misma casilla en **Preferencias > Juegos** (en el Mac se aplica en cuanto la marca), y la interfaz web la tiene en su página **Preferencias > Juegos**, con la misma nota. En [rookparcel-nox](Ejecutar-rookparcel-nox) es el mismo ajuste, `auto_rate_limit`, que se define en las Preferencias de la interfaz web.

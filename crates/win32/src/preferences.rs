@@ -60,8 +60,8 @@ use crate::sched_grid;
 use crate::util::{hiword, loword, scale, send, wide, window_text};
 use crate::webui_host::{Edit, Setup as WebSetup, Status as WebStatus, View as WebView};
 
-/// The tree, in µTorrent 2.2.1's order; Disk Cache and Rookparcel's Disk I/O, Trackers, Run
-/// Program and UI Lock sit under Advanced.
+/// The tree, in µTorrent 2.2.1's order, with Rookparcel's Gaming page (D80) before Advanced;
+/// Disk Cache and Rookparcel's Trackers, Run Program and UI Lock sit under Advanced.
 pub const PAGES: [S; 15] = [
     S::PageGeneral,
     S::PageUi,
@@ -72,9 +72,9 @@ pub const PAGES: [S; 15] = [
     S::PageQueueing,
     S::PageScheduler,
     S::PageWebUi,
+    S::PageGaming,
     S::PageAdvanced,
     S::PageDiskCache,
-    S::PageDiskIo,
     S::PageTrackers,
     S::PageRunProgram,
     S::PageUiLock,
@@ -83,9 +83,9 @@ pub const PAGES: [S; 15] = [
 pub const PAGE_CONNECTION: usize = 3;
 const PAGE_BITTORRENT: usize = 5;
 const PAGE_WEBUI: usize = 8;
-const PAGE_ADVANCED: usize = 9;
-const PAGE_DISK_CACHE: usize = 10;
-const PAGE_DISK_IO: usize = 11;
+const PAGE_GAMING: usize = 9;
+const PAGE_ADVANCED: usize = 10;
+const PAGE_DISK_CACHE: usize = 11;
 const PAGE_TRACKERS: usize = 12;
 const PAGE_RUN_PROGRAM: usize = 13;
 const PAGE_UI_LOCK: usize = 14;
@@ -187,7 +187,6 @@ const ID_SLOTS_PER_TORRENT: u16 = id(4, 5);
 const ID_UNCHOKE: u16 = id(4, 6);
 const ID_RATE_OVERHEAD: u16 = id(4, 7);
 const ID_RATE_UTP: u16 = id(4, 8);
-const ID_KEEP_PING_LOW: u16 = id(4, 9);
 // BitTorrent
 const ID_DHT: u16 = id(5, 1);
 const ID_LSD: u16 = id(5, 2);
@@ -235,31 +234,32 @@ const ID_SCHED_UL: u16 = id(7, 3);
 const ID_SCHED_DL: u16 = id(7, 4);
 const ID_SCHED_DHT: u16 = id(7, 5);
 
-const ID_ADV_FILTER: u16 = id(9, 1);
-const ID_ADV_LIST: u16 = id(9, 2);
-const ID_ADV_VALUE: u16 = id(9, 3);
-const ID_ADV_TRUE: u16 = id(9, 4);
-const ID_ADV_FALSE: u16 = id(9, 5);
-const ID_ADV_SET: u16 = id(9, 6);
-const ID_ADV_RESET: u16 = id(9, 7);
+const ID_ADV_FILTER: u16 = id(10, 1);
+const ID_ADV_LIST: u16 = id(10, 2);
+const ID_ADV_VALUE: u16 = id(10, 3);
+const ID_ADV_TRUE: u16 = id(10, 4);
+const ID_ADV_FALSE: u16 = id(10, 5);
+const ID_ADV_SET: u16 = id(10, 6);
+const ID_ADV_RESET: u16 = id(10, 7);
 // Disk Cache
-const ID_DISK_QUEUE: u16 = id(10, 1);
-const ID_FILE_POOL: u16 = id(10, 2);
-const ID_AIO: u16 = id(10, 3);
-const ID_HASH_THREADS: u16 = id(10, 4);
-const ID_READ_CACHE: u16 = id(10, 5);
-const ID_CACHE_OVERRIDE: u16 = id(10, 6);
-const ID_CACHE_MB: u16 = id(10, 7);
-const ID_CACHE_EXPIRE: u16 = id(10, 8);
-const ID_CACHE_EXPIRY: u16 = id(10, 9);
-// Disk I/O
-const ID_CHECK_GENTLY: u16 = id(11, 1);
-const ID_CHECK_RATE_LIMIT: u16 = id(11, 2);
-const ID_CHECK_RATE_MB: u16 = id(11, 3);
-const ID_ACTIVE_CHECKING: u16 = id(11, 4);
-const ID_TUNE_FOR_DRIVE: u16 = id(11, 5);
-const ID_DISK_SLOW_DL: u16 = id(11, 6);
-const ID_DISK_SLOW_UL: u16 = id(11, 7);
+const ID_DISK_QUEUE: u16 = id(11, 1);
+const ID_FILE_POOL: u16 = id(11, 2);
+const ID_AIO: u16 = id(11, 3);
+const ID_HASH_THREADS: u16 = id(11, 4);
+const ID_READ_CACHE: u16 = id(11, 5);
+const ID_CACHE_OVERRIDE: u16 = id(11, 6);
+const ID_CACHE_MB: u16 = id(11, 7);
+const ID_CACHE_EXPIRE: u16 = id(11, 8);
+const ID_CACHE_EXPIRY: u16 = id(11, 9);
+// Gaming (D80): smart disk I/O (D48) and keep ping low (D49)
+const ID_CHECK_GENTLY: u16 = id(9, 1);
+const ID_CHECK_RATE_LIMIT: u16 = id(9, 2);
+const ID_CHECK_RATE_MB: u16 = id(9, 3);
+const ID_ACTIVE_CHECKING: u16 = id(9, 4);
+const ID_TUNE_FOR_DRIVE: u16 = id(9, 5);
+const ID_DISK_SLOW_DL: u16 = id(9, 6);
+const ID_DISK_SLOW_UL: u16 = id(9, 7);
+const ID_KEEP_PING_LOW: u16 = id(9, 8);
 // Trackers (D66)
 const ID_TRK_APPEND: u16 = id(12, 1);
 const ID_TRK_LIST: u16 = id(12, 2);
@@ -1283,17 +1283,15 @@ fn build() -> (Vec<u16>, Vec<(u16, u16)>) {
     b.number(13, ID_UL_RATE, NUMBER, tr!(PrefUpRate));
     b.group([0, 38, W, 32], tr!(PrefDownLimiting));
     b.number(51, ID_DL_RATE, NUMBER, tr!(PrefDownRate));
-    b.group([0, 76, W, 52], tr!(PrefRateOptions));
+    b.group([0, 76, W, 38], tr!(PrefRateOptions));
     b.ctl(BUTTON, ID_RATE_OVERHEAD, CHECK, [8, 89, 290, 10], tr!(PrefRateOverhead));
     b.ctl(BUTTON, ID_RATE_UTP, CHECK, [8, 102, 290, 10], tr!(PrefRateUtp));
-    b.ctl(BUTTON, ID_KEEP_PING_LOW, CHECK, [8, 115, 290, 10], tr!(PrefKeepPingLow));
-    b.group([0, 134, W, 82], tr!(PrefConnections));
-    b.number(147, ID_CONNECTIONS, NUMBER, tr!(PrefMaxConnections));
-    b.number(163, ID_PEERS_PER_TORRENT, NUMBER, tr!(PrefPeersPerTorrent));
-    b.number(179, ID_SLOTS_PER_TORRENT, NUMBER, tr!(PrefSlotsPerTorrent));
-    b.number(195, ID_UNCHOKE, LINE, tr!(PrefGlobalSlots));
-    b.label([0, 222, W, 9], tr!(PrefPerTorrentNote));
-    b.label([0, 235, W, 36], tr!(PrefKeepPingLowNote));
+    b.group([0, 120, W, 82], tr!(PrefConnections));
+    b.number(133, ID_CONNECTIONS, NUMBER, tr!(PrefMaxConnections));
+    b.number(149, ID_PEERS_PER_TORRENT, NUMBER, tr!(PrefPeersPerTorrent));
+    b.number(165, ID_SLOTS_PER_TORRENT, NUMBER, tr!(PrefSlotsPerTorrent));
+    b.number(181, ID_UNCHOKE, LINE, tr!(PrefGlobalSlots));
+    b.label([0, 208, W, 9], tr!(PrefPerTorrentNote));
 
     b.page(5);
     b.group([0, 0, W, 72], tr!(PrefBasicFeatures));
@@ -1367,6 +1365,24 @@ fn build() -> (Vec<u16>, Vec<(u16, u16)>) {
     b.ctl(BUTTON, ID_WEBUI_OPEN, PUSH, [W - 80, 222, 80, 14], tr!(PrefWebUiOpen));
     b.label([0, 241, W, 32], tr!(PrefWebUiNote));
 
+    // keep ping low with its note, then smart disk I/O, each box before its number as on Disk
+    // Cache; per-drive types are on Advanced only
+    b.page(PAGE_GAMING);
+    b.group([0, 0, W, 30], tr!(PrefPingGroup));
+    b.ctl(BUTTON, ID_KEEP_PING_LOW, CHECK, [8, 13, 290, 10], tr!(PrefKeepPingLow));
+    b.label([0, 36, W, 36], tr!(PrefKeepPingLowNote));
+    b.group([0, 78, W, 64], tr!(PrefChecking));
+    b.ctl(BUTTON, ID_CHECK_GENTLY, CHECK, [8, 91, 290, 10], tr!(PrefCheckGently));
+    b.ctl(BUTTON, ID_CHECK_RATE_LIMIT, CHECK, [8, 107, 228, 10], tr!(PrefCheckRateLimit));
+    b.ctl(EDIT, ID_CHECK_RATE_MB, NUMBER, [240, 105, 54, 13], "");
+    b.number(123, ID_ACTIVE_CHECKING, NUMBER, tr!(PrefActiveChecking));
+    b.group([0, 150, W, 30], tr!(PrefDrives));
+    b.ctl(BUTTON, ID_TUNE_FOR_DRIVE, CHECK, [8, 163, 290, 10], tr!(PrefTuneForDrive));
+    b.group([0, 188, W, 44], tr!(PrefDiskBusy));
+    b.ctl(BUTTON, ID_DISK_SLOW_DL, CHECK, [8, 201, 290, 10], tr!(PrefDiskSlowDownloads));
+    b.ctl(BUTTON, ID_DISK_SLOW_UL, CHECK, [8, 215, 290, 10], tr!(PrefDiskSlowUploads));
+    b.label([0, 240, W, 27], tr!(PrefDiskIoNote));
+
     b.page(PAGE_ADVANCED);
     b.label_for([0, 2, 24, 9], tr!(PrefFilter), ID_ADV_FILTER);
     b.ctl(EDIT, ID_ADV_FILTER, LINE, [28, 0, W - 28, 13], "");
@@ -1393,20 +1409,6 @@ fn build() -> (Vec<u16>, Vec<(u16, u16)>) {
     b.number(117, ID_AIO, NUMBER, tr!(PrefAioThreads));
     b.number(133, ID_HASH_THREADS, NUMBER, tr!(PrefHashThreads));
     b.label([0, 160, W, 45], &tr!(PrefReadCacheNote, mb = settings::AUTO_CACHE_MB));
-
-    // each box before its number, as on Disk Cache; per-drive types are on Advanced only
-    b.page(PAGE_DISK_IO);
-    b.group([0, 0, W, 64], tr!(PrefChecking));
-    b.ctl(BUTTON, ID_CHECK_GENTLY, CHECK, [8, 13, 290, 10], tr!(PrefCheckGently));
-    b.ctl(BUTTON, ID_CHECK_RATE_LIMIT, CHECK, [8, 29, 228, 10], tr!(PrefCheckRateLimit));
-    b.ctl(EDIT, ID_CHECK_RATE_MB, NUMBER, [240, 27, 54, 13], "");
-    b.number(45, ID_ACTIVE_CHECKING, NUMBER, tr!(PrefActiveChecking));
-    b.group([0, 72, W, 30], tr!(PrefDrives));
-    b.ctl(BUTTON, ID_TUNE_FOR_DRIVE, CHECK, [8, 85, 290, 10], tr!(PrefTuneForDrive));
-    b.group([0, 110, W, 44], tr!(PrefDiskBusy));
-    b.ctl(BUTTON, ID_DISK_SLOW_DL, CHECK, [8, 123, 290, 10], tr!(PrefDiskSlowDownloads));
-    b.ctl(BUTTON, ID_DISK_SLOW_UL, CHECK, [8, 137, 290, 10], tr!(PrefDiskSlowUploads));
-    b.label([0, 162, W, 27], tr!(PrefDiskIoNote));
 
     // trackers for new downloads (D66): the typed list, then the list from the web with its
     // status line, which takes the lines its text needs (`fit_tracker_notes`), as the note does
@@ -1584,8 +1586,7 @@ unsafe fn init(dlg: HWND, st: &mut State<'_>) {
         send(tree, TVM_SETIMAGELIST, TVSIL_NORMAL as usize, st.images);
         let mut parent = TVI_ROOT;
         for (i, title) in PAGES.iter().enumerate() {
-            let nested =
-                matches!(i, PAGE_DISK_CACHE | PAGE_DISK_IO | PAGE_TRACKERS | PAGE_RUN_PROGRAM | PAGE_UI_LOCK);
+            let nested = matches!(i, PAGE_DISK_CACHE | PAGE_TRACKERS | PAGE_RUN_PROGRAM | PAGE_UI_LOCK);
             let under = if nested { parent } else { TVI_ROOT };
             let h = insert_tree(tree, under, lang::text(*title), i, page_icon(*title));
             if i == PAGE_ADVANCED {
@@ -4131,11 +4132,12 @@ mod tests {
     }
 
     #[test]
-    fn disk_io_controls_under_advanced() {
+    fn gaming_page_above_advanced() {
         let mut f = Fixture::new(defaults());
-        f.page(PAGE_DISK_IO);
+        f.page(PAGE_GAMING);
         let enabled = |f: &Fixture, id| unsafe { IsWindowEnabled(item(f.dlg, id)) != 0 };
         let all = [
+            ID_KEEP_PING_LOW,
             ID_CHECK_GENTLY,
             ID_CHECK_RATE_LIMIT,
             ID_CHECK_RATE_MB,
@@ -4148,8 +4150,10 @@ mod tests {
             for id in all {
                 assert!(shown(item(f.dlg, id)), "control {id}");
             }
-            // gentle checks and drive tuning on, the cap and the busy-disk throttle off
-            assert!(checked(f.dlg, ID_CHECK_GENTLY) && checked(f.dlg, ID_TUNE_FOR_DRIVE));
+            // drive tuning on; gentle checks (D80), the cap, the busy-disk throttle and keep
+            // ping low off
+            assert!(!checked(f.dlg, ID_CHECK_GENTLY) && checked(f.dlg, ID_TUNE_FOR_DRIVE));
+            assert!(!checked(f.dlg, ID_KEEP_PING_LOW));
             assert!(!checked(f.dlg, ID_CHECK_RATE_LIMIT));
             assert!(!checked(f.dlg, ID_DISK_SLOW_DL) && !checked(f.dlg, ID_DISK_SLOW_UL));
         }
@@ -4162,16 +4166,17 @@ mod tests {
         assert!(enabled(&f, ID_CHECK_RATE_MB));
         f.set(ID_CHECK_RATE_MB, "250");
         f.set(ID_ACTIVE_CHECKING, "2");
-        f.check(ID_CHECK_GENTLY, false);
+        f.check(ID_CHECK_GENTLY, true);
         f.check(ID_TUNE_FOR_DRIVE, false);
+        f.check(ID_KEEP_PING_LOW, true);
         f.check(ID_DISK_SLOW_DL, true);
         f.check(ID_DISK_SLOW_UL, true);
         f.click(ID_APPLY);
         let o = f.last_applied();
         let s = &o.settings;
-        assert!(!s.check_gently && s.check_rate_limit && !s.tune_for_drive);
+        assert!(s.check_gently && s.check_rate_limit && !s.tune_for_drive);
         assert_eq!((s.check_rate_mb, s.active_checking), (250, 2));
-        assert!(s.disk_slow_downloads && s.disk_slow_uploads);
+        assert!(s.disk_slow_downloads && s.disk_slow_uploads && s.auto_rate_limit);
         let mut prefs = Prefs::default();
         o.store(&mut prefs);
         assert_eq!(Options::load(&prefs, "unused"), o);
@@ -4179,12 +4184,23 @@ mod tests {
         // up to 8 drives on the page, refused there; -1 set on Advanced survives untouched
         f.set(ID_ACTIVE_CHECKING, "9");
         let err = unsafe { read_controls(f.dlg, &mut f.st) }.unwrap_err();
-        assert_eq!((err.0, page_of(err.0)), (ID_ACTIVE_CHECKING, Some(PAGE_DISK_IO)));
+        assert_eq!((err.0, page_of(err.0)), (ID_ACTIVE_CHECKING, Some(PAGE_GAMING)));
         let mut o = defaults();
         o.settings.active_checking = -1;
         let g = Fixture::new(o);
         g.click(ID_APPLY);
         assert_eq!(g.last_applied().settings.active_checking, -1);
+
+        // a page of the tree's top level, just above Advanced, with its own icon
+        unsafe {
+            use windows_sys::Win32::UI::Controls::{TVGN_PARENT, TVM_GETNEXTITEM};
+            let tree = item(f.dlg, ID_TREE);
+            let parent = send(tree, TVM_GETNEXTITEM, TVGN_PARENT as usize, f.st.tree_items[PAGE_GAMING]);
+            assert_eq!(parent, 0);
+        }
+        assert_eq!(PAGE_GAMING + 1, PAGE_ADVANCED);
+        assert_eq!(page_icon(PAGES[PAGE_GAMING]), Some(UiIcon::Gaming));
+        assert_eq!(page_of(ID_KEEP_PING_LOW), Some(PAGE_GAMING));
     }
 
     const TRACKER_A: &str = "udp://tracker.example:6969/announce";
@@ -4212,7 +4228,7 @@ mod tests {
             for id in all {
                 assert!(!item(f.dlg, id).is_null() && shown(item(f.dlg, id)), "control {id}");
             }
-            // in the tree: the third page under Advanced, with the Trackers tab's symbol
+            // in the tree: the second page under Advanced, with the Trackers tab's symbol
             let tree = item(f.dlg, ID_TREE);
             let parent = send(tree, TVM_GETNEXTITEM, TVGN_PARENT as usize, f.st.tree_items[PAGE_TRACKERS]);
             assert_eq!(parent, f.st.tree_items[PAGE_ADVANCED]);
