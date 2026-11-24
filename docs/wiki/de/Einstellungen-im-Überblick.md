@@ -192,7 +192,7 @@ Mehr: [Weboberfläche](Weboberfläche), [Sonarr, Radarr und Prowlarr](Sonarr-Rad
 
 ## Gaming
 
-*Neu in 1.2.78.* Einstellungen, die den Computer und die Leitung reaktionsschnell halten, solange Rookparcel arbeitet. **Ping niedrig halten** ist von der Seite „Bandbreite“ hierher gezogen, die frühere Seite „Festplatten-E/A“ von „Erweitert“.
+*Neu in 1.2.79.* Einstellungen, die den Computer und die Leitung reaktionsschnell halten, solange Rookparcel arbeitet. **Ping niedrig halten** ist von der Seite „Bandbreite“ hierher gezogen, die frühere Seite „Festplatten-E/A“ von „Erweitert“.
 
 **Ping**
 

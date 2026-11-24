@@ -63,7 +63,7 @@ Si seuls certains fichiers d'un torrent ont disparu (supprimés à la main ou pa
 
 Les E/S disque intelligentes gardent l'ordinateur réactif pendant que Rookparcel lit et écrit. Leurs paramètres se trouvent dans **Options > Préférences > Jeux** (une page juste au-dessus d'Avancé dans la liste des pages).
 
-La case **Utiliser les E/S disque intelligentes** de l'Assistant de configuration active ou désactive d'un coup les quatre parties. Le réglage par lecteur est actif dès le départ ; la case ajoute les vérifications en douceur et le ralentissement quand un disque est occupé. *L'Assistant de configuration est nouveau dans la version 1.1.62. Les paramètres existent depuis la version 1.1.40 ; depuis la 1.2.78 ils sont sur la page Jeux, et les vérifications en douceur sont désactivées au départ.*
+La case **Utiliser les E/S disque intelligentes** de l'Assistant de configuration active ou désactive d'un coup les quatre parties. Le réglage par lecteur est actif dès le départ ; la case ajoute les vérifications en douceur et le ralentissement quand un disque est occupé. *L'Assistant de configuration est nouveau dans la version 1.1.62. Les paramètres existent depuis la version 1.1.40 ; depuis la 1.2.79 ils sont sur la page Jeux, et les vérifications en douceur sont désactivées au départ.*
 
 ### Vérification
 

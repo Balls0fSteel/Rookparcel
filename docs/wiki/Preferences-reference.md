@@ -190,7 +190,7 @@ More: [Web UI](Web-UI), [Sonarr, Radarr and Prowlarr](Sonarr-Radarr-and-Prowlarr
 
 ## Gaming
 
-*New in 1.2.78.* Settings that keep the computer and the line responsive while Rookparcel works. **Keep ping low** moved here from Bandwidth, and the Disk I/O page moved here from Advanced.
+*New in 1.2.79.* Settings that keep the computer and the line responsive while Rookparcel works. **Keep ping low** moved here from Bandwidth, and the Disk I/O page moved here from Advanced.
 
 **Ping**
 

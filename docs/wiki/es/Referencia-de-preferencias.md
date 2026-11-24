@@ -192,7 +192,7 @@ Más información: [Interfaz web](Interfaz-web), [Sonarr, Radarr y Prowlarr](Son
 
 ## Juegos
 
-*Novedad de la 1.2.78.* Ajustes que mantienen el equipo y la línea con buena respuesta mientras Rookparcel trabaja. **Mantener el ping bajo** pasó aquí desde Ancho de banda, y la antigua página E/S de disco, desde Avanzado.
+*Novedad de la 1.2.79.* Ajustes que mantienen el equipo y la línea con buena respuesta mientras Rookparcel trabaja. **Mantener el ping bajo** pasó aquí desde Ancho de banda, y la antigua página E/S de disco, desde Avanzado.
 
 **Ping**
 

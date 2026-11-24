@@ -63,7 +63,7 @@ Ha egy torrentnek csak néhány fájlja tűnt el (kézzel vagy vírusirtó tör�
 
 Az okos lemez I/O reagálóképesen tartja a számítógépet, amíg a Rookparcel olvas és ír. A beállításai a **Beállítások > Tulajdonságok > Játék** oldalon vannak (a Haladó fölötti oldal az oldallistában).
 
-A Beállítási útmutató **Okos lemez I/O használata** négyzete mind a négy részt együtt kapcsolja be vagy ki. A meghajtónkénti hangolás kezdettől be van kapcsolva; a négyzet hozzáadja a kíméletes ellenőrzéseket és a lassítást, amíg a lemez foglalt. *A Beállítási útmutató az 1.1.62-ben új. A beállítások az 1.1.40 óta megvannak; az 1.2.78 óta a Játék oldalon vannak, és a kíméletes ellenőrzés kezdetben ki van kapcsolva.*
+A Beállítási útmutató **Okos lemez I/O használata** négyzete mind a négy részt együtt kapcsolja be vagy ki. A meghajtónkénti hangolás kezdettől be van kapcsolva; a négyzet hozzáadja a kíméletes ellenőrzéseket és a lassítást, amíg a lemez foglalt. *A Beállítási útmutató az 1.1.62-ben új. A beállítások az 1.1.40 óta megvannak; az 1.2.79 óta a Játék oldalon vannak, és a kíméletes ellenőrzés kezdetben ki van kapcsolva.*
 
 ### Ellenőrzés
 

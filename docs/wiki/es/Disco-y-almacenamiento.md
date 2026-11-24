@@ -63,7 +63,7 @@ Si solo faltan algunos archivos de un torrent (borrados a mano o por un antiviru
 
 La E/S de disco inteligente mantiene el equipo con buena respuesta mientras Rookparcel lee y escribe. Sus ajustes están en **Opciones > Preferencias > Juegos** (una página justo encima de Avanzado en la lista de páginas).
 
-La casilla **Usar E/S de disco inteligente** de la Guía de configuración activa o desactiva las cuatro partes a la vez. El ajuste por unidad está activado desde el principio; la casilla añade las comprobaciones suaves y la ralentización mientras un disco está ocupado. *La Guía de configuración es nueva en 1.1.62. Los ajustes existen desde la 1.1.40; desde la 1.2.78 están en la página Juegos, y las comprobaciones suaves están desactivadas al principio.*
+La casilla **Usar E/S de disco inteligente** de la Guía de configuración activa o desactiva las cuatro partes a la vez. El ajuste por unidad está activado desde el principio; la casilla añade las comprobaciones suaves y la ralentización mientras un disco está ocupado. *La Guía de configuración es nueva en 1.1.62. Los ajustes existen desde la 1.1.40; desde la 1.2.79 están en la página Juegos, y las comprobaciones suaves están desactivadas al principio.*
 
 ### Comprobación
 

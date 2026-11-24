@@ -192,7 +192,7 @@ További információ: [Webes felület](Webes-felület), [Sonarr, Radarr és Pro
 
 ## Játék
 
-*Az 1.2.78-ban jelent meg.* Olyan beállítások, amelyek reagálóképesen tartják a számítógépet és a vonalat, amíg a Rookparcel dolgozik. Az **Alacsony ping megtartása** a Sávszélesség oldalról, a korábbi Lemez I/O oldal pedig a Haladó alól került ide.
+*Az 1.2.79-ben jelent meg.* Olyan beállítások, amelyek reagálóképesen tartják a számítógépet és a vonalat, amíg a Rookparcel dolgozik. Az **Alacsony ping megtartása** a Sávszélesség oldalról, a korábbi Lemez I/O oldal pedig a Haladó alól került ide.
 
 **Ping**
 

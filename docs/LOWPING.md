@@ -1,6 +1,6 @@
 # Keep ping low (D49)
 
-Since 1.2.78 (D80) the box is on Preferences > Gaming, in the Ping group (no longer on Bandwidth).
+Since 1.2.79 (D80) the box is on Preferences > Gaming, in the Ping group (no longer on Bandwidth).
 
 Written 2026-11-02_111726_1793614646; the owner answered Q3, Q4, Q5 and Q7 on 2026-11-02_112509_1793615109 and approved the rest as proposed on 2026-11-02_123805_1793619485 (Q1 the slices in this order, Q2 off by default, Q6 the 25 ms uTP target while on). Approved. Slice 1 is in 1.1.29 (2026-11-02_130357_1793621037); what it left out is under "Slice 1 status" below. Slice 2 is in 1.1.30 (2026-11-02_162406_1793633046), under "Slice 2 status"; slice 3 in 1.1.31 (2026-11-02_170156_1793635316), under "Slice 3 status"; the bloated-line test and its fixes in 1.1.32 (2026-11-02_211916_1793650756). The owner asked whether Rookparcel can find a safe upload speed by itself so games keep a low ping, and set aside a "gamer mode" driven by a list of game executables. It goes beyond 2.2.1 and is separate from the disk work ([DISKIO.md](DISKIO.md), proposed D48), though both end in the same kind of cap.
 

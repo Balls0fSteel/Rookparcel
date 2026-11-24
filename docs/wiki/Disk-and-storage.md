@@ -61,7 +61,7 @@ If only some of a torrent's files are gone (deleted by hand or by a virus scanne
 
 Smart disk I/O keeps the computer responsive while Rookparcel reads and writes. Its settings are on **Options > Preferences > Gaming** (a page just above Advanced in the page list).
 
-The Setup Guide's **Use smart disk I/O** box turns all four parts on or off together. Per-drive tuning is on from the start; the box adds gentle checks and the slow-down while a disk is busy. *The Setup Guide is new in 1.1.62. The settings are in 1.1.40; they moved from Advanced > Disk I/O to the Gaming page in 1.2.78, and gentle checks have been off at first since then.*
+The Setup Guide's **Use smart disk I/O** box turns all four parts on or off together. Per-drive tuning is on from the start; the box adds gentle checks and the slow-down while a disk is busy. *The Setup Guide is new in 1.1.62. The settings are in 1.1.40; they moved from Advanced > Disk I/O to the Gaming page in 1.2.79, and gentle checks have been off at first since then.*
 
 ### Checking
 

@@ -192,7 +192,7 @@ Voir aussi : [Interface web](Interface-Web), [Sonarr, Radarr et Prowlarr](Sonarr
 
 ## Jeux
 
-*Nouveauté de la 1.2.78.* Paramètres qui gardent l'ordinateur et la ligne réactifs pendant que Rookparcel travaille. **Garder un ping bas** est passé ici depuis Bande passante, et l'ancienne page E/S disque depuis Avancé.
+*Nouveauté de la 1.2.79.* Paramètres qui gardent l'ordinateur et la ligne réactifs pendant que Rookparcel travaille. **Garder un ping bas** est passé ici depuis Bande passante, et l'ancienne page E/S disque depuis Avancé.
 
 **Ping**
 

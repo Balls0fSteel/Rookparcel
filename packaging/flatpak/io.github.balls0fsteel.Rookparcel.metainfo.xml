@@ -70,6 +70,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="1.2.79" date="2026-11-25" type="stable">
+      <description>
+        <p>A new Gaming page in Preferences, just above Advanced, gathers what keeps games, calls and the computer responsive: Keep ping low (from Bandwidth) and the smart disk I/O settings (from Advanced &gt; Disk I/O). Checking torrents gently is now off unless you turn it on there.</p>
+      </description>
+    </release>
     <release version="1.2.77" date="2026-11-23" type="stable">
       <description>
         <p>Adding many torrents is fast again: since 1.2.57 every added torrent waited for the settings file to be written to the disk, even when the settings had not changed. They are now written only when they change, as safe against a crash as before.</p>

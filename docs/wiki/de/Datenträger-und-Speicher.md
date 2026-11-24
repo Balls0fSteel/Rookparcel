@@ -63,7 +63,7 @@ Fehlen nur einige Dateien eines Torrents (von Hand oder von einem Virenscanner g
 
 Die intelligente Festplatten-E/A hält den Computer reaktionsschnell, während Rookparcel liest und schreibt. Ihre Einstellungen finden Sie unter **Optionen > Einstellungen > Gaming** (eine Seite direkt über „Erweitert“ in der Seitenliste).
 
-Das Kästchen **Intelligente Festplatten-E/A verwenden** im Einrichtungsassistenten schaltet alle vier Teile gemeinsam ein oder aus. Die Abstimmung je Laufwerk ist von Anfang an an; das Kästchen fügt schonende Prüfungen und das Abbremsen hinzu, solange eine Festplatte ausgelastet ist. *Der Einrichtungsassistent ist neu in 1.1.62. Die Einstellungen gibt es seit 1.1.40; seit 1.2.78 stehen sie auf der Seite „Gaming“, und schonende Prüfungen sind zunächst aus.*
+Das Kästchen **Intelligente Festplatten-E/A verwenden** im Einrichtungsassistenten schaltet alle vier Teile gemeinsam ein oder aus. Die Abstimmung je Laufwerk ist von Anfang an an; das Kästchen fügt schonende Prüfungen und das Abbremsen hinzu, solange eine Festplatte ausgelastet ist. *Der Einrichtungsassistent ist neu in 1.1.62. Die Einstellungen gibt es seit 1.1.40; seit 1.2.79 stehen sie auf der Seite „Gaming“, und schonende Prüfungen sind zunächst aus.*
 
 ### Prüfung
 
