@@ -4,7 +4,7 @@
 //! their own actions (`performClick:`, a text field's action), the way a click or Return would: a check box, a bad port, a good one, a bad one again, the
 //! Advanced filter, a drag on the Scheduler's grid, closing the window with the bad port,
 //! opening it again at the port, UI Settings' excluded file names (D74) and BitTorrent's IP
-//! filter from an address (D75). After each step it keeps the snapshot of the moment as
+//! filter from an address (D75), then the Gaming page's two boxes (D80). After each step it keeps the snapshot of the moment as
 //! `<step>-window-<n>.png` and `<step>.txt`, and logs the `rookparcel.ini` lines the step is
 //! about. Accessibility cannot reach the windows while the VM's screen is locked; this can.
 
@@ -211,6 +211,18 @@ fn step() -> bool {
         }
         19 => {
             keep("ipfilter-update");
+            page("gaming");
+        }
+        // D80: keep ping low and gentle checks (off by default) on the Gaming page
+        20 => {
+            keep("gaming-defaults");
+            ini(&["check_gently", "auto_rate_limit"]);
+            click("check_gently");
+            click("auto_rate_limit");
+        }
+        21 => {
+            keep("gaming-ticked");
+            ini(&["check_gently", "auto_rate_limit"]);
             eprintln!("prefs tour: done");
             return false;
         }
