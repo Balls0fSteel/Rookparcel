@@ -1,0 +1,15 @@
+# Changelog, 2026-11-22 (1.2.74 and 1.2.75)
+
+Moved verbatim from the root changelog on 2026-11-25_084558_1795592758.
+
+## 2026-11-22_142957_1795354197: 1.2.75, a torrent whose storage is gone is held; Recheck starts a stopped torrent
+
+- **The owner's report (on 1.2.69):** a storage was removed, and instead of "missing files" its torrents downloaded again. Not fixed by 1.2.70-1.2.74: the resume check took every file that was not found as lost (1.2.46's per-file rule, meant for a virus scanner removing one file), so a pulled drive cleared every piece and the empty set was saved.
+- **D79 (`disk::storage_gone`, `engine/storage_hold.rs`):** a resume check that finds none of the files its pieces are in, or not its save path, stops the torrent with "files missing (the drive, share or folder is not available)" before anything is made on disk; the stored pieces stay, across restarts too. Every 30 s a probe thread (`DiskIo::async_probe_paths`, so a dead share never blocks the engine or a disk queue) looks at the held paths, and a torrent whose path is back starts and finds its files by the resume data, without hashing. A write that fails with "not found" (the drive pulled while downloading) is held the same way. One file of several gone keeps 1.2.46's rule. Start ends a hold (held again if still missing); Recheck takes what is there.
+- **Recheck (the owner's second point):** on a stopped torrent it only forgot the pieces; the check waited for a Start. Now the GUIs and the Web UI start a stopped torrent with the recheck (`frontend::actions::recheck`; the Pause mark goes as with Start), the engine's Recheck clears a torrent's error (libtorrent `force_recheck`'s `clear_error`), and a requested check runs without a queue slot, so a queued torrent is checked at once and queued again after. The qBittorrent shim's `torrents/recheck` keeps qBittorrent's behaviour.
+- **Tests:** disk (all files gone, save path gone, nothing to lose, one of two gone, the probe), engine (hold, probe, back, Start and Remove end it), swarm (a seed held over two restarts, then seeding without hashing; Recheck of a held one downloads), queueing (a queued download's recheck), frontend (Recheck clears the Pause mark). Not checked by hand with a real drive yet.
+
+## 2026-11-22_005433_1795305273: 1.2.74, the macOS swarm flake's cause
+
+- **1.2.73's CI** failed once on macOS in `a_download_stopped_midway_resumes_with_its_names_and_pieces` (passed on a rerun); its message (one block fewer done after a passing check) led an agent to the cause: a piece whose last block was being written at a stop was hashed after it, set as had, and kept as partial too, so its blocks counted twice until the check dropped them. A late hash now takes the piece out of the partial pieces, and loading drops partial pieces that are also had (PORTING row corrected; it still said partial pieces were not saved).
+- **Evidence:** with a 200 ms delay on the second block's write the swarm test failed 19 of 20 times with CI's exact message, 0 of 20 with the fix; three deterministic engine tests (`stop_hash_tests.rs`) fail without it. Core suite, clippy and fmt pass.

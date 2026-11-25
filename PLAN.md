@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-25_013509_1795566909
+Last updated: 2026-11-25_084558_1795592758
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D80](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -19,7 +19,7 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Current status
 
-- **1.2.79 (published 2026-11-25; 1.2.78 not released):** a Gaming page in Preferences above Advanced (Keep ping low and smart disk I/O; D80), gentle checks off by default; checked on Win32, the Web UI and the GTK and macOS VMs (1.2.79 adds the Mac tour step). **1.2.77 (published 2026-11-23):** adding no longer waits for a settings flush per torrent (the 3x slower add since 1.2.57) and its review's fix. **1.2.76 (published 2026-11-22):** the release review's fixes (banned peers no longer fill the peer list). **1.2.75 (not released):** a torrent whose storage is gone is held and resumes when it is back (D79); Recheck starts a stopped or queued torrent. **1.2.71-1.2.74:** the 2026-11-21 bug hunt's 34 fixes and follow-ups, the macOS swarm flake's cause. **1.2.70:** unreadable files stop a check with an error, "Queued for checking", round-robin connection attempts, test flakes; remote `PROTOCOL` 21.
+- **1.2.80 (not released):** the desktop entry says `Version=1.0` for the AppImage catalog's older validator (its PR AppImage/appimage.github.io#12506 needs `/retest` after the release). **1.2.79 (published 2026-11-25; 1.2.78 not released; RELEASING step 5 done on the three VMs, all passed):** a Gaming page in Preferences above Advanced (Keep ping low and smart disk I/O; D80), gentle checks off by default; checked on Win32, the Web UI and the GTK and macOS VMs. **1.2.77 (published 2026-11-23):** adding no longer waits for a settings flush per torrent (the 3x slower add since 1.2.57) and its review's fix. **1.2.76 (published 2026-11-22):** the release review's fixes (banned peers no longer fill the peer list). **1.2.70-1.2.75:** the storage hold (D79), the 2026-11-21 bug hunt's fixes, remote `PROTOCOL` 21 (details in the release notes).
 - **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.

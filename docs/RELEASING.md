@@ -24,6 +24,10 @@ libraries but glibc, so they need glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, 
 an AppImage started on a desktop without FUSE 2 needs `--appimage-extract-and-run`. The AppImage
 icon is provisional (the family `assets/patina-icons/app-icon.txt` names) until the owner picks
 one (Road to 1.0 item 10); the Flatpak and the macOS `.app` use the same one.
+The AppImage catalog (appimage.github.io, its PR #12506 for Rookparcel) tests a release's GTK
+AppImage on Ubuntu 22.04: desktop-file-validate 0.26 there refused 1.2.79's `Version=1.5`, so
+the desktop entry stays at `Version=1.0` (a test asserts it). After a fix, comment `/retest`
+on that PR.
 Earlier releases had `Rookparcel-<version>-arm64.dmg` (`PaTorrent-...` before 1.2.5) instead:
 the GTK GUI bundled with Homebrew's GTK 4, Apple silicon only, macOS 15 or later (D23).
 

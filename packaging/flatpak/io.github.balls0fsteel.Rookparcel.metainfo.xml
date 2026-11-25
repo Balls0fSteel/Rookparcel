@@ -70,6 +70,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="1.2.80" date="2026-11-25" type="stable">
+      <description>
+        <p>The desktop entry declares version 1.0 of the desktop entry specification, so older validators, such as the AppImage catalog's, accept it. Nothing else changes.</p>
+      </description>
+    </release>
     <release version="1.2.79" date="2026-11-25" type="stable">
       <description>
         <p>A new Gaming page in Preferences, just above Advanced, gathers what keeps games, calls and the computer responsive: Keep ping low (from Bandwidth) and the smart disk I/O settings (from Advanced &gt; Disk I/O). Checking torrents gently is now off unless you turn it on there.</p>

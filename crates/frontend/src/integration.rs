@@ -85,7 +85,9 @@ pub fn entry_shown(command: &[String], icon: &str, kind: EntryKind, shown: bool)
         EntryKind::Autostart { minimized: false } => {}
     }
     let name = profile.as_ref().map_or("Rookparcel".to_owned(), |p| format!("Rookparcel ({p})"));
-    let mut s = format!("[Desktop Entry]\nType=Application\nVersion=1.5\nName={}\n", string_value(&name));
+    // `Version=1.0`: nothing here needs a newer spec, and desktop-file-validate before 0.27
+    // (Ubuntu 22.04, the AppImage catalog's test) rejects 1.5 as unknown
+    let mut s = format!("[Desktop Entry]\nType=Application\nVersion=1.0\nName={}\n", string_value(&name));
     s += "GenericName=BitTorrent Client\n";
     s += &format!("Comment={}\n", string_value(tr!(AboutShort)));
     s += &format!("Exec={}\n", args.join(" "));
@@ -296,6 +298,8 @@ mod tests {
         let have = std::fs::read_to_string(&path).unwrap_or_default().replace("\r\n", "\n");
         assert!(have == want, "{} is stale: run the tests with ROOKPARCEL_WRITE_DESKTOP=1", path.display());
         assert_eq!(exec_args(&have), Some(cmd(&["rookparcel-gtk", "%U"])));
+        // older validators (the AppImage catalog's) know no spec past 1.0-1.4
+        assert!(have.contains("\nVersion=1.0\n"));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Version=1.5
+Version=1.0
 Name=Rookparcel
 GenericName=BitTorrent Client
 Comment=A BitTorrent client in the spirit of µTorrent 2.2.1, on a Rust port of libtorrent.
