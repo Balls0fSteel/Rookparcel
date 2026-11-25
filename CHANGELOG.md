@@ -6,6 +6,7 @@ Earlier history: [archive index](docs/archive/README.md), including all 148 orig
 
 ## 2026-11-25_004722_1795564042: 1.2.79, the Gaming page checked on the Linux and macOS VMs
 
+- **Published** 2026-11-25 (2026-11-25_013509_1795566909): release build green, the draft checked (digests against `SHA256SUMS`, the zip's files and versions, `rookparcel-nox --version`); RELEASING step 5 by hand not done. The README, the wiki in five languages and the site's news name it.
 - **GTK (Xubuntu VM, Xvfb, local engine, scratch settings):** Gaming sits between Scheduler and Advanced with the gamepad icon; Ping with its note, then Checking, Drives, When the Disk Is Busy and the `drive_overrides` note; gentle checks, the throttles and Keep ping low off, tuning on; Bandwidth has the two rate-option boxes. Ticking gentle checks and Keep ping low and Apply stores `lt.check_gently=true` and `lt.auto_rate_limit=true`; unticking gentle checks removes its line; after a restart Keep ping low shows ticked.
 - **macOS (VM, `tools/mac-vm`, slice GAM):** the Preferences tour (`prefs/tour.rs`) now ends on the Gaming page: nothing stored at the defaults, both boxes stored at once when clicked (the Mac applies live); the `gamecontroller` symbol, the same groups and order, Bandwidth without the box; nothing in the app's log. No issues found on either; the tour step is the only change.
 

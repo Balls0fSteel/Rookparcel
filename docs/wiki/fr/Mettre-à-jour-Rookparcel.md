@@ -11,7 +11,7 @@ Environ dix secondes après son démarrage, puis toutes les 12 heures tant qu'il
 Quand une version plus récente est sortie :
 
 - Une boîte de question apparaît, une fois pour chaque nouvelle version.
-- Ensuite, un avis reste dans la barre d'état jusqu'à ce que vous cliquiez dessus : « Rookparcel 1.2.77 est disponible - cliquez ici pour le télécharger ».
+- Ensuite, un avis reste dans la barre d'état jusqu'à ce que vous cliquiez dessus : « Rookparcel 1.2.79 est disponible - cliquez ici pour le télécharger ».
 - L'onglet Journal contient aussi une ligne avec le lien.
 
 Pour rechercher tout de suite, choisissez **Aide > Rechercher des mises à jour** (sous macOS **Rookparcel > Rechercher des mises à jour**). Elle répond dans les deux cas, avec la version plus récente ou avec « Vous avez la version la plus récente ».
@@ -20,7 +20,7 @@ Pour rechercher tout de suite, choisissez **Aide > Rechercher des mises à jour*
 
 Un Rookparcel installé par l'installeur Windows peut installer lui-même la nouvelle version. *Nouveau dans la 1.1.40.*
 
-1. La question indique « Rookparcel 1.2.77 est disponible. Vous avez la version 1.2.76. Le télécharger et l'installer maintenant ? ». Cliquez sur **Télécharger et installer**. (**Ouvrir la page de téléchargement** ouvre à la place la page de la version dans votre navigateur ; **Annuler** ne fait rien.)
+1. La question indique « Rookparcel 1.2.79 est disponible. Vous avez la version 1.2.77. Le télécharger et l'installer maintenant ? ». Cliquez sur **Télécharger et installer**. (**Ouvrir la page de téléchargement** ouvre à la place la page de la version dans votre navigateur ; **Annuler** ne fait rien.)
 2. Une petite fenêtre montre la progression du téléchargement. Rookparcel vérifie l'installeur téléchargé avec le `SHA256SUMS` de la version avant de l'utiliser.
 3. Rookparcel demande : « Pour l'installer, Rookparcel se ferme maintenant et redémarre une fois l'installation terminée. Fermer et installer maintenant ? ». Cliquez sur **Oui**.
 4. Rookparcel enregistre tout et se ferme. L'installeur installe la nouvelle version en silence dans le même dossier et relance Rookparcel.

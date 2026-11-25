@@ -11,7 +11,7 @@ Etwa zehn Sekunden nach dem Start von Rookparcel und danach alle 12 Stunden, sol
 Ist eine neuere Version erschienen:
 
 - Ein Fragefenster erscheint, einmal für jede neue Version.
-- Danach bleibt ein Hinweis in der Statusleiste, bis Sie darauf klicken: „Rookparcel 1.2.77 ist verfügbar - zum Herunterladen hier klicken“.
+- Danach bleibt ein Hinweis in der Statusleiste, bis Sie darauf klicken: „Rookparcel 1.2.79 ist verfügbar - zum Herunterladen hier klicken“.
 - Der Reiter Protokoll hat ebenfalls eine Zeile mit dem Link.
 
 Um sofort zu prüfen, wählen Sie **Hilfe > Nach Updates suchen** (unter macOS **Rookparcel > Nach Updates suchen**). Es antwortet in beiden Fällen, mit der neueren Version oder mit „Sie haben die neueste Version“.
@@ -20,7 +20,7 @@ Um sofort zu prüfen, wählen Sie **Hilfe > Nach Updates suchen** (unter macOS *
 
 Ein Rookparcel, das mit dem Windows-Setup installiert wurde, kann die neue Version selbst installieren. *Neu in 1.1.40.*
 
-1. Die Frage lautet „Rookparcel 1.2.77 ist verfügbar. Sie haben 1.2.76. Jetzt herunterladen und installieren?“. Klicken Sie auf **Herunterladen und installieren**. (**Downloadseite öffnen** öffnet stattdessen die Release-Seite in Ihrem Browser; **Abbrechen** tut nichts.)
+1. Die Frage lautet „Rookparcel 1.2.79 ist verfügbar. Sie haben 1.2.77. Jetzt herunterladen und installieren?“. Klicken Sie auf **Herunterladen und installieren**. (**Downloadseite öffnen** öffnet stattdessen die Release-Seite in Ihrem Browser; **Abbrechen** tut nichts.)
 2. Ein kleines Fenster zeigt den Fortschritt des Downloads. Rookparcel prüft das heruntergeladene Setup gegen die `SHA256SUMS` der Version, bevor es es verwendet.
 3. Rookparcel fragt: „Zum Installieren wird Rookparcel jetzt beendet und nach dem Setup neu gestartet. Jetzt beenden und installieren?“. Klicken Sie auf **Ja**.
 4. Rookparcel speichert alles und schließt sich. Das Setup installiert die neue Version still in denselben Ordner und startet Rookparcel erneut.
