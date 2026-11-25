@@ -65,7 +65,7 @@
  "Checksums": "Ellenőrző összegek",
  "Installs Rookparcel; a newer installer upgrades it in place.": "Telepíti a Rookparcelt; egy újabb telepítő helyben frissíti.",
  "<code>rookparcel.exe</code> (the GUI) and <code>rookparcel-nox.exe</code> (the headless daemon); statically linked, nothing to install.": "<code>rookparcel.exe</code> (a grafikus felület) és <code>rookparcel-nox.exe</code> (a fej nélküli démon); statikusan szerkesztett, nincs mit telepíteni.",
- "The GTK 4 GUI with its libraries bundled. Needs glibc 2.34 or newer (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 or later).": "A GTK 4 grafikus felület a könyvtáraival együtt. glibc 2.34 vagy újabb szükséges (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 vagy újabb).",
+ "The GTK 4 GUI with its libraries bundled. Needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 or later).": "A GTK 4 grafikus felület a könyvtáraival együtt. glibc 2.35 vagy újabb szükséges (Ubuntu 22.04, Debian 12, Fedora 36 vagy újabb).",
  "The GTK 4 GUI on the GNOME 51 runtime, which comes from Flathub.": "A GTK 4 grafikus felület a GNOME 51 futtatókörnyezeten, amely a Flathubról érkezik.",
  "<code>rookparcel-gtk</code>, <code>rookparcel-nox</code>, the desktop entry and the systemd units. They use the system's GTK 4 (4.12 or newer) and OpenSSL 3, as on Ubuntu 24.04.": "<code>rookparcel-gtk</code>, <code>rookparcel-nox</code>, az asztali indítóbejegyzés és a systemd-egységek. A rendszer GTK 4 (4.12 vagy újabb) és OpenSSL 3 könyvtárát használják, mint az Ubuntu 24.04-en.",
  "<code>rookparcel-nox</code> with OpenSSL bundled, for servers.": "<code>rookparcel-nox</code> a beágyazott OpenSSL-lel, szerverekhez.",

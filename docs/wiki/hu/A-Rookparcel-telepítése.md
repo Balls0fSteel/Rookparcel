@@ -12,7 +12,7 @@ Minden kiadás megtalálható a [Kiadások oldalon](https://github.com/Balls0fSt
 |---|---|---|
 | Windows 10 / 11, x64, telepítő | `rookparcel-<version>-windows-x64-setup.exe` | a `rookparcel.exe` (az ablak) és a `rookparcel-nox.exe` (a fej nélküli démon), Start menü-bejegyzéssel és eltávolítóval telepítve |
 | Windows 10 / 11, x64, hordozható | `rookparcel-<version>-windows-x64.zip` | ugyanez a két program; nincs mit telepíteni |
-| Linux asztali gép, x86_64 vagy aarch64 | `Rookparcel-<version>-<arch>.AppImage` | a GTK 4-es ablak a könyvtáraival együtt (glibc 2.34 vagy újabb kell hozzá: Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 vagy újabb) |
+| Linux asztali gép, x86_64 vagy aarch64 | `Rookparcel-<version>-<arch>.AppImage` | a GTK 4-es ablak a könyvtáraival együtt (glibc 2.35 vagy újabb kell hozzá: Ubuntu 22.04, Debian 12, Fedora 36 vagy újabb) |
 | Linux asztali gép, Flatpak | `Rookparcel-<version>-<arch>.flatpak` | a GTK 4-es ablak a Flathubról származó GNOME 51 futtatókörnyezeten |
 | Linux, sima bináris fájlok | `rookparcel-<version>-linux-<arch>.tar.gz` | a `rookparcel-gtk`, a `rookparcel-nox`, az asztali bejegyzés és a systemd-egységek; a rendszer GTK 4-ét (4.12 vagy újabb) és OpenSSL 3-át használják |
 | Linux kiszolgáló, fej nélküli | `rookparcel-nox-<version>-<arch>.AppImage` | a `rookparcel-nox` beépített OpenSSL-lel |
@@ -111,7 +111,7 @@ Az ellenőrző összegnek meg kell egyeznie a fájl sorával a `SHA256SUMS` fáj
 
 3. Ha a rendszeren nincs FUSE 2, indítsa az `--appimage-extract-and-run` kapcsolóval kiegészítve.
 
-Az AppImage glibc 2.34 vagy újabb verziót igényel (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 vagy újabb). A beállítások a `~/.config/rookparcel/gtk`, a torrentek a `~/.local/share/rookparcel/gtk` mappába kerülnek. Az `.AppImage` fájl mellé tett `rookparcel.ini` fájl ehelyett hordozhatóvá teszi (*új az 1.1.49-ben*).
+Az AppImage glibc 2.35 vagy újabb verziót igényel (Ubuntu 22.04, Debian 12, Fedora 36 vagy újabb). A beállítások a `~/.config/rookparcel/gtk`, a torrentek a `~/.local/share/rookparcel/gtk` mappába kerülnek. Az `.AppImage` fájl mellé tett `rookparcel.ini` fájl ehelyett hordozhatóvá teszi (*új az 1.1.49-ben*).
 
 ### Flatpak
 

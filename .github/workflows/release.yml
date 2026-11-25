@@ -224,7 +224,7 @@ jobs:
   appimage:
     needs: version
     # The AppImages are built in Ubuntu 22.04 (glibc 2.35), so they run there and on Debian 12
-    # and RHEL 9 too; the AppImage catalog tests on 22.04. 22.04's GTK is 4.6, older than the
+    # too; the AppImage catalog tests on 22.04. 22.04's GTK is 4.6, older than the
     # GUI's 4.12, so packaging/appimage/gtk-stack.sh builds GTK 4.14 and a newer GLib and
     # Wayland, cached by the scripts' hash (D81, packaging/appimage/README.md)
     strategy:

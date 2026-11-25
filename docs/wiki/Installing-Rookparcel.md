@@ -10,7 +10,7 @@ Every release is on the [Releases page](https://github.com/Balls0fSteel/Rookparc
 |---|---|---|
 | Windows 10 / 11, x64, installer | `rookparcel-<version>-windows-x64-setup.exe` | `rookparcel.exe` (the window) and `rookparcel-nox.exe` (the headless daemon), installed with a Start menu entry and an uninstaller |
 | Windows 10 / 11, x64, portable | `rookparcel-<version>-windows-x64.zip` | the same two programs; nothing to install |
-| Linux desktop, x86_64 or aarch64 | `Rookparcel-<version>-<arch>.AppImage` | the GTK 4 window with its libraries bundled (needs glibc 2.34 or newer: Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 or later) |
+| Linux desktop, x86_64 or aarch64 | `Rookparcel-<version>-<arch>.AppImage` | the GTK 4 window with its libraries bundled (needs glibc 2.35 or newer: Ubuntu 22.04, Debian 12, Fedora 36 or later) |
 | Linux desktop, Flatpak | `Rookparcel-<version>-<arch>.flatpak` | the GTK 4 window on the GNOME 51 runtime from Flathub |
 | Linux, plain binaries | `rookparcel-<version>-linux-<arch>.tar.gz` | `rookparcel-gtk`, `rookparcel-nox`, the desktop entry and the systemd units; they use the system's GTK 4 (4.12 or newer) and OpenSSL 3 |
 | Linux server, headless | `rookparcel-nox-<version>-<arch>.AppImage` | `rookparcel-nox` with OpenSSL bundled |
@@ -109,7 +109,7 @@ The hash should match the file's line in `SHA256SUMS`.
 
 3. Without FUSE 2 on the system, start it with `--appimage-extract-and-run` added.
 
-The AppImage needs glibc 2.34 or newer (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 or later). Settings go to `~/.config/rookparcel/gtk`, torrents to `~/.local/share/rookparcel/gtk`. A `rookparcel.ini` file beside the `.AppImage` makes it portable instead (*new in 1.1.49*).
+The AppImage needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 or later). Settings go to `~/.config/rookparcel/gtk`, torrents to `~/.local/share/rookparcel/gtk`. A `rookparcel.ini` file beside the `.AppImage` makes it portable instead (*new in 1.1.49*).
 
 ### Flatpak
 

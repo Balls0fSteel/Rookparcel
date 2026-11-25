@@ -242,8 +242,8 @@ KINDS = [
          "Portable zip", "<code>rookparcel.exe</code> (the GUI) and <code>rookparcel-nox.exe</code> "
          "(the headless daemon); statically linked, nothing to install."),
     Kind("appimage", "linux", r"(?:Rookparcel|PaTorrent)-VER-(?P<arch>x86_64|aarch64)\.AppImage",
-         "AppImage", "The GTK 4 GUI with its libraries bundled. Needs glibc 2.34 or newer "
-         "(Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 or later)."),
+         "AppImage", "The GTK 4 GUI with its libraries bundled. Needs glibc 2.35 or newer "
+         "(Ubuntu 22.04, Debian 12, Fedora 36 or later)."),
     Kind("flatpak", "linux", r"(?:Rookparcel|PaTorrent)-VER-(?P<arch>x86_64|aarch64)\.flatpak",
          "Flatpak bundle", "The GTK 4 GUI on the GNOME 51 runtime, which comes from Flathub."),
     Kind("linux-tar", "linux", r"(?:rookparcel|patorrent)-VER-linux-(?P<arch>x86_64|aarch64)\.tar\.gz",

@@ -12,7 +12,7 @@ Todas las versiones están en la [página de versiones publicadas](https://githu
 |---|---|---|
 | Windows 10 / 11, x64, instalador | `rookparcel-<version>-windows-x64-setup.exe` | `rookparcel.exe` (la ventana) y `rookparcel-nox.exe` (el demonio sin ventana), instalados con una entrada en el menú Inicio y un desinstalador |
 | Windows 10 / 11, x64, portátil | `rookparcel-<version>-windows-x64.zip` | los mismos dos programas; no hay nada que instalar |
-| Escritorio Linux, x86_64 o aarch64 | `Rookparcel-<version>-<arch>.AppImage` | la ventana GTK 4 con sus bibliotecas incluidas (necesita glibc 2.34 o posterior: Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 o posteriores) |
+| Escritorio Linux, x86_64 o aarch64 | `Rookparcel-<version>-<arch>.AppImage` | la ventana GTK 4 con sus bibliotecas incluidas (necesita glibc 2.35 o posterior: Ubuntu 22.04, Debian 12, Fedora 36 o posteriores) |
 | Escritorio Linux, Flatpak | `Rookparcel-<version>-<arch>.flatpak` | la ventana GTK 4 sobre el runtime GNOME 51 de Flathub |
 | Linux, binarios sueltos | `rookparcel-<version>-linux-<arch>.tar.gz` | `rookparcel-gtk`, `rookparcel-nox`, la entrada de escritorio y las unidades de systemd; usan el GTK 4 (4.12 o posterior) y el OpenSSL 3 del sistema |
 | Servidor Linux, sin ventana | `rookparcel-nox-<version>-<arch>.AppImage` | `rookparcel-nox` con OpenSSL incluido |
@@ -111,7 +111,7 @@ El hash debe coincidir con la línea del archivo en `SHA256SUMS`.
 
 3. Si el sistema no tiene FUSE 2, inícielo añadiendo `--appimage-extract-and-run`.
 
-El AppImage necesita glibc 2.34 o posterior (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 o posteriores). Los ajustes van a `~/.config/rookparcel/gtk` y los torrents a `~/.local/share/rookparcel/gtk`. Un archivo `rookparcel.ini` junto al `.AppImage` lo hace portátil (*nuevo en la 1.1.49*).
+El AppImage necesita glibc 2.35 o posterior (Ubuntu 22.04, Debian 12, Fedora 36 o posteriores). Los ajustes van a `~/.config/rookparcel/gtk` y los torrents a `~/.local/share/rookparcel/gtk`. Un archivo `rookparcel.ini` junto al `.AppImage` lo hace portátil (*nuevo en la 1.1.49*).
 
 ### Flatpak
 

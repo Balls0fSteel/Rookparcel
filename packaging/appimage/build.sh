@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds rookparcel-gtk and rookparcel-nox and makes the two AppImages, in the ubuntu:22.04
 # container after deps.sh and gtk-stack.sh (packaging/appimage/README.md), so they need glibc
-# 2.35 and run on Ubuntu 22.04, Debian 12, RHEL 9 and newer. Run from the repository root:
+# 2.35 (the GUI's: 22.04's Cairo is bundled; nox 2.34) and run on Ubuntu 22.04, Debian 12 and newer. Run from the repository root:
 #   VERSION=1.2.81 APP_ICON_DIR=assets/patina-icons/exports/app/<family> packaging/appimage/build.sh
 # The AppImages land in the current folder.
 set -euo pipefail
@@ -87,5 +87,13 @@ print("bundled: GTK %d.%d.%d, GLib %d.%d" % (v + g))
 assert v >= (4, 14, 0) and g >= (2, 80), "an older GTK or GLib was bundled"
 PY
 ls AppDir-nox/usr/lib/libssl.so.* AppDir-nox/usr/lib/libcrypto.so.*
+# what the bundles need of the system's glibc, libraries included (22.04's Cairo needs 2.35):
+# the docs promise 2.35 for the GUI and 2.34 for nox
+for d in AppDir-gtk AppDir-nox; do
+  need=$(find "$d" -type f \( -name '*.so*' -o -path '*/bin/*' \) -exec objdump -T {} \; 2>/dev/null |
+    grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
+  echo "$d needs $need"
+  [ "$(printf '%s\n' "$need" GLIBC_2.35 | sort -V | tail -n 1)" = GLIBC_2.35 ]
+done
 ./"rookparcel-nox-$VERSION-$arch.AppImage" --version
 ls -l ./*.AppImage

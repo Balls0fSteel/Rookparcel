@@ -12,7 +12,7 @@ Jede Version steht auf der [Releases-Seite](https://github.com/Balls0fSteel/Rook
 |---|---|---|
 | Windows 10 / 11, x64, Installer | `rookparcel-<version>-windows-x64-setup.exe` | `rookparcel.exe` (das Fenster) und `rookparcel-nox.exe` (der Daemon ohne Fenster), installiert mit einem Startmenü-Eintrag und einem Deinstallationsprogramm |
 | Windows 10 / 11, x64, portabel | `rookparcel-<version>-windows-x64.zip` | dieselben beiden Programme; nichts zu installieren |
-| Linux-Desktop, x86_64 oder aarch64 | `Rookparcel-<version>-<arch>.AppImage` | das GTK-4-Fenster mit mitgelieferten Bibliotheken (benötigt glibc 2.34 oder neuer: Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 oder später) |
+| Linux-Desktop, x86_64 oder aarch64 | `Rookparcel-<version>-<arch>.AppImage` | das GTK-4-Fenster mit mitgelieferten Bibliotheken (benötigt glibc 2.35 oder neuer: Ubuntu 22.04, Debian 12, Fedora 36 oder später) |
 | Linux-Desktop, Flatpak | `Rookparcel-<version>-<arch>.flatpak` | das GTK-4-Fenster auf der GNOME-51-Runtime von Flathub |
 | Linux, einfache Programmdateien | `rookparcel-<version>-linux-<arch>.tar.gz` | `rookparcel-gtk`, `rookparcel-nox`, der Desktop-Eintrag und die systemd-Units; sie verwenden GTK 4 (4.12 oder neuer) und OpenSSL 3 des Systems |
 | Linux-Server, ohne Fenster | `rookparcel-nox-<version>-<arch>.AppImage` | `rookparcel-nox` mit mitgeliefertem OpenSSL |
@@ -111,7 +111,7 @@ Der Hash sollte mit der Zeile der Datei in `SHA256SUMS` übereinstimmen.
 
 3. Ist FUSE 2 nicht auf dem System, starten Sie es mit zusätzlichem `--appimage-extract-and-run`.
 
-Das AppImage braucht glibc 2.34 oder neuer (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 oder später). Die Einstellungen kommen nach `~/.config/rookparcel/gtk`, die Torrents nach `~/.local/share/rookparcel/gtk`. Eine Datei `rookparcel.ini` neben der `.AppImage`-Datei macht es stattdessen portabel (*neu in 1.1.49*).
+Das AppImage braucht glibc 2.35 oder neuer (Ubuntu 22.04, Debian 12, Fedora 36 oder später). Die Einstellungen kommen nach `~/.config/rookparcel/gtk`, die Torrents nach `~/.local/share/rookparcel/gtk`. Eine Datei `rookparcel.ini` neben der `.AppImage`-Datei macht es stattdessen portabel (*neu in 1.1.49*).
 
 ### Flatpak
 

@@ -20,8 +20,8 @@ How a version goes out (PLAN.md D22, Road to 1.0 items 6, 7 and 14). The files a
 
 The tarballs' binaries use the system's glibc, OpenSSL 3 and GTK 4 (4.12 or later), as Ubuntu
 24.04 has them, so they run on distributions about that age or newer. The AppImages carry their
-libraries but glibc and are built in Ubuntu 22.04 (D81), so they need glibc 2.34 or newer (Ubuntu
-22.04, Debian 12, RHEL 9, Fedora 35); job `appimage-start` starts the GTK one in a clean 22.04
+libraries but glibc and are built in Ubuntu 22.04 (D81): the GTK one needs glibc 2.35 (22.04's Cairo
+is bundled), the nox one 2.34 (Ubuntu 22.04, Debian 12, Fedora 36; not RHEL 9); job `appimage-start` starts the GTK one in a clean 22.04
 container on Xvfb, as the AppImage catalog does, and keeps a picture (`appimage-start-<arch>`);
 an AppImage started on a desktop without FUSE 2 needs `--appimage-extract-and-run`. The AppImage
 icon is provisional (the family `assets/patina-icons/app-icon.txt` names) until the owner picks

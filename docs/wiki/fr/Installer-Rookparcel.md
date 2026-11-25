@@ -12,7 +12,7 @@ Chaque version se trouve sur la [page des versions](https://github.com/Balls0fSt
 |---|---|---|
 | Windows 10 / 11, x64, installeur | `rookparcel-<version>-windows-x64-setup.exe` | `rookparcel.exe` (la fenêtre) et `rookparcel-nox.exe` (le démon sans fenêtre), installés avec une entrée du menu Démarrer et un désinstalleur |
 | Windows 10 / 11, x64, portable | `rookparcel-<version>-windows-x64.zip` | les deux mêmes programmes ; rien à installer |
-| Bureau Linux, x86_64 ou aarch64 | `Rookparcel-<version>-<arch>.AppImage` | la fenêtre GTK 4 avec ses bibliothèques incluses (demande glibc 2.34 ou plus récent : Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 ou plus récent) |
+| Bureau Linux, x86_64 ou aarch64 | `Rookparcel-<version>-<arch>.AppImage` | la fenêtre GTK 4 avec ses bibliothèques incluses (demande glibc 2.35 ou plus récent : Ubuntu 22.04, Debian 12, Fedora 36 ou plus récent) |
 | Bureau Linux, Flatpak | `Rookparcel-<version>-<arch>.flatpak` | la fenêtre GTK 4 sur l'environnement d'exécution GNOME 51 de Flathub |
 | Linux, binaires simples | `rookparcel-<version>-linux-<arch>.tar.gz` | `rookparcel-gtk`, `rookparcel-nox`, l'entrée de bureau et les unités systemd ; ils utilisent le GTK 4 (4.12 ou plus récent) et l'OpenSSL 3 du système |
 | Serveur Linux, sans fenêtre | `rookparcel-nox-<version>-<arch>.AppImage` | `rookparcel-nox` avec OpenSSL inclus |
@@ -111,7 +111,7 @@ Le hash doit correspondre à la ligne du fichier dans `SHA256SUMS`.
 
 3. Sans FUSE 2 sur le système, lancez-le avec `--appimage-extract-and-run` en plus.
 
-L'AppImage demande glibc 2.34 ou plus récent (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 ou plus récent). Les réglages vont dans `~/.config/rookparcel/gtk`, les torrents dans `~/.local/share/rookparcel/gtk`. Un fichier `rookparcel.ini` à côté du fichier `.AppImage` le rend portable à la place (*nouveau dans la 1.1.49*).
+L'AppImage demande glibc 2.35 ou plus récent (Ubuntu 22.04, Debian 12, Fedora 36 ou plus récent). Les réglages vont dans `~/.config/rookparcel/gtk`, les torrents dans `~/.local/share/rookparcel/gtk`. Un fichier `rookparcel.ini` à côté du fichier `.AppImage` le rend portable à la place (*nouveau dans la 1.1.49*).
 
 ### Flatpak
 

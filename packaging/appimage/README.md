@@ -2,7 +2,7 @@
 
 The release job's `appimage` job makes `Rookparcel-<version>-<arch>.AppImage` (the GTK GUI) and
 `rookparcel-nox-<version>-<arch>.AppImage` in an `ubuntu:22.04` container, natively on x86_64 and
-aarch64, so they need glibc 2.34 and run on Ubuntu 22.04, Debian 12, RHEL 9 and newer (D81). The
+aarch64, so they need glibc 2.35 (the GUI's, for the bundled Cairo of 22.04; nox 2.34) and run on Ubuntu 22.04, Debian 12 and newer (D81). The
 AppImage catalog (appimage.github.io) starts each app on 22.04.
 
 | Script | What |
