@@ -11,7 +11,7 @@ A Rookparcel indítása után körülbelül tíz másodperccel, majd futás köz
 Ha megjelent egy újabb verzió:
 
 - Megjelenik egy kérdésablak, minden új verziónál egyszer.
-- Ezután egy értesítés marad az állapotsorban, amíg rá nem kattint: „Elérhető a Rookparcel 1.2.79 - kattintson ide a letöltéshez”.
+- Ezután egy értesítés marad az állapotsorban, amíg rá nem kattint: „Elérhető a Rookparcel 1.2.80 - kattintson ide a letöltéshez”.
 - A Napló lapon is van egy sor a hivatkozással.
 
 Az azonnali ellenőrzéshez válassza a **Súgó > Frissítések keresése** parancsot (macOS-en **Rookparcel > Frissítések keresése**). Mindkét esetben válaszol: az újabb verzióval, vagy azzal, hogy „Ön a legújabb verziót használja”.
@@ -20,7 +20,7 @@ Az azonnali ellenőrzéshez válassza a **Súgó > Frissítések keresése** par
 
 A Windows-telepítővel telepített Rookparcel maga is telepítheti az új verziót. *Új az 1.1.40-ben.*
 
-1. A kérdés így szól: „Elérhető a Rookparcel 1.2.79. Az Ön verziója: 1.2.77. Letölti és telepíti most?”. Kattintson a **Letöltés és telepítés** gombra. (A **Letöltési oldal megnyitása** a kiadási oldalt nyitja meg a böngészőben; a **Mégse** nem csinál semmit.)
+1. A kérdés így szól: „Elérhető a Rookparcel 1.2.80. Az Ön verziója: 1.2.79. Letölti és telepíti most?”. Kattintson a **Letöltés és telepítés** gombra. (A **Letöltési oldal megnyitása** a kiadási oldalt nyitja meg a böngészőben; a **Mégse** nem csinál semmit.)
 2. Egy kis ablak mutatja a letöltés előrehaladását. A Rookparcel a letöltött telepítőt a használat előtt ellenőrzi a kiadás `SHA256SUMS` fájlja alapján.
 3. A Rookparcel megkérdezi: „A telepítéshez a Rookparcel most bezárul, és a telepítő végeztével újraindul. Bezárja és telepíti most?”. Kattintson az **Igen** gombra.
 4. A Rookparcel elmenti az összes adatot, és bezárul. A telepítő csendben telepíti az új verziót ugyanabba a mappába, és újra elindítja a Rookparcelt.

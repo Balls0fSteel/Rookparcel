@@ -17,7 +17,7 @@ A Rookparcel négy programból áll:
 
 A legtöbb oldal a Windows-os ablakot írja le, majd megmondja, miben tér el a GTK-s ablak és a webes felület. A macOS-es alkalmazás a GTK-s ablakhoz hasonlóan működik; ahol eltér, az oldalon macOS-szakasz van: [A Rookparcel telepítése](A-Rookparcel-telepítése#macos), [Billentyűparancsok](Billentyűparancsok#macos), [Tálca, értesítések és indítás](Tálca-értesítések-és-indítás#macos), [A beállítások leírása](A-beállítások-leírása#különbségek-macos-en) és [Automatikus leállítás](Automatikus-leállítás). *A natív macOS-es alkalmazás az 1.2.19-es verzióban jelent meg; az előtte kiadott verziók macOS-en az Apple silicon számára készült GTK-s ablakot tartalmazzák.*
 
-**Verzió:** a wiki a jelenlegi kódot (1.2.79) követi, amely egyben a legújabb kiadott verzió is: [1.2.79](https://github.com/Balls0fSteel/Rookparcel/releases/latest). Az oldalak megmondják, melyik verzióban jelent meg egy újabb funkció.
+**Verzió:** a wiki a jelenlegi kódot (1.2.80) követi, amely egyben a legújabb kiadott verzió is: [1.2.80](https://github.com/Balls0fSteel/Rookparcel/releases/latest). Az oldalak megmondják, melyik verzióban jelent meg egy újabb funkció.
 
 **Más nyelvek:** [Français](Accueil) · [Español](Inicio) · [Deutsch](Startseite) · [Magyar](Kezdőlap). A fordítások ezt az angol wikit követik; ha eltérnek, az angol oldal a mérvadó.
 

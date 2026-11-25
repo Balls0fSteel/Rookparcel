@@ -11,7 +11,7 @@ Unos diez segundos después de iniciarse, y después cada 12 horas mientras se e
 Cuando hay una versión más reciente:
 
 - Aparece un cuadro de pregunta, una vez por cada versión nueva.
-- Después, un aviso permanece en la barra de estado hasta que haga clic en él: «Rookparcel 1.2.79 está disponible - haga clic aquí para descargarlo».
+- Después, un aviso permanece en la barra de estado hasta que haga clic en él: «Rookparcel 1.2.80 está disponible - haga clic aquí para descargarlo».
 - La pestaña Registro tiene también una línea con el enlace.
 
 Para comprobar al instante, elija **Ayuda > Buscar actualizaciones** (en macOS **Rookparcel > Buscar actualizaciones**). Responde en cualquier caso, con la versión más reciente o con «Tiene la versión más reciente».
@@ -20,7 +20,7 @@ Para comprobar al instante, elija **Ayuda > Buscar actualizaciones** (en macOS *
 
 Un Rookparcel instalado con el instalador de Windows puede instalar la versión nueva por sí mismo. *Nuevo en la 1.1.40.*
 
-1. La pregunta dice «Rookparcel 1.2.79 está disponible. Tiene la versión 1.2.77. ¿Descargarlo e instalarlo ahora?». Haga clic en **Descargar e instalar**. (**Abrir la página de descarga** abre en cambio la página de la versión en su navegador; **Cancelar** no hace nada.)
+1. La pregunta dice «Rookparcel 1.2.80 está disponible. Tiene la versión 1.2.79. ¿Descargarlo e instalarlo ahora?». Haga clic en **Descargar e instalar**. (**Abrir la página de descarga** abre en cambio la página de la versión en su navegador; **Cancelar** no hace nada.)
 2. Una ventana pequeña muestra el progreso de la descarga. Rookparcel comprueba el instalador descargado con el `SHA256SUMS` de la versión antes de usarlo.
 3. Rookparcel pregunta: «Para instalarlo, Rookparcel se cierra ahora y se inicia de nuevo cuando termine el instalador. ¿Cerrar e instalar ahora?». Haga clic en **Sí**.
 4. Rookparcel guarda todo y se cierra. El instalador instala la versión nueva en silencio en la misma carpeta y vuelve a iniciar Rookparcel.

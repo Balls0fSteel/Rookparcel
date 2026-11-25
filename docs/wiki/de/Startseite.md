@@ -15,7 +15,7 @@ Rookparcel besteht aus vier Programmen:
 
 Die meisten Seiten beschreiben das Windows-Fenster und sagen dann, was im GTK-Fenster und in der Weboberfläche anders ist. Die macOS-App funktioniert wie das GTK-Fenster; wo sie abweicht, hat die Seite einen macOS-Abschnitt: [Rookparcel installieren](Rookparcel-installieren#macos), [Tastenkürzel](Tastenkürzel#macos), [Infobereich, Benachrichtigungen und Autostart](Infobereich-Benachrichtigungen-und-Autostart#macos), [Einstellungen im Überblick](Einstellungen-im-Überblick#unterschiede-unter-macos) und [Automatisches Herunterfahren](Automatisches-Herunterfahren). *Die native macOS-App ist neu in 1.2.19; Versionen davor haben das GTK-Fenster für Apple Silicon unter macOS.*
 
-**Version:** Das Wiki folgt dem aktuellen Code (1.2.79), der auch die neueste veröffentlichte Version ist: [1.2.79](https://github.com/Balls0fSteel/Rookparcel/releases/latest). Die Seiten sagen, in welcher Version eine neuere Funktion hinzugekommen ist.
+**Version:** Das Wiki folgt dem aktuellen Code (1.2.80), der auch die neueste veröffentlichte Version ist: [1.2.80](https://github.com/Balls0fSteel/Rookparcel/releases/latest). Die Seiten sagen, in welcher Version eine neuere Funktion hinzugekommen ist.
 
 **Andere Sprachen:** [English](Home) · [Français](Accueil) · [Español](Inicio) · Deutsch · [Magyar](Kezdőlap). Die Übersetzungen folgen diesem englischen Wiki; wo sie abweichen, gilt die englische Seite.
 

@@ -6,7 +6,7 @@ Ez az oldal felsorolja az egyes platformok letöltéseit, megmutatja, hogyan tel
 
 ## Honnan tölthető le
 
-Minden kiadás megtalálható a [Kiadások oldalon](https://github.com/Balls0fSteel/Rookparcel/releases). A legújabb kiadott verzió az 1.2.79. Minden kiadáshoz tartoznak kiadási jegyzetek az első indítás lépéseivel platformonként, valamint egy `SHA256SUMS` fájl, amely minden letöltés ellenőrző összegét tartalmazza.
+Minden kiadás megtalálható a [Kiadások oldalon](https://github.com/Balls0fSteel/Rookparcel/releases). A legújabb kiadott verzió az 1.2.80. Minden kiadáshoz tartoznak kiadási jegyzetek az első indítás lépéseivel platformonként, valamint egy `SHA256SUMS` fájl, amely minden letöltés ellenőrző összegét tartalmazza.
 
 | Platform | Fájl | Mi van benne |
 |---|---|---|
@@ -75,7 +75,7 @@ A telepítő a következő kapcsolókat fogadja, szkriptekhez és rendszergazdá
 Például rendszergazdai parancssorból:
 
 ```
-rookparcel-1.2.79-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
+rookparcel-1.2.80-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
 ```
 
 ### A zip
@@ -92,7 +92,7 @@ Ha a zipből futó példánnyal szeretné megnyitni a `.torrent` fájlokat és a
 Minden kiadás `SHA256SUMS` fájlja felsorolja az összes fájl SHA-256 értékét. PowerShellben:
 
 ```
-Get-FileHash .\rookparcel-1.2.79-windows-x64-setup.exe -Algorithm SHA256
+Get-FileHash .\rookparcel-1.2.80-windows-x64-setup.exe -Algorithm SHA256
 ```
 
 Az ellenőrző összegnek meg kell egyeznie a fájl sorával a `SHA256SUMS` fájlban.
@@ -105,8 +105,8 @@ Az ellenőrző összegnek meg kell egyeznie a fájl sorával a `SHA256SUMS` fáj
 2. Tegye futtathatóvá, és indítsa el:
 
    ```bash
-   chmod +x Rookparcel-1.2.79-x86_64.AppImage
-   ./Rookparcel-1.2.79-x86_64.AppImage
+   chmod +x Rookparcel-1.2.80-x86_64.AppImage
+   ./Rookparcel-1.2.80-x86_64.AppImage
    ```
 
 3. Ha a rendszeren nincs FUSE 2, indítsa az `--appimage-extract-and-run` kapcsolóval kiegészítve.
@@ -119,7 +119,7 @@ A csomag az alkalmazást tartalmazza; a futtatókörnyezet a Flathubról jön. A
 
 ```bash
 flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak install --user Rookparcel-1.2.79-x86_64.flatpak
+flatpak install --user Rookparcel-1.2.80-x86_64.flatpak
 flatpak run io.github.balls0fsteel.Rookparcel
 ```
 
