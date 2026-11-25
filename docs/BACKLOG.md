@@ -486,7 +486,11 @@ widgets); the scheduler's Off cell is the surface colour in every UI. Still open
   desktop, including aarch64. Existing smoke checks of binaries and nox do not
   cover the GUI. The GTK plugin forces X11/XWayland; remove this only after a
   Wayland check. Built on Ubuntu 24.04, they need glibc 2.39; Ubuntu 22.04's GTK
-  4.6 is older than the GUI's 4.12 requirement.
+  4.6 is older than the GUI's 4.12 requirement. The AppImage catalog
+  (AppImage/appimage.github.io#12506) starts the app on Ubuntu 22.04 (glibc 2.35):
+  1.2.80 passed its lint but exited with "GLIBC_2.38 not found" (2026-11-25). Getting
+  in needs a 22.04-era build: the Rust binary for glibc 2.35 and GTK 4.12+ with its
+  stack built from source and bundled; that also reaches Debian 12 and RHEL 9.
 - Flatpak: install/run both architectures on real desktops; check tray,
   notifications, associations and Background-portal autostart. Portal Apply is
   asynchronous, stores grants in `background.ini` and has no parent-window
