@@ -6,13 +6,13 @@ Ez az oldal felsorolja az egyes platformok letöltéseit, megmutatja, hogyan tel
 
 ## Honnan tölthető le
 
-Minden kiadás megtalálható a [Kiadások oldalon](https://github.com/Balls0fSteel/Rookparcel/releases). A legújabb kiadott verzió az 1.2.80. Minden kiadáshoz tartoznak kiadási jegyzetek az első indítás lépéseivel platformonként, valamint egy `SHA256SUMS` fájl, amely minden letöltés ellenőrző összegét tartalmazza.
+Minden kiadás megtalálható a [Kiadások oldalon](https://github.com/Balls0fSteel/Rookparcel/releases). A legújabb kiadott verzió az 1.2.81. Minden kiadáshoz tartoznak kiadási jegyzetek az első indítás lépéseivel platformonként, valamint egy `SHA256SUMS` fájl, amely minden letöltés ellenőrző összegét tartalmazza.
 
 | Platform | Fájl | Mi van benne |
 |---|---|---|
 | Windows 10 / 11, x64, telepítő | `rookparcel-<version>-windows-x64-setup.exe` | a `rookparcel.exe` (az ablak) és a `rookparcel-nox.exe` (a fej nélküli démon), Start menü-bejegyzéssel és eltávolítóval telepítve |
 | Windows 10 / 11, x64, hordozható | `rookparcel-<version>-windows-x64.zip` | ugyanez a két program; nincs mit telepíteni |
-| Linux asztali gép, x86_64 vagy aarch64 | `Rookparcel-<version>-<arch>.AppImage` | a GTK 4-es ablak a könyvtáraival együtt (glibc 2.39 vagy újabb kell hozzá: Ubuntu 24.04, Fedora 40, Debian 13 vagy újabb) |
+| Linux asztali gép, x86_64 vagy aarch64 | `Rookparcel-<version>-<arch>.AppImage` | a GTK 4-es ablak a könyvtáraival együtt (glibc 2.34 vagy újabb kell hozzá: Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 vagy újabb) |
 | Linux asztali gép, Flatpak | `Rookparcel-<version>-<arch>.flatpak` | a GTK 4-es ablak a Flathubról származó GNOME 51 futtatókörnyezeten |
 | Linux, sima bináris fájlok | `rookparcel-<version>-linux-<arch>.tar.gz` | a `rookparcel-gtk`, a `rookparcel-nox`, az asztali bejegyzés és a systemd-egységek; a rendszer GTK 4-ét (4.12 vagy újabb) és OpenSSL 3-át használják |
 | Linux kiszolgáló, fej nélküli | `rookparcel-nox-<version>-<arch>.AppImage` | a `rookparcel-nox` beépített OpenSSL-lel |
@@ -75,7 +75,7 @@ A telepítő a következő kapcsolókat fogadja, szkriptekhez és rendszergazdá
 Például rendszergazdai parancssorból:
 
 ```
-rookparcel-1.2.80-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
+rookparcel-1.2.81-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
 ```
 
 ### A zip
@@ -92,7 +92,7 @@ Ha a zipből futó példánnyal szeretné megnyitni a `.torrent` fájlokat és a
 Minden kiadás `SHA256SUMS` fájlja felsorolja az összes fájl SHA-256 értékét. PowerShellben:
 
 ```
-Get-FileHash .\rookparcel-1.2.80-windows-x64-setup.exe -Algorithm SHA256
+Get-FileHash .\rookparcel-1.2.81-windows-x64-setup.exe -Algorithm SHA256
 ```
 
 Az ellenőrző összegnek meg kell egyeznie a fájl sorával a `SHA256SUMS` fájlban.
@@ -105,13 +105,13 @@ Az ellenőrző összegnek meg kell egyeznie a fájl sorával a `SHA256SUMS` fáj
 2. Tegye futtathatóvá, és indítsa el:
 
    ```bash
-   chmod +x Rookparcel-1.2.80-x86_64.AppImage
-   ./Rookparcel-1.2.80-x86_64.AppImage
+   chmod +x Rookparcel-1.2.81-x86_64.AppImage
+   ./Rookparcel-1.2.81-x86_64.AppImage
    ```
 
 3. Ha a rendszeren nincs FUSE 2, indítsa az `--appimage-extract-and-run` kapcsolóval kiegészítve.
 
-Az AppImage glibc 2.39 vagy újabb verziót igényel (Ubuntu 24.04, Fedora 40, Debian 13 vagy újabb). A beállítások a `~/.config/rookparcel/gtk`, a torrentek a `~/.local/share/rookparcel/gtk` mappába kerülnek. Az `.AppImage` fájl mellé tett `rookparcel.ini` fájl ehelyett hordozhatóvá teszi (*új az 1.1.49-ben*).
+Az AppImage glibc 2.34 vagy újabb verziót igényel (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 vagy újabb). A beállítások a `~/.config/rookparcel/gtk`, a torrentek a `~/.local/share/rookparcel/gtk` mappába kerülnek. Az `.AppImage` fájl mellé tett `rookparcel.ini` fájl ehelyett hordozhatóvá teszi (*új az 1.1.49-ben*).
 
 ### Flatpak
 
@@ -119,7 +119,7 @@ A csomag az alkalmazást tartalmazza; a futtatókörnyezet a Flathubról jön. A
 
 ```bash
 flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak install --user Rookparcel-1.2.80-x86_64.flatpak
+flatpak install --user Rookparcel-1.2.81-x86_64.flatpak
 flatpak run io.github.balls0fsteel.Rookparcel
 ```
 

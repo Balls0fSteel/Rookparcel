@@ -4,13 +4,13 @@ This page lists the downloads for each platform, how to install and start each o
 
 ## Where to download
 
-Every release is on the [Releases page](https://github.com/Balls0fSteel/Rookparcel/releases). The latest published release is 1.2.80. Each release has notes with the first-run steps per platform, and a `SHA256SUMS` file with the checksum of every download.
+Every release is on the [Releases page](https://github.com/Balls0fSteel/Rookparcel/releases). The latest published release is 1.2.81. Each release has notes with the first-run steps per platform, and a `SHA256SUMS` file with the checksum of every download.
 
 | Platform | File | What is inside |
 |---|---|---|
 | Windows 10 / 11, x64, installer | `rookparcel-<version>-windows-x64-setup.exe` | `rookparcel.exe` (the window) and `rookparcel-nox.exe` (the headless daemon), installed with a Start menu entry and an uninstaller |
 | Windows 10 / 11, x64, portable | `rookparcel-<version>-windows-x64.zip` | the same two programs; nothing to install |
-| Linux desktop, x86_64 or aarch64 | `Rookparcel-<version>-<arch>.AppImage` | the GTK 4 window with its libraries bundled (needs glibc 2.39 or newer: Ubuntu 24.04, Fedora 40, Debian 13 or later) |
+| Linux desktop, x86_64 or aarch64 | `Rookparcel-<version>-<arch>.AppImage` | the GTK 4 window with its libraries bundled (needs glibc 2.34 or newer: Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 or later) |
 | Linux desktop, Flatpak | `Rookparcel-<version>-<arch>.flatpak` | the GTK 4 window on the GNOME 51 runtime from Flathub |
 | Linux, plain binaries | `rookparcel-<version>-linux-<arch>.tar.gz` | `rookparcel-gtk`, `rookparcel-nox`, the desktop entry and the systemd units; they use the system's GTK 4 (4.12 or newer) and OpenSSL 3 |
 | Linux server, headless | `rookparcel-nox-<version>-<arch>.AppImage` | `rookparcel-nox` with OpenSSL bundled |
@@ -73,7 +73,7 @@ The setup takes these switches, for scripts and administrators:
 For example, from an administrator prompt:
 
 ```
-rookparcel-1.2.80-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
+rookparcel-1.2.81-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
 ```
 
 ### The zip
@@ -90,7 +90,7 @@ To open `.torrent` files and `magnet:` links with the zip copy, tick the associa
 Each release's `SHA256SUMS` lists the SHA-256 of every file. In PowerShell:
 
 ```
-Get-FileHash .\rookparcel-1.2.80-windows-x64-setup.exe -Algorithm SHA256
+Get-FileHash .\rookparcel-1.2.81-windows-x64-setup.exe -Algorithm SHA256
 ```
 
 The hash should match the file's line in `SHA256SUMS`.
@@ -103,13 +103,13 @@ The hash should match the file's line in `SHA256SUMS`.
 2. Make it executable and start it:
 
    ```bash
-   chmod +x Rookparcel-1.2.80-x86_64.AppImage
-   ./Rookparcel-1.2.80-x86_64.AppImage
+   chmod +x Rookparcel-1.2.81-x86_64.AppImage
+   ./Rookparcel-1.2.81-x86_64.AppImage
    ```
 
 3. Without FUSE 2 on the system, start it with `--appimage-extract-and-run` added.
 
-The AppImage needs glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian 13 or later). Settings go to `~/.config/rookparcel/gtk`, torrents to `~/.local/share/rookparcel/gtk`. A `rookparcel.ini` file beside the `.AppImage` makes it portable instead (*new in 1.1.49*).
+The AppImage needs glibc 2.34 or newer (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 or later). Settings go to `~/.config/rookparcel/gtk`, torrents to `~/.local/share/rookparcel/gtk`. A `rookparcel.ini` file beside the `.AppImage` makes it portable instead (*new in 1.1.49*).
 
 ### Flatpak
 
@@ -117,7 +117,7 @@ The bundle holds the application; the runtime comes from Flathub. Add Flathub on
 
 ```bash
 flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak install --user Rookparcel-1.2.80-x86_64.flatpak
+flatpak install --user Rookparcel-1.2.81-x86_64.flatpak
 flatpak run io.github.balls0fsteel.Rookparcel
 ```
 

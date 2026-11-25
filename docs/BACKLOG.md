@@ -1508,3 +1508,9 @@ Layer 1 (1.2.55): the loss paths closed and the engine hold. Layer 3: `crates/fr
   helper at a folder), now both hold `search_helper::test_lock`; the race itself was not
   reproduced. `the_setup_round_trips_through_the_preferences` compares with the port it proposed
   (failed 2 of 30 runs with 8080 toggled by another thread, 0 of 60 after).
+- Windows CI runner flake (2026-11-25, CI run 45576510819 on the docs-only `253d8c45`): three
+  engine tests (`listen::session_tests::udp_picks_the_port_when_tcp_keeps_drawing_ports_taken_for_udp`,
+  `unchanged_interfaces_change_nothing`, `network_rule::tests::a_session_started_held_runs_nothing_until_let_go`)
+  failed within 4 s with "failed to listen on 127.0.0.1:0 (Tcp) ... os error 10013" (WSAEACCES on
+  an ephemeral port); the next commit's run passed. Watch for a recurrence; if it comes back,
+  retry a bind that fails with 10013 in those tests.

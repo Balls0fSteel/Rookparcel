@@ -65,7 +65,7 @@
  "Checksums": "Sumas de verificación",
  "Installs Rookparcel; a newer installer upgrades it in place.": "Instala Rookparcel; un instalador más reciente lo actualiza en el mismo sitio.",
  "<code>rookparcel.exe</code> (the GUI) and <code>rookparcel-nox.exe</code> (the headless daemon); statically linked, nothing to install.": "<code>rookparcel.exe</code> (la interfaz) y <code>rookparcel-nox.exe</code> (el demonio sin interfaz); enlazados estáticamente, sin nada que instalar.",
- "The GTK 4 GUI with its libraries bundled. Needs glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian 13 or later).": "La interfaz GTK 4 con sus bibliotecas incluidas. Requiere glibc 2.39 o posterior (Ubuntu 24.04, Fedora 40, Debian 13 o posteriores).",
+ "The GTK 4 GUI with its libraries bundled. Needs glibc 2.34 or newer (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 or later).": "La interfaz GTK 4 con sus bibliotecas incluidas. Requiere glibc 2.34 o posterior (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 o posteriores).",
  "The GTK 4 GUI on the GNOME 51 runtime, which comes from Flathub.": "La interfaz GTK 4 sobre el runtime GNOME 51, que viene de Flathub.",
  "<code>rookparcel-gtk</code>, <code>rookparcel-nox</code>, the desktop entry and the systemd units. They use the system's GTK 4 (4.12 or newer) and OpenSSL 3, as on Ubuntu 24.04.": "<code>rookparcel-gtk</code>, <code>rookparcel-nox</code>, la entrada de escritorio y las unidades de systemd. Usan el GTK 4 (4.12 o posterior) y el OpenSSL 3 del sistema, como en Ubuntu 24.04.",
  "<code>rookparcel-nox</code> with OpenSSL bundled, for servers.": "<code>rookparcel-nox</code> con OpenSSL incluido, para servidores.",

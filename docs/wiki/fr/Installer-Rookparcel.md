@@ -6,13 +6,13 @@ Cette page liste les téléchargements pour chaque plateforme, explique comment 
 
 ## Où télécharger
 
-Chaque version se trouve sur la [page des versions](https://github.com/Balls0fSteel/Rookparcel/releases). La dernière version publiée est la 1.2.80. Chaque version a des notes avec les étapes du premier lancement pour chaque plateforme, et un fichier `SHA256SUMS` avec la somme de contrôle de chaque téléchargement.
+Chaque version se trouve sur la [page des versions](https://github.com/Balls0fSteel/Rookparcel/releases). La dernière version publiée est la 1.2.81. Chaque version a des notes avec les étapes du premier lancement pour chaque plateforme, et un fichier `SHA256SUMS` avec la somme de contrôle de chaque téléchargement.
 
 | Plateforme | Fichier | Contenu |
 |---|---|---|
 | Windows 10 / 11, x64, installeur | `rookparcel-<version>-windows-x64-setup.exe` | `rookparcel.exe` (la fenêtre) et `rookparcel-nox.exe` (le démon sans fenêtre), installés avec une entrée du menu Démarrer et un désinstalleur |
 | Windows 10 / 11, x64, portable | `rookparcel-<version>-windows-x64.zip` | les deux mêmes programmes ; rien à installer |
-| Bureau Linux, x86_64 ou aarch64 | `Rookparcel-<version>-<arch>.AppImage` | la fenêtre GTK 4 avec ses bibliothèques incluses (demande glibc 2.39 ou plus récent : Ubuntu 24.04, Fedora 40, Debian 13 ou plus récent) |
+| Bureau Linux, x86_64 ou aarch64 | `Rookparcel-<version>-<arch>.AppImage` | la fenêtre GTK 4 avec ses bibliothèques incluses (demande glibc 2.34 ou plus récent : Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 ou plus récent) |
 | Bureau Linux, Flatpak | `Rookparcel-<version>-<arch>.flatpak` | la fenêtre GTK 4 sur l'environnement d'exécution GNOME 51 de Flathub |
 | Linux, binaires simples | `rookparcel-<version>-linux-<arch>.tar.gz` | `rookparcel-gtk`, `rookparcel-nox`, l'entrée de bureau et les unités systemd ; ils utilisent le GTK 4 (4.12 ou plus récent) et l'OpenSSL 3 du système |
 | Serveur Linux, sans fenêtre | `rookparcel-nox-<version>-<arch>.AppImage` | `rookparcel-nox` avec OpenSSL inclus |
@@ -75,7 +75,7 @@ L'installeur accepte ces options, pour les scripts et les administrateurs :
 Par exemple, depuis une invite de commandes d'administrateur :
 
 ```
-rookparcel-1.2.80-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
+rookparcel-1.2.81-windows-x64-setup.exe /S /ALLUSERS /ASSOCIATE=torrent,magnet
 ```
 
 ### Le zip
@@ -92,7 +92,7 @@ Pour ouvrir les fichiers `.torrent` et les liens `magnet:` avec la copie du zip,
 Le `SHA256SUMS` de chaque version donne le SHA-256 de chaque fichier. Dans PowerShell :
 
 ```
-Get-FileHash .\rookparcel-1.2.80-windows-x64-setup.exe -Algorithm SHA256
+Get-FileHash .\rookparcel-1.2.81-windows-x64-setup.exe -Algorithm SHA256
 ```
 
 Le hash doit correspondre à la ligne du fichier dans `SHA256SUMS`.
@@ -105,13 +105,13 @@ Le hash doit correspondre à la ligne du fichier dans `SHA256SUMS`.
 2. Rendez-le exécutable et lancez-le :
 
    ```bash
-   chmod +x Rookparcel-1.2.80-x86_64.AppImage
-   ./Rookparcel-1.2.80-x86_64.AppImage
+   chmod +x Rookparcel-1.2.81-x86_64.AppImage
+   ./Rookparcel-1.2.81-x86_64.AppImage
    ```
 
 3. Sans FUSE 2 sur le système, lancez-le avec `--appimage-extract-and-run` en plus.
 
-L'AppImage demande glibc 2.39 ou plus récent (Ubuntu 24.04, Fedora 40, Debian 13 ou plus récent). Les réglages vont dans `~/.config/rookparcel/gtk`, les torrents dans `~/.local/share/rookparcel/gtk`. Un fichier `rookparcel.ini` à côté du fichier `.AppImage` le rend portable à la place (*nouveau dans la 1.1.49*).
+L'AppImage demande glibc 2.34 ou plus récent (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 ou plus récent). Les réglages vont dans `~/.config/rookparcel/gtk`, les torrents dans `~/.local/share/rookparcel/gtk`. Un fichier `rookparcel.ini` à côté du fichier `.AppImage` le rend portable à la place (*nouveau dans la 1.1.49*).
 
 ### Flatpak
 
@@ -119,7 +119,7 @@ Le paquet contient l'application ; l'environnement d'exécution vient de Flathu
 
 ```bash
 flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak install --user Rookparcel-1.2.80-x86_64.flatpak
+flatpak install --user Rookparcel-1.2.81-x86_64.flatpak
 flatpak run io.github.balls0fsteel.Rookparcel
 ```
 

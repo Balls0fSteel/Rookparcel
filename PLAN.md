@@ -1,6 +1,6 @@
 # Rookparcel plan
 
-Last updated: 2026-11-25_100735_1795597655
+Last updated: 2026-11-25_104014_1795599614
 
 Read this file for current work. Load only the relevant sections of [detailed follow-ups](docs/BACKLOG.md) or [decisions D1-D80](docs/DECISIONS.md) when needed. Completed phase checklists and old reports are in the [history index](docs/archive/README.md); they are not the active plan.
 
@@ -19,13 +19,13 @@ Design: [ARCHITECTURE.md](docs/ARCHITECTURE.md), [PORTING.md](docs/PORTING.md), 
 
 ## Current status
 
-- **1.2.81 (not released):** the AppImages built on Ubuntu 22.04 (glibc 2.34; D81) for the AppImage catalog. **1.2.80 (published 2026-11-25):** the desktop entry at `Version=1.0` (the catalog's lint, AppImage/appimage.github.io#12506). **1.2.79 (published 2026-11-25; step 5 done on the VMs):** the Gaming page (D80), gentle checks off by default. **1.2.76-1.2.77:** the release review's fixes; adding without a settings flush per torrent. **1.2.70-1.2.75:** the storage hold (D79), the 2026-11-21 bug hunt's fixes, remote `PROTOCOL` 21 (details in the release notes).
+- **1.2.81 (published 2026-11-25):** the AppImages built on Ubuntu 22.04 (glibc 2.34; D81); `/retest` asked on AppImage/appimage.github.io#12506. **1.2.80 (published 2026-11-25):** the desktop entry at `Version=1.0` (the catalog's lint, AppImage/appimage.github.io#12506). **1.2.79 (published 2026-11-25; step 5 done on the VMs):** the Gaming page (D80), gentle checks off by default. **1.2.76-1.2.77:** the release review's fixes; adding without a settings flush per torrent. **1.2.70-1.2.75:** the storage hold (D79), the 2026-11-21 bug hunt's fixes, remote `PROTOCOL` 21 (details in the release notes).
 - **Settings guard (D70, 1.2.55-1.2.57):** loss paths closed, the engine's hold (fetches too), the fixture test, a stamp compared at each start with backups; 1.2.57 has the release review's fixes. Hand checks: BACKLOG "Settings guard".
 - **Native macOS GUI (D52, D61, [MACOS_GUI.md](docs/MACOS_GUI.md)):** since 1.2.19; arm64 and Retina by hand are open (BACKLOG "macOS").
 - **Renamed PaTorrent to Rookparcel** (D59, 1.2.5). Open: upgrading a real PaTorrent 1.2 install on each platform.
 - **Artwork:** the Postal Rook won ([small marks](docs/art/postal-rook-small-2026-11-05/README.md)); the [96 UI icon studies](docs/art/rookparcel-ui-2026-11-05/README.md) await selection and 16/20/24 px redraws.
-- **Releases:** 1.0.1 to 1.2.80 published ([notes](docs/releases/)); the feature history is in the notes and CHANGELOG. RELEASING.md step 5 by hand is open for 1.2.63-1.2.69. Open in BACKLOG: those features' sections, "Security review 1.2.63", "Files tab sort and the unfocused selection" (the owner's retest), "Trackers and Peers tab sort", a macOS swarm-test flake ("Validation").
-- **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.80. At each release: update the version lines in `docs/wiki/Home.md`, `Installing-Rookparcel.md` and their fr/es/de/hu copies (`grep -rl 1.2.80 docs/wiki`). A small nox add race is in BACKLOG "Remote mode and Web UI".
+- **Releases:** 1.0.1 to 1.2.81 published ([notes](docs/releases/)); the feature history is in the notes and CHANGELOG. RELEASING.md step 5 by hand is open for 1.2.63-1.2.69. Open in BACKLOG: those features' sections, "Security review 1.2.63", "Files tab sort and the unfocused selection" (the owner's retest), "Trackers and Peers tab sort", a macOS swarm-test flake ("Validation").
+- **Version texts:** the README, `docs/wiki` (pushed to the GitHub wiki) and the site's news are at 1.2.81. At each release: update the version lines in `docs/wiki/Home.md`, `Installing-Rookparcel.md` and their fr/es/de/hu copies (`grep -rl 1.2.81 docs/wiki`). A small nox add race is in BACKLOG "Remote mode and Web UI".
 - **UI lock (D69, released in 1.2.54; D71's off switch in 1.2.63):** a 4-6 digit PIN hides all three GUIs' windows in the tray; Ctrl or Option at start, or `--reset-lock`, removes a forgotten one; wiki page `Locking-Rookparcel`. Open: BACKLOG "UI lock".
 - **Benchmarks:** the website shows [the version history](docs/BENCHMARKS.md) on a Hetzner CCX23 (`launch-hetzner.ps1 -Published`): 10,000 torrents use 67.5 MB after restart (qBittorrent 612 MB), idle 0.03 %; adding 10,000 takes 1.59 s in 1.2.77 (1.2.57-1.2.76 were 3x slower, a flushed settings write per add; qBittorrent 2.16 s). Win32 lists 100,000 in 1.37-1.49 s (2026-11-11). BACKLOG "Disk and storage" has the SHA-1 suspect on CPUs without SHA-NI and an unreproduced 10,000-listing delay.
 - CI, FreeBSD and Fuzz green for `2ae717e3` (1.2.75, 2026-11-22, first try on every platform; 1.2.74 green too).
