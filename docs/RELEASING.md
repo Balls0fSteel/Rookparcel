@@ -10,8 +10,8 @@ How a version goes out (PLAN.md D22, Road to 1.0 items 6, 7 and 14). The files a
 | `rookparcel-<version>-windows-x64.zip` | `rookparcel.exe`, `rookparcel-nox.exe` (static CRT, nothing to install, D7), `LICENSE.md`, `THIRD-PARTY-NOTICES.md` | `windows-latest` |
 | `rookparcel-<version>-windows-x64-setup.exe` | an installer of the same four files (NSIS, [`packaging/windows`](../packaging/windows/README.md)): for one user or all users, Start menu shortcut, optional desktop shortcut and associations, an uninstaller (see [Windows installer](#windows-installer)) | `windows-latest` |
 | `rookparcel-<version>-linux-x86_64.tar.gz`, `-linux-aarch64.tar.gz` | `rookparcel-nox`, `rookparcel-gtk`, the desktop entry, the systemd units (`systemd/system`, `systemd/user`), the same two texts | `ubuntu-24.04`, `ubuntu-24.04-arm` |
-| `Rookparcel-<version>-x86_64.AppImage`, `-aarch64.AppImage` | the GTK GUI with GTK 4 and every library it needs but glibc (linuxdeploy and its GTK plugin) | `ubuntu-24.04`, `ubuntu-24.04-arm` |
-| `rookparcel-nox-<version>-x86_64.AppImage`, `-aarch64.AppImage` | `rookparcel-nox` with OpenSSL; a terminal program, kept out of the menus | `ubuntu-24.04`, `ubuntu-24.04-arm` |
+| `Rookparcel-<version>-x86_64.AppImage`, `-aarch64.AppImage` | the GTK GUI with GTK 4.14 and every library it needs but glibc (linuxdeploy and its GTK plugin; GTK and GLib built for it, D81) | `ubuntu:22.04` container on `ubuntu-24.04`, `ubuntu-24.04-arm` ([`packaging/appimage`](../packaging/appimage/README.md)) |
+| `rookparcel-nox-<version>-x86_64.AppImage`, `-aarch64.AppImage` | `rookparcel-nox` with OpenSSL; a terminal program, kept out of the menus | `ubuntu:22.04` container, as above |
 | `Rookparcel-<version>-x86_64.flatpak`, `-aarch64.flatpak` | the GTK GUI as a single-file Flatpak bundle on the GNOME 51 runtime (see [Flatpak](#flatpak)) | `ubuntu-24.04`, `ubuntu-24.04-arm`, in Flathub's builder container |
 | `Rookparcel-<version>-macos.dmg` | `Rookparcel.app`: the native AppKit GUI (`rookparcel-mac`, D61) as one universal binary for Apple silicon and Intel, macOS 11 or later, ad-hoc signed; the two texts | `macos-15` (x86_64 cross-built and joined with `lipo`) |
 | `rookparcel-nox-<version>-macos-arm64.tar.gz`, `-macos-x86_64.tar.gz` | `rookparcel-nox` (system libraries only: TLS is Secure Transport, D9), the two texts | `macos-15` (x86_64 cross-built) |
@@ -20,14 +20,16 @@ How a version goes out (PLAN.md D22, Road to 1.0 items 6, 7 and 14). The files a
 
 The tarballs' binaries use the system's glibc, OpenSSL 3 and GTK 4 (4.12 or later), as Ubuntu
 24.04 has them, so they run on distributions about that age or newer. The AppImages carry their
-libraries but glibc, so they need glibc 2.39 or newer (Ubuntu 24.04, Fedora 40, Debian 13);
+libraries but glibc and are built in Ubuntu 22.04 (D81), so they need glibc 2.34 or newer (Ubuntu
+22.04, Debian 12, RHEL 9, Fedora 35); job `appimage-start` starts the GTK one in a clean 22.04
+container on Xvfb, as the AppImage catalog does, and keeps a picture (`appimage-start-<arch>`);
 an AppImage started on a desktop without FUSE 2 needs `--appimage-extract-and-run`. The AppImage
 icon is provisional (the family `assets/patina-icons/app-icon.txt` names) until the owner picks
 one (Road to 1.0 item 10); the Flatpak and the macOS `.app` use the same one.
 The AppImage catalog (appimage.github.io, its PR #12506 for Rookparcel) tests a release's GTK
 AppImage on Ubuntu 22.04: desktop-file-validate 0.26 there refused 1.2.79's `Version=1.5`, so
-the desktop entry stays at `Version=1.0` (a test asserts it). After a fix, comment `/retest`
-on that PR.
+the desktop entry stays at `Version=1.0` (a test asserts it), and 1.2.80's AppImage, built on
+24.04, could not start there (hence D81). After a fix, comment `/retest` on that PR.
 Earlier releases had `Rookparcel-<version>-arm64.dmg` (`PaTorrent-...` before 1.2.5) instead:
 the GTK GUI bundled with Homebrew's GTK 4, Apple silicon only, macOS 15 or later (D23).
 

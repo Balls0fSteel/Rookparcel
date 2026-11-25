@@ -70,6 +70,11 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="1.2.81" date="2026-11-25" type="stable">
+      <description>
+        <p>The AppImages are built on Ubuntu 22.04, so they run on Ubuntu 22.04, Debian 12 and RHEL 9 too. Nothing else changes.</p>
+      </description>
+    </release>
     <release version="1.2.80" date="2026-11-25" type="stable">
       <description>
         <p>The desktop entry declares version 1.0 of the desktop entry specification, so older validators, such as the AppImage catalog's, accept it. Nothing else changes.</p>

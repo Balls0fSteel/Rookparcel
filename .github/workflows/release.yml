@@ -192,6 +192,8 @@ jobs:
 
   linux:
     needs: version
+    # the tarballs: built on the runner's Ubuntu 24.04, they use the system's glibc, GTK 4 and
+    # OpenSSL 3 (the AppImages are the appimage job's)
     strategy:
       fail-fast: false
       matrix:
@@ -201,14 +203,42 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    env:
-      # pinned linuxdeploy releases and the GTK plugin's commit (no `continuous` builds)
-      LINUXDEPLOY: https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1
-      LINUXDEPLOY_APPIMAGE: https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/1-alpha-20250213-1
-      LINUXDEPLOY_GTK: https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/7a3fbc31a9e5075073ff8790f26effbac5f84453/linuxdeploy-plugin-gtk.sh
-      # the runners have no FUSE: AppImages (linuxdeploy's own) unpack themselves to run
-      APPIMAGE_EXTRACT_AND_RUN: 1
     steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libssl-dev libgtk-4-dev
+      - run: cargo build --release --locked -p rookparcel-nox -p rookparcel-gtk
+      - name: Tarball
+        run: |
+          name="rookparcel-${{ needs.version.outputs.version }}-linux-${{ matrix.arch }}"
+          mkdir -p "$name/systemd"
+          install -m 755 target/release/rookparcel-nox target/release/rookparcel-gtk "$name/"
+          install -m 644 LICENSE.md THIRD-PARTY-NOTICES.md contrib/linux/*.desktop "$name/"
+          cp -r contrib/systemd/system contrib/systemd/user "$name/systemd/"
+          tar -czf "$name.tar.gz" --owner=0 --group=0 "$name"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-${{ matrix.arch }}
+          path: rookparcel-*.tar.gz
+
+  appimage:
+    needs: version
+    # The AppImages are built in Ubuntu 22.04 (glibc 2.35), so they run there and on Debian 12
+    # and RHEL 9 too; the AppImage catalog tests on 22.04. 22.04's GTK is 4.6, older than the
+    # GUI's 4.12, so packaging/appimage/gtk-stack.sh builds GTK 4.14 and a newer GLib and
+    # Wayland, cached by the scripts' hash (D81, packaging/appimage/README.md)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container: ubuntu:22.04
+    steps:
+      - run: apt-get update -qq && apt-get install -y -qq --no-install-recommends git ca-certificates
       - uses: actions/checkout@v7
       # the provisional app icon's family: assets/patina-icons/app-icon.txt names it for every
       # build (Road to 1.0 item 10; assets/patina-icons/INTEGRATION.md)
@@ -221,78 +251,61 @@ jobs:
             exit 1
           fi
           echo "APP_ICON_DIR=$dir" >> "$GITHUB_ENV"
-      - uses: dtolnay/rust-toolchain@stable
-      - run: sudo apt-get update && sudo apt-get install -y libssl-dev libgtk-4-dev libgdk-pixbuf2.0-bin librsvg2-common
-      - run: cargo build --release --locked -p rookparcel-nox -p rookparcel-gtk
-      - name: Tarball
-        run: |
-          name="rookparcel-${{ needs.version.outputs.version }}-linux-${{ matrix.arch }}"
-          mkdir -p "$name/systemd"
-          install -m 755 target/release/rookparcel-nox target/release/rookparcel-gtk "$name/"
-          install -m 644 LICENSE.md THIRD-PARTY-NOTICES.md contrib/linux/*.desktop "$name/"
-          cp -r contrib/systemd/system contrib/systemd/user "$name/systemd/"
-          tar -czf "$name.tar.gz" --owner=0 --group=0 "$name"
-      - name: AppImages
-        run: |
-          version="${{ needs.version.outputs.version }}"
-          arch="${{ matrix.arch }}"
-          tools="$RUNNER_TEMP/linuxdeploy"
-          mkdir -p "$tools"
-          curl -fsSL -o "$tools/linuxdeploy" "$LINUXDEPLOY/linuxdeploy-$arch.AppImage"
-          curl -fsSL -o "$tools/linuxdeploy-plugin-appimage" "$LINUXDEPLOY_APPIMAGE/linuxdeploy-plugin-appimage-$arch.AppImage"
-          curl -fsSL -o "$tools/linuxdeploy-plugin-gtk.sh" "$LINUXDEPLOY_GTK"
-          chmod +x "$tools"/*
-          export PATH="$tools:$PATH" LINUXDEPLOY_OUTPUT_VERSION="$version"
-          app_id=io.github.balls0fsteel.Rookparcel
-          icons="$RUNNER_TEMP/icons"
-          mkdir -p "$icons"
-          cp "$APP_ICON_DIR/256.png" "$icons/$app_id.png"
-          cp "$APP_ICON_DIR/256.png" "$icons/$app_id.Nox.png"
-
-          # the GTK GUI, GTK 4 bundled (the plugin sets GTK's module, schema and loader paths).
-          # Its hook's `GDK_BACKEND=x11` goes: GTK 4 runs on Wayland (checked under GNOME 50),
-          # and forced X11 needs Xwayland
-          DEPLOY_GTK_VERSION=4 linuxdeploy \
-            --appdir AppDir-gtk \
-            --executable target/release/rookparcel-gtk \
-            --desktop-file "contrib/linux/$app_id.desktop" \
-            --icon-file "$icons/$app_id.png" \
-            --plugin gtk
-          hook=AppDir-gtk/apprun-hooks/linuxdeploy-plugin-gtk.sh
-          grep -q '^export GDK_BACKEND=x11' "$hook"
-          sed -i '/^export GDK_BACKEND=x11/d' "$hook"
-          LDAI_OUTPUT="Rookparcel-$version-$arch.AppImage" linuxdeploy --appdir AppDir-gtk --output appimage
-
-          # nox: a terminal program, kept out of the menus; OpenSSL bundled
-          cat > "$RUNNER_TEMP/$app_id.Nox.desktop" <<EOF
-          [Desktop Entry]
-          Type=Application
-          Name=Rookparcel nox
-          Comment=Headless BitTorrent daemon with a Web UI
-          Exec=rookparcel-nox
-          Icon=$app_id.Nox
-          Terminal=true
-          NoDisplay=true
-          Categories=Network;FileTransfer;P2P;
-          EOF
-          LDAI_OUTPUT="rookparcel-nox-$version-$arch.AppImage" linuxdeploy \
-            --appdir AppDir-nox \
-            --executable target/release/rookparcel-nox \
-            --desktop-file "$RUNNER_TEMP/$app_id.Nox.desktop" \
-            --icon-file "$icons/$app_id.Nox.png" \
-            --output appimage
-
-          # the libraries are inside (the runner has them too, so ldd alone proves nothing),
-          # and the nox bundle starts
-          ls AppDir-gtk/usr/lib/libgtk-4.so.* AppDir-nox/usr/lib/libssl.so.* AppDir-nox/usr/lib/libcrypto.so.*
-          ./"rookparcel-nox-$version-$arch.AppImage" --version
-          ls -l *.AppImage
+      - run: bash packaging/appimage/deps.sh
+      - uses: actions/cache/restore@v4
+        id: stack
+        with:
+          path: /opt/rp-gtk-stage
+          key: appimage-gtk-stack-${{ matrix.arch }}-${{ hashFiles('packaging/appimage/deps.sh', 'packaging/appimage/gtk-stack.sh') }}
+      - run: bash packaging/appimage/gtk-stack.sh
+      - if: steps.stack.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /opt/rp-gtk-stage
+          key: ${{ steps.stack.outputs.cache-primary-key }}
+      - run: bash packaging/appimage/build.sh
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
       - uses: actions/upload-artifact@v7
         with:
-          name: linux-${{ matrix.arch }}
-          path: |
-            rookparcel-*.tar.gz
-            *.AppImage
+          name: appimage-${{ matrix.arch }}
+          path: '*.AppImage'
+
+  appimage-start:
+    needs: [version, appimage]
+    # the GTK AppImage started in a clean Ubuntu 22.04 (nothing of the build installed) on an
+    # Xvfb display, as the AppImage catalog starts it; the job fails without a window. Its
+    # picture is the artifact appimage-start-<arch>
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container: ubuntu:22.04
+    steps:
+      - run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+            git ca-certificates xvfb xdotool imagemagick procps fonts-dejavu-core \
+            libx11-6 libxcb1 libfontconfig1 libfreetype6 libfribidi0 libharfbuzz0b libwayland-client0
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: appimage-${{ matrix.arch }}
+      - run: |
+          chmod +x ./*.AppImage
+          ./rookparcel-nox-*-${{ matrix.arch }}.AppImage --appimage-extract-and-run --version
+          bash packaging/appimage/smoke.sh "$(ls Rookparcel-*-${{ matrix.arch }}.AppImage)" "appimage-start-${{ matrix.arch }}.png"
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appimage-start-${{ matrix.arch }}
+          path: appimage-start-*.png
+          if-no-files-found: ignore
 
   flatpak:
     needs: version
@@ -668,7 +681,7 @@ jobs:
 
   release:
     if: github.ref_type == 'tag'
-    needs: [version, windows, linux, flatpak, macos]
+    needs: [version, windows, linux, appimage, appimage-start, flatpak, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
